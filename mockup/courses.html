@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FFF8F1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#181514" media="(prefers-color-scheme: dark)">
+  <title>Courses · FamilyCocon</title>
+  <link rel="icon" href="img/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<header class="entete">
+  <div class="conteneur">
+    <img class="logo" src="img/logo.svg" alt="">
+    <div class="famille">Famille Martin<small>FamilyCocon</small></div>
+    <div class="membres" aria-label="Membres de la famille">
+      <span class="avatar" style="--c:var(--membre-1)" title="Thomas">T</span>
+      <span class="avatar" style="--c:var(--membre-2)" title="Marie">M</span>
+      <span class="avatar" style="--c:var(--membre-3)" title="Léa">L</span>
+      <span class="avatar" style="--c:var(--membre-4)" title="Hugo">H</span>
+    </div>
+  </div>
+</header>
+
+<main class="conteneur" style="max-width:720px">
+
+  <section class="titre-page">
+    <a class="retour" href="index.html">‹ Accueil</a>
+    <h1>🛒 Courses</h1>
+    <p>5 produits pris sur 13</p>
+    <div class="progres"><span style="width:38%"></span></div>
+  </section>
+
+  <div class="pilules" role="tablist">
+    <button class="pilule active">Semaine</button>
+    <button class="pilule">Drive</button>
+    <button class="pilule">Anniversaire Hugo 🎂</button>
+    <button class="pilule">+ Liste</button>
+  </div>
+
+  <form class="ajout" onsubmit="return false">
+    <input type="text" placeholder="Ajouter un produit… (ex : 2 baguettes)" aria-label="Produit à ajouter">
+    <button class="bouton">Ajouter</button>
+  </form>
+
+  <details class="rayon" open>
+    <summary><span class="r-emoji">🥕</span>Fruits et légumes<span class="compte">2 / 4</span></summary>
+    <ul>
+      <li><label class="produit"><input type="checkbox"><span class="coche"></span><span class="p-emoji">🍎</span><span class="p-nom">Pommes<small>1 kg</small></span><span class="avatar petit" style="--c:var(--membre-2)">M</span></label></li>
+      <li><label class="produit"><input type="checkbox"><span class="coche"></span><span class="p-emoji">🥕</span><span class="p-nom">Carottes</span><span class="avatar petit" style="--c:var(--membre-2)">M</span></label></li>
+      <li><label class="produit"><input type="checkbox" checked><span class="coche"></span><span class="p-emoji">🍌</span><span class="p-nom">Bananes<small>6</small></span><span class="avatar petit" style="--c:var(--membre-3)">L</span></label></li>
+      <li><label class="produit"><input type="checkbox" checked><span class="coche"></span><span class="p-emoji">🥔</span><span class="p-nom">Pommes de terre<small>pour le gratin</small></span><span class="avatar petit" style="--c:var(--membre-1)">T</span></label></li>
+    </ul>
+  </details>
+
+  <details class="rayon" open>
+    <summary><span class="r-emoji">🥖</span>Boulangerie<span class="compte">0 / 2</span></summary>
+    <ul>
+      <li><label class="produit"><input type="checkbox"><span class="coche"></span><span class="p-emoji">🥖</span><span class="p-nom">Pain<small>2 baguettes</small></span><span class="avatar petit" style="--c:var(--membre-1)">T</span></label></li>
+      <li><label class="produit"><input type="checkbox"><span class="coche"></span><span class="p-emoji">🥐</span><span class="p-nom">Croissants<small>pour dimanche</small></span><span class="avatar petit" style="--c:var(--membre-4)">H</span></label></li>
+    </ul>
+  </details>
+
+  <details class="rayon" open>
+    <summary><span class="r-emoji">🧀</span>Frais<span class="compte">2 / 4</span></summary>
+    <ul>
+      <li><label class="produit"><input type="checkbox"><span class="coche"></span><span class="p-emoji">🥛</span><span class="p-nom">Lait<small>2 bouteilles</small></span><span class="avatar petit" style="--c:var(--membre-2)">M</span></label></li>
+      <li><label class="produit"><input type="checkbox"><span class="coche"></span><span class="p-emoji">🧈</span><span class="p-nom">Beurre doux</span><span class="avatar petit" style="--c:var(--membre-2)">M</span></label></li>
+      <li><label class="produit"><input type="checkbox" checked><span class="coche"></span><span class="p-emoji">🥚</span><span class="p-nom">Œufs<small>12</small></span><span class="avatar petit" style="--c:var(--membre-1)">T</span></label></li>
+      <li><label class="produit"><input type="checkbox" checked><span class="coche"></span><span class="p-emoji">🧀</span><span class="p-nom">Gruyère râpé</span><span class="avatar petit" style="--c:var(--membre-1)">T</span></label></li>
+    </ul>
+  </details>
+
+  <details class="rayon">
+    <summary><span class="r-emoji">🥫</span>Épicerie<span class="compte">1 / 2</span></summary>
+    <ul>
+      <li><label class="produit"><input type="checkbox"><span class="coche"></span><span class="p-emoji">🍝</span><span class="p-nom">Pâtes</span><span class="avatar petit" style="--c:var(--membre-4)">H</span></label></li>
+      <li><label class="produit"><input type="checkbox" checked><span class="coche"></span><span class="p-emoji">🍫</span><span class="p-nom">Chocolat</span><span class="avatar petit" style="--c:var(--membre-3)">L</span></label></li>
+    </ul>
+  </details>
+
+  <details class="rayon">
+    <summary><span class="r-emoji">🧴</span>Hygiène et maison<span class="compte">0 / 1</span></summary>
+    <ul>
+      <li><label class="produit"><input type="checkbox"><span class="coche"></span><span class="p-emoji">🧻</span><span class="p-nom">Papier toilette</span><span class="avatar petit" style="--c:var(--membre-2)">M</span></label></li>
+    </ul>
+  </details>
+
+  <p style="text-align:center;margin-top:22px">
+    <button class="bouton discret">🧹 Retirer les produits pris</button>
+  </p>
+
+</main>
+
+<div class="toast" role="status">
+  <span class="avatar petit" style="--c:var(--membre-1)">T</span>
+  Thomas a ajouté du pain 🥖
+</div>
+
+<nav class="nav-bas" aria-label="Navigation principale">
+  <a href="index.html"><span class="ico">🏠</span>Accueil</a>
+  <a href="#"><span class="ico">🗓️</span>Agenda</a>
+  <a class="plus" href="#" aria-label="Ajouter">+</a>
+  <a class="actif" href="courses.html"><span class="ico">🛒</span>Courses</a>
+  <a href="#"><span class="ico">👤</span>Moi</a>
+</nav>
+
+</body>
+</html>
