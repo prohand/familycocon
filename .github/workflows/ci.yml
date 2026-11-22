@@ -23,6 +23,7 @@ permissions:
 env:
   GOTOOLCHAIN: go1.27.4
   GOVULNCHECK_VERSION: v1.9.0
+  SQLC_VERSION: v1.31.1
 
 jobs:
   controles:
@@ -37,10 +38,23 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # sqlc et govulncheck : compilés une seule fois puis gardés en cache
+      # (sqlc compile du C : plus d'une minute à chaque fois sans cache).
+      - name: Cache des outils (sqlc, govulncheck)
+        id: outils
+        uses: actions/cache@v6
+        with:
+          path: ~/outils
+          key: outils-${{ runner.os }}-${{ env.GOTOOLCHAIN }}-sqlc-${{ env.SQLC_VERSION }}-govulncheck-${{ env.GOVULNCHECK_VERSION }}
+      - name: Installation des outils (si pas en cache)
+        if: steps.outils.outputs.cache-hit != 'true'
+        run: |
+          GOBIN="$HOME/outils" go install github.com/sqlc-dev/sqlc/cmd/sqlc@${SQLC_VERSION}
+          GOBIN="$HOME/outils" go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION}
       - name: Formatage, Go vet, code SQL généré à jour
-        run: make verif
+        run: make verif SQLC="$HOME/outils/sqlc"
       - name: Govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION} ./...
+        run: ~/outils/govulncheck ./...
 
   tests:
     name: Tests
@@ -75,6 +89,9 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: false
+          # Cache des couches (image Go, modules téléchargés) entre deux CI.
+          cache-from: type=gha,scope=ci-image
+          cache-to: type=gha,scope=ci-image,mode=max
           build-args: |
             VERSION=ci
             COMMIT=${{ github.sha }}

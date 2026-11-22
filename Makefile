@@ -8,7 +8,8 @@
 #   make image     image Docker locale (architecture de la machine)
 
 export GOTOOLCHAIN := go1.27.4
-SQLC := go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
+# sqlc : surchargeable (make verif SQLC=~/outils/sqlc), comme le fait la CI.
+SQLC ?= go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 VERSION ?= dev
 LDFLAGS := -s -w -buildid= -X familycocon/internal/version.Version=$(VERSION)
 
