@@ -1,0 +1,19 @@
+{{define "contenu"}}
+<div class="marque">
+  <img src="{{statique "img/logo.svg"}}" alt="">
+  <h1>Créer ma famille</h1>
+  <p>Vous serez le premier parent ; vous inviterez les autres ensuite.</p>
+</div>
+{{with .Donnees}}
+<form class="carte" method="post" action="/inscription">
+  {{if .Erreur}}<p class="message-erreur" role="alert">{{.Erreur}}</p>{{end}}
+  <label class="champ"><span>Nom de la famille</span>
+    <input name="famille" value="{{.Famille}}" placeholder="Famille Martin" maxlength="60" required autofocus></label>
+  <label class="champ"><span>Votre prénom</span>
+    <input name="prenom" value="{{.Prenom}}" autocomplete="given-name" maxlength="40" required></label>
+  {{template "champs-compte" .}}
+  <button class="bouton large">Créer la famille 🏡</button>
+</form>
+<p class="separateur"><a class="lien-discret" href="/connexion">J'ai déjà un compte</a></p>
+{{end}}
+{{end}}

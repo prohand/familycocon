@@ -1,0 +1,31 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/enfants">‹ Espace enfants</a>
+  <h1>{{if .Nouvelle}}🎁 Nouvelle récompense{{else}}✏️ {{.Recompense.Titre}}{{end}}</h1>
+</section>
+<form class="carte" method="post" action="{{if .Nouvelle}}/enfants/recompenses{{else}}/enfants/recompenses/{{.Recompense.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  <label class="champ"><span>Récompense</span>
+    <input name="titre" value="{{.Recompense.Titre}}" placeholder="Ex. : 5 € d'argent de poche, Soirée film" maxlength="60" required autofocus></label>
+  <label class="champ"><span>Prix en étoiles ⭐</span>
+    <input type="number" name="prix" value="{{.Recompense.Prix}}" min="1" max="9999" inputmode="numeric" required></label>
+  <fieldset class="categories">
+    <legend>Image</legend>
+    <div class="grille-emoji">
+      {{- range .Emojis}}
+      <label><input type="radio" name="emoji" value="{{.}}"{{if eq . $.Donnees.Recompense.Emoji}} checked{{end}}><span>{{.}}</span></label>
+      {{- end}}
+    </div>
+  </fieldset>
+  <div class="boutons"><button class="bouton">{{if .Nouvelle}}Ajouter{{else}}Enregistrer{{end}}</button></div>
+</form>
+{{if not .Nouvelle}}
+<form class="bloc" method="post" action="/enfants/recompenses/{{.Recompense.ID}}/supprimer" hx-confirm="Retirer cette récompense ?">
+  {{template "jeton" $c.CSRF}}
+  <button class="bouton danger">Retirer la récompense</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

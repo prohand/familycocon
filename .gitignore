@@ -1,0 +1,7 @@
+# Données locales (base, sauvegardes, clés)
+/donnees/
+/dist/
+.env
+*.db
+*.db-wal
+*.db-shm

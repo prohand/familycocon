@@ -1,0 +1,69 @@
+{{define "contenu"}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>⭐ Espace enfants</h1>
+  <p>Missions, étoiles et récompenses</p>
+</section>
+<div class="boutons">
+  <a class="bouton" href="/enfants/missions/nouvelle">＋ Mission</a>
+  <a class="bouton secondaire" href="/enfants/recompenses/nouvelle">＋ Récompense</a>
+</div>
+{{template "parent" .}}
+{{end}}
+
+{{define "parent"}}
+{{with .Donnees}}
+<div id="parent" hx-get="/enfants/contenu" hx-trigger="maj-enfants from:body delay:300ms" hx-swap="outerHTML">
+  {{if .AValider}}
+  <section class="bloc">
+    <div class="section-titre"><h2>👀 À valider</h2><span class="aide">{{len .AValider}}</span></div>
+    <div class="carte">
+      {{- range .AValider}}
+      <div class="ligne a-valider">
+        {{with .Enfant}}<span class="avatar petit c{{.Couleur}}">{{initiale .Nom}}</span>{{end}}
+        <span class="p-emoji">{{.Emoji}}</span>
+        <span class="quoi">{{.Titre}}<small>{{with .Enfant}}{{.Nom}}{{end}} · {{if .Echange}}veut l'échanger contre {{.Etoiles}} ⭐{{else}}{{.Etoiles}} ⭐ à gagner{{end}}</small></span>
+        <span class="boutons-decision">
+          {{if .Echange}}
+          <button class="bouton petit" hx-post="/enfants/echanges/{{.ID}}/confirmer" hx-target="#parent" hx-swap="outerHTML" aria-label="Confirmer">✓</button>
+          <button class="bouton petit secondaire" hx-post="/enfants/echanges/{{.ID}}/refuser" hx-target="#parent" hx-swap="outerHTML" aria-label="Refuser">✗</button>
+          {{else}}
+          <button class="bouton petit" hx-post="/enfants/validations/{{.ID}}/valider" hx-target="#parent" hx-swap="outerHTML" aria-label="Valider">✓</button>
+          <button class="bouton petit secondaire" hx-post="/enfants/validations/{{.ID}}/refuser" hx-target="#parent" hx-swap="outerHTML" aria-label="À refaire">✗</button>
+          {{end}}
+        </span>
+      </div>
+      {{- end}}
+    </div>
+  </section>
+  {{end}}
+
+  <section class="bloc">
+    <div class="section-titre"><h2>🧒 Les enfants</h2></div>
+    <div class="enfants-grille">
+      {{- range .Enfants}}
+      <a class="carte-enfant c{{.Enfant.Couleur}}" href="/enfants/enfant/{{.Enfant.ID}}">
+        <span class="avatar grand c{{.Enfant.Couleur}}">{{initiale .Enfant.Nom}}</span>
+        <b>{{.Enfant.Nom}}</b>
+        <span class="tresor-petit">⭐ {{.Solde.Disponible}}</span>
+        <span class="aide">{{if .Total}}{{.Faites}} / {{.Total}} missions aujourd'hui{{else}}Pas de mission aujourd'hui{{end}}</span>
+      </a>
+      {{- else}}
+      <div class="carte vide"><span class="emoji">🧒</span>Ajoutez un enfant dans <a href="/famille">Ma famille</a>.</div>
+      {{- end}}
+    </div>
+  </section>
+
+  <section class="bloc">
+    <div class="section-titre"><h2>🎁 Récompenses</h2></div>
+    <div class="carte">
+      {{- range .Recompenses}}
+      <a class="ligne" href="/enfants/recompenses/{{.ID}}"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Titre}}</span><b>{{.Prix}} ⭐</b></a>
+      {{- else}}
+      <p class="vide"><span class="emoji">🎁</span>Créez une récompense : argent de poche, sortie, jouet…</p>
+      {{- end}}
+    </div>
+  </section>
+</div>
+{{end}}
+{{end}}

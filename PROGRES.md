@@ -1,0 +1,46 @@
+# PROGRES — FamilyCocon
+
+| Étape | État |
+|---|---|
+| 0. Maquette statique (accueil, courses, logo) | **fait**, validée |
+| 1. Socle : config, base, serveur, /health, Docker, CI | **fait** |
+| 2. Comptes, rôles, invitations, PIN, réglages (modules, raccourcis) | **fait** |
+| 3. Courses + temps réel (SSE) + notifications | **fait** |
+| 4. Tâches ménagères | **fait** |
+| 5. Agenda (mois, semaine) | **fait** |
+| 6. Menus de la semaine → courses | **fait** |
+| 7. Budget + courbe SVG | **fait** |
+| 8. Espace enfants (étoiles, récompenses) | **fait** |
+| 9. PWA + Web Push | **fait** |
+| 10. Sauvegarde / restauration, README, mesures finales | **fait** |
+
+## Mesures
+
+| Date | Étape | Binaire | Image | RAM au repos | RAM en charge |
+|---|---|---|---|---|---|
+| 22/11/2026 | 1 | 12,7 Mo | 19 Mo (affiché par Docker) | 6,6 Mio | — |
+| 22/11/2026 | 10 | 15,7 Mo (amd64), 14,7 Mo (arm64) | ~16 Mo installée (couches), 6,8 Mo compressée | 8,3 Mio au démarrage, 7,3 Mio après usage | 19,4 Mio (30 SSE + 20 clients, 190 req/s à 0,5 cœur, 0 erreur) |
+
+Notes :
+- La première mesure de l'étape 10 donnait 38,9 Mio au démarrage : l'empreinte
+  « leurre » Argon2id (19 Mio) était calculée au lancement. Corrigé : elle est
+  écrite en dur, et la mémoire d'Argon2id est rendue au système 5 s après le
+  dernier calcul.
+- Le gros du binaire est SQLite en Go pur (modernc), le prix d'un binaire
+  statique sans cgo et d'une compilation arm64 sans émulation.
+
+## Non vérifié ici
+
+- Envoi réel d'une notification push vers Google/Apple/Mozilla : le
+  chiffrement et la signature sont testés (code repris de mirador-stack, qui
+  les vérifie contre une autre implémentation), l'envoi est testé avec un
+  faux service. À essayer sur un vrai téléphone, en HTTPS.
+
+Vérifié par la CI GitHub : contrôles, tests et image Docker amd64 + arm64
+réussis à chaque étape (le build multi-arch passe sans émulation).
+
+## Idées pour la suite
+
+- Glisser-déposer pour réordonner les listes ; listes de courses « modèles ».
+- Export du budget (CSV).
+- Sauvegardes distantes (rclone, SFTP) comme dans mirador-stack.

@@ -1,0 +1,25 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/menus?date={{.Creneau.Jour}}">‹ Menus</a>
+  <h1>🍽️ {{.Titre}}</h1>
+</section>
+<form class="carte" method="post" action="/menus/{{.Creneau.Jour}}/{{.Creneau.Moment}}">
+  {{template "jeton" $c.CSRF}}
+  <label class="champ"><span>Plat</span>
+    <input name="nom" value="{{with .Creneau.Repas}}{{.Nom}}{{end}}" list="recettes" placeholder="Ex. : Gratin dauphinois" maxlength="80" required autofocus autocomplete="off"></label>
+  <datalist id="recettes">{{range .Recettes}}<option value="{{.}}">{{end}}</datalist>
+  <label class="champ"><span>Ingrédients (un par ligne)</span>
+    <textarea name="ingredients" rows="7" placeholder="1 kg de pommes de terre&#10;50 cl de crème&#10;Gruyère râpé">{{with .Creneau.Repas}}{{.Ingredients}}{{end}}</textarea></label>
+  <p class="aide">Un plat déjà fait ? Laissez les ingrédients vides : ceux de la dernière fois reviennent.</p>
+  <div class="boutons"><button class="bouton">Enregistrer</button></div>
+</form>
+{{if and .Creneau.Repas $c.EstParent}}
+<form class="bloc" method="post" action="/menus/{{.Creneau.Jour}}/{{.Creneau.Moment}}/vider" hx-confirm="Vider ce repas ?">
+  {{template "jeton" $c.CSRF}}
+  <button class="bouton danger">Vider ce repas</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

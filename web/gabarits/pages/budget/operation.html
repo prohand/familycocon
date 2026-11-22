@@ -1,0 +1,42 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/budget">‹ Budget</a>
+  <h1>{{if .Nouvelle}}{{if eq .Op.Sens "revenu"}}⬆️ Nouveau revenu{{else}}⬇️ Nouvelle dépense{{end}}{{else}}✏️ Opération{{end}}</h1>
+</section>
+<form class="carte" method="post" action="{{if .Nouvelle}}/budget{{else}}/budget/{{.Op.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  <label class="champ"><span>Montant ({{.Devise}})</span>
+    <input class="gros-montant" name="montant" value="{{.Montant}}" inputmode="decimal" placeholder="0,00" autocomplete="off" required autofocus></label>
+  <fieldset class="categories">
+    <legend>Catégorie</legend>
+    <div class="grille-cat">
+      {{- range .Categories}}
+      <label class="{{.Sens}}"><input type="radio" name="categorie" value="{{.Cle}}"{{if eq .Cle $.Donnees.Op.Categorie}} checked{{end}} required>
+        <span><b>{{.Emoji}}</b>{{.Nom}}</span></label>
+      {{- end}}
+    </div>
+  </fieldset>
+  <div class="rangee">
+    <label class="champ"><span>Libellé (facultatif)</span><input name="libelle" value="{{.Op.Libelle}}" maxlength="80" placeholder="Ex. : Supermarché"></label>
+    <label class="champ"><span>Date</span><input type="date" name="jour" value="{{.Op.Jour}}" required></label>
+  </div>
+  <label class="champ"><span>Qui ?</span>
+    <select name="membre"><option value="0">—</option>
+      {{- range .Membres}}{{if eq .Role "parent"}}<option value="{{.ID}}"{{if and $.Donnees.Op.MembreID.Valid (eq .ID $.Donnees.Op.MembreID.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}{{end}}
+    </select></label>
+  <label class="interrupteur">
+    <span class="emoji">🔁</span><span class="nom">Revient chaque mois <small class="aide">(salaire, loyer…)</small></span>
+    <input type="checkbox" name="fixe" value="1"{{if .Op.Fixe}} checked{{end}}><span class="glissiere"></span>
+  </label>
+  <div class="boutons"><button class="bouton">Enregistrer</button></div>
+</form>
+{{if not .Nouvelle}}
+<form class="bloc" method="post" action="/budget/{{.Op.ID}}/supprimer" hx-confirm="Supprimer cette opération ?">
+  {{template "jeton" $c.CSRF}}
+  <button class="bouton danger">Supprimer</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

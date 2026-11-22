@@ -1,0 +1,123 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="{{if .ParParent}}/enfants{{else}}/{{end}}">‹ {{if .ParParent}}Espace enfants{{else}}Accueil{{end}}</a>
+</section>
+{{template "espace" $}}
+{{end}}
+{{end}}
+
+{{define "espace"}}
+{{$c := .C}}
+{{with .Donnees}}
+<div id="espace" class="espace-enfant"
+     hx-get="{{if .ParParent}}/enfants/enfant/{{.Enfant.ID}}/contenu{{else}}/enfants/contenu{{end}}" hx-trigger="maj-enfants from:body delay:300ms" hx-swap="outerHTML">
+  <section class="tete-enfant c{{.Enfant.Couleur}}">
+    <span class="avatar grand c{{.Enfant.Couleur}}">{{initiale .Enfant.Nom}}</span>
+    <div>
+      <h1>{{if .ParParent}}Espace de {{.Enfant.Nom}}{{else}}Coucou {{.Enfant.Nom}} !{{end}}</h1>
+      <p class="tresor"><span class="grosse-etoile">⭐</span><b>{{.Solde.Disponible}}</b> {{if le .Solde.Disponible 1}}étoile{{else}}étoiles{{end}}</p>
+      {{if .Solde.Reservees}}<p class="petit-texte">+ {{.Solde.Reservees}} ⭐ en attente pour une récompense</p>{{end}}
+    </div>
+  </section>
+
+  <section class="bloc">
+    <div class="section-titre">
+      <h2>🚀 {{if .ParParent}}Missions du jour{{else}}Mes missions du jour{{end}}</h2>
+      {{if .Total}}<span class="aide">{{.Faites}} / {{.Total}}</span>{{end}}
+    </div>
+    {{if .Total}}<progress class="progres enfants" max="{{.Total}}" value="{{.Faites}}"></progress>{{end}}
+    <div class="missions">
+      {{- range .Missions}}
+      <article class="mission {{.Etat}} cat-{{.Categorie}}{{if .JusteValidee}} juste-validee{{end}}">
+        <span class="mission-emoji">{{.Emoji}}</span>
+        <h3>{{.Titre}}</h3>
+        <p class="mission-etoiles" aria-label="{{.Mission.Etoiles}} étoiles">{{.Etoiles}}</p>
+        {{- if eq .Etat "validee"}}
+        <p class="etat">🌟 +{{.Mission.Etoiles}} {{if eq .Mission.Etoiles 1}}étoile{{else}}étoiles{{end}} !</p>
+        {{- else if eq .Etat "attente"}}
+        <p class="etat">⏳ Un parent vérifie</p>
+          {{- if $.Donnees.ParParent}}
+          <div class="boutons-decision">
+            <button class="bouton petit" hx-post="/enfants/validations/{{.FaiteID}}/valider" hx-target="#espace" hx-swap="outerHTML">✓ Valider</button>
+            <button class="bouton petit secondaire" hx-post="/enfants/validations/{{.FaiteID}}/refuser" hx-target="#espace" hx-swap="outerHTML">✗ À refaire</button>
+          </div>
+          {{- else}}
+          <button class="lien-discret bouton-texte" hx-post="/enfants/missions/{{.ID}}/annuler" hx-target="#espace" hx-swap="outerHTML">Oups, pas encore fini</button>
+          {{- end}}
+        {{- else}}
+          {{if eq .Etat "refusee"}}<p class="etat">💪 À refaire</p>{{end}}
+          {{- if not $.Donnees.ParParent}}
+          <button class="gros-bouton" hx-post="/enfants/missions/{{.ID}}/faire" hx-target="#espace" hx-swap="outerHTML">C'est fait ! ✋</button>
+          {{- else}}<p class="etat">À faire</p>{{end}}
+        {{- end}}
+        {{if $.Donnees.ParParent}}<a class="crayon" href="/enfants/missions/{{.ID}}" aria-label="Modifier {{.Titre}}">✏️</a>{{end}}
+      </article>
+      {{- else}}
+      <div class="carte vide"><span class="emoji">🌈</span>Pas de mission aujourd'hui. Profite !</div>
+      {{- end}}
+    </div>
+    {{if .ParParent}}<p><a class="bouton" href="/enfants/missions/nouvelle?enfant={{.Enfant.ID}}">＋ Mission pour {{.Enfant.Nom}}</a></p>{{end}}
+  </section>
+
+  {{if .Ailleurs}}
+  <section class="bloc">
+    <div class="section-titre"><h2>📅 Les autres jours</h2></div>
+    <div class="carte">
+      {{- range .Ailleurs}}
+      <div class="ligne"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Titre}}<small>{{.Regle.Texte}} · {{.Etoiles}}</small></span>
+        {{if $.Donnees.ParParent}}<a class="crayon" href="/enfants/missions/{{.ID}}" aria-label="Modifier {{.Titre}}">✏️</a>{{end}}</div>
+      {{- end}}
+    </div>
+  </section>
+  {{end}}
+
+  <section class="bloc">
+    <div class="section-titre"><h2>🎁 {{if .ParParent}}Récompenses{{else}}Mes récompenses{{end}}</h2></div>
+    <div class="recompenses">
+      {{- range .Recompenses}}
+      <article class="recompense{{if .Possible}} possible{{end}}">
+        <span class="recompense-emoji">{{.Emoji}}</span>
+        <h3>{{.Titre}}</h3>
+        <p class="prix">{{.Prix}} ⭐</p>
+        {{- if .EnAttente}}<p class="etat">⏳ Demandée</p>
+        {{- else if $.Donnees.ParParent}}
+        {{- else if .Possible}}<button class="gros-bouton" hx-post="/enfants/recompenses/{{.ID}}/demander" hx-target="#espace" hx-swap="outerHTML" hx-confirm="Échanger {{.Prix}} étoiles contre « {{.Titre}} » ?">Je la veux !</button>
+        {{- else}}<p class="etat">Encore {{.Manque}} ⭐</p>{{end}}
+      </article>
+      {{- else}}
+      <div class="carte vide"><span class="emoji">🎁</span>Pas encore de récompense.</div>
+      {{- end}}
+    </div>
+  </section>
+
+  <section class="bloc">
+    <div class="section-titre"><h2>📈 {{if .ParParent}}Progrès{{else}}Mes progrès{{end}}</h2></div>
+    <div class="carte">
+      {{- range .Semaines}}
+      <div class="semaine-progres">
+        <span>{{.Titre}}</span><b>{{.Etoiles}} ⭐</b>
+        <progress class="jauge etoiles" max="{{if $.Donnees.MaxSemaine}}{{$.Donnees.MaxSemaine}}{{else}}1{{end}}" value="{{.Etoiles}}"></progress>
+        <small>{{pluriel .Missions "mission réussie" "missions réussies"}}</small>
+      </div>
+      {{- end}}
+    </div>
+  </section>
+
+  {{if or .Recents .Echanges}}
+  <section class="bloc">
+    <div class="section-titre"><h2>📜 Historique</h2></div>
+    <div class="carte">
+      {{- range .Recents}}
+      <div class="ligne"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Titre}}</span><b class="gain">+{{.Etoiles}} ⭐</b></div>
+      {{- end}}
+      {{- range .Echanges}}
+      <div class="ligne"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Titre}}<small>{{if eq .Etat "confirme"}}Obtenue 🎉{{else if eq .Etat "refuse"}}Refusée{{else}}En attente{{end}}</small></span>
+        <b class="{{if eq .Etat "confirme"}}perte{{else}}neutre{{end}}">−{{.Prix}} ⭐</b></div>
+      {{- end}}
+    </div>
+  </section>
+  {{end}}
+</div>
+{{end}}
+{{end}}

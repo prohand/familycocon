@@ -1,0 +1,32 @@
+# FamilyCocon : exemple de déploiement derrière un reverse proxy.
+#
+#   cp .env.exemple .env   puis régler FC_URL_PUBLIQUE (et FC_PROXYS)
+#   docker compose up -d
+#
+# Le conteneur écoute sur le port 8080 ; seul le reverse proxy doit y
+# accéder (voir deploy/ pour Nginx et Traefik).
+services:
+  familycocon:
+    image: ghcr.io/prohand/familycocon:latest
+    container_name: familycocon
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - familycocon-donnees:/donnees
+    # Port publié seulement sur la machine (le reverse proxy est devant).
+    # Avec Traefik dans Docker : supprimer « ports » et utiliser les labels.
+    ports:
+      - "127.0.0.1:8080:8080"
+    # Durcissement : système de fichiers en lecture seule (seul /donnees
+    # est inscriptible), aucun privilège.
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    logging:
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  familycocon-donnees:

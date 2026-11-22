@@ -1,0 +1,24 @@
+{{define "contenu"}}
+<section class="salut">
+  <h1>Bonjour {{.C.Membre.Nom}} 👋</h1>
+  <p>{{.Donnees.Date}}</p>
+</section>
+
+{{if .Donnees.Tuiles}}
+<div class="tuiles">
+  {{- range .Donnees.Tuiles}}
+  <a class="tuile {{.Cle}}" href="{{.URL}}">
+    {{- if .Badge}}<span class="badge">{{.Badge}}</span>{{end}}
+    <span class="emoji">{{.Emoji}}</span>
+    <span><span class="nom">{{.Nom}}</span>{{if .Info}}<br><span class="info">{{.Info}}</span>{{end}}</span>
+  </a>
+  {{- end}}
+  {{- range .Donnees.Blocs}}
+  <div class="bloc-accueil">{{.}}</div>
+  {{- end}}
+</div>
+{{else}}
+<div class="carte vide"><span class="emoji">🧺</span>Aucun module n'est activé.
+  {{if .C.EstParent}}<p><a class="bouton" href="/famille">Activer des modules</a></p>{{end}}</div>
+{{end}}
+{{end}}

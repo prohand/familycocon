@@ -1,0 +1,48 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/enfants">‹ Espace enfants</a>
+  <h1>{{if .Nouvelle}}🚀 Nouvelle mission{{else}}✏️ {{.Mission.Titre}}{{end}}</h1>
+</section>
+<form class="carte" method="post" action="{{if .Nouvelle}}/enfants/missions{{else}}/enfants/missions/{{.Mission.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  <fieldset class="qui">
+    <legend>Pour qui ?</legend>
+    <div class="choix-membres">
+      {{- range .Enfants}}
+      <label><input type="radio" name="enfant" value="{{.ID}}"{{if eq .ID $.Donnees.Mission.EnfantID}} checked{{end}} required>
+        <span class="pastille c{{.Couleur}}">{{.Nom}}</span></label>
+      {{- end}}
+    </div>
+  </fieldset>
+  <label class="champ"><span>Mission</span>
+    <input name="titre" value="{{.Mission.Titre}}" placeholder="Ex. : Ranger sa chambre, Lire 15 minutes" maxlength="80" required></label>
+  <fieldset class="repetition">
+    <legend>Genre</legend>
+    <div class="pilules-choix">
+      <label><input type="radio" name="categorie" value="menage"{{if eq .Mission.Categorie "menage"}} checked{{end}}><span>🧹 Ménage</span></label>
+      <label><input type="radio" name="categorie" value="devoirs"{{if eq .Mission.Categorie "devoirs"}} checked{{end}}><span>📚 Devoirs</span></label>
+      <label><input type="radio" name="categorie" value="routine"{{if eq .Mission.Categorie "routine"}} checked{{end}}><span>🪥 Routine</span></label>
+      <label><input type="radio" name="categorie" value="autre"{{if eq .Mission.Categorie "autre"}} checked{{end}}><span>⭐ Autre</span></label>
+    </div>
+  </fieldset>
+  <fieldset class="repetition">
+    <legend>Combien d'étoiles ? (selon la difficulté)</legend>
+    <div class="pilules-choix etoiles-choix">
+      {{- range $i := couleurs}}{{if le $i 5}}
+      <label><input type="radio" name="etoiles" value="{{$i}}"{{if eq (print $i) (print $.Donnees.Mission.Etoiles)}} checked{{end}}><span>{{etoiles $i}}</span></label>
+      {{- end}}{{end}}
+    </div>
+  </fieldset>
+  {{template "choix-repetition" .Regle}}
+  <div class="boutons"><button class="bouton">{{if .Nouvelle}}Ajouter la mission{{else}}Enregistrer{{end}}</button></div>
+</form>
+{{if not .Nouvelle}}
+<form class="bloc" method="post" action="/enfants/missions/{{.Mission.ID}}/supprimer" hx-confirm="Supprimer cette mission ?">
+  {{template "jeton" $c.CSRF}}
+  <button class="bouton danger">Supprimer la mission</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

@@ -1,0 +1,17 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<div class="marque">
+  <span class="avatar grand c{{.Enfant.Couleur}}">{{initiale .Enfant.Nom}}</span>
+  <h1>Coucou {{.Enfant.Nom}} !</h1>
+  <p>Tape ton code secret</p>
+</div>
+<form class="carte" method="post" action="/connexion/enfant/{{.Enfant.ID}}">
+  {{if .Erreur}}<p class="message-erreur" role="alert">{{.Erreur}}</p>{{end}}
+  <label class="champ"><span class="sr">Code secret</span>
+    <input class="pin" type="password" name="pin" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6"
+           autocomplete="off" required autofocus></label>
+  <button class="bouton large">C'est parti ! 🚀</button>
+</form>
+<p class="separateur"><a class="lien-discret" href="/connexion">Ce n'est pas moi</a></p>
+{{end}}
+{{end}}

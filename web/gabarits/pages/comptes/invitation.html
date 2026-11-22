@@ -1,0 +1,16 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<div class="marque">
+  <img src="{{statique "img/logo.svg"}}" alt="">
+  <h1>{{.Famille}}</h1>
+  <p>Vous êtes invité(e) à rejoindre la famille{{if eq .Role "enfant"}} (compte enfant){{end}}.</p>
+</div>
+<form class="carte" method="post">
+  {{if .Erreur}}<p class="message-erreur" role="alert">{{.Erreur}}</p>{{end}}
+  <label class="champ"><span>Votre prénom</span>
+    <input name="prenom" value="{{.Prenom}}" autocomplete="given-name" maxlength="40" required autofocus></label>
+  {{template "champs-compte" .}}
+  <button class="bouton large">Rejoindre la famille 🏡</button>
+</form>
+{{end}}
+{{end}}

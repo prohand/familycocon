@@ -1,0 +1,120 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>🛒 Courses</h1>
+</section>
+
+<nav class="pilules" aria-label="Listes">
+  {{- range .Listes}}
+  <a class="pilule{{if eq .ID $.Donnees.Liste.ID}} active{{end}}" href="/courses/liste/{{.ID}}">{{.Nom}}</a>
+  {{- end}}
+</nav>
+<details class="nouvelle-liste">
+  <summary>＋ Nouvelle liste</summary>
+  <form class="ajout" method="post" action="/courses/listes">
+    {{template "jeton" $c.CSRF}}
+    <input name="nom" placeholder="Ex. : Anniversaire, Drive…" maxlength="40" required aria-label="Nom de la nouvelle liste">
+    <button class="bouton petit">Créer</button>
+  </form>
+</details>
+
+<form class="ajout" method="post" action="/courses/liste/{{.Liste.ID}}/produits"
+      hx-post="/courses/liste/{{.Liste.ID}}/produits" hx-target="#liste-courses" hx-swap="outerHTML" data-vider>
+  {{template "jeton" $c.CSRF}}
+  <input name="produit" placeholder="Ajouter… (ex : 2 baguettes)" aria-label="Produit à ajouter"
+         list="suggestions-produits" maxlength="100" autocomplete="off" required{{if .Ajout}} autofocus{{end}}>
+  <label class="sr" for="rayon-ajout">Rayon</label>
+  <select id="rayon-ajout" name="rayon" class="choix-rayon" title="Rayon (deviné si vous ne choisissez pas)">
+    <option value="">Rayon auto</option>
+    {{- range .TousRayons}}<option value="{{.Cle}}">{{.Emoji}} {{.Nom}}</option>{{end}}
+  </select>
+  <button class="bouton">Ajouter</button>
+</form>
+<datalist id="suggestions-produits">{{range .Suggestions}}<option value="{{.}}">{{end}}</datalist>
+
+{{template "liste" $}}
+
+{{if $c.EstParent}}
+<details class="reglages-liste carte bloc">
+  <summary>⚙️ Réglages de la liste « {{.Liste.Nom}} »</summary>
+  <form class="rangee" method="post" action="/courses/liste/{{.Liste.ID}}/renommer">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Nom</span><input name="nom" value="{{.Liste.Nom}}" maxlength="40" required></label>
+    <button class="bouton petit secondaire">Renommer</button>
+  </form>
+  <form method="post" action="/courses/liste/{{.Liste.ID}}/supprimer" hx-confirm="Supprimer la liste « {{.Liste.Nom}} » et tous ses produits ?">
+    {{template "jeton" $c.CSRF}}
+    <button class="bouton petit danger">Supprimer la liste</button>
+  </form>
+</details>
+{{end}}
+{{end}}
+{{end}}
+
+{{/* Bloc rechargé par htmx : progression + rayons. */}}
+{{define "liste"}}
+{{$c := .C}}
+{{with .Donnees}}
+<div id="liste-courses"
+  {{- if .Rafraichir}} hx-get="/courses/liste/{{.Liste.ID}}/contenu" hx-trigger="maj-courses from:body delay:300ms" hx-swap="outerHTML"{{end}}>
+  {{if .Total}}
+  <p class="avancement">{{.Pris}} pris sur {{.Total}}</p>
+  <progress class="progres" max="{{.Total}}" value="{{.Pris}}">{{.Pris}} / {{.Total}}</progress>
+  {{- range .Rayons}}
+  <details class="rayon" data-rayon="{{.Cle}}" open>
+    <summary><span class="r-emoji">{{.Emoji}}</span>{{.Nom}}<span class="compte">{{.Pris}} / {{.Total}}</span></summary>
+    <ul>
+      {{- range .Produits}}
+      {{- if eq .ID $.Donnees.Edition}}
+      <li>{{template "edition-produit" dict "P" . "Rayons" $.Donnees.TousRayons "C" $c}}</li>
+      {{- else}}
+      <li class="ligne-produit">
+        <label class="produit">
+          <input type="checkbox"{{if .Pris}} checked{{end}} aria-label="{{.Nom}}"
+                 hx-post="/courses/produit/{{.ID}}/cocher" hx-vals='{"pris": "{{if .Pris}}0{{else}}1{{end}}"}'
+                 hx-trigger="change" hx-target="#liste-courses" hx-swap="outerHTML">
+          <span class="coche"></span>
+          <span class="p-emoji">{{.Emoji}}</span>
+          <span class="p-nom">{{.Nom}}{{if .Quantite}}<small>{{.Quantite}}</small>{{end}}</span>
+          {{with .Auteur}}<span class="avatar petit c{{.Couleur}}" title="Ajouté par {{.Nom}}">{{initiale .Nom}}</span>{{end}}
+        </label>
+        <button class="crayon" type="button" aria-label="Modifier {{.Nom}}"
+                hx-get="/courses/produit/{{.ID}}/modifier" hx-target="#liste-courses" hx-swap="outerHTML">✏️</button>
+      </li>
+      {{- end}}
+      {{- end}}
+    </ul>
+  </details>
+  {{- end}}
+  {{if and $c.EstParent .Pris}}
+  <p class="centre">
+    <button class="bouton discret" hx-post="/courses/liste/{{.Liste.ID}}/vider" hx-target="#liste-courses" hx-swap="outerHTML">🧹 Retirer les produits pris</button>
+  </p>
+  {{end}}
+  {{else}}
+  <div class="carte vide"><span class="emoji">🧺</span>La liste est vide. Ajoutez le premier produit !</div>
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{/* Modification d'un produit (nom, quantité, rayon). */}}
+{{define "edition-produit"}}
+<form class="edition-produit" hx-post="/courses/produit/{{.P.ID}}" hx-target="#liste-courses" hx-swap="outerHTML">
+  <div class="rangee">
+    <label class="champ"><span>Produit</span><input name="nom" value="{{.P.Nom}}" maxlength="80" required></label>
+    <label class="champ etroit"><span>Quantité</span><input name="quantite" value="{{.P.Quantite}}" maxlength="20"></label>
+  </div>
+  <label class="champ"><span>Rayon</span>
+    <select name="rayon">{{range .Rayons}}<option value="{{.Cle}}"{{if eq .Cle $.P.Rayon}} selected{{end}}>{{.Emoji}} {{.Nom}}</option>{{end}}</select></label>
+  <div class="boutons">
+    <button class="bouton petit">Enregistrer</button>
+    <button class="bouton petit secondaire" type="button" hx-get="/courses/liste/{{.P.ListeID}}/contenu" hx-target="#liste-courses" hx-swap="outerHTML">Annuler</button>
+    {{if .C.EstParent}}
+    <button class="bouton petit danger" type="button" hx-post="/courses/produit/{{.P.ID}}/supprimer" hx-target="#liste-courses" hx-swap="outerHTML">Supprimer</button>
+    {{end}}
+  </div>
+</form>
+{{end}}

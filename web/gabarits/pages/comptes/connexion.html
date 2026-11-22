@@ -1,0 +1,35 @@
+{{define "contenu"}}
+<div class="marque">
+  <img src="{{statique "img/logo.svg"}}" alt="">
+  <h1>FamilyCocon</h1>
+  <p>Le petit nid de la famille</p>
+</div>
+
+{{with .Donnees}}
+{{if .Enfants}}
+<section class="carte">
+  <h2>Qui es-tu ? 👋</h2>
+  <div class="enfants-choix">
+    {{- range .Enfants}}
+    <a href="/connexion/enfant/{{.ID}}"><span class="avatar grand c{{.Couleur}}">{{initiale .Nom}}</span>{{.Nom}}</a>
+    {{- end}}
+  </div>
+</section>
+<p class="separateur">ou, pour les grands :</p>
+{{end}}
+
+<form class="carte" method="post" action="/connexion">
+  {{if .Erreur}}<p class="message-erreur" role="alert">{{.Erreur}}</p>{{end}}
+  <input type="hidden" name="suite" value="{{.Suite}}">
+  <label class="champ"><span>Identifiant</span>
+    <input name="identifiant" value="{{.Identifiant}}" autocomplete="username" autocapitalize="none" required autofocus></label>
+  <label class="champ"><span>Mot de passe</span>
+    <input type="password" name="mdp" autocomplete="current-password" required></label>
+  <button class="bouton large">Se connecter</button>
+</form>
+
+{{if .Inscription}}
+<p class="separateur"><a class="lien-discret" href="/inscription">Créer une nouvelle famille</a></p>
+{{end}}
+{{end}}
+{{end}}

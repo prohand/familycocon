@@ -1,0 +1,15 @@
+{{define "contenu"}}
+<section class="titre-page">
+  <h1>➕ Ajouter</h1>
+  <p>Que voulez-vous ajouter ?</p>
+</section>
+{{if .Donnees}}
+<div class="actions">
+  {{- range .Donnees}}
+  <a class="action" href="{{.URL}}"><span class="emoji">{{.Emoji}}</span>{{.Texte}}</a>
+  {{- end}}
+</div>
+{{else}}
+<div class="carte vide"><span class="emoji">🧺</span>Rien à ajouter pour l'instant.</div>
+{{end}}
+{{end}}
