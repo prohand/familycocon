@@ -1,0 +1,24 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<div class="marque">
+  <img src="{{statique "img/logo.svg"}}" alt="">
+  <h1>Vérification</h1>
+  <p>Encore une étape, {{.Prenom}} 🔐</p>
+</div>
+{{if .Erreur}}<p class="message-erreur" role="alert">{{.Erreur}}</p>{{end}}
+{{if .Passkeys}}
+<section class="carte bloc">
+  <button class="bouton large" type="button" data-passkey="verification">🔑 Utiliser ma passkey</button>
+</section>
+{{end}}
+{{if .TOTP}}
+{{if .Passkeys}}<p class="separateur">ou</p>{{end}}
+<form class="carte" method="post" action="/connexion/verification">
+  <label class="champ"><span>Code de l'application (6 chiffres) ou code de secours</span>
+    <input class="pin" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="16" required autofocus></label>
+  <button class="bouton large">Valider</button>
+</form>
+{{end}}
+<p class="separateur"><a class="lien-discret" href="/connexion">Annuler</a></p>
+{{end}}
+{{end}}

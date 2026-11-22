@@ -52,6 +52,9 @@ type formConnexion struct {
 	Role        string
 	Enfant      donnees.Membre
 	Prenom      string
+	TOTP        bool // second facteur : code de l'application
+	Passkeys    bool // second facteur : passkey
+	PasskeyOK   bool // connexion par passkey proposée (pas sur une adresse IP)
 }
 
 // inscriptionPermise : peut-on créer une nouvelle famille ?
@@ -100,6 +103,7 @@ func (a *App) afficherConnexion(w http.ResponseWriter, r *http.Request, statut i
 		f.Enfants, _ = a.Q.EnfantsAvecPin(r.Context(), fam)
 	}
 	f.Inscription = a.inscriptionPermise(r.Context())
+	_, _, f.PasskeyOK = a.domaineWebAuthn()
 	a.afficherAnonyme(w, r, statut, "comptes/connexion", "Connexion", f)
 }
 
@@ -150,19 +154,23 @@ func (a *App) connexion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fin(false)
-	a.Limiteur.Effacer(cleCompte)
-	if err := a.OuvrirSession(r.Context(), w, m); err != nil {
+	// Second facteur demandé (application ou passkey) : la connexion attend.
+	totp, passkeys, err := a.secondFacteur(r.Context(), m)
+	if err != nil {
 		a.ErreurInterne(w, r, err)
 		return
 	}
-	// L'appareil d'un parent devient un appareil de confiance : les enfants
-	// pourront s'y connecter avec leur code PIN.
-	if m.Role == RoleParent {
-		if err := a.MarquerAppareil(r.Context(), w, r, m.FamilleID); err != nil {
-			a.Journal.Error("appareil de confiance", "erreur", err)
+	if totp || passkeys {
+		if err := a.debuterSecondFacteur(w, r, m, f.Suite); err != nil {
+			f.Erreur = err.Error()
+			a.afficherConnexion(w, r, http.StatusServiceUnavailable, f)
 		}
+		return
 	}
-	a.Journal.Info("connexion", "membre", m.ID, "ip", ip.String())
+	if err := a.terminerConnexion(w, r, m, "mot de passe"); err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
 	http.Redirect(w, r, f.Suite, http.StatusSeeOther)
 }
 

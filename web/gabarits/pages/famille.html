@@ -43,6 +43,12 @@
         <button class="bouton petit secondaire">Changer le code</button>
       </form>
       {{end}}
+      {{if and .Mdp.Valid (ne .ID $c.Membre.ID)}}
+      <form method="post" action="/famille/membres/{{.ID}}/securite" hx-confirm="Retirer la double authentification et les passkeys de {{.Nom}} (téléphone perdu) ?">
+        {{template "jeton" $c.CSRF}}
+        <p><button class="bouton petit secondaire">🔐 Réinitialiser sa double authentification</button></p>
+      </form>
+      {{end}}
       {{if ne .ID $c.Membre.ID}}
       <form method="post" action="/famille/membres/{{.ID}}/retirer" hx-confirm="Retirer {{.Nom}} de la famille ?">
         {{template "jeton" $c.CSRF}}

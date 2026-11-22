@@ -193,3 +193,85 @@ if ("serviceWorker" in navigator) {
   document.addEventListener("DOMContentLoaded", verifier);
   document.addEventListener("htmx:afterSettle", verifier);
 })();
+
+// Passkeys (WebAuthn) : connexion sans mot de passe, second facteur, ajout.
+// Le serveur envoie les options en base64url ; le navigateur veut des octets.
+(function () {
+  "use strict";
+  if (!window.PublicKeyCredential) return;
+  function enOctets(b64) {
+    var s = atob((b64 + "===".slice((b64.length + 3) % 4)).replace(/-/g, "+").replace(/_/g, "/"));
+    var o = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) o[i] = s.charCodeAt(i);
+    return o.buffer;
+  }
+  function enB64(buf) {
+    var o = new Uint8Array(buf), s = "";
+    for (var i = 0; i < o.length; i++) s += String.fromCharCode(o[i]);
+    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  function jeton() {
+    try { return JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) { return ""; }
+  }
+  function lire(r) {
+    return r.json().catch(function () { return {}; }).then(function (d) {
+      if (!r.ok) throw new Error(d.erreur || "refusé");
+      return d;
+    });
+  }
+  function poster(url, corps) {
+    return fetch(url, { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-Jeton": jeton() }, body: JSON.stringify(corps) });
+  }
+  // Connexion : sans mot de passe (« connexion ») ou second facteur (« verification »).
+  function seConnecter(mode) {
+    var base = mode === "connexion" ? "/connexion/passkey" : "/connexion/verification";
+    return fetch(base + (mode === "connexion" ? "/defi" : "/defi"), { credentials: "same-origin" }).then(lire).then(function (o) {
+      o.challenge = enOctets(o.challenge);
+      (o.allowCredentials || []).forEach(function (c) { c.id = enOctets(c.id); });
+      return navigator.credentials.get({ publicKey: o });
+    }).then(function (cred) {
+      return poster(mode === "connexion" ? "/connexion/passkey" : "/connexion/verification/passkey", {
+        id: cred.id,
+        clientDataJSON: enB64(cred.response.clientDataJSON),
+        authenticatorData: enB64(cred.response.authenticatorData),
+        signature: enB64(cred.response.signature)
+      });
+    }).then(lire).then(function (d) { window.location.href = d.suite || "/"; });
+  }
+  function ajouter() {
+    var nom = document.getElementById("nom-passkey");
+    return fetch("/moi/securite/passkeys/defi", { credentials: "same-origin" }).then(lire).then(function (o) {
+      o.challenge = enOctets(o.challenge);
+      o.user.id = enOctets(o.user.id);
+      (o.excludeCredentials || []).forEach(function (c) { c.id = enOctets(c.id); });
+      return navigator.credentials.create({ publicKey: o });
+    }).then(function (cred) {
+      return poster("/moi/securite/passkeys", {
+        clientDataJSON: enB64(cred.response.clientDataJSON),
+        attestationObject: enB64(cred.response.attestationObject),
+        nom: nom ? nom.value : ""
+      });
+    }).then(function (r) {
+      if (!r.ok) return lire(r);
+      window.location.reload();
+    });
+  }
+  function montrer() {
+    document.querySelectorAll("[data-passkey]").forEach(function (b) { b.hidden = false; });
+  }
+  document.addEventListener("DOMContentLoaded", montrer);
+  document.addEventListener("htmx:afterSettle", montrer);
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-passkey]");
+    if (!b) return;
+    e.preventDefault();
+    b.disabled = true;
+    var mode = b.getAttribute("data-passkey");
+    var action = mode === "ajouter" ? ajouter() : seConnecter(mode);
+    action.catch(function (err) {
+      var msg = err && err.name === "NotAllowedError" ? "Annulé." : (err && err.message) || "Passkey refusée.";
+      if (window.fcToast) window.fcToast(msg, true);
+    }).finally(function () { b.disabled = false; });
+  });
+})();

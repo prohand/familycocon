@@ -29,6 +29,10 @@ tâches ménagères, menus, budget et espace enfants, sur le téléphone de chac
 
 - **Comptes** : un parent crée la famille et invite les autres adultes par un lien (7 jours, usage unique).
 - **Rôles** : parent ou enfant. Un enfant ne supprime rien et ne voit ni le budget ni les réglages.
+- **Double authentification et passkeys** (comptes à mot de passe) :
+  - code d'une application (Aegis, FreeOTP, Google Authenticator…) avec codes de secours ;
+  - passkeys : connexion sans mot de passe (empreinte, visage, code du téléphone), ou en second facteur ;
+  - un parent peut tout réinitialiser pour un membre qui a perdu son téléphone.
 - **Connexion enfant par code PIN** : sur un appareil où un parent s'est déjà connecté, l'enfant touche son prénom puis tape son code.
 - **Courses** :
   - listes partagées en temps réel, produits rangés par rayon, avec un emoji ;
@@ -95,6 +99,7 @@ Le conteneur tourne sans privilège : utilisateur 65532, système de fichiers en
    - Android (Chrome) : menu ⋮ › *Installer l'application* ;
    - iPhone (Safari) : *Partager* › *Sur l'écran d'accueil*.
 5. **Notifications** : page **Moi** › *Activer sur cet appareil*. HTTPS obligatoire. Sur iPhone, il faut d'abord avoir installé l'appli (étape 4).
+6. **Sécurité** : page **Moi** › *Double authentification et passkeys*. Les passkeys demandent un nom de domaine en HTTPS (pas une adresse IP).
 
 ## Configuration
 

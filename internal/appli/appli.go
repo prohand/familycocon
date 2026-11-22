@@ -38,6 +38,8 @@ type App struct {
 	Limiteur *Limiteur
 	// Temps réel (Server-Sent Events).
 	Direct *Direct
+	// Petites données de quelques minutes (connexion en attente, défis).
+	Memoire *MemoireCourte
 	// Notifications Web Push (nil tant que DemarrerPush n'a pas été appelé).
 	Push *Pousseur
 
@@ -60,6 +62,7 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 		Demarre:  time.Now(),
 		Limiteur: NouveauLimiteur(),
 		Direct:   nouveauDirect(),
+		Memoire:  NouvelleMemoireCourte(2000),
 		resumes:  map[string]ResumeFunc{},
 	}
 	sous, err := fs.Sub(web.Fichiers, "statique")
@@ -77,6 +80,7 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 	a.routesMoi()
 	a.Route("GET /direct", "", Membre, a.direct)
 	a.routesPush()
+	a.routesMFA()
 	a.Mux.HandleFunc("GET /hors-ligne", func(w http.ResponseWriter, r *http.Request) {
 		a.Statique.Servir(w, r, "hors-ligne.html", false)
 	})
