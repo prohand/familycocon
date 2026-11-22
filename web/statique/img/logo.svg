@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="FamilyCocon">
+  <!-- Logo FamilyCocon : un nid corail, trois petites têtes rondes à l'abri dedans -->
+  <circle cx="20" cy="29" r="7.5" fill="#F6B8A6"/>
+  <circle cx="44" cy="29" r="7.5" fill="#F6B8A6"/>
+  <circle cx="32" cy="25" r="9" fill="#F9CDBF"/>
+  <path d="M5 33c9 4 45 4 54 0-1.5 13-12 22-27 22S6.5 46 5 33z" fill="#E8735A"/>
+  <path d="M10 40c10 3.5 34 3.5 44 0M15 47c8 2.5 26 2.5 34 0" fill="none" stroke="#FCE3DA" stroke-width="2.4" stroke-linecap="round" opacity=".85"/>
+</svg>

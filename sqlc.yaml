@@ -1,0 +1,17 @@
+# Génération du code d'accès à la base (sqlc) : chaque requête SQL de
+# internal/donnees/requetes/ est vérifiée contre le schéma (les migrations),
+# puis transformée en fonction Go typée. Après une modification : make sql
+version: "2"
+sql:
+  - engine: sqlite
+    schema: internal/base/migrations
+    queries: internal/donnees/requetes
+    gen:
+      go:
+        package: donnees
+        out: internal/donnees
+        emit_empty_slices: true
+        emit_methods_with_db_argument: false
+        output_files_suffix: _gen
+        output_db_file_name: db_gen.go
+        output_models_file_name: modeles_gen.go
