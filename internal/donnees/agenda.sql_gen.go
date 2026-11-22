@@ -25,21 +25,22 @@ func (q *Queries) AjouterParticipant(ctx context.Context, arg AjouterParticipant
 }
 
 const creerEvenement = `-- name: CreerEvenement :one
-INSERT INTO evenements (famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le
+INSERT INTO evenements (famille_id, titre, lieu, note, debut, fin, journee, repetition, repetition_fin, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin
 `
 
 type CreerEvenementParams struct {
-	FamilleID  int64
-	Titre      string
-	Lieu       string
-	Note       string
-	Debut      int64
-	Fin        int64
-	Journee    int64
-	Repetition string
-	CreePar    sql.NullInt64
-	CreeLe     int64
+	FamilleID     int64
+	Titre         string
+	Lieu          string
+	Note          string
+	Debut         int64
+	Fin           int64
+	Journee       int64
+	Repetition    string
+	RepetitionFin string
+	CreePar       sql.NullInt64
+	CreeLe        int64
 }
 
 func (q *Queries) CreerEvenement(ctx context.Context, arg CreerEvenementParams) (Evenement, error) {
@@ -52,6 +53,7 @@ func (q *Queries) CreerEvenement(ctx context.Context, arg CreerEvenementParams) 
 		arg.Fin,
 		arg.Journee,
 		arg.Repetition,
+		arg.RepetitionFin,
 		arg.CreePar,
 		arg.CreeLe,
 	)
@@ -68,12 +70,13 @@ func (q *Queries) CreerEvenement(ctx context.Context, arg CreerEvenementParams) 
 		&i.Repetition,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.RepetitionFin,
 	)
 	return i, err
 }
 
 const evenementParID = `-- name: EvenementParID :one
-SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le FROM evenements WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin FROM evenements WHERE id = ? AND famille_id = ?
 `
 
 type EvenementParIDParams struct {
@@ -96,13 +99,14 @@ func (q *Queries) EvenementParID(ctx context.Context, arg EvenementParIDParams) 
 		&i.Repetition,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.RepetitionFin,
 	)
 	return i, err
 }
 
 const evenementsPeriode = `-- name: EvenementsPeriode :many
 
-SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le FROM evenements
+SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin FROM evenements
 WHERE famille_id = ? AND debut < ?2 AND (fin >= ?3 OR repetition <> '')
 ORDER BY debut
 `
@@ -135,6 +139,7 @@ func (q *Queries) EvenementsPeriode(ctx context.Context, arg EvenementsPeriodePa
 			&i.Repetition,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.RepetitionFin,
 		); err != nil {
 			return nil, err
 		}
@@ -150,20 +155,21 @@ func (q *Queries) EvenementsPeriode(ctx context.Context, arg EvenementsPeriodePa
 }
 
 const modifierEvenement = `-- name: ModifierEvenement :exec
-UPDATE evenements SET titre = ?, lieu = ?, note = ?, debut = ?, fin = ?, journee = ?, repetition = ?
+UPDATE evenements SET titre = ?, lieu = ?, note = ?, debut = ?, fin = ?, journee = ?, repetition = ?, repetition_fin = ?
 WHERE id = ? AND famille_id = ?
 `
 
 type ModifierEvenementParams struct {
-	Titre      string
-	Lieu       string
-	Note       string
-	Debut      int64
-	Fin        int64
-	Journee    int64
-	Repetition string
-	ID         int64
-	FamilleID  int64
+	Titre         string
+	Lieu          string
+	Note          string
+	Debut         int64
+	Fin           int64
+	Journee       int64
+	Repetition    string
+	RepetitionFin string
+	ID            int64
+	FamilleID     int64
 }
 
 func (q *Queries) ModifierEvenement(ctx context.Context, arg ModifierEvenementParams) error {
@@ -175,6 +181,7 @@ func (q *Queries) ModifierEvenement(ctx context.Context, arg ModifierEvenementPa
 		arg.Fin,
 		arg.Journee,
 		arg.Repetition,
+		arg.RepetitionFin,
 		arg.ID,
 		arg.FamilleID,
 	)

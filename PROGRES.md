@@ -23,6 +23,7 @@
 | Budget : opérations qui reviennent (automatiques) | **fait** |
 | Abonnements (parents), reliés au budget | **fait** |
 | Tâches dans l'agenda | **fait** |
+| Agenda : plus de répétitions + date de fin | **fait** |
 
 ## Mesures
 

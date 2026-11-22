@@ -120,17 +120,18 @@ type Echeance struct {
 }
 
 type Evenement struct {
-	ID         int64
-	FamilleID  int64
-	Titre      string
-	Lieu       string
-	Note       string
-	Debut      int64
-	Fin        int64
-	Journee    int64
-	Repetition string
-	CreePar    sql.NullInt64
-	CreeLe     int64
+	ID            int64
+	FamilleID     int64
+	Titre         string
+	Lieu          string
+	Note          string
+	Debut         int64
+	Fin           int64
+	Journee       int64
+	Repetition    string
+	CreePar       sql.NullInt64
+	CreeLe        int64
+	RepetitionFin string
 }
 
 type EvenementsMembre struct {

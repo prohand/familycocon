@@ -76,46 +76,6 @@ func chevauche(d, f, debut, fin time.Time) bool {
 	return d.Before(fin) && (f.After(debut) || !d.Before(debut))
 }
 
-// deplier : les occurrences d'un événement dans la période.
-func deplier(e donnees.Evenement, lieu *time.Location, debut, fin time.Time) [][2]time.Time {
-	d0 := time.Unix(e.Debut, 0).In(lieu)
-	duree := time.Duration(e.Fin-e.Debut) * time.Second
-	var out [][2]time.Time
-	switch e.Repetition {
-	case "semaine":
-		k := 0
-		if ecart := debut.Sub(d0) - duree; ecart > 0 {
-			k = int(ecart/(7*24*time.Hour)) - 1
-			k = max(k, 0)
-		}
-		for ; k < 100000; k++ {
-			d := time.Date(d0.Year(), d0.Month(), d0.Day()+7*k, d0.Hour(), d0.Minute(), 0, 0, lieu)
-			if !d.Before(fin) {
-				break
-			}
-			if chevauche(d, d.Add(duree), debut, fin) {
-				out = append(out, [2]time.Time{d, d.Add(duree)})
-			}
-		}
-	case "an":
-		for k := max(0, debut.Year()-d0.Year()-1); ; k++ {
-			d := time.Date(d0.Year()+k, d0.Month(), d0.Day(), d0.Hour(), d0.Minute(), 0, 0, lieu)
-			if !d.Before(fin) {
-				break
-			}
-			if chevauche(d, d.Add(duree), debut, fin) {
-				out = append(out, [2]time.Time{d, d.Add(duree)})
-			}
-		}
-	default:
-		f := time.Unix(e.Fin, 0).In(lieu)
-		if chevauche(d0, f, debut, fin) {
-			out = append(out, [2]time.Time{d0, f})
-		}
-	}
-	return out
-}
-
 // Occurrences : les occurrences de la période [debut, fin[, triées.
 func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin time.Time) ([]Occurrence, error) {
 	evts, err := m.a.Q.EvenementsPeriode(ctx, donnees.EvenementsPeriodeParams{FamilleID: c.Famille.ID, FinPeriode: fin.Unix(), DebutPeriode: debut.Unix()})
@@ -321,6 +281,17 @@ type formEvt struct {
 	HeureFin   string
 	Membres    []donnees.Membre
 	Choisis    map[int64]bool
+	Choix      []ChoixRepetition
+	Regle      regle  // répétition actuelle (cases des jours)
+	TexteRep   string // « Chaque 2e mardi du mois »
+	Semaine    []caseJour
+}
+
+// caseJour : une case « lun … dim » de la répétition « certains jours ».
+type caseJour struct {
+	N     int
+	Nom   string
+	Coche bool
 }
 
 func (m *Module) evenement(r *http.Request, c *appli.Contexte) (donnees.Evenement, error) {
@@ -337,7 +308,7 @@ func modifiable(c *appli.Contexte, e donnees.Evenement) bool {
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
-	f := &formEvt{Nouveau: r.PathValue("id") == "", Modifiable: true, Choisis: map[int64]bool{}}
+	f := &formEvt{Nouveau: r.PathValue("id") == "", Modifiable: true, Choisis: map[int64]bool{}, Choix: Choix}
 	var err error
 	if f.Membres, err = m.a.Membres(ctx, c); err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -356,6 +327,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Evt, f.Modifiable = e, modifiable(c, e)
+		f.Regle, f.TexteRep = lireRegle(e.Repetition), TexteRepetition(e, c.Lieu)
 		d, fin := c.Heure(e.Debut), c.Heure(e.Fin)
 		f.Date, f.DateFin = repetition.CleJour(d), repetition.CleJour(fin)
 		if e.Journee == 0 {
@@ -372,6 +344,9 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			}
 		}
 	}
+	for i := 1; i <= 7; i++ {
+		f.Semaine = append(f.Semaine, caseJour{N: i, Nom: repetition.NomsJours[i], Coche: f.Regle.Jours[i]})
+	}
 	titre := "Nouvel événement"
 	if !f.Nouveau {
 		titre = f.Evt.Titre
@@ -382,6 +357,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 // saisie : un événement lu dans le formulaire.
 type saisie struct {
 	titre, lieu, note, repetition string
+	repetitionFin                 string
 	debut, fin                    time.Time
 	journee                       bool
 	membres                       []int64
@@ -402,10 +378,16 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 	if utf8.RuneCountInString(s.lieu) > 80 || utf8.RuneCountInString(s.note) > 500 {
 		return s, "Lieu (80 caractères) ou note (500) trop long."
 	}
-	s.repetition = f.Get("repetition")
-	if s.repetition != "" && s.repetition != "semaine" && s.repetition != "an" {
-		return s, "Répétition inconnue."
+	rg := lireRegle(f.Get("repetition"))
+	if rg.Type == "jours" {
+		for i := 1; i <= 7; i++ {
+			rg.Jours[i] = f.Get("rjour"+strconv.Itoa(i)) == "1"
+		}
+		if rg.String() == "jours:" {
+			return s, "Cochez au moins un jour de la semaine."
+		}
 	}
+	s.repetition = rg.String()
 	jour, err := time.ParseInLocation("2006-01-02", f.Get("date"), c.Lieu)
 	if err != nil {
 		return s, "Date invalide."
@@ -415,6 +397,13 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 		if jourFin, err = time.ParseInLocation("2006-01-02", f.Get("date_fin"), c.Lieu); err != nil || jourFin.Before(jour) {
 			return s, "La date de fin doit être après le début."
 		}
+	}
+	if s.repetition != "" && f.Get("repetition_fin") != "" {
+		rf, err := time.ParseInLocation("2006-01-02", f.Get("repetition_fin"), c.Lieu)
+		if err != nil || rf.Before(jour) {
+			return s, "La fin de la répétition doit être après la date de l'événement."
+		}
+		s.repetitionFin = repetition.CleJour(rf)
 	}
 	s.journee = f.Get("journee") == "1" || f.Get("heure_debut") == ""
 	if s.journee {
@@ -480,7 +469,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		var err error
 		e, err = q.CreerEvenement(ctx, donnees.CreerEvenementParams{
 			FamilleID: c.Famille.ID, Titre: s.titre, Lieu: s.lieu, Note: s.note, Debut: s.debut.Unix(), Fin: s.fin.Unix(),
-			Journee: bool01(s.journee), Repetition: s.repetition, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+			Journee: bool01(s.journee), Repetition: s.repetition, RepetitionFin: s.repetitionFin, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 		})
 		if err != nil {
 			return err
@@ -516,7 +505,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
 		if err := q.ModifierEvenement(ctx, donnees.ModifierEvenementParams{
 			Titre: s.titre, Lieu: s.lieu, Note: s.note, Debut: s.debut.Unix(), Fin: s.fin.Unix(),
-			Journee: bool01(s.journee), Repetition: s.repetition, ID: e.ID, FamilleID: c.Famille.ID,
+			Journee: bool01(s.journee), Repetition: s.repetition, RepetitionFin: s.repetitionFin, ID: e.ID, FamilleID: c.Famille.ID,
 		}); err != nil {
 			return err
 		}

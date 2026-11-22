@@ -33,11 +33,16 @@
 
   <fieldset class="repetition">
     <legend>Revient ?</legend>
-    <div class="pilules-choix">
-      <label><input type="radio" name="repetition" value=""{{if eq .Evt.Repetition ""}} checked{{end}}><span>Non</span></label>
-      <label><input type="radio" name="repetition" value="semaine"{{if eq .Evt.Repetition "semaine"}} checked{{end}}><span>Chaque semaine</span></label>
-      <label><input type="radio" name="repetition" value="an"{{if eq .Evt.Repetition "an"}} checked{{end}}><span>Chaque année</span></label>
+    {{if .TexteRep}}<p class="aide">🔁 {{.TexteRep}}</p>{{end}}
+    <label class="champ"><span class="cache">Répétition</span>
+      <select name="repetition">
+        {{- range .Choix}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.Regle.Type}} selected{{end}}>{{.Nom}}</option>{{end}}
+      </select></label>
+    {{/* Affiché seulement pour « Certains jours » (CSS :has, pas de script). */}}
+    <div class="jours-repetition">
+      {{- range .Semaine}}<label><input type="checkbox" name="rjour{{.N}}" value="1"{{if .Coche}} checked{{end}}><span>{{.Nom}}</span></label>{{end}}
     </div>
+    <label class="champ fin-repetition"><span>Jusqu'au (facultatif)</span><input type="date" name="repetition_fin" value="{{.Evt.RepetitionFin}}"></label>
   </fieldset>
 
   <label class="champ"><span>Où ? (facultatif)</span><input name="lieu" value="{{.Evt.Lieu}}" maxlength="80"></label>
