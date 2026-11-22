@@ -53,7 +53,7 @@
   {{- range $s.Carnet}}
   <div class="ligne">
     <span class="heure">{{slice .Jour 8 10}}/{{slice .Jour 5 7}}<small>{{slice .Jour 0 4}}</small></span>
-    <span class="quoi">{{.Libelle}}<small>{{if .Km}}{{.Km}} km{{end}}{{if and .Km .Note}} · {{end}}{{.Note}}</small></span>
+    <span class="quoi">{{.Libelle}}<small>{{if .Km}}{{milliers .Km}} km{{end}}{{if and .Km .Note}} · {{end}}{{.Note}}</small></span>
     {{if .Montant}}<b>{{montant .Montant $s.Devise}}</b>{{end}}
     {{if $p}}<form method="post" action="/suivi/carnet/{{.ID}}/supprimer" hx-confirm="Supprimer cette ligne ?">{{template "jeton" $j}}<button class="crayon" aria-label="Supprimer">🗑️</button></form>{{end}}
   </div>

@@ -108,26 +108,13 @@ func (m *Module) ficheVehicule(w http.ResponseWriter, r *http.Request, c *appli.
 		v.Infos = append(v.Infos, "🔖 "+x.Immatriculation)
 	}
 	if x.Kilometrage > 0 {
-		v.Infos = append(v.Infos, fmt.Sprintf("🛣️ %s km", milliers(x.Kilometrage)))
+		v.Infos = append(v.Infos, fmt.Sprintf("🛣️ %s km", appli.Milliers(x.Kilometrage)))
 	}
 	if x.Notes != "" {
 		v.Infos = append(v.Infos, "📝 "+x.Notes)
 	}
 	v.KmURL = fmt.Sprintf("/vehicules/%d/km", x.ID)
 	m.afficherFiche(w, r, c, modVehicules, x.ID, v)
-}
-
-// milliers : 123456 → « 123 456 ».
-func milliers(n int64) string {
-	s := strconv.FormatInt(n, 10)
-	var b strings.Builder
-	for i, c := range s {
-		if i > 0 && (len(s)-i)%3 == 0 {
-			b.WriteRune(' ')
-		}
-		b.WriteRune(c)
-	}
-	return b.String()
 }
 
 type formVehicule struct {
