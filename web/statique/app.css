@@ -857,6 +857,89 @@ button.coche:hover { border-color: var(--taches-t); }
 .jours-semaine span { width: 46px; padding: 8px 0; text-align: center; }
 .repetition:has(input[value="jours"]:checked) .jours-semaine { display: flex; }
 
+
+/* ---------- Agenda ---------- */
+.navigation-periode { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+.navigation-periode h2 { font-size: 1.15rem; text-align: center; }
+.fleche {
+  width: 42px; height: 42px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--carte); box-shadow: var(--ombre);
+  font-size: 1.5rem; font-weight: 800; color: var(--agenda-t);
+}
+.centre-petit { text-align: center; margin: 4px 0 8px; }
+.semaine { display: grid; gap: 12px; }
+@media (min-width: 900px) { .semaine { grid-template-columns: repeat(2, 1fr); } }
+.jour-semaine { padding: 14px 18px; }
+.jour-semaine.aujourdhui { box-shadow: 0 0 0 2.5px var(--agenda-t), var(--ombre); }
+.jour-entete { display: flex; align-items: center; justify-content: space-between; }
+.jour-entete h3 { font-size: 1rem; }
+.ajout-jour {
+  width: 32px; height: 32px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--agenda); color: var(--agenda-t); font-weight: 800;
+}
+.rien { margin: 6px 0 0; color: var(--texte-doux); font-weight: 600; }
+.ligne.evt .heure { width: 52px; }
+.ligne.evt .heure small { display: block; font-weight: 600; font-size: .75rem; }
+.ligne.evt:hover .quoi { color: var(--agenda-t); }
+.pastilles { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; max-width: 45%; }
+
+.calendrier {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  background: var(--carte);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre);
+  padding: 10px;
+}
+.nom-jour { text-align: center; font-size: .75rem; font-weight: 800; color: var(--texte-doux); padding-bottom: 4px; }
+.case {
+  min-height: 58px;
+  border-radius: 12px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: background .15s;
+}
+.case:hover { background: var(--fond); }
+.case .num { font-weight: 800; font-size: .9rem; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; }
+.case.aujourdhui .num { background: var(--agenda-t); color: #fff; }
+.case.hors-mois { opacity: .35; }
+.case.choisie { background: var(--agenda); }
+/* Téléphone : un point coloré par événement ; PC : le titre. */
+.evt-mini {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c);
+  font-size: 0; overflow: hidden;
+}
+.plus-evt { font-size: .65rem; font-weight: 800; color: var(--texte-doux); }
+@media (min-width: 700px) {
+  .case { min-height: 92px; align-items: stretch; }
+  .case .num { align-self: flex-start; }
+  .evt-mini {
+    width: auto; height: auto; border-radius: 6px;
+    font-size: .72rem; font-weight: 800; padding: 1px 6px;
+    white-space: nowrap; text-overflow: ellipsis;
+    background: color-mix(in srgb, var(--c) 20%, transparent);
+    color: color-mix(in srgb, var(--c) 75%, var(--texte));
+  }
+}
+.sans-bord { border: 0; padding: 0; margin: 0; min-width: 0; }
+.qui { border: 0; padding: 0; margin: 14px 0; }
+.qui legend { font-weight: 800; font-size: .9rem; margin-bottom: 8px; padding: 0; }
+.qui legend small { color: var(--texte-doux); font-weight: 600; }
+.choix-membres { display: flex; flex-wrap: wrap; gap: 8px; }
+.choix-membres label { position: relative; cursor: pointer; }
+.choix-membres input { position: absolute; opacity: 0; }
+.choix-membres .pastille { padding: 7px 14px 7px 12px; font-size: .9rem; opacity: .55; border: 2px solid transparent; }
+.choix-membres input:checked + .pastille { opacity: 1; border-color: var(--c); }
+.choix-membres input:focus-visible + .pastille { outline: 3px solid var(--corail); outline-offset: 2px; }
+.champ textarea { resize: vertical; font-family: inherit; }
+
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

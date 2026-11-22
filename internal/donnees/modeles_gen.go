@@ -15,6 +15,25 @@ type Appareil struct {
 	VueLe     int64
 }
 
+type Evenement struct {
+	ID         int64
+	FamilleID  int64
+	Titre      string
+	Lieu       string
+	Note       string
+	Debut      int64
+	Fin        int64
+	Journee    int64
+	Repetition string
+	CreePar    sql.NullInt64
+	CreeLe     int64
+}
+
+type EvenementsMembre struct {
+	EvenementID int64
+	MembreID    int64
+}
+
 type Famille struct {
 	ID      int64
 	Nom     string

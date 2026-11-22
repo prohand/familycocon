@@ -1,0 +1,540 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// Package agenda : agenda partagé de la famille, vue semaine et vue mois.
+// Chaque événement concerne un ou plusieurs membres (pastilles à leur
+// couleur) ou toute la famille. Répétition possible chaque semaine (sport,
+// musique) ou chaque année (anniversaires).
+//
+// Droits : tout le monde crée ; on modifie ses propres événements (un
+// parent modifie tout) ; seuls les parents suppriment.
+package agenda
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"html/template"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"familycocon/internal/appli"
+	"familycocon/internal/donnees"
+	"familycocon/internal/repetition"
+)
+
+// Module : le module Agenda.
+type Module struct{ a *appli.App }
+
+const mod = "agenda"
+
+// Brancher ajoute les routes du module.
+func Brancher(a *appli.App) {
+	m := &Module{a: a}
+	a.Route("GET /agenda", mod, appli.Membre, m.page)
+	a.Route("GET /agenda/contenu", mod, appli.Membre, m.contenu)
+	a.Route("GET /agenda/nouveau", mod, appli.Membre, m.formulaire)
+	a.Route("POST /agenda", mod, appli.Membre, m.creer)
+	a.Route("GET /agenda/{id}", mod, appli.Membre, m.formulaire)
+	a.Route("POST /agenda/{id}", mod, appli.Membre, m.modifier)
+	a.Route("POST /agenda/{id}/supprimer", mod, appli.Parent, m.supprimer)
+
+	a.AjouterResume(mod, m.resume)
+	a.AjouterBloc(appli.BlocAccueil{Module: mod, Ordre: 1, Rendre: m.blocAccueil})
+	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "🗓️", Texte: "Un événement", URL: "/agenda/nouveau"})
+}
+
+// Occurrence : un événement à une date (un événement répété en a plusieurs).
+type Occurrence struct {
+	Evt     donnees.Evenement
+	Debut   time.Time
+	Fin     time.Time
+	Membres []*donnees.Membre // vide : toute la famille
+}
+
+// Heure : « 10:00 », « Journée ».
+func (o Occurrence) Heure() string {
+	if o.Evt.Journee == 1 {
+		return "Journée"
+	}
+	return o.Debut.Format("15:04")
+}
+
+// HeureFin : « 11:30 » (vide pour un événement d'une journée).
+func (o Occurrence) HeureFin() string {
+	if o.Evt.Journee == 1 || o.Fin.Equal(o.Debut) {
+		return ""
+	}
+	return o.Fin.Format("15:04")
+}
+
+// chevauche : l'occurrence touche-t-elle la période [debut, fin[ ?
+func chevauche(d, f, debut, fin time.Time) bool {
+	return d.Before(fin) && (f.After(debut) || !d.Before(debut))
+}
+
+// deplier : les occurrences d'un événement dans la période.
+func deplier(e donnees.Evenement, lieu *time.Location, debut, fin time.Time) [][2]time.Time {
+	d0 := time.Unix(e.Debut, 0).In(lieu)
+	duree := time.Duration(e.Fin-e.Debut) * time.Second
+	var out [][2]time.Time
+	switch e.Repetition {
+	case "semaine":
+		k := 0
+		if ecart := debut.Sub(d0) - duree; ecart > 0 {
+			k = int(ecart/(7*24*time.Hour)) - 1
+			k = max(k, 0)
+		}
+		for ; k < 100000; k++ {
+			d := time.Date(d0.Year(), d0.Month(), d0.Day()+7*k, d0.Hour(), d0.Minute(), 0, 0, lieu)
+			if !d.Before(fin) {
+				break
+			}
+			if chevauche(d, d.Add(duree), debut, fin) {
+				out = append(out, [2]time.Time{d, d.Add(duree)})
+			}
+		}
+	case "an":
+		for k := max(0, debut.Year()-d0.Year()-1); ; k++ {
+			d := time.Date(d0.Year()+k, d0.Month(), d0.Day(), d0.Hour(), d0.Minute(), 0, 0, lieu)
+			if !d.Before(fin) {
+				break
+			}
+			if chevauche(d, d.Add(duree), debut, fin) {
+				out = append(out, [2]time.Time{d, d.Add(duree)})
+			}
+		}
+	default:
+		f := time.Unix(e.Fin, 0).In(lieu)
+		if chevauche(d0, f, debut, fin) {
+			out = append(out, [2]time.Time{d0, f})
+		}
+	}
+	return out
+}
+
+// Occurrences : les occurrences de la période [debut, fin[, triées.
+func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin time.Time) ([]Occurrence, error) {
+	evts, err := m.a.Q.EvenementsPeriode(ctx, donnees.EvenementsPeriodeParams{FamilleID: c.Famille.ID, FinPeriode: fin.Unix(), DebutPeriode: debut.Unix()})
+	if err != nil {
+		return nil, err
+	}
+	parts, err := m.a.Q.ParticipantsDeFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return nil, err
+	}
+	membres, err := m.a.Membres(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	parID := map[int64]*donnees.Membre{}
+	for i := range membres {
+		parID[membres[i].ID] = &membres[i]
+	}
+	parEvt := map[int64][]*donnees.Membre{}
+	for _, p := range parts {
+		if mb := parID[p.MembreID]; mb != nil {
+			parEvt[p.EvenementID] = append(parEvt[p.EvenementID], mb)
+		}
+	}
+	var out []Occurrence
+	for _, e := range evts {
+		for _, dates := range deplier(e, c.Lieu, debut, fin) {
+			out = append(out, Occurrence{Evt: e, Debut: dates[0], Fin: dates[1], Membres: parEvt[e.ID]})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Evt.Journee != out[j].Evt.Journee {
+			return out[i].Evt.Journee == 1 // les journées entières d'abord
+		}
+		return out[i].Debut.Before(out[j].Debut)
+	})
+	return out, nil
+}
+
+// minuit : le jour t à 00:00.
+func minuit(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+// duJour : occurrences qui touchent le jour j.
+func duJour(occ []Occurrence, j time.Time) []Occurrence {
+	var out []Occurrence
+	fin := j.AddDate(0, 0, 1)
+	for _, o := range occ {
+		if chevauche(o.Debut, o.Fin, j, fin) {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// Jour : une case de la vue (semaine ou mois).
+type Jour struct {
+	Date        time.Time
+	Cle         string // 2026-11-22
+	Titre       string // « Lundi 16 »
+	Aujourdhui  bool
+	DansMois    bool
+	Occurrences []Occurrence
+	Plus        int // vue mois : événements non montrés
+}
+
+type vueAgenda struct {
+	Vue        string // semaine | mois
+	Titre      string // « Semaine du 16 au 22 novembre », « Novembre 2026 »
+	Precedent  string // date (2006-01-02) de la période précédente
+	Suivant    string
+	Jours      []Jour // semaine : 7 jours ; mois : 5 ou 6 semaines de 7 jours
+	Choisi     *Jour  // vue mois : le jour touché
+	NomsJours  []string
+	Aujourdhui string
+	Ref        string // date de référence de la période affichée
+}
+
+func titreJour(t time.Time) string {
+	j := appli.JourFR(t)
+	return strings.ToUpper(j[:1]) + j[1:] + " " + strconv.Itoa(t.Day())
+}
+
+func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request) (*vueAgenda, error) {
+	q := r.URL.Query()
+	maintenant := c.Maintenant()
+	aujourdhui := minuit(maintenant)
+	ref := aujourdhui
+	if d, err := time.ParseInLocation("2006-01-02", q.Get("date"), c.Lieu); err == nil {
+		ref = d
+	}
+	v := &vueAgenda{Vue: "semaine", NomsJours: repetition.NomsJours[1:], Aujourdhui: repetition.CleJour(aujourdhui)}
+	if q.Get("vue") == "mois" {
+		v.Vue = "mois"
+	}
+	v.Ref = repetition.CleJour(ref)
+	var debut, fin time.Time
+	if v.Vue == "semaine" {
+		debut = repetition.Lundi(ref)
+		fin = debut.AddDate(0, 0, 7)
+		dimanche := fin.AddDate(0, 0, -1)
+		if debut.Month() == dimanche.Month() {
+			v.Titre = fmt.Sprintf("Du %d au %d %s", debut.Day(), dimanche.Day(), appli.MoisFR(dimanche.Month()))
+		} else {
+			v.Titre = fmt.Sprintf("Du %d %s au %d %s", debut.Day(), appli.MoisFR(debut.Month()), dimanche.Day(), appli.MoisFR(dimanche.Month()))
+		}
+		v.Precedent = repetition.CleJour(debut.AddDate(0, 0, -7))
+		v.Suivant = repetition.CleJour(fin)
+	} else {
+		premier := time.Date(ref.Year(), ref.Month(), 1, 0, 0, 0, 0, c.Lieu)
+		debut = repetition.Lundi(premier)
+		dernier := premier.AddDate(0, 1, -1)
+		fin = repetition.Lundi(dernier).AddDate(0, 0, 7)
+		mois := appli.MoisFR(premier.Month())
+		v.Titre = strings.ToUpper(mois[:1]) + mois[1:] + " " + strconv.Itoa(premier.Year()) // les mois commencent par une lettre sans accent
+		v.Precedent = repetition.CleJour(premier.AddDate(0, -1, 0))
+		v.Suivant = repetition.CleJour(premier.AddDate(0, 1, 0))
+	}
+	occ, err := m.Occurrences(ctx, c, debut, fin)
+	if err != nil {
+		return nil, err
+	}
+	choisi := q.Get("jour")
+	if choisi == "" {
+		choisi = v.Aujourdhui
+	}
+	for j := debut; j.Before(fin); j = j.AddDate(0, 0, 1) {
+		jour := Jour{Date: j, Cle: repetition.CleJour(j), Titre: titreJour(j), Aujourdhui: j.Equal(aujourdhui),
+			DansMois: v.Vue == "semaine" || j.Month() == ref.Month(), Occurrences: duJour(occ, j)}
+		v.Jours = append(v.Jours, jour)
+	}
+	if v.Vue == "mois" {
+		for i := range v.Jours {
+			if v.Jours[i].Cle == choisi && v.Jours[i].DansMois {
+				copie := v.Jours[i]
+				v.Choisi = &copie
+			}
+			if n := len(v.Jours[i].Occurrences); n > 3 {
+				v.Jours[i].Plus = n - 3
+				v.Jours[i].Occurrences = v.Jours[i].Occurrences[:3]
+			}
+		}
+	}
+	return v, nil
+}
+
+func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	v, err := m.vue(r.Context(), c, r)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Afficher(w, r, c, "agenda/agenda", "Agenda", mod, v)
+}
+
+func (m *Module) contenu(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	v, err := m.vue(r.Context(), c, r)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Fragment(w, r, c, "agenda/agenda", "agenda", v)
+}
+
+// formEvt : données du formulaire.
+type formEvt struct {
+	Nouveau    bool
+	Modifiable bool
+	Evt        donnees.Evenement
+	Date       string
+	DateFin    string
+	HeureDebut string
+	HeureFin   string
+	Membres    []donnees.Membre
+	Choisis    map[int64]bool
+}
+
+func (m *Module) evenement(r *http.Request, c *appli.Contexte) (donnees.Evenement, error) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		return donnees.Evenement{}, sql.ErrNoRows
+	}
+	return m.a.Q.EvenementParID(r.Context(), donnees.EvenementParIDParams{ID: id, FamilleID: c.Famille.ID})
+}
+
+func modifiable(c *appli.Contexte, e donnees.Evenement) bool {
+	return c.EstParent() || (e.CreePar.Valid && e.CreePar.Int64 == c.Membre.ID)
+}
+
+func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	f := &formEvt{Nouveau: r.PathValue("id") == "", Modifiable: true, Choisis: map[int64]bool{}}
+	var err error
+	if f.Membres, err = m.a.Membres(ctx, c); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if f.Nouveau {
+		jour := minuit(c.Maintenant())
+		if d, err := time.ParseInLocation("2006-01-02", r.URL.Query().Get("date"), c.Lieu); err == nil {
+			jour = d
+		}
+		f.Date, f.DateFin, f.HeureDebut, f.HeureFin = repetition.CleJour(jour), repetition.CleJour(jour), "", ""
+	} else {
+		e, err := m.evenement(r, c)
+		if err != nil {
+			m.a.PageErreur(w, r, c, http.StatusNotFound, "Événement introuvable", "Cet événement n'existe plus.")
+			return
+		}
+		f.Evt, f.Modifiable = e, modifiable(c, e)
+		d, fin := c.Heure(e.Debut), c.Heure(e.Fin)
+		f.Date, f.DateFin = repetition.CleJour(d), repetition.CleJour(fin)
+		if e.Journee == 0 {
+			f.HeureDebut, f.HeureFin = d.Format("15:04"), fin.Format("15:04")
+		}
+		parts, err := m.a.Q.ParticipantsDeFamille(ctx, c.Famille.ID)
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		for _, p := range parts {
+			if p.EvenementID == e.ID {
+				f.Choisis[p.MembreID] = true
+			}
+		}
+	}
+	titre := "Nouvel événement"
+	if !f.Nouveau {
+		titre = f.Evt.Titre
+	}
+	m.a.Afficher(w, r, c, "agenda/evenement", titre, mod, f)
+}
+
+// saisie : un événement lu dans le formulaire.
+type saisie struct {
+	titre, lieu, note, repetition string
+	debut, fin                    time.Time
+	journee                       bool
+	membres                       []int64
+}
+
+func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
+	var s saisie
+	if err := r.ParseForm(); err != nil {
+		return s, "Formulaire invalide."
+	}
+	f := r.PostForm
+	s.titre = strings.TrimSpace(f.Get("titre"))
+	s.lieu = strings.TrimSpace(f.Get("lieu"))
+	s.note = strings.TrimSpace(f.Get("note"))
+	if n := utf8.RuneCountInString(s.titre); n < 1 || n > 80 {
+		return s, "Le titre doit faire entre 1 et 80 caractères."
+	}
+	if utf8.RuneCountInString(s.lieu) > 80 || utf8.RuneCountInString(s.note) > 500 {
+		return s, "Lieu (80 caractères) ou note (500) trop long."
+	}
+	s.repetition = f.Get("repetition")
+	if s.repetition != "" && s.repetition != "semaine" && s.repetition != "an" {
+		return s, "Répétition inconnue."
+	}
+	jour, err := time.ParseInLocation("2006-01-02", f.Get("date"), c.Lieu)
+	if err != nil {
+		return s, "Date invalide."
+	}
+	jourFin := jour
+	if f.Get("date_fin") != "" {
+		if jourFin, err = time.ParseInLocation("2006-01-02", f.Get("date_fin"), c.Lieu); err != nil || jourFin.Before(jour) {
+			return s, "La date de fin doit être après le début."
+		}
+	}
+	s.journee = f.Get("journee") == "1" || f.Get("heure_debut") == ""
+	if s.journee {
+		s.debut = jour
+		s.fin = jourFin.AddDate(0, 0, 1).Add(-time.Second)
+	} else {
+		hd, err1 := time.Parse("15:04", f.Get("heure_debut"))
+		s.debut = time.Date(jour.Year(), jour.Month(), jour.Day(), hd.Hour(), hd.Minute(), 0, 0, c.Lieu)
+		s.fin = s.debut.Add(time.Hour)
+		var err2 error
+		if f.Get("heure_fin") != "" {
+			var hf time.Time
+			hf, err2 = time.Parse("15:04", f.Get("heure_fin"))
+			s.fin = time.Date(jourFin.Year(), jourFin.Month(), jourFin.Day(), hf.Hour(), hf.Minute(), 0, 0, c.Lieu)
+		}
+		if err1 != nil || err2 != nil {
+			return s, "Heure invalide."
+		}
+		if s.fin.Before(s.debut) {
+			return s, "La fin doit être après le début."
+		}
+	}
+	membres, err := m.a.Membres(r.Context(), c)
+	if err != nil {
+		return s, "Erreur interne."
+	}
+	for _, mb := range membres {
+		if f.Get("membre_"+strconv.FormatInt(mb.ID, 10)) == "1" {
+			s.membres = append(s.membres, mb.ID)
+		}
+	}
+	return s, ""
+}
+
+func bool01(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func (m *Module) enregistrerMembres(ctx context.Context, q *donnees.Queries, evt int64, membres []int64) error {
+	if err := q.ViderParticipants(ctx, evt); err != nil {
+		return err
+	}
+	for _, id := range membres {
+		if err := q.AjouterParticipant(ctx, donnees.AjouterParticipantParams{EvenementID: evt, MembreID: id}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	s, msg := m.lire(r, c)
+	if msg != "" {
+		m.a.Echec(w, r, http.StatusBadRequest, msg)
+		return
+	}
+	var e donnees.Evenement
+	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		var err error
+		e, err = q.CreerEvenement(ctx, donnees.CreerEvenementParams{
+			FamilleID: c.Famille.ID, Titre: s.titre, Lieu: s.lieu, Note: s.note, Debut: s.debut.Unix(), Fin: s.fin.Unix(),
+			Journee: bool01(s.journee), Repetition: s.repetition, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+		})
+		if err != nil {
+			return err
+		}
+		return m.enregistrerMembres(ctx, q, e.ID, s.membres)
+	})
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	quand := appli.JourFR(s.debut) + " " + strconv.Itoa(s.debut.Day())
+	m.a.Publier(c, mod, fmt.Sprintf("%s a ajouté « %s » (%s) 🗓️", c.Membre.Nom, e.Titre, quand))
+	m.a.Flash(w, "Événement ajouté ✓")
+	m.a.Rediriger(w, r, "/agenda?date="+repetition.CleJour(s.debut))
+}
+
+func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	e, err := m.evenement(r, c)
+	if err != nil {
+		m.a.Echec(w, r, http.StatusNotFound, "Événement introuvable.")
+		return
+	}
+	if !modifiable(c, e) {
+		m.a.Echec(w, r, http.StatusForbidden, "Seul un parent (ou qui l'a créé) peut le modifier.")
+		return
+	}
+	s, msg := m.lire(r, c)
+	if msg != "" {
+		m.a.Echec(w, r, http.StatusBadRequest, msg)
+		return
+	}
+	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		if err := q.ModifierEvenement(ctx, donnees.ModifierEvenementParams{
+			Titre: s.titre, Lieu: s.lieu, Note: s.note, Debut: s.debut.Unix(), Fin: s.fin.Unix(),
+			Journee: bool01(s.journee), Repetition: s.repetition, ID: e.ID, FamilleID: c.Famille.ID,
+		}); err != nil {
+			return err
+		}
+		return m.enregistrerMembres(ctx, q, e.ID, s.membres)
+	})
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Publier(c, mod, "")
+	m.a.Flash(w, "Événement enregistré ✓")
+	m.a.Rediriger(w, r, "/agenda?date="+repetition.CleJour(s.debut))
+}
+
+func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	e, err := m.evenement(r, c)
+	if err != nil {
+		m.a.Echec(w, r, http.StatusNotFound, "Événement introuvable.")
+		return
+	}
+	if err := m.a.Q.SupprimerEvenement(r.Context(), donnees.SupprimerEvenementParams{ID: e.ID, FamilleID: c.Famille.ID}); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Publier(c, mod, "")
+	m.a.Flash(w, "Événement « "+e.Titre+" » supprimé")
+	m.a.Rediriger(w, r, "/agenda")
+}
+
+// duJourMeme : les occurrences d'aujourd'hui.
+func (m *Module) duJourMeme(ctx context.Context, c *appli.Contexte) ([]Occurrence, error) {
+	j := minuit(c.Maintenant())
+	return m.Occurrences(ctx, c, j, j.AddDate(0, 0, 1))
+}
+
+func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
+	occ, err := m.duJourMeme(ctx, c)
+	if err != nil || len(occ) == 0 {
+		return appli.Resume{Info: "Rien aujourd'hui"}
+	}
+	return appli.Resume{Info: appli.Pluriel(len(occ), "événement aujourd'hui", "événements aujourd'hui"), Badge: len(occ)}
+}
+
+func (m *Module) blocAccueil(ctx context.Context, c *appli.Contexte) (template.HTML, error) {
+	occ, err := m.duJourMeme(ctx, c)
+	if err != nil || len(occ) == 0 {
+		return "", err
+	}
+	return m.a.RendreBloc("agenda/agenda", "accueil-agenda", c, occ)
+}

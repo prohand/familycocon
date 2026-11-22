@@ -1,0 +1,55 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/agenda?date={{.Date}}">‹ Agenda</a>
+  <h1>{{if .Nouveau}}✨ Nouvel événement{{else}}🗓️ {{.Evt.Titre}}{{end}}</h1>
+  {{if not .Modifiable}}<p>Seul un parent (ou qui l'a créé) peut le modifier.</p>{{end}}
+</section>
+<form class="carte" method="post" action="{{if .Nouveau}}/agenda{{else}}/agenda/{{.Evt.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  <fieldset class="sans-bord"{{if not .Modifiable}} disabled{{end}}>
+  <label class="champ"><span>Quoi ?</span>
+    <input name="titre" value="{{.Evt.Titre}}" placeholder="Ex. : Piscine, Dentiste, Anniversaire de Jules" maxlength="80" required{{if .Nouveau}} autofocus{{end}}></label>
+  <div class="rangee">
+    <label class="champ"><span>Le</span><input type="date" name="date" value="{{.Date}}" required></label>
+    <label class="champ"><span>Jusqu'au (facultatif)</span><input type="date" name="date_fin" value="{{if ne .DateFin .Date}}{{.DateFin}}{{end}}"></label>
+  </div>
+  <div class="rangee">
+    <label class="champ"><span>De</span><input type="time" name="heure_debut" value="{{.HeureDebut}}"></label>
+    <label class="champ"><span>À</span><input type="time" name="heure_fin" value="{{.HeureFin}}"></label>
+  </div>
+  <p class="aide">Sans heure : toute la journée.</p>
+
+  <fieldset class="qui">
+    <legend>Pour qui ? <small>(personne de coché : toute la famille)</small></legend>
+    <div class="choix-membres">
+      {{- range .Membres}}
+      <label><input type="checkbox" name="membre_{{.ID}}" value="1"{{if index $.Donnees.Choisis .ID}} checked{{end}}>
+        <span class="pastille c{{.Couleur}}">{{.Nom}}</span></label>
+      {{- end}}
+    </div>
+  </fieldset>
+
+  <fieldset class="repetition">
+    <legend>Revient ?</legend>
+    <div class="pilules-choix">
+      <label><input type="radio" name="repetition" value=""{{if eq .Evt.Repetition ""}} checked{{end}}><span>Non</span></label>
+      <label><input type="radio" name="repetition" value="semaine"{{if eq .Evt.Repetition "semaine"}} checked{{end}}><span>Chaque semaine</span></label>
+      <label><input type="radio" name="repetition" value="an"{{if eq .Evt.Repetition "an"}} checked{{end}}><span>Chaque année</span></label>
+    </div>
+  </fieldset>
+
+  <label class="champ"><span>Où ? (facultatif)</span><input name="lieu" value="{{.Evt.Lieu}}" maxlength="80"></label>
+  <label class="champ"><span>Note (facultatif)</span><textarea name="note" rows="3" maxlength="500">{{.Evt.Note}}</textarea></label>
+  {{if .Modifiable}}<div class="boutons"><button class="bouton">{{if .Nouveau}}Ajouter{{else}}Enregistrer{{end}}</button></div>{{end}}
+  </fieldset>
+</form>
+{{if and (not .Nouveau) $c.EstParent}}
+<form class="bloc" method="post" action="/agenda/{{.Evt.ID}}/supprimer" hx-confirm="Supprimer « {{.Evt.Titre}} »{{if .Evt.Repetition}} (et toutes ses répétitions){{end}} ?">
+  {{template "jeton" $c.CSRF}}
+  <button class="bouton danger">Supprimer</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

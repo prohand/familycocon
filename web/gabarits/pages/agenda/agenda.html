@@ -1,0 +1,82 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>🗓️ Agenda</h1>
+</section>
+<div class="barre-actions">
+  <nav class="pilules" aria-label="Vue">
+    <a class="pilule{{if eq .Vue "semaine"}} active{{end}}" href="/agenda?vue=semaine">Semaine</a>
+    <a class="pilule{{if eq .Vue "mois"}} active{{end}}" href="/agenda?vue=mois">Mois</a>
+  </nav>
+  <a class="bouton" href="/agenda/nouveau">＋ Événement</a>
+</div>
+{{template "agenda" $}}
+{{end}}
+{{end}}
+
+{{define "agenda"}}
+{{with .Donnees}}
+<div id="agenda" hx-get="/agenda/contenu?vue={{.Vue}}&amp;date={{.Ref}}{{with .Choisi}}&amp;jour={{.Cle}}{{end}}" hx-trigger="maj-agenda from:body delay:300ms" hx-swap="outerHTML">
+  <div class="navigation-periode">
+    <a class="fleche" href="/agenda?vue={{.Vue}}&amp;date={{.Precedent}}" aria-label="Période précédente">‹</a>
+    <h2>{{.Titre}}</h2>
+    <a class="fleche" href="/agenda?vue={{.Vue}}&amp;date={{.Suivant}}" aria-label="Période suivante">›</a>
+  </div>
+  <p class="centre-petit"><a class="lien-discret" href="/agenda?vue={{.Vue}}">Aujourd'hui</a></p>
+
+  {{if eq .Vue "semaine"}}
+  <div class="semaine">
+    {{- range .Jours}}
+    <section class="carte jour-semaine{{if .Aujourdhui}} aujourdhui{{end}}">
+      <div class="jour-entete">
+        <h3>{{.Titre}}{{if .Aujourdhui}} <span class="etiquette">aujourd'hui</span>{{end}}</h3>
+        <a class="ajout-jour" href="/agenda/nouveau?date={{.Cle}}" aria-label="Ajouter le {{.Titre}}">＋</a>
+      </div>
+      {{- range .Occurrences}}{{template "ligne-evt" .}}{{else}}<p class="rien">—</p>{{end}}
+    </section>
+    {{- end}}
+  </div>
+  {{else}}
+  <div class="calendrier" role="grid">
+    {{- range .NomsJours}}<div class="nom-jour" role="columnheader">{{.}}</div>{{end}}
+    {{- range .Jours}}
+    <a class="case{{if not .DansMois}} hors-mois{{end}}{{if .Aujourdhui}} aujourdhui{{end}}{{$cle := .Cle}}{{with $.Donnees.Choisi}}{{if eq .Cle $cle}} choisie{{end}}{{end}}"
+       href="/agenda?vue=mois&amp;date={{.Cle}}&amp;jour={{.Cle}}" role="gridcell">
+      <span class="num">{{.Date.Day}}</span>
+      {{- range .Occurrences}}
+      <span class="evt-mini {{if .Membres}}c{{(index .Membres 0).Couleur}}{{else}}ctous{{end}}">{{.Evt.Titre}}</span>
+      {{- end}}
+      {{if .Plus}}<span class="plus-evt">+{{.Plus}}</span>{{end}}
+    </a>
+    {{- end}}
+  </div>
+  {{with .Choisi}}
+  <section class="carte bloc">
+    <div class="jour-entete">
+      <h3>{{.Titre}}</h3>
+      <a class="ajout-jour" href="/agenda/nouveau?date={{.Cle}}" aria-label="Ajouter le {{.Titre}}">＋</a>
+    </div>
+    {{- range .Occurrences}}{{template "ligne-evt" .}}{{else}}<p class="rien">Rien de prévu.</p>{{end}}
+  </section>
+  {{end}}
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "ligne-evt"}}
+<a class="ligne evt" href="/agenda/{{.Evt.ID}}">
+  <span class="heure">{{.Heure}}{{with .HeureFin}}<small>{{.}}</small>{{end}}</span>
+  <span class="quoi">{{.Evt.Titre}}{{if .Evt.Lieu}}<small>📍 {{.Evt.Lieu}}</small>{{end}}</span>
+  <span class="pastilles">{{template "pastilles" .Membres}}</span>
+</a>
+{{end}}
+
+{{/* Bloc de l'accueil : les événements du jour. */}}
+{{define "accueil-agenda"}}
+<div class="section-titre"><h2>Aujourd'hui</h2><a href="/agenda">Agenda ›</a></div>
+<div class="carte">
+  {{- range .Donnees}}{{template "ligne-evt" .}}{{end}}
+</div>
+{{end}}

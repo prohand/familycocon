@@ -46,3 +46,6 @@
 
 {{/* Avatar d'un membre (ou « tout le monde » si nil). */}}
 {{define "avatar-petit"}}{{if .}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{else}}<span class="avatar petit ctous" title="Tout le monde">∗</span>{{end}}{{end}}
+
+{{/* Pastilles des membres d'un événement (liste vide : toute la famille). */}}
+{{define "pastilles"}}{{range .}}<span class="pastille c{{.Couleur}}">{{.Nom}}</span>{{else}}<span class="pastille ctous">Tous</span>{{end}}{{end}}
