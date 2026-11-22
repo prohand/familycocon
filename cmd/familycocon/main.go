@@ -7,6 +7,7 @@
 //	familycocon                       lance le serveur
 //	familycocon -sante                vérifie que le serveur répond (HEALTHCHECK Docker)
 //	familycocon -sauvegarde FICHIER   copie la base à chaud (VACUUM INTO)
+//	familycocon -restaurer FICHIER    remet une sauvegarde en place (serveur ARRÊTÉ)
 //	familycocon -version              affiche la version
 //
 // La configuration est lue dans les variables d'environnement (voir .env.exemple).
@@ -18,6 +19,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -38,6 +40,7 @@ import (
 func main() {
 	sante := flag.Bool("sante", false, "vérifie que le serveur répond (code de sortie 0 = ok)")
 	sauvegarde := flag.String("sauvegarde", "", "copie la base dans ce fichier (un nom seul : dans FC_DONNEES/sauvegardes)")
+	restaurer := flag.String("restaurer", "", "remet cette sauvegarde en place (le serveur doit être arrêté)")
 	afficherVersion := flag.Bool("version", false, "affiche la version")
 	flag.Parse()
 
@@ -53,6 +56,17 @@ func main() {
 	switch {
 	case *sante:
 		os.Exit(verifierSante(cfg))
+	case *restaurer != "":
+		ancienne, err := base.Restaurer(context.Background(), *restaurer, cfg.Donnees)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "restauration :", err)
+			os.Exit(1)
+		}
+		fmt.Println("base restaurée depuis", *restaurer)
+		if ancienne != "" {
+			fmt.Println("ancienne base gardée :", ancienne)
+		}
+		return
 	case *sauvegarde != "":
 		if err := sauvegarder(cfg, *sauvegarde); err != nil {
 			fmt.Fprintln(os.Stderr, "sauvegarde :", err)
@@ -167,9 +181,13 @@ func verifierSante(cfg *config.Config) int {
 	return 0
 }
 
-// sauvegarder copie la base à chaud, puis vérifie la copie.
+// sauvegarder copie la base à chaud, puis vérifie la copie. Cible « - » :
+// la copie est écrite sur la sortie standard (docker exec … > fichier.db).
 func sauvegarder(cfg *config.Config, cible string) error {
-	if !strings.ContainsRune(cible, '/') {
+	flux := cible == "-"
+	if flux {
+		cible = filepath.Join(cfg.Donnees, "sauvegardes", fmt.Sprintf(".flux-%d.db", time.Now().UnixNano()))
+	} else if !strings.ContainsRune(cible, '/') {
 		cible = filepath.Join(cfg.Donnees, "sauvegardes", cible)
 	}
 	if err := os.MkdirAll(filepath.Dir(cible), 0o700); err != nil {
@@ -185,12 +203,25 @@ func sauvegarder(cfg *config.Config, cible string) error {
 	if _, err := base.CopierVers(ctx, db, cible); err != nil {
 		return err
 	}
+	if flux {
+		defer os.Remove(cible)
+	}
 	copie, err := base.OuvrirLecture(cible)
 	if err != nil {
 		return err
 	}
-	defer copie.Close()
-	if err := base.Verifier(ctx, copie); err != nil {
+	err = base.Verifier(ctx, copie)
+	copie.Close()
+	if err != nil {
+		return err
+	}
+	if flux {
+		f, err := os.Open(cible)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(os.Stdout, f)
 		return err
 	}
 	fmt.Println("sauvegarde faite :", cible)

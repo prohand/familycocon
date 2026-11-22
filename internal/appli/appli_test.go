@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"familycocon/internal/base"
 	"familycocon/internal/config"
@@ -155,5 +156,30 @@ func TestNotifierASCII(t *testing.T) {
 	var v map[string]map[string]any
 	if err := json.Unmarshal([]byte(h), &v); err != nil || v["fc-toast"]["texte"] != "Bravo Léa ! 🎉" {
 		t.Fatalf("relu : %v (%v)", v, err)
+	}
+}
+
+func TestProchaineSauvegarde(t *testing.T) {
+	paris, _ := time.LoadLocation("Europe/Paris")
+	m := time.Date(2026, 11, 22, 18, 0, 0, 0, paris)
+	if p := prochaine(m, "03:30"); p.Day() != 23 || p.Hour() != 3 || p.Minute() != 30 {
+		t.Fatal(p)
+	}
+	if p := prochaine(m, "20:00"); p.Day() != 22 || p.Hour() != 20 {
+		t.Fatal(p)
+	}
+}
+
+func TestEmpreinteLeurre(t *testing.T) {
+	// Le leurre doit être une empreinte valide (même coût de calcul) qui ne
+	// correspond à aucun mot de passe courant.
+	ok, occupe := ComparerOccupe(EmpreinteLeurre, "leurre-pour-un-compte-inconnu")
+	if ok || occupe {
+		t.Fatal("leurre invalide ou trop facile")
+	}
+	debut := time.Now()
+	ComparerOccupe(EmpreinteLeurre, "x")
+	if time.Since(debut) < time.Millisecond {
+		t.Fatal("le leurre ne coûte rien : la durée trahirait les comptes inexistants")
 	}
 }

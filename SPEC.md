@@ -61,5 +61,17 @@ Le fuseau horaire et la monnaie se règlent **dans l'interface** (réglages de l
 - Reverse proxy (Nginx ou Traefik) : transmettre l'en-tête `Host`, ne pas mettre
   en tampon `/direct` (SSE). Exemples dans `deploy/`.
 - `/health` : JSON, 200 si la base répond, 503 sinon. `familycocon -sante` pour Docker.
-- Sauvegarde : `familycocon -sauvegarde FICHIER` (à chaud, vérifiée), plus une
-  sauvegarde automatique quotidienne (`FC_SAUVEGARDE_HEURE`).
+- Sauvegarde : `familycocon -sauvegarde FICHIER` ou `-sauvegarde -` (sortie
+  standard), à chaud et vérifiée ; sauvegarde automatique quotidienne
+  (`FC_SAUVEGARDE_HEURE`, rotation `FC_SAUVEGARDE_GARDER`) ; script hôte
+  `scripts/sauvegarde.sh`.
+- Restauration : `familycocon -restaurer FICHIER`, serveur arrêté (vérifie
+  l'intégrité et la version, garde l'ancienne base) ; `scripts/restauration.sh`.
+
+## 7. Notifications push
+- Clé VAPID créée au premier démarrage, gardée en base (table `serveur`) :
+  elle suit les sauvegardes, les abonnements restent valides après une restauration.
+- Envoi en arrière-plan (file de 64, pas d'attente côté requête) ; pas de push
+  à un membre qui a une page ouverte (il voit déjà la notification à l'écran).
+- Chaque membre choisit les modules qui le notifient (courses : non par défaut).
+- Services de push acceptés : Google, Apple, Mozilla, Microsoft (liste fermée).

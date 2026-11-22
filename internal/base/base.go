@@ -227,3 +227,90 @@ func Verifier(ctx context.Context, db *sql.DB) error {
 	}
 	return nil
 }
+
+// Restaurer remplace la base du dossier par la sauvegarde source, après
+// l'avoir vérifiée (intégrité, version du schéma pas plus récente que ce
+// binaire). L'ancienne base est gardée à côté (« .avant-restauration-… »).
+// Le serveur doit être ARRÊTÉ.
+func Restaurer(ctx context.Context, source, dossier string) (string, error) {
+	src, err := OuvrirLecture(source)
+	if err != nil {
+		return "", fmt.Errorf("sauvegarde illisible : %w", err)
+	}
+	defer src.Close()
+	if err := Verifier(ctx, src); err != nil {
+		return "", err
+	}
+	var v sql.NullInt64
+	if err := src.QueryRowContext(ctx, `SELECT max(version) FROM schema_version`).Scan(&v); err != nil {
+		return "", fmt.Errorf("ce fichier n'est pas une sauvegarde de FamilyCocon : %w", err)
+	}
+	if int(v.Int64) > VersionAttendue() {
+		return "", fmt.Errorf("sauvegarde en version %d, plus récente que ce binaire (%d) : mettez FamilyCocon à jour d'abord", v.Int64, VersionAttendue())
+	}
+	contenu, err := os.ReadFile(source)
+	if err != nil {
+		return "", err
+	}
+	cible := filepath.Join(dossier, NomFichier)
+	temp := cible + ".restauration"
+	if err := os.WriteFile(temp, contenu, 0o600); err != nil {
+		return "", err
+	}
+	ancienne := ""
+	if _, err := os.Stat(cible); err == nil {
+		ancienne = cible + ".avant-restauration-" + time.Now().UTC().Format("20060102-150405")
+		if err := os.Rename(cible, ancienne); err != nil {
+			return "", err
+		}
+	}
+	// Les fichiers du journal WAL de l'ancienne base ne doivent pas être
+	// rejoués sur la nouvelle.
+	for _, suffixe := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(cible + suffixe); err == nil {
+			if ancienne != "" {
+				_ = os.Rename(cible+suffixe, ancienne+suffixe)
+			} else {
+				_ = os.Remove(cible + suffixe)
+			}
+		}
+	}
+	return ancienne, os.Rename(temp, cible)
+}
+
+// Sauvegardes automatiques : « auto-AAAAMMJJ-HHMMSS.db » dans le dossier.
+
+// SauvegardeAuto fait une sauvegarde vérifiée et ne garde que les garder
+// plus récentes sauvegardes automatiques.
+func SauvegardeAuto(ctx context.Context, db *sql.DB, dossier string, garder int) (string, error) {
+	nom := "auto-" + time.Now().Format("20060102-150405") + ".db"
+	chemin, err := Copier(ctx, db, dossier, nom)
+	if err != nil {
+		return "", err
+	}
+	copie, err := OuvrirLecture(chemin)
+	if err != nil {
+		return chemin, err
+	}
+	err = Verifier(ctx, copie)
+	copie.Close()
+	if err != nil {
+		return chemin, err
+	}
+	entrees, err := os.ReadDir(dossier)
+	if err != nil {
+		return chemin, err
+	}
+	var autos []string
+	for _, e := range entrees {
+		if strings.HasPrefix(e.Name(), "auto-") && strings.HasSuffix(e.Name(), ".db") {
+			autos = append(autos, e.Name())
+		}
+	}
+	sort.Strings(autos) // la date dans le nom : ordre chronologique
+	for len(autos) > garder {
+		_ = os.Remove(filepath.Join(dossier, autos[0]))
+		autos = autos[1:]
+	}
+	return chemin, nil
+}

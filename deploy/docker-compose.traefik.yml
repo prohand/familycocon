@@ -1,0 +1,39 @@
+# FamilyCocon derrière Traefik (exemple), à utiliser à la place du
+# docker-compose.yml principal. Traefik et FamilyCocon sur le même réseau
+# Docker « traefik » (externe). Dans .env :
+#   FC_URL_PUBLIQUE=https://famille.exemple.fr
+#   FC_PROXYS=172.16.0.0/12
+# Traefik transmet l'en-tête Host et ne met pas les SSE en tampon : rien
+# de spécial à régler pour le temps réel.
+services:
+  familycocon:
+    image: ghcr.io/prohand/familycocon:latest
+    container_name: familycocon
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - familycocon-donnees:/donnees
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 128m
+    cpus: 0.5
+    pids_limit: 64
+    networks: [traefik]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.familycocon.rule=Host(`famille.exemple.fr`)
+      - traefik.http.routers.familycocon.entrypoints=websecure
+      - traefik.http.routers.familycocon.tls.certresolver=letsencrypt
+      - traefik.http.services.familycocon.loadbalancer.server.port=8080
+      - traefik.http.middlewares.familycocon-gzip.compress=true
+      - traefik.http.routers.familycocon.middlewares=familycocon-gzip
+    logging:
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  familycocon-donnees:
+
+networks:
+  traefik:
+    external: true

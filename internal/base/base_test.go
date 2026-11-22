@@ -86,3 +86,52 @@ func TestBasePlusRecente(t *testing.T) {
 		t.Fatalf("erreur attendue, obtenu %v", err)
 	}
 }
+
+func TestRestaurerEtSauvegardeAuto(t *testing.T) {
+	ctx := context.Background()
+	dossier := t.TempDir()
+	db, err := Ouvrir(filepath.Join(dossier, NomFichier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Migrer(ctx, db, dossier); err != nil {
+		t.Fatal(err)
+	}
+	db.Exec(`INSERT INTO familles(nom, cree_le) VALUES ('Avant', 1)`)
+	sauv := filepath.Join(dossier, "sauvegardes")
+	// Rotation : 4 sauvegardes, 2 gardées.
+	var derniere string
+	os.MkdirAll(sauv, 0o700)
+	for i := 0; i < 4; i++ {
+		os.WriteFile(filepath.Join(sauv, "auto-2020010"+string(rune('1'+i))+"-000000.db"), []byte("x"), 0o600)
+	}
+	if derniere, err = SauvegardeAuto(ctx, db, sauv, 2); err != nil {
+		t.Fatal(err)
+	}
+	entrees, _ := os.ReadDir(sauv)
+	if len(entrees) != 2 {
+		t.Fatalf("%d sauvegardes gardées, 2 attendues", len(entrees))
+	}
+	db.Exec(`UPDATE familles SET nom = 'Après'`)
+	db.Close()
+
+	// Fichier qui n'est pas une base : refusé.
+	faux := filepath.Join(dossier, "faux.db")
+	os.WriteFile(faux, []byte("pas une base"), 0o600)
+	if _, err := Restaurer(ctx, faux, dossier); err == nil {
+		t.Fatal("faux fichier accepté")
+	}
+	ancienne, err := Restaurer(ctx, derniere, dossier)
+	if err != nil || ancienne == "" {
+		t.Fatalf("restauration : %v (%q)", err, ancienne)
+	}
+	db, err = Ouvrir(filepath.Join(dossier, NomFichier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var nom string
+	if err := db.QueryRow(`SELECT nom FROM familles`).Scan(&nom); err != nil || nom != "Avant" {
+		t.Fatalf("base restaurée : %q %v", nom, err)
+	}
+}

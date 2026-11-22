@@ -10,7 +10,9 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -50,8 +52,30 @@ func argon(mdp string, sel []byte, t, m uint32, p uint8) ([]byte, error) {
 	case <-minuteur.C:
 		return nil, ErrOccupe
 	}
-	defer func() { <-calculs }()
+	defer func() {
+		<-calculs
+		libererMemoire()
+	}()
 	return argon2.IDKey([]byte(mdp), sel, t, m, p, argonTaille), nil
+}
+
+// libererMemoire : un calcul Argon2id prend 19 Mio, que Go ne rend au
+// système que lentement. 5 s après le dernier calcul (une rafale de
+// connexions n'en déclenche qu'un), la mémoire est rendue tout de suite :
+// le serveur revient à quelques Mio au repos.
+var (
+	liberation   *time.Timer
+	liberationMu sync.Mutex
+)
+
+func libererMemoire() {
+	liberationMu.Lock()
+	defer liberationMu.Unlock()
+	if liberation != nil {
+		liberation.Reset(5 * time.Second)
+		return
+	}
+	liberation = time.AfterFunc(5*time.Second, debug.FreeOSMemory)
 }
 
 // VerifierRegles : longueur seulement (10 à 128 caractères). Pas de règle
@@ -136,7 +160,9 @@ func Empreinte(mdp string) (string, error) {
 
 // EmpreinteLeurre : comparée quand le compte n'existe pas, pour que la
 // durée de réponse ne dise pas si un nom d'utilisateur existe.
-var EmpreinteLeurre, _ = Empreinte("leurre-pour-un-compte-inconnu")
+// Écrite ici une fois pour toutes (mêmes paramètres que les vraies) : la
+// calculer au démarrage coûtait 19 Mio de RAM pour rien.
+const EmpreinteLeurre = "$argon2id$v=19$m=19456,t=2,p=1$bGV1cnJlLWZhbWlseWNv$4kH0xGq3n1y2nq5w0sQ3yV3fE7m1d3m1Zr6pJw4q9Xc"
 
 // Comparer dit si mdp correspond à l'empreinte (temps constant).
 func Comparer(empreinte, mdp string) bool {
