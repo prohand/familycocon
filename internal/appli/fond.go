@@ -10,6 +10,9 @@ import (
 // Demarrer lance les tâches de fond : ménage des sessions, invitations et
 // appareils périmés (toutes les heures).
 func (a *App) Demarrer(ctx context.Context) {
+	if err := a.DemarrerPush(ctx); err != nil {
+		a.Journal.Error("notifications push indisponibles", "erreur", err)
+	}
 	go func() {
 		minuteur := time.NewTicker(time.Hour)
 		defer minuteur.Stop()

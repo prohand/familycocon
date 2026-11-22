@@ -11,7 +11,7 @@
 | 6. Menus de la semaine → courses | **fait** |
 | 7. Budget + courbe SVG | **fait** |
 | 8. Espace enfants (étoiles, récompenses) | **fait** |
-| 9. PWA + Web Push | à faire |
+| 9. PWA + Web Push | **fait** |
 | 10. Sauvegarde / restauration, README, mesures finales | à faire |
 
 ## Mesures

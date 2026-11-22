@@ -30,16 +30,22 @@ type Message struct {
 // appareils par personne). Au-delà, la plus ancienne est fermée.
 const abonnesMax = 40
 
+// abonne : une page ouverte.
+type abonne struct {
+	ch     chan []byte
+	membre int64
+}
+
 // Direct : les abonnés, rangés par famille.
 type Direct struct {
 	mu      sync.Mutex
-	abonnes map[int64][]chan []byte
+	abonnes map[int64][]abonne
 	ferme   bool
 }
 
-func nouveauDirect() *Direct { return &Direct{abonnes: map[int64][]chan []byte{}} }
+func nouveauDirect() *Direct { return &Direct{abonnes: map[int64][]abonne{}} }
 
-func (d *Direct) abonner(famille int64) chan []byte {
+func (d *Direct) abonner(famille, membre int64) chan []byte {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	ch := make(chan []byte, 16)
@@ -49,10 +55,10 @@ func (d *Direct) abonner(famille int64) chan []byte {
 	}
 	l := d.abonnes[famille]
 	if len(l) >= abonnesMax {
-		close(l[0])
+		close(l[0].ch)
 		l = l[1:]
 	}
-	d.abonnes[famille] = append(l, ch)
+	d.abonnes[famille] = append(l, abonne{ch: ch, membre: membre})
 	return ch
 }
 
@@ -61,7 +67,7 @@ func (d *Direct) desabonner(famille int64, ch chan []byte) {
 	defer d.mu.Unlock()
 	l := d.abonnes[famille]
 	for i, x := range l {
-		if x == ch {
+		if x.ch == ch {
 			d.abonnes[famille] = append(l[:i:i], l[i+1:]...)
 			close(ch)
 			break
@@ -70,6 +76,19 @@ func (d *Direct) desabonner(famille int64, ch chan []byte) {
 	if len(d.abonnes[famille]) == 0 {
 		delete(d.abonnes, famille)
 	}
+}
+
+// EnLigne : le membre a-t-il une page ouverte (il voit déjà les
+// notifications à l'écran : pas besoin de notification push) ?
+func (d *Direct) EnLigne(famille, membre int64) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, x := range d.abonnes[famille] {
+		if x.membre == membre {
+			return true
+		}
+	}
+	return false
 }
 
 // Publier envoie un message à toute la famille. Un navigateur trop lent
@@ -81,9 +100,9 @@ func (d *Direct) Publier(famille int64, m Message) {
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	for _, ch := range d.abonnes[famille] {
+	for _, x := range d.abonnes[famille] {
 		select {
-		case ch <- b:
+		case x.ch <- b:
 		default:
 		}
 	}
@@ -106,19 +125,24 @@ func (d *Direct) fermer() {
 	defer d.mu.Unlock()
 	d.ferme = true
 	for f, l := range d.abonnes {
-		for _, ch := range l {
-			close(ch)
+		for _, x := range l {
+			close(x.ch)
 		}
 		delete(d.abonnes, f)
 	}
 }
 
 // Publier : raccourci pour un module (notification signée par le membre).
+// Avec un texte, les membres qui n'ont pas de page ouverte reçoivent aussi
+// une notification push (s'ils l'ont demandée pour ce module).
 func (a *App) Publier(c *Contexte, module, texte string) {
 	a.Direct.Publier(c.Famille.ID, Message{
 		Module: module, Texte: texte, Auteur: c.Membre.ID,
 		Couleur: c.Membre.Couleur, Initiale: Initiale(c.Membre.Nom),
 	})
+	if texte != "" && a.Push != nil {
+		a.Push.Annoncer(c.Famille.ID, c.Membre.ID, module, texte)
+	}
 }
 
 // pouls : un commentaire SSE régulier garde la connexion ouverte à travers
@@ -140,7 +164,7 @@ func (a *App) direct(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	}
 	_ = rc.Flush()
 
-	ch := a.Direct.abonner(c.Famille.ID)
+	ch := a.Direct.abonner(c.Famille.ID, c.Membre.ID)
 	defer a.Direct.desabonner(c.Famille.ID, ch)
 	minuteur := time.NewTicker(pouls)
 	defer minuteur.Stop()

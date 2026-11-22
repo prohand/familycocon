@@ -39,6 +39,24 @@
   </form>
 </section>
 
+<section class="carte bloc">
+  <h2>🔔 Notifications</h2>
+  <p class="aide">Sur le téléphone, même quand FamilyCocon est fermé.{{if .Appareils}} {{pluriel .Appareils "appareil abonné" "appareils abonnés"}}.{{end}}</p>
+  <p><button class="bouton secondaire" type="button" data-push="activer">🔔 Activer sur cet appareil</button></p>
+  <p class="aide" id="etat-push"></p>
+  <form method="post" action="/moi/notifications">
+    {{template "jeton" $c.CSRF}}
+    {{- range .Modules}}
+    <label class="interrupteur">
+      <span class="emoji">{{.Emoji}}</span><span class="nom">{{.Nom}}</span>
+      <input type="checkbox" name="push_{{.Cle}}" value="1"{{if contient $.Donnees.Push .Cle}} checked{{end}}>
+      <span class="glissiere"></span>
+    </label>
+    {{- end}}
+    <div class="boutons"><button class="bouton">Enregistrer</button></div>
+  </form>
+</section>
+
 {{if .AMotDePasse}}
 <section class="carte bloc">
   <h2>🔑 Mot de passe</h2>

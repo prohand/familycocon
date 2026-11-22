@@ -8,6 +8,15 @@ import (
 	"database/sql"
 )
 
+type AbonnementsPush struct {
+	ID       int64
+	MembreID int64
+	Adresse  string
+	P256dh   []byte
+	Auth     []byte
+	CreeLe   int64
+}
+
 type Appareil struct {
 	Empreinte []byte
 	FamilleID int64
@@ -82,6 +91,7 @@ type Membre struct {
 	Raccourcis  string
 	Actif       int64
 	CreeLe      int64
+	PushModules string
 }
 
 type Mission struct {
@@ -176,6 +186,11 @@ type Repas struct {
 	DansCourses int64
 	CreePar     sql.NullInt64
 	CreeLe      int64
+}
+
+type Serveur struct {
+	Nom    string
+	Valeur []byte
 }
 
 type Session struct {

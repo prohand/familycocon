@@ -18,6 +18,9 @@ type donneesMoi struct {
 	Choisis     []string // les 4 cases actuelles
 	Couleurs    []int
 	AMotDePasse bool
+	Modules     []ModuleDef // modules qui peuvent notifier
+	Push        []string    // modules choisis
+	Appareils   int64       // appareils abonnés
 }
 
 func (a *App) routesMoi() {
@@ -28,7 +31,9 @@ func (a *App) routesMoi() {
 }
 
 func (a *App) pageMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
-	d := donneesMoi{Possibles: RaccourcisPossibles(c), Couleurs: []int{1, 2, 3, 4, 5, 6, 7, 8}, AMotDePasse: c.Membre.Mdp.Valid}
+	d := donneesMoi{Possibles: RaccourcisPossibles(c), Couleurs: []int{1, 2, 3, 4, 5, 6, 7, 8}, AMotDePasse: c.Membre.Mdp.Valid,
+		Modules: ModulesVisibles(c), Push: strings.Split(c.Membre.PushModules, ",")}
+	d.Appareils, _ = a.Q.CompterAbonnements(r.Context(), c.Membre.ID)
 	for _, rc := range Raccourcis(c) {
 		d.Choisis = append(d.Choisis, rc.Cle)
 	}

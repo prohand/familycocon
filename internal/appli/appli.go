@@ -38,6 +38,8 @@ type App struct {
 	Limiteur *Limiteur
 	// Temps réel (Server-Sent Events).
 	Direct *Direct
+	// Notifications Web Push (nil tant que DemarrerPush n'a pas été appelé).
+	Push *Pousseur
 
 	// Fonctions de gabarit ajoutées par les modules avant Charger.
 	fonctions template.FuncMap
@@ -74,6 +76,10 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 	a.routesFamille()
 	a.routesMoi()
 	a.Route("GET /direct", "", Membre, a.direct)
+	a.routesPush()
+	a.Mux.HandleFunc("GET /hors-ligne", func(w http.ResponseWriter, r *http.Request) {
+		a.Statique.Servir(w, r, "hors-ligne.html", false)
+	})
 	return a, nil
 }
 
