@@ -20,17 +20,13 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		"initiale": Initiale,
 		// {{pluriel 3 "produit" "produits"}} → 3 produits
 		"pluriel": func(n any, un, plusieurs string) string {
-			var v int64
 			switch x := n.(type) {
 			case int:
-				v = int64(x)
+				return Pluriel(x, un, plusieurs)
 			case int64:
-				v = x
+				return Pluriel(x, un, plusieurs)
 			}
-			if v == 0 || v == 1 || v == -1 {
-				return fmt.Sprintf("%d %s", v, un)
-			}
-			return fmt.Sprintf("%d %s", v, plusieurs)
+			return fmt.Sprint(n, " ", plusieurs)
 		},
 		// {{montant 123456 "EUR"}} → 1 234,56 €
 		"montant": Montant,
@@ -60,6 +56,14 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		"ajouter":  func(a, b int) int { return a + b },
 		"couleurs": func() []int { return []int{1, 2, 3, 4, 5, 6, 7, 8} },
 	}
+}
+
+// Pluriel : « 1 produit », « 3 produits » (0 et 1 au singulier, en français).
+func Pluriel[T ~int | ~int64](n T, un, plusieurs string) string {
+	if n >= -1 && n <= 1 {
+		return fmt.Sprintf("%d %s", n, un)
+	}
+	return fmt.Sprintf("%d %s", n, plusieurs)
 }
 
 // Initiale : première lettre, en majuscule.

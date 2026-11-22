@@ -36,6 +36,8 @@ type App struct {
 
 	// Limite des tentatives de connexion.
 	Limiteur *Limiteur
+	// Temps réel (Server-Sent Events).
+	Direct *Direct
 
 	// Fonctions de gabarit ajoutées par les modules avant Charger.
 	fonctions template.FuncMap
@@ -55,6 +57,7 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 		Mux:      http.NewServeMux(),
 		Demarre:  time.Now(),
 		Limiteur: NouveauLimiteur(),
+		Direct:   nouveauDirect(),
 		resumes:  map[string]ResumeFunc{},
 	}
 	sous, err := fs.Sub(web.Fichiers, "statique")
@@ -70,6 +73,7 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 	a.routesAccueil()
 	a.routesFamille()
 	a.routesMoi()
+	a.Route("GET /direct", "", Membre, a.direct)
 	return a, nil
 }
 

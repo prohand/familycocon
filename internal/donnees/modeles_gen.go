@@ -33,6 +33,13 @@ type Invitation struct {
 	ExpireLe  int64
 }
 
+type Liste struct {
+	ID        int64
+	FamilleID int64
+	Nom       string
+	CreeLe    int64
+}
+
 type Membre struct {
 	ID          int64
 	FamilleID   int64
@@ -45,6 +52,30 @@ type Membre struct {
 	Raccourcis  string
 	Actif       int64
 	CreeLe      int64
+}
+
+type Produit struct {
+	ID        int64
+	ListeID   int64
+	Nom       string
+	Quantite  string
+	Rayon     string
+	Emoji     string
+	Pris      int64
+	AjoutePar sql.NullInt64
+	PrisPar   sql.NullInt64
+	CreeLe    int64
+	PrisLe    sql.NullInt64
+}
+
+type ProduitsConnu struct {
+	FamilleID int64
+	Cle       string
+	Nom       string
+	Rayon     string
+	Emoji     string
+	Compte    int64
+	VuLe      int64
 }
 
 type Session struct {

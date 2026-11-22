@@ -42,4 +42,4 @@ func (a *App) Menage(ctx context.Context) {
 }
 
 // Arreter ferme proprement ce qui doit l'être avant l'arrêt du serveur.
-func (a *App) Arreter() {}
+func (a *App) Arreter() { a.Direct.fermer() }

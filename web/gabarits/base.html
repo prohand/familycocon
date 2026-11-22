@@ -13,11 +13,10 @@
   <link rel="preload" href="/statique/fonts/nunito.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{statique "app.css"}}">
   <script src="{{statique "js/htmx.min.js"}}" defer></script>
-  <script src="{{statique "js/sse.min.js"}}" defer></script>
   <script src="{{statique "js/app.js"}}" defer></script>
 </head>
 {{- if .C}}
-<body hx-boost="true" hx-headers='{"X-Jeton": "{{.C.CSRF}}"}' hx-ext="sse" sse-connect="/direct" data-membre="{{.C.Membre.ID}}">
+<body hx-boost="true" hx-headers='{"X-Jeton": "{{.C.CSRF}}"}' data-direct="/direct" data-membre="{{.C.Membre.ID}}">
 <header class="entete">
   <div class="conteneur">
     <a class="logo-lien" href="/" aria-label="Accueil"><img class="logo" src="{{statique "img/logo.svg"}}" alt=""></a>

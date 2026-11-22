@@ -2,10 +2,13 @@
 
 package main
 
-import "familycocon/internal/appli"
+import (
+	"familycocon/internal/appli"
+	"familycocon/internal/courses"
+)
 
 // brancherModules ajoute les routes de chaque module (courses, agenda…).
 func brancherModules(a *appli.App) error {
-	_ = a
+	courses.Brancher(a)
 	return nil
 }

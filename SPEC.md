@@ -12,9 +12,9 @@ Application web d'organisation familiale, auto-hébergée, pensée pour le tél�
 | Base | SQLite, `modernc.org/sqlite` (pur Go) | pas de cgo → binaire statique ; une seule connexion, mode WAL |
 | Requêtes | SQL écrit à la main + **sqlc** | chaque requête est vérifiée contre le schéma à la génération ; code Go typé, sans dépendance à l'exécution |
 | Gabarits | `html/template` embarqués (`embed`) | échappement automatique (pas d'injection HTML) |
-| Front | htmx 2.0.11 + extension SSE 2.2.4 + CSS à la main | ~18 Ko gzip au total ; pas de framework JS |
+| Front | htmx 2.0.11 + `app.js` (~3 Ko) + CSS à la main | ~20 Ko gzip au total ; pas de framework JS |
 | Police | Nunito (variable, latin), embarquée | 39 Ko, licence OFL ; aucun appel à Google Fonts |
-| Temps réel | Server-Sent Events (bibliothèque standard) | plus simple que WebSocket, passe par tous les proxys |
+| Temps réel | Server-Sent Events (bibliothèque standard ; `EventSource` du navigateur, sans l'extension htmx) | plus simple que WebSocket, passe par tous les proxys, reconnexion automatique |
 | Mots de passe | Argon2id (`golang.org/x/crypto`) | repris de mirador-stack (paramètres OWASP, 2 calculs simultanés au plus) |
 | Web Push | RFC 8291/8292 écrit en Go (repris de mirador-stack) | aucune dépendance |
 | Journal | `log/slog` (JSON en production) | bibliothèque standard |

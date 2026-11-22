@@ -54,3 +54,69 @@
     }
   });
 })();
+
+// Temps réel : une connexion /direct par page (EventSource se reconnecte
+// tout seul). Message « fc » : { module, texte, auteur, couleur, initiale }.
+//   - module : la page se met à jour (événement « maj-<module> » sur body,
+//     écouté par les blocs htmx : hx-trigger="maj-courses from:body") ;
+//   - texte : notification, sauf pour son auteur.
+(function () {
+  "use strict";
+  var source = null;
+  function connecter() {
+    var url = document.body && document.body.getAttribute("data-direct");
+    if (!url || source || !window.EventSource) return;
+    source = new EventSource(url);
+    source.addEventListener("fc", function (e) {
+      var m;
+      try { m = JSON.parse(e.data); } catch (_) { return; }
+      var moi = document.body.getAttribute("data-membre");
+      if (m.module && window.htmx) htmx.trigger(document.body, "maj-" + m.module, m);
+      if (m.texte && String(m.auteur) !== moi) window.fcToast(m.texte, false, m.couleur, m.initiale);
+    });
+  }
+  document.addEventListener("DOMContentLoaded", connecter);
+  // Page mise en arrière-plan longtemps (téléphone) : on rafraîchit au retour.
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && source && source.readyState === 2) {
+      source = null;
+      connecter();
+    }
+  });
+})();
+
+// Formulaires d'ajout rapide (data-vider) : vidés après l'envoi, le curseur
+// reste dans le champ pour enchaîner (« pain », « lait », « œufs »…).
+document.addEventListener("htmx:afterRequest", function (e) {
+  var f = e.detail.elt;
+  if (!e.detail.successful || !f || !f.matches || !f.matches("form[data-vider]")) return;
+  f.reset();
+  var champ = f.querySelector("input:not([type=hidden])");
+  if (champ) champ.focus();
+});
+
+// Rayons repliés : gardés en mémoire sur cet appareil (la liste est
+// rechargée à chaque changement, les rayons repliés le restent).
+(function () {
+  "use strict";
+  var CLE = "fc-rayons-replies";
+  function lire() {
+    try { return JSON.parse(localStorage.getItem(CLE) || "{}"); } catch (_) { return {}; }
+  }
+  function appliquer() {
+    var replies = lire();
+    document.querySelectorAll("details[data-rayon]").forEach(function (d) {
+      if (replies[d.getAttribute("data-rayon")]) d.removeAttribute("open");
+    });
+  }
+  document.addEventListener("toggle", function (e) {
+    var d = e.target;
+    if (!d.matches || !d.matches("details[data-rayon]")) return;
+    var replies = lire();
+    if (d.open) delete replies[d.getAttribute("data-rayon")];
+    else replies[d.getAttribute("data-rayon")] = 1;
+    try { localStorage.setItem(CLE, JSON.stringify(replies)); } catch (_) {}
+  }, true);
+  document.addEventListener("DOMContentLoaded", appliquer);
+  document.addEventListener("htmx:afterSettle", appliquer);
+})();
