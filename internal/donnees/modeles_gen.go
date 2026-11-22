@@ -24,6 +24,13 @@ type Appareil struct {
 	VueLe     int64
 }
 
+type CodesSecour struct {
+	MembreID  int64
+	Empreinte []byte
+	CreeLe    int64
+	UtiliseLe int64
+}
+
 type Echange struct {
 	ID           int64
 	RecompenseID int64
@@ -92,6 +99,8 @@ type Membre struct {
 	Actif       int64
 	CreeLe      int64
 	PushModules string
+	Totp        string
+	TotpDernier int64
 }
 
 type Mission struct {
@@ -131,6 +140,19 @@ type Operation struct {
 	Fixe      int64
 	CreePar   sql.NullInt64
 	CreeLe    int64
+}
+
+type Passkey struct {
+	ID          int64
+	MembreID    int64
+	Identifiant []byte
+	ClePublique []byte
+	Algorithme  int64
+	Compteur    int64
+	Domaine     string
+	Nom         string
+	CreeLe      int64
+	UtiliseLe   int64
 }
 
 type Produit struct {

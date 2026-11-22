@@ -20,7 +20,8 @@ Application web d'organisation familiale, auto-hébergée, pensée pour le tél�
 | Journal | `log/slog` (JSON en production) | bibliothèque standard |
 | Image | `scratch` : binaire + certificats + licences | ni shell ni outil ; utilisateur 65532 |
 
-Dépendances directes : `modernc.org/sqlite`, `golang.org/x/crypto`. Rien d'autre.
+Dépendances directes : `modernc.org/sqlite`, `golang.org/x/crypto`, `rsc.io/qr` (QR code
+de la double authentification, ~30 Ko, BSD). Rien d'autre.
 
 ## 2. Configuration
 Variables d'environnement (`.env.exemple`) : `FC_URL_PUBLIQUE`, `FC_PROXYS`,
@@ -44,11 +45,32 @@ Le fuseau horaire et la monnaie se règlent **dans l'interface** (réglages de l
   un module désactivé n'a plus de tuile, de raccourci ni de page (404).
 - Raccourcis de la barre du bas : 4 cases autour du « + », choisies par chaque membre.
 
+## 4 bis. Double authentification et passkeys
+Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
+(TOTP, codes de secours, vérification WebAuthn avec son petit décodeur CBOR).
+- **Application (TOTP)** : QR code généré par le serveur (rien ne sort), code à
+  6 chiffres, ±30 s, anti-rejeu (le dernier pas accepté est gardé). 10 codes de
+  secours à usage unique, gardés en empreinte, montrés une seule fois.
+- **Passkeys** (WebAuthn) : jusqu'à 10 par compte.
+  - seule, sans mot de passe : l'appareil doit vérifier la personne (code,
+    empreinte, visage) ;
+  - ou en second facteur après le mot de passe (un simple toucher suffit).
+  - Domaine et origine tirés de `FC_URL_PUBLIQUE` ; impossible sur une adresse IP.
+- Connexion en attente du second facteur : 5 minutes, en mémoire (cookie `fc_attente`).
+- Désactiver la 2FA ou refaire des codes de secours : mot de passe redemandé.
+- Téléphone perdu : un parent réinitialise la 2FA et les passkeys d'un membre
+  (ses sessions sont fermées).
+- Le secret TOTP est en clair dans la base (comme les empreintes de mots de
+  passe, la base est à protéger) : le chiffrer avec une clé gardée à côté ne
+  protégerait de rien, et une clé gardée ailleurs casserait les restaurations.
+
 ## 5. Sécurité (modèle de menaces)
 | Menace | Parade |
 |---|---|
 | Vol de mot de passe en base | Argon2id ; jetons stockés en empreinte |
 | Devinette de mot de passe / PIN | limite de tentatives par compte et par IP, en mémoire ; durée constante (empreinte leurre) |
+| Mot de passe volé | double authentification (application ou passkey), codes à usage unique, anti-rejeu |
+| Hameçonnage | passkeys : liées au domaine et à l'origine, vérifiées par le serveur |
 | CSRF | `http.CrossOriginProtection` (Sec-Fetch-Site / Origin) **et** jeton par session envoyé par htmx (en-tête) et dans les formulaires |
 | Vol de session | cookie `HttpOnly`, `Secure` (https), `SameSite=Lax`, préfixe `__Host-` |
 | Injection HTML / script | `html/template` ; CSP stricte sans script ni style « inline » |

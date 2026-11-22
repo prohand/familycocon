@@ -53,5 +53,5 @@ UPDATE membres SET raccourcis = ? WHERE id = ?;
 -- Un membre retire n'est pas efface (l'historique " qui a fait quoi " reste
 -- lisible) : il est desactive, perd ses identifiants et ses sessions.
 -- name: RetirerMembre :exec
-UPDATE membres SET actif = 0, identifiant = NULL, mdp = NULL, pin = NULL
+UPDATE membres SET actif = 0, identifiant = NULL, mdp = NULL, pin = NULL, totp = '', totp_dernier = 0
 WHERE id = ? AND famille_id = ?;

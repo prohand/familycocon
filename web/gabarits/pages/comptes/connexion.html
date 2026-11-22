@@ -28,6 +28,11 @@
   <button class="bouton large">Se connecter</button>
 </form>
 
+{{if .PasskeyOK}}
+<p class="separateur">ou</p>
+<p><button class="bouton large secondaire" type="button" data-passkey="connexion" hidden>🔑 Se connecter avec une passkey</button></p>
+{{end}}
+
 {{if .Inscription}}
 <p class="separateur"><a class="lien-discret" href="/inscription">Créer une nouvelle famille</a></p>
 {{end}}

@@ -1120,6 +1120,15 @@ progress.jauge.etoiles::-moz-progress-bar { background: linear-gradient(90deg, #
 .grille-emoji input:checked + span { border-color: var(--enfants-t); background: var(--enfants); transform: scale(1.08); }
 .grille-emoji input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
 
+
+/* ---------- Sécurité (double authentification, passkeys) ---------- */
+.qr { display: flex; justify-content: center; margin: 8px 0; }
+.qr img { border-radius: 14px; background: #fff; padding: 8px; image-rendering: pixelated; }
+.cle-totp { font-size: .85rem; word-break: break-all; }
+.codes-secours { border: 3px dashed var(--corail); }
+.liste-codes { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; }
+.liste-codes code { font-size: 1rem; font-weight: 800; letter-spacing: .05em; }
+
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

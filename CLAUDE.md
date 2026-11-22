@@ -29,7 +29,8 @@
 - Tests avant de présenter un résultat : `make verif` puis `make test`.
 - Requêtes SQL : dans `internal/donnees/requetes/*.sql`, puis `make sql` (sqlc).
   Ne jamais modifier les fichiers `*_gen.go` à la main. **Pas d'accent** dans ces
-  fichiers `.sql`, même en commentaire (bogue de sqlc avec `SELECT *`).
+  fichiers `.sql`, même en commentaire (bogue de sqlc avec `SELECT *`). Ne pas mélanger
+  `?` et `sqlc.arg()` quand un argument nommé sert deux fois : tout nommer.
 - Schéma : une nouvelle migration `internal/base/migrations/NNNN_nom.sql` ; ne jamais
   modifier une migration déjà publiée.
 - Mesurer la RAM et la taille de l'image à la fin de chaque grosse étape (`PROGRES.md`).

@@ -1,0 +1,70 @@
+{{define "contenu"}}
+{{$c := .C}}
+<section class="titre-page">
+  <a class="retour" href="/moi">‹ Moi</a>
+  <h1>🔐 Sécurité</h1>
+  <p>Double authentification et passkeys</p>
+</section>
+{{with .Donnees}}
+{{if .Codes}}
+<section class="carte bloc codes-secours">
+  <h2>🧾 Vos codes de secours</h2>
+  <p class="aide"><b>Notez-les maintenant</b> (papier, gestionnaire de mots de passe) : ils ne seront plus jamais affichés.
+    Chacun remplace une seule fois le code de l'application, si le téléphone est perdu.</p>
+  <ul class="liste-codes">{{range .Codes}}<li><code>{{.}}</code></li>{{end}}</ul>
+</section>
+{{end}}
+
+<section class="carte bloc">
+  <h2>📱 Application d'authentification</h2>
+  {{if .TOTP}}
+  <p class="aide">✅ Activée. À la connexion, un code de l'application est demandé après le mot de passe.
+    Codes de secours restants : <b>{{.Restants}}</b>.</p>
+  <form method="post" action="/moi/securite/codes" class="rangee">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Mot de passe</span><input type="password" name="mdp" autocomplete="current-password" required></label>
+    <button class="bouton petit secondaire">Nouveaux codes de secours</button>
+  </form>
+  <form method="post" action="/moi/securite/totp/desactiver" class="rangee" hx-confirm="Désactiver la double authentification ?">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Mot de passe</span><input type="password" name="mdp" autocomplete="current-password" required></label>
+    <button class="bouton petit danger">Désactiver</button>
+  </form>
+  {{else}}
+  <p class="aide">Avec une application (Aegis, FreeOTP, Google Authenticator, 2FAS…) : scannez ce QR code, puis tapez le code affiché.</p>
+  <div class="qr"><img src="{{.QR}}" alt="QR code à scanner" width="210" height="210"></div>
+  <p class="aide centre">Ou saisissez la clé : <code class="cle-totp">{{.Secret}}</code></p>
+  <form method="post" action="/moi/securite/totp/activer" class="rangee">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Code à 6 chiffres</span><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required></label>
+    <button class="bouton">Activer</button>
+  </form>
+  {{end}}
+</section>
+
+<section class="carte bloc">
+  <h2>🔑 Passkeys</h2>
+  <p class="aide">Une passkey (empreinte, visage, code du téléphone, clé de sécurité) permet de se connecter <b>sans mot de passe</b>,
+    ou sert de second facteur après le mot de passe.</p>
+  {{- range .Passkeys}}
+  <div class="ligne">
+    <span class="p-emoji">🔑</span>
+    <span class="quoi">{{.Nom}}<small>Ajoutée le {{.Cree}}{{with .Utilise}} · utilisée le {{.}}{{end}}</small></span>
+    <form method="post" action="/moi/securite/passkeys/{{.ID}}/supprimer" hx-confirm="Supprimer la passkey « {{.Nom}} » ?">
+      {{template "jeton" $c.CSRF}}
+      <button class="bouton petit danger">Supprimer</button>
+    </form>
+  </div>
+  {{- end}}
+  {{if .PasskeyPossible}}
+  <div class="rangee bloc">
+    <label class="champ"><span>Nom de la passkey</span><input id="nom-passkey" maxlength="40" placeholder="Ex. : Téléphone de {{$c.Membre.Nom}}"></label>
+    <button class="bouton" type="button" data-passkey="ajouter" hidden>＋ Ajouter une passkey</button>
+  </div>
+  <p class="aide" id="etat-passkey"></p>
+  {{else}}
+  <p class="message-erreur">Les passkeys demandent un nom de domaine en HTTPS (pas une adresse IP) : réglez FC_URL_PUBLIQUE.</p>
+  {{end}}
+</section>
+{{end}}
+{{end}}
