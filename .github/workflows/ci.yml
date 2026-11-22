@@ -71,6 +71,9 @@ jobs:
       - name: Tests (accès concurrents compris)
         run: go test -race ./...
 
+  # L'image ne dépend que du Dockerfile et des dépendances Go : elle n'est
+  # reconstruite que si l'un d'eux change, et toujours sur main (le code
+  # lui-même est déjà compilé et testé par les deux autres jobs).
   image:
     name: Image Docker (amd64 + arm64, non publiée)
     runs-on: ubuntu-latest
@@ -79,8 +82,28 @@ jobs:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - uses: docker/setup-buildx-action@v4
+          fetch-depth: 0
+      - name: Faut-il reconstruire l'image ?
+        id: besoin
+        env:
+          AVANT: ${{ github.event.before }}
+          REF: ${{ github.ref }}
+          EVENEMENT: ${{ github.event_name }}
+        run: |
+          set -eu
+          construire=oui
+          if [ "$REF" != "refs/heads/main" ] && [ "$EVENEMENT" = "push" ] \
+             && [ -n "$AVANT" ] && ! echo "$AVANT" | grep -q '^0*$' && git cat-file -e "$AVANT" 2>/dev/null; then
+            if ! git diff --name-only "$AVANT" HEAD | grep -qE '^(Dockerfile|\.dockerignore|go\.mod|go\.sum|\.github/workflows/)'; then
+              construire=non
+            fi
+          fi
+          echo "Reconstruire l'image : $construire"
+          echo "construire=$construire" >> "$GITHUB_OUTPUT"
+      - if: steps.besoin.outputs.construire == 'oui'
+        uses: docker/setup-buildx-action@v4
       - name: Construction
+        if: steps.besoin.outputs.construire == 'oui'
         uses: docker/build-push-action@v7
         env:
           DOCKER_BUILD_RECORD_UPLOAD: false
