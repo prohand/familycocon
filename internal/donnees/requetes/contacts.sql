@@ -1,7 +1,10 @@
--- Contacts (adresses, anniversaires).
+-- Contacts : carnet central (adresses, anniversaires, prestataires).
 
 -- name: ContactsFamille :many
-SELECT * FROM contacts WHERE famille_id = ? ORDER BY nom COLLATE NOCASE;
+SELECT * FROM contacts WHERE famille_id = ? ORDER BY favori DESC, nom COLLATE NOCASE;
+
+-- name: PrestatairesFamille :many
+SELECT * FROM contacts WHERE famille_id = ? AND pro = 1 ORDER BY metier COLLATE NOCASE, nom COLLATE NOCASE;
 
 -- name: ContactsAvecNaissance :many
 SELECT * FROM contacts WHERE famille_id = ? AND naissance <> '';
@@ -10,15 +13,36 @@ SELECT * FROM contacts WHERE famille_id = ? AND naissance <> '';
 SELECT * FROM contacts WHERE id = ? AND famille_id = ?;
 
 -- name: CreerContact :one
-INSERT INTO contacts (famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO contacts (famille_id, nom, relation, naissance, telephone, tel_fixe, tel_travail, email, adresse, societe, metier, site,
+  favori, pro, groupes, notes, idees, cree_le, modifie_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: ModifierContact :exec
-UPDATE contacts SET nom = ?, relation = ?, naissance = ?, telephone = ?, email = ?, adresse = ?, notes = ?, idees = ?, modifie_le = ?
+UPDATE contacts SET nom = ?, relation = ?, naissance = ?, telephone = ?, tel_fixe = ?, tel_travail = ?, email = ?, adresse = ?,
+  societe = ?, metier = ?, site = ?, favori = ?, pro = ?, groupes = ?, notes = ?, idees = ?, modifie_le = ?
 WHERE id = ? AND famille_id = ?;
+
+-- name: BasculerFavori :exec
+UPDATE contacts SET favori = 1 - favori WHERE id = ? AND famille_id = ?;
 
 -- name: SupprimerContact :exec
 DELETE FROM contacts WHERE id = ? AND famille_id = ?;
 
 -- name: CompterContacts :one
 SELECT count(*) FROM contacts WHERE famille_id = ?;
+
+-- name: CompterPrestataires :one
+SELECT count(*) FROM contacts WHERE famille_id = ? AND pro = 1;
+
+-- Contacts cites par les evenements de l'agenda.
+
+-- name: ContactsEvenementsFamille :many
+SELECT ec.evenement_id, c.id, c.nom, c.telephone
+FROM evenements_contacts ec JOIN contacts c ON c.id = ec.contact_id
+WHERE c.famille_id = ? ORDER BY c.nom COLLATE NOCASE;
+
+-- name: AjouterContactEvenement :exec
+INSERT OR IGNORE INTO evenements_contacts (evenement_id, contact_id) VALUES (?, ?);
+
+-- name: ViderContactsEvenement :exec
+DELETE FROM evenements_contacts WHERE evenement_id = ?;

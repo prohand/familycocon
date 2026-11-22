@@ -18,6 +18,13 @@
   {{- range .Infos}}<div class="ligne"><span class="quoi texte-long">{{.}}</span></div>{{end}}
 </section>
 {{end}}
+{{if .Contacts}}
+<section class="carte bloc fiche">
+  {{- range .Contacts}}
+  <div class="ligne"><a class="quoi" href="{{.URL}}">{{.Nom}}<small>{{.Role}}</small></a>{{if .Tel}}<a class="appel" href="tel:{{.Tel}}" aria-label="Appeler {{.Nom}}">📞</a>{{end}}</div>
+  {{- end}}
+</section>
+{{end}}
 {{if .KmURL}}
 <form class="carte bloc rangee" method="post" action="{{.KmURL}}">
   {{template "jeton" $c.CSRF}}

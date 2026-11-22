@@ -1,0 +1,71 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>👥 Contacts</h1>
+  <p>{{pluriel .Total "contact" "contacts"}} pour toute la famille</p>
+</section>
+<div class="barre-actions">
+  <form class="ajout recherche" method="get" action="/contacts">
+    {{if .Filtre}}<input type="hidden" name="filtre" value="{{.Filtre}}">{{end}}
+    <input type="search" name="q" value="{{.Recherche}}" placeholder="🔍 Nom, numéro, métier…" aria-label="Chercher">
+  </form>
+  <a class="bouton" href="/contacts/nouveau">＋ Contact</a>
+</div>
+<nav class="pilules bloc" aria-label="Filtrer">
+  <a class="pilule{{if not .Filtre}} active{{end}}" href="/contacts">Tous</a>
+  <a class="pilule{{if eq .Filtre "favoris"}} active{{end}}" href="/contacts?filtre=favoris">⭐ Favoris</a>
+  <a class="pilule{{if eq .Filtre "pros"}} active{{end}}" href="/contacts?filtre=pros">🧰 Pros</a>
+  {{- range .Groupes}}
+  <a class="pilule{{if eq . $.Donnees.Filtre}} active{{end}}" href="/contacts?filtre={{.}}">🏷️ {{.}}</a>
+  {{- end}}
+</nav>
+
+{{if .Favoris}}
+<section class="bloc">
+  <h2 class="sous-titre">⭐ Favoris</h2>
+  <div class="favoris">
+    {{- range .Favoris}}
+    <div class="favori-contact">
+      <a href="/contacts/{{.ID}}"><span class="avatar ctous">{{initiale .Nom}}</span><b>{{.Nom}}</b></a>
+      {{if .Tel}}<a class="appel" href="tel:{{.Tel}}" aria-label="Appeler {{.Nom}}">📞</a>{{end}}
+    </div>
+    {{- end}}
+  </div>
+</section>
+{{end}}
+
+{{range .Lettres}}
+<section class="bloc">
+  <h2 class="sous-titre lettre">{{.Lettre}}</h2>
+  <div class="carte">
+    {{- range .Contacts}}
+    <div class="ligne contact">
+      <a class="quoi-lien" href="/contacts/{{.ID}}">
+        <span class="avatar petit ctous">{{initiale .Nom}}</span>
+        <span class="quoi">{{.Nom}}{{if .Favori}} ⭐{{end}}<small>{{.Detail}}</small></span>
+      </a>
+      {{if .Tel}}<a class="appel" href="tel:{{.Tel}}" aria-label="Appeler {{.Nom}}">📞</a>{{end}}
+    </div>
+    {{- end}}
+  </div>
+</section>
+{{else}}
+<div class="carte vide bloc"><span class="emoji">👥</span>{{if or .Recherche .Filtre}}Personne ne correspond.{{else}}Le carnet est vide : ajoutez mamie, la nounou, le médecin… ou importez les contacts de votre téléphone.{{end}}</div>
+{{end}}
+
+{{if .PeutGerer}}
+<details class="bloc carte vcard">
+  <summary class="lien-ajout">📲 Importer / exporter (vCard)</summary>
+  <p class="aide">Sur le téléphone : Contacts › Exporter › fichier .vcf, puis envoyez-le ici. Les contacts déjà présents ne sont pas ajoutés deux fois.</p>
+  <form method="post" action="/contacts/import" enctype="multipart/form-data" class="rangee">
+    {{template "jeton" $c.CSRF}}
+    <input type="file" name="fichier" accept=".vcf,text/vcard,text/x-vcard" required>
+    <button class="bouton petit">Importer</button>
+  </form>
+  <p><a class="bouton secondaire petit" href="/contacts/export.vcf">⬇️ Exporter tout le carnet (.vcf)</a></p>
+</details>
+{{end}}
+{{end}}
+{{end}}

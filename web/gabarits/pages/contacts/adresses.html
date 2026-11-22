@@ -17,14 +17,14 @@
     {{- range .Contacts}}
     <a class="ligne" href="/contacts/{{.ID}}">
       <span class="avatar petit ctous">{{initiale .Nom}}</span>
-      <span class="quoi">{{.Nom}}<small>{{if .Telephone}}📞 {{.Telephone}}{{end}}{{if and .Telephone .Email}} · {{end}}{{if .Email}}✉️ {{.Email}}{{end}}</small></span>
+      <span class="quoi">{{.Nom}}<small class="texte-long">🏠 {{.Adresse}}</small></span>
       <span class="fleche-droite">›</span>
     </a>
     {{- end}}
   </div>
 </section>
 {{else}}
-<div class="carte vide bloc"><span class="emoji">📇</span>{{if .Recherche}}Personne ne correspond à « {{.Recherche}} ».{{else}}Le carnet est vide : ajoutez mamie, la nounou, les voisins…{{end}}</div>
+<div class="carte vide bloc"><span class="emoji">📇</span>{{if .Recherche}}Personne ne correspond à « {{.Recherche}} ».{{else}}Aucune adresse : elles apparaissent ici dès qu'un contact en a une.{{end}}</div>
 {{end}}
 {{end}}
 {{end}}

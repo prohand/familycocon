@@ -113,14 +113,21 @@ func (m *Module) ficheVehicule(w http.ResponseWriter, r *http.Request, c *appli.
 	if x.Notes != "" {
 		v.Infos = append(v.Infos, "📝 "+x.Notes)
 	}
+	if ct, ok := m.citer(r.Context(), c, "🔧 Garage", x.GarageID); ok {
+		v.Contacts = append(v.Contacts, ct)
+	}
+	if ct, ok := m.citer(r.Context(), c, "🛡️ Assurance", x.AssureurID); ok {
+		v.Contacts = append(v.Contacts, ct)
+	}
 	v.KmURL = fmt.Sprintf("/vehicules/%d/km", x.ID)
 	m.afficherFiche(w, r, c, modVehicules, x.ID, v)
 }
 
 type formVehicule struct {
-	Nouveau bool
-	V       donnees.Vehicule
-	Genres  any
+	Nouveau  bool
+	V        donnees.Vehicule
+	Genres   any
+	Contacts []donnees.Contact
 }
 
 func (m *Module) formVehicule(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -133,6 +140,7 @@ func (m *Module) formVehicule(w http.ResponseWriter, r *http.Request, c *appli.C
 		}
 		f.V = x
 	}
+	f.Contacts = m.contactsChoix(r.Context(), c)
 	m.a.Afficher(w, r, c, "foyer/vehicule", "Véhicule", modVehicules, f)
 }
 
@@ -158,7 +166,8 @@ func (m *Module) enregistrerVehicule(w http.ResponseWriter, r *http.Request, c *
 	id := idDe(r)
 	if r.PathValue("id") == "" {
 		v, err := m.a.Q.CreerVehicule(ctx, donnees.CreerVehiculeParams{FamilleID: c.Famille.ID, Nom: nom, Genre: genre,
-			Immatriculation: immat, Modele: modele, Kilometrage: km, Notes: notes, CreeLe: time.Now().Unix()})
+			Immatriculation: immat, Modele: modele, Kilometrage: km, Notes: notes, GarageID: m.lireContact(r, c, "garage_id"),
+			AssureurID: m.lireContact(r, c, "assureur_id"), CreeLe: time.Now().Unix()})
 		if err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
@@ -170,7 +179,8 @@ func (m *Module) enregistrerVehicule(w http.ResponseWriter, r *http.Request, c *
 			return
 		}
 		if err := m.a.Q.ModifierVehicule(ctx, donnees.ModifierVehiculeParams{Nom: nom, Genre: genre, Immatriculation: immat,
-			Modele: modele, Kilometrage: km, Notes: notes, ID: id, FamilleID: c.Famille.ID}); err != nil {
+			Modele: modele, Kilometrage: km, Notes: notes, GarageID: m.lireContact(r, c, "garage_id"),
+			AssureurID: m.lireContact(r, c, "assureur_id"), ID: id, FamilleID: c.Famille.ID}); err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		}

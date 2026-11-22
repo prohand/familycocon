@@ -9,6 +9,34 @@ import (
 	"context"
 )
 
+const ajouterContactEvenement = `-- name: AjouterContactEvenement :exec
+INSERT OR IGNORE INTO evenements_contacts (evenement_id, contact_id) VALUES (?, ?)
+`
+
+type AjouterContactEvenementParams struct {
+	EvenementID int64
+	ContactID   int64
+}
+
+func (q *Queries) AjouterContactEvenement(ctx context.Context, arg AjouterContactEvenementParams) error {
+	_, err := q.db.ExecContext(ctx, ajouterContactEvenement, arg.EvenementID, arg.ContactID)
+	return err
+}
+
+const basculerFavori = `-- name: BasculerFavori :exec
+UPDATE contacts SET favori = 1 - favori WHERE id = ? AND famille_id = ?
+`
+
+type BasculerFavoriParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) BasculerFavori(ctx context.Context, arg BasculerFavoriParams) error {
+	_, err := q.db.ExecContext(ctx, basculerFavori, arg.ID, arg.FamilleID)
+	return err
+}
+
 const compterContacts = `-- name: CompterContacts :one
 SELECT count(*) FROM contacts WHERE famille_id = ?
 `
@@ -20,8 +48,19 @@ func (q *Queries) CompterContacts(ctx context.Context, familleID int64) (int64, 
 	return count, err
 }
 
+const compterPrestataires = `-- name: CompterPrestataires :one
+SELECT count(*) FROM contacts WHERE famille_id = ? AND pro = 1
+`
+
+func (q *Queries) CompterPrestataires(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterPrestataires, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const contactParID = `-- name: ContactParID :one
-SELECT id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le FROM contacts WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le, tel_fixe, tel_travail, societe, metier, site, favori, pro, groupes FROM contacts WHERE id = ? AND famille_id = ?
 `
 
 type ContactParIDParams struct {
@@ -45,12 +84,20 @@ func (q *Queries) ContactParID(ctx context.Context, arg ContactParIDParams) (Con
 		&i.Idees,
 		&i.CreeLe,
 		&i.ModifieLe,
+		&i.TelFixe,
+		&i.TelTravail,
+		&i.Societe,
+		&i.Metier,
+		&i.Site,
+		&i.Favori,
+		&i.Pro,
+		&i.Groupes,
 	)
 	return i, err
 }
 
 const contactsAvecNaissance = `-- name: ContactsAvecNaissance :many
-SELECT id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le FROM contacts WHERE famille_id = ? AND naissance <> ''
+SELECT id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le, tel_fixe, tel_travail, societe, metier, site, favori, pro, groupes FROM contacts WHERE famille_id = ? AND naissance <> ''
 `
 
 func (q *Queries) ContactsAvecNaissance(ctx context.Context, familleID int64) ([]Contact, error) {
@@ -75,6 +122,57 @@ func (q *Queries) ContactsAvecNaissance(ctx context.Context, familleID int64) ([
 			&i.Idees,
 			&i.CreeLe,
 			&i.ModifieLe,
+			&i.TelFixe,
+			&i.TelTravail,
+			&i.Societe,
+			&i.Metier,
+			&i.Site,
+			&i.Favori,
+			&i.Pro,
+			&i.Groupes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const contactsEvenementsFamille = `-- name: ContactsEvenementsFamille :many
+
+SELECT ec.evenement_id, c.id, c.nom, c.telephone
+FROM evenements_contacts ec JOIN contacts c ON c.id = ec.contact_id
+WHERE c.famille_id = ? ORDER BY c.nom COLLATE NOCASE
+`
+
+type ContactsEvenementsFamilleRow struct {
+	EvenementID int64
+	ID          int64
+	Nom         string
+	Telephone   string
+}
+
+// Contacts cites par les evenements de l'agenda.
+func (q *Queries) ContactsEvenementsFamille(ctx context.Context, familleID int64) ([]ContactsEvenementsFamilleRow, error) {
+	rows, err := q.db.QueryContext(ctx, contactsEvenementsFamille, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ContactsEvenementsFamilleRow{}
+	for rows.Next() {
+		var i ContactsEvenementsFamilleRow
+		if err := rows.Scan(
+			&i.EvenementID,
+			&i.ID,
+			&i.Nom,
+			&i.Telephone,
 		); err != nil {
 			return nil, err
 		}
@@ -91,10 +189,10 @@ func (q *Queries) ContactsAvecNaissance(ctx context.Context, familleID int64) ([
 
 const contactsFamille = `-- name: ContactsFamille :many
 
-SELECT id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le FROM contacts WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
+SELECT id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le, tel_fixe, tel_travail, societe, metier, site, favori, pro, groupes FROM contacts WHERE famille_id = ? ORDER BY favori DESC, nom COLLATE NOCASE
 `
 
-// Contacts (adresses, anniversaires).
+// Contacts : carnet central (adresses, anniversaires, prestataires).
 func (q *Queries) ContactsFamille(ctx context.Context, familleID int64) ([]Contact, error) {
 	rows, err := q.db.QueryContext(ctx, contactsFamille, familleID)
 	if err != nil {
@@ -117,6 +215,14 @@ func (q *Queries) ContactsFamille(ctx context.Context, familleID int64) ([]Conta
 			&i.Idees,
 			&i.CreeLe,
 			&i.ModifieLe,
+			&i.TelFixe,
+			&i.TelTravail,
+			&i.Societe,
+			&i.Metier,
+			&i.Site,
+			&i.Favori,
+			&i.Pro,
+			&i.Groupes,
 		); err != nil {
 			return nil, err
 		}
@@ -132,22 +238,31 @@ func (q *Queries) ContactsFamille(ctx context.Context, familleID int64) ([]Conta
 }
 
 const creerContact = `-- name: CreerContact :one
-INSERT INTO contacts (famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le
+INSERT INTO contacts (famille_id, nom, relation, naissance, telephone, tel_fixe, tel_travail, email, adresse, societe, metier, site,
+  favori, pro, groupes, notes, idees, cree_le, modifie_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le, tel_fixe, tel_travail, societe, metier, site, favori, pro, groupes
 `
 
 type CreerContactParams struct {
-	FamilleID int64
-	Nom       string
-	Relation  string
-	Naissance string
-	Telephone string
-	Email     string
-	Adresse   string
-	Notes     string
-	Idees     string
-	CreeLe    int64
-	ModifieLe int64
+	FamilleID  int64
+	Nom        string
+	Relation   string
+	Naissance  string
+	Telephone  string
+	TelFixe    string
+	TelTravail string
+	Email      string
+	Adresse    string
+	Societe    string
+	Metier     string
+	Site       string
+	Favori     int64
+	Pro        int64
+	Groupes    string
+	Notes      string
+	Idees      string
+	CreeLe     int64
+	ModifieLe  int64
 }
 
 func (q *Queries) CreerContact(ctx context.Context, arg CreerContactParams) (Contact, error) {
@@ -157,8 +272,16 @@ func (q *Queries) CreerContact(ctx context.Context, arg CreerContactParams) (Con
 		arg.Relation,
 		arg.Naissance,
 		arg.Telephone,
+		arg.TelFixe,
+		arg.TelTravail,
 		arg.Email,
 		arg.Adresse,
+		arg.Societe,
+		arg.Metier,
+		arg.Site,
+		arg.Favori,
+		arg.Pro,
+		arg.Groupes,
 		arg.Notes,
 		arg.Idees,
 		arg.CreeLe,
@@ -178,27 +301,44 @@ func (q *Queries) CreerContact(ctx context.Context, arg CreerContactParams) (Con
 		&i.Idees,
 		&i.CreeLe,
 		&i.ModifieLe,
+		&i.TelFixe,
+		&i.TelTravail,
+		&i.Societe,
+		&i.Metier,
+		&i.Site,
+		&i.Favori,
+		&i.Pro,
+		&i.Groupes,
 	)
 	return i, err
 }
 
 const modifierContact = `-- name: ModifierContact :exec
-UPDATE contacts SET nom = ?, relation = ?, naissance = ?, telephone = ?, email = ?, adresse = ?, notes = ?, idees = ?, modifie_le = ?
+UPDATE contacts SET nom = ?, relation = ?, naissance = ?, telephone = ?, tel_fixe = ?, tel_travail = ?, email = ?, adresse = ?,
+  societe = ?, metier = ?, site = ?, favori = ?, pro = ?, groupes = ?, notes = ?, idees = ?, modifie_le = ?
 WHERE id = ? AND famille_id = ?
 `
 
 type ModifierContactParams struct {
-	Nom       string
-	Relation  string
-	Naissance string
-	Telephone string
-	Email     string
-	Adresse   string
-	Notes     string
-	Idees     string
-	ModifieLe int64
-	ID        int64
-	FamilleID int64
+	Nom        string
+	Relation   string
+	Naissance  string
+	Telephone  string
+	TelFixe    string
+	TelTravail string
+	Email      string
+	Adresse    string
+	Societe    string
+	Metier     string
+	Site       string
+	Favori     int64
+	Pro        int64
+	Groupes    string
+	Notes      string
+	Idees      string
+	ModifieLe  int64
+	ID         int64
+	FamilleID  int64
 }
 
 func (q *Queries) ModifierContact(ctx context.Context, arg ModifierContactParams) error {
@@ -207,8 +347,16 @@ func (q *Queries) ModifierContact(ctx context.Context, arg ModifierContactParams
 		arg.Relation,
 		arg.Naissance,
 		arg.Telephone,
+		arg.TelFixe,
+		arg.TelTravail,
 		arg.Email,
 		arg.Adresse,
+		arg.Societe,
+		arg.Metier,
+		arg.Site,
+		arg.Favori,
+		arg.Pro,
+		arg.Groupes,
 		arg.Notes,
 		arg.Idees,
 		arg.ModifieLe,
@@ -216,6 +364,54 @@ func (q *Queries) ModifierContact(ctx context.Context, arg ModifierContactParams
 		arg.FamilleID,
 	)
 	return err
+}
+
+const prestatairesFamille = `-- name: PrestatairesFamille :many
+SELECT id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le, tel_fixe, tel_travail, societe, metier, site, favori, pro, groupes FROM contacts WHERE famille_id = ? AND pro = 1 ORDER BY metier COLLATE NOCASE, nom COLLATE NOCASE
+`
+
+func (q *Queries) PrestatairesFamille(ctx context.Context, familleID int64) ([]Contact, error) {
+	rows, err := q.db.QueryContext(ctx, prestatairesFamille, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Contact{}
+	for rows.Next() {
+		var i Contact
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Nom,
+			&i.Relation,
+			&i.Naissance,
+			&i.Telephone,
+			&i.Email,
+			&i.Adresse,
+			&i.Notes,
+			&i.Idees,
+			&i.CreeLe,
+			&i.ModifieLe,
+			&i.TelFixe,
+			&i.TelTravail,
+			&i.Societe,
+			&i.Metier,
+			&i.Site,
+			&i.Favori,
+			&i.Pro,
+			&i.Groupes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const supprimerContact = `-- name: SupprimerContact :exec
@@ -229,5 +425,14 @@ type SupprimerContactParams struct {
 
 func (q *Queries) SupprimerContact(ctx context.Context, arg SupprimerContactParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerContact, arg.ID, arg.FamilleID)
+	return err
+}
+
+const viderContactsEvenement = `-- name: ViderContactsEvenement :exec
+DELETE FROM evenements_contacts WHERE evenement_id = ?
+`
+
+func (q *Queries) ViderContactsEvenement(ctx context.Context, evenementID int64) error {
+	_, err := q.db.ExecContext(ctx, viderContactsEvenement, evenementID)
 	return err
 }

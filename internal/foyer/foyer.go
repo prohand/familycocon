@@ -12,6 +12,7 @@ package foyer
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -66,6 +67,50 @@ type vueFiche struct {
 	TitreCarnet         string
 	Modifier, Supprimer string
 	KmURL               string // formulaire « kilométrage » (véhicules)
+	Contacts            []ContactCite
+}
+
+// ContactCite : un contact du carnet cité par la fiche (vétérinaire, garage…).
+type ContactCite struct {
+	Role, Nom, URL string
+	Tel            string // pour « appeler »
+}
+
+// contactsChoix : les contacts du carnet, pour les listes de choix.
+func (m *Module) contactsChoix(ctx context.Context, c *appli.Contexte) []donnees.Contact {
+	l, _ := m.a.Q.ContactsFamille(ctx, c.Famille.ID)
+	return l
+}
+
+// lireContact : le contact choisi dans le champ (seulement de la famille).
+func (m *Module) lireContact(r *http.Request, c *appli.Contexte, champ string) sql.NullInt64 {
+	id, _ := strconv.ParseInt(r.PostFormValue(champ), 10, 64)
+	if id <= 0 {
+		return sql.NullInt64{}
+	}
+	if _, err := m.a.Q.ContactParID(r.Context(), donnees.ContactParIDParams{ID: id, FamilleID: c.Famille.ID}); err != nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: id, Valid: true}
+}
+
+// citer : le contact id (s'il existe encore), pour la fiche.
+func (m *Module) citer(ctx context.Context, c *appli.Contexte, role string, id sql.NullInt64) (ContactCite, bool) {
+	if !id.Valid {
+		return ContactCite{}, false
+	}
+	x, err := m.a.Q.ContactParID(ctx, donnees.ContactParIDParams{ID: id.Int64, FamilleID: c.Famille.ID})
+	if err != nil {
+		return ContactCite{}, false
+	}
+	tel := x.Telephone
+	if tel == "" {
+		tel = x.TelFixe
+	}
+	if tel == "" {
+		tel = x.TelTravail
+	}
+	return ContactCite{Role: role, Nom: x.Nom, URL: fmt.Sprintf("/contacts/%d", x.ID), Tel: lienTel(tel)}, true
 }
 
 // alerte : la prochaine échéance d'un objet, si elle est en retard ou proche.

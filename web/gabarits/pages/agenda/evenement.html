@@ -6,6 +6,13 @@
   <h1>{{if .Nouveau}}✨ Nouvel événement{{else}}🗓️ {{.Evt.Titre}}{{end}}</h1>
   {{if not .Modifiable}}<p>Seul un parent (ou qui l'a créé) peut le modifier.</p>{{end}}
 </section>
+{{if .ContactsEv}}
+<section class="carte bloc fiche">
+  {{- range .ContactsEv}}
+  <div class="ligne"><a class="quoi" href="/contacts/{{.ID}}">👤 {{.Nom}}</a>{{if .Tel}}<a class="appel" href="tel:{{.Tel}}" aria-label="Appeler {{.Nom}}">📞</a>{{end}}</div>
+  {{- end}}
+</section>
+{{end}}
 <form class="carte" method="post" action="{{if .Nouveau}}/agenda{{else}}/agenda/{{.Evt.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
   <fieldset class="sans-bord"{{if not .Modifiable}} disabled{{end}}>
@@ -30,6 +37,13 @@
       {{- end}}
     </div>
   </fieldset>
+
+  {{if .Contacts}}
+  <label class="champ"><span>👤 Avec (contacts du carnet, plusieurs possibles)</span>
+    <select name="contacts" multiple size="4">
+      {{- range .Contacts}}<option value="{{.ID}}"{{if index $.Donnees.Cites .ID}} selected{{end}}>{{.Nom}}{{if .Metier}} ({{.Metier}}){{end}}</option>{{end}}
+    </select></label>
+  {{end}}
 
   <fieldset class="repetition">
     <legend>Revient ?</legend>

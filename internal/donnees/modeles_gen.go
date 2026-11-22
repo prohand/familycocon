@@ -29,16 +29,17 @@ type AbonnementsPush struct {
 }
 
 type Animal struct {
-	ID          int64
-	FamilleID   int64
-	Nom         string
-	Espece      string
-	Race        string
-	Naissance   string
-	Puce        string
-	Veterinaire string
-	Notes       string
-	CreeLe      int64
+	ID            int64
+	FamilleID     int64
+	Nom           string
+	Espece        string
+	Race          string
+	Naissance     string
+	Puce          string
+	Veterinaire   string
+	Notes         string
+	CreeLe        int64
+	VeterinaireID sql.NullInt64
 }
 
 type Appareil struct {
@@ -83,18 +84,26 @@ type CodesSecour struct {
 }
 
 type Contact struct {
-	ID        int64
-	FamilleID int64
-	Nom       string
-	Relation  string
-	Naissance string
-	Telephone string
-	Email     string
-	Adresse   string
-	Notes     string
-	Idees     string
-	CreeLe    int64
-	ModifieLe int64
+	ID         int64
+	FamilleID  int64
+	Nom        string
+	Relation   string
+	Naissance  string
+	Telephone  string
+	Email      string
+	Adresse    string
+	Notes      string
+	Idees      string
+	CreeLe     int64
+	ModifieLe  int64
+	TelFixe    string
+	TelTravail string
+	Societe    string
+	Metier     string
+	Site       string
+	Favori     int64
+	Pro        int64
+	Groupes    string
 }
 
 type Echange struct {
@@ -132,6 +141,11 @@ type Evenement struct {
 	CreePar       sql.NullInt64
 	CreeLe        int64
 	RepetitionFin string
+}
+
+type EvenementsContact struct {
+	EvenementID int64
+	ContactID   int64
 }
 
 type EvenementsMembre struct {
@@ -246,19 +260,6 @@ type Passkey struct {
 	Nom         string
 	CreeLe      int64
 	UtiliseLe   int64
-}
-
-type Prestataire struct {
-	ID        int64
-	FamilleID int64
-	Nom       string
-	Metier    string
-	Telephone string
-	Email     string
-	Adresse   string
-	Site      string
-	Notes     string
-	CreeLe    int64
 }
 
 type Produit struct {
@@ -401,4 +402,6 @@ type Vehicule struct {
 	Kilometrage     int64
 	Notes           string
 	CreeLe          int64
+	GarageID        sql.NullInt64
+	AssureurID      sql.NullInt64
 }

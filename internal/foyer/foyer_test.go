@@ -9,11 +9,15 @@ import (
 	"time"
 
 	"familycocon/internal/appli"
+	"familycocon/internal/contacts"
 	"familycocon/internal/essai"
 	"familycocon/internal/suivi"
 )
 
-func brancher(a *appli.App) { Brancher(a, suivi.Brancher(a)) }
+func brancher(a *appli.App) {
+	contacts.Brancher(a)
+	Brancher(a, suivi.Brancher(a))
+}
 
 func TestVehicule(t *testing.T) {
 	_, srv := essai.NouvelleApp(t, brancher)
@@ -108,14 +112,36 @@ func TestAnimalEtPrestataire(t *testing.T) {
 		t.Fatal("fiche visible sans session")
 	}
 
-	marie.Get("/prestataires/nouveau")
-	code, page = marie.Post("/prestataires", map[string]string{"nom": "Plomberie Martin", "metier": "Plombier",
-		"telephone": "06 12 34 56 78", "site": "plomberie.example", "adresse": "3 rue des Lilas"})
-	if code != 200 || !strings.Contains(page, `href="tel:0612345678"`) || !strings.Contains(page, `href="https://plomberie.example"`) ||
-		!strings.Contains(page, "query=3%20rue%20des%20Lilas") {
-		t.Fatalf("prestataire : %d\n%s", code, page)
+	// Prestataire = contact « pro » du carnet.
+	marie.Get("/contacts/nouveau?pro=1")
+	code, page = marie.Post("/contacts", map[string]string{"nom": "Plomberie Martin", "metier": "Plombier", "pro": "1",
+		"telephone": "06 12 34 56 78", "site": "plomberie.example", "adresse": "3 rue des Lilas", "relation": "pro"})
+	if code != 200 {
+		t.Fatalf("création du contact pro : %d", code)
 	}
-	if code, _ := marie.Post("/prestataires", map[string]string{"nom": "X", "site": "javascript:alert(1)"}); code != http.StatusBadRequest {
+	idPro := essai.Trouver(t, page, `href="/prestataires/(\d+)"`)
+	_, page = marie.Get("/prestataires/" + idPro)
+	if !strings.Contains(page, `href="tel:0612345678"`) || !strings.Contains(page, `href="https://plomberie.example"`) ||
+		!strings.Contains(page, "query=3%20rue%20des%20Lilas") || !strings.Contains(page, "Interventions") {
+		t.Fatalf("fiche prestataire :\n%s", page)
+	}
+	if _, page := marie.Get("/prestataires"); !strings.Contains(page, "Plomberie Martin") {
+		t.Fatal("prestataire absent de la liste")
+	}
+	if code, _ := marie.Post("/contacts", map[string]string{"nom": "X", "site": "javascript:alert(1)"}); code != http.StatusBadRequest {
 		t.Fatalf("site javascript: accepté : %d", code)
+	}
+
+	// Vétérinaire choisi dans le carnet : appel direct depuis la fiche de l'animal.
+	_, page = marie.Post("/contacts", map[string]string{"nom": "Dr Duval", "metier": "Vétérinaire", "pro": "1", "telephone": "02 99 00 11 22"})
+	idVeto := essai.Trouver(t, page, `action="/contacts/(\d+)/favori"`)
+	marie.Get("/animaux/" + id + "/modifier")
+	_, page = marie.Post("/animaux/"+id, map[string]string{"nom": "Filou", "espece": "chat", "veterinaire_id": idVeto})
+	if !strings.Contains(page, "Dr Duval") || !strings.Contains(page, `href="tel:0299001122"`) || !strings.Contains(page, `href="/contacts/`+idVeto+`"`) {
+		t.Fatalf("vétérinaire absent de la fiche :\n%s", page)
+	}
+	// Contact d'une autre famille ou inconnu : ignoré.
+	if _, page := marie.Post("/animaux/"+id, map[string]string{"nom": "Filou", "espece": "chat", "veterinaire_id": "9999"}); strings.Contains(page, "Dr Duval") {
+		t.Fatal("contact inconnu accepté")
 	}
 }

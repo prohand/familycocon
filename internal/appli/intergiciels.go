@@ -26,6 +26,9 @@ const csp = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 's
 // TailleMaxCorps : 1 Mio, bien assez pour des formulaires.
 const TailleMaxCorps = 1 << 20
 
+// TailleMaxImport : 8 Mio pour l'import d'un carnet vCard.
+const TailleMaxImport = 8 << 20
+
 // enregistreur garde le statut renvoyé, pour le journal.
 type enregistreur struct {
 	http.ResponseWriter
@@ -86,7 +89,11 @@ func (a *App) Envelopper(h http.Handler) http.Handler {
 		if a.Config.CookieSecurise() {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}
-		r.Body = http.MaxBytesReader(e, r.Body, TailleMaxCorps)
+		taille := int64(TailleMaxCorps)
+		if r.URL.Path == "/contacts/import" {
+			taille = TailleMaxImport // carnet d'un téléphone (photos comprises)
+		}
+		r.Body = http.MaxBytesReader(e, r.Body, taille)
 		interne.ServeHTTP(e, r)
 	})
 }
