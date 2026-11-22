@@ -11,6 +11,16 @@
 <p><a class="bouton secondaire" href="/famille">🏡 Réglages de la famille</a></p>
 {{end}}
 
+{{if .AMotDePasse}}
+<a class="carte bloc carte-securite{{if or .TOTP .NbPasskeys}} protegee{{end}}" href="/moi/securite">
+  <span class="grand-emoji">{{if or .TOTP .NbPasskeys}}🛡️{{else}}🔓{{end}}</span>
+  <span class="quoi"><b>Sécurité du compte</b>
+    <small>{{if .TOTP}}✅ Double authentification activée{{else}}❌ Double authentification désactivée{{end}}</small>
+    <small>{{if .NbPasskeys}}🔑 {{pluriel .NbPasskeys "passkey" "passkeys"}}{{else}}🔑 Aucune passkey{{end}}</small></span>
+  <span class="fleche-droite">›</span>
+</a>
+{{end}}
+
 <section class="carte bloc">
   <h2>🎨 Mon profil</h2>
   <form method="post" action="/moi/profil">
@@ -58,8 +68,6 @@
 </section>
 
 {{if .AMotDePasse}}
-<p><a class="bouton secondaire" href="/moi/securite">🔐 Double authentification et passkeys</a></p>
-
 <section class="carte bloc">
   <h2>🔑 Mot de passe</h2>
   <form method="post" action="/moi/mdp">

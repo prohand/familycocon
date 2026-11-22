@@ -4,6 +4,15 @@
   <p>{{.Donnees.Date}}</p>
 </section>
 
+{{if .Donnees.ConseilSecurite}}
+<a class="carte conseil-securite" href="/moi/securite">
+  <span class="grand-emoji">🔐</span>
+  <span class="quoi"><b>Protégez votre compte</b>
+    <small>Ajoutez une passkey (empreinte, visage) ou la double authentification : 1 minute.</small></span>
+  <span class="fleche-droite">›</span>
+</a>
+{{end}}
+
 {{if .Donnees.Tuiles}}
 <div class="tuiles">
   {{- range .Donnees.Tuiles}}

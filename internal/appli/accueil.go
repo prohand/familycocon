@@ -76,6 +76,9 @@ type donneesAccueil struct {
 	Date   string
 	Tuiles []tuile
 	Blocs  []template.HTML
+	// Compte à mot de passe sans double authentification ni passkey : un
+	// conseil s'affiche pour le protéger.
+	ConseilSecurite bool
 }
 
 func (a *App) routesAccueil() {
@@ -86,6 +89,10 @@ func (a *App) routesAccueil() {
 func (a *App) pageAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	ctx := r.Context()
 	d := donneesAccueil{Date: DateLongue(c.Maintenant())}
+	if c.Membre.Mdp.Valid && c.Membre.Totp == "" {
+		n, err := a.Q.CompterPasskeys(ctx, c.Membre.ID)
+		d.ConseilSecurite = err == nil && n == 0
+	}
 	for _, m := range ModulesVisibles(c) {
 		t := tuile{ModuleDef: m}
 		if f, ok := a.resumes[m.Cle]; ok {
