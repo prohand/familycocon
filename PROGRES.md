@@ -35,9 +35,9 @@ Notes :
   chiffrement et la signature sont testés (code repris de mirador-stack, qui
   les vérifie contre une autre implémentation), l'envoi est testé avec un
   faux service. À essayer sur un vrai téléphone, en HTTPS.
-- Build multi-arch par la CI GitHub : le Dockerfile compile en croisé (testé
-  en local pour amd64, et le binaire arm64 se compile) ; le premier passage de
-  la CI le confirmera.
+
+Vérifié par la CI GitHub : contrôles, tests et image Docker amd64 + arm64
+réussis à chaque étape (le build multi-arch passe sans émulation).
 
 ## Idées pour la suite
 
