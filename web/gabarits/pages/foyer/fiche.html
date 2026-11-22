@@ -1,0 +1,38 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="{{.Retour}}">‹ {{.TitreRetour}}</a>
+  <h1>{{.Emoji}} {{.Nom}}</h1>
+  {{if .Sous}}<p>{{.Sous}}</p>{{end}}
+</section>
+{{if .Liens}}
+<div class="actions-contact">
+  {{- range .Liens}}
+  <a class="action" href="{{.URL}}"{{if .Externe}} target="_blank" rel="noopener noreferrer"{{end}}><span class="emoji">{{.Emoji}}</span>{{.Texte}}</a>
+  {{- end}}
+</div>
+{{end}}
+{{if .Infos}}
+<section class="carte bloc fiche">
+  {{- range .Infos}}<div class="ligne"><span class="quoi texte-long">{{.}}</span></div>{{end}}
+</section>
+{{end}}
+{{if .KmURL}}
+<form class="carte bloc rangee" method="post" action="{{.KmURL}}">
+  {{template "jeton" $c.CSRF}}
+  <label class="champ"><span>🛣️ Kilométrage du compteur</span><input name="km" inputmode="numeric" required></label>
+  <button class="bouton petit">Noter</button>
+</form>
+{{end}}
+{{template "bloc-suivi" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Titre" .TitreSuivi "TitreCarnet" .TitreCarnet}}
+<div class="boutons">
+  <a class="bouton" href="{{.Modifier}}">✏️ Modifier</a>
+  {{if $c.EstParent}}
+  <form method="post" action="{{.Supprimer}}" hx-confirm="Supprimer {{.Nom}} et tout son historique ?">
+    {{template "jeton" $c.CSRF}}<button class="bouton danger">Supprimer</button>
+  </form>
+  {{end}}
+</div>
+{{end}}
+{{end}}

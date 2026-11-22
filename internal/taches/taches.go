@@ -47,6 +47,63 @@ func Brancher(a *appli.App) {
 	a.AjouterResume(mod, m.resume)
 	a.AjouterBloc(appli.BlocAccueil{Module: mod, Ordre: 2, Rendre: m.blocAccueil})
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "✅", Texte: "Une tâche ménagère", URL: "/taches/nouvelle"})
+	a.AjouterCalendrier(mod, m.calendrier)
+}
+
+// calendrier : les tâches des jours affichés dans l'agenda. Seules les tâches
+// rattachées à un jour (chaque jour, certains jours) y sont : « une fois »
+// et « chaque semaine » n'ont pas de jour précis.
+func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin time.Time) ([]appli.ElementJour, error) {
+	taches, err := m.a.Q.TachesActives(ctx, c.Famille.ID)
+	if err != nil {
+		return nil, err
+	}
+	membres, err := m.a.Membres(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	parID := map[int64]*donnees.Membre{}
+	for i := range membres {
+		parID[membres[i].ID] = &membres[i]
+	}
+	var out []appli.ElementJour
+	var ids []int64 // tâche de chaque élément de out
+	var cles []string
+	for j := debut; j.Before(fin); j = j.AddDate(0, 0, 1) {
+		cles = append(cles, repetition.CleJour(j))
+		for _, t := range taches {
+			regle := repetition.Lire(t.Repetition)
+			if regle.Type != repetition.Jour && regle.Type != repetition.Jours {
+				continue
+			}
+			// Rien avant le jour où la tâche a été créée.
+			if _, aFaire := regle.Occurrence(j); !aFaire || repetition.CleJour(j) < repetition.CleJour(c.Heure(t.CreeLe)) {
+				continue
+			}
+			e := appli.ElementJour{Jour: repetition.CleJour(j), Emoji: t.Emoji, Titre: t.Titre, URL: "/taches", Module: mod}
+			if t.AssigneA.Valid {
+				e.Membre = parID[t.AssigneA.Int64]
+			}
+			out = append(out, e)
+			ids = append(ids, t.ID)
+		}
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	// Déjà faites ? (la clé d'une occurrence quotidienne est le jour).
+	faites, err := m.a.Q.TachesFaitesOccurrences(ctx, donnees.TachesFaitesOccurrencesParams{FamilleID: c.Famille.ID, Occurrences: cles})
+	if err != nil {
+		return nil, err
+	}
+	fait := map[string]bool{}
+	for _, f := range faites {
+		fait[strconv.FormatInt(f.TacheID, 10)+"|"+f.Occurrence] = true
+	}
+	for i := range out {
+		out[i].Faite = fait[strconv.FormatInt(ids[i], 10)+"|"+out[i].Jour]
+	}
+	return out, nil
 }
 
 // emojis : mots-clés → emoji (le premier trouvé l'emporte).

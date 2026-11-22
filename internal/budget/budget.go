@@ -73,7 +73,11 @@ func Brancher(a *appli.App) {
 	a.Route("GET /budget", mod, appli.Parent, m.page)
 	a.Route("GET /budget/nouvelle", mod, appli.Parent, m.formulaire)
 	a.Route("POST /budget", mod, appli.Parent, m.creer)
-	a.Route("POST /budget/fixes", mod, appli.Parent, m.recopierFixes)
+	a.Route("GET /budget/recurrences", mod, appli.Parent, m.pageRecurrences)
+	a.Route("GET /recurrences/{id}", mod, appli.Parent, m.formRecurrence)
+	a.Route("POST /recurrences/{id}", mod, appli.Parent, m.modifierRecurrence)
+	a.Route("POST /recurrences/{id}/arreter", mod, appli.Parent, m.arreterRecurrence)
+	a.Route("POST /recurrences/{id}/supprimer", mod, appli.Parent, m.supprimerRecurrence)
 	a.Route("GET /budget/{id}", mod, appli.Parent, m.formulaire)
 	a.Route("POST /budget/{id}", mod, appli.Parent, m.modifier)
 	a.Route("POST /budget/{id}/supprimer", mod, appli.Parent, m.supprimer)
@@ -118,7 +122,10 @@ type vueBudget struct {
 	MaxCat    int64
 	Jours     []jourOps
 	Pilules   []Categorie
-	Fixes     int // opérations fixes du mois précédent absentes de ce mois
+	Prevues   []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
+	PrevuNet  int64     // revenus − dépenses prévus
+	ResteFin  int64     // reste à vivre prévu en fin de mois
+	NbRecur   int       // opérations qui reviennent (lien vers leur page)
 	Devise    string
 }
 
@@ -166,6 +173,10 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 	}
 	if _, ok := CategorieParCle(filtre); ok {
 		v.Filtre = filtre
+	}
+	// Les opérations qui reviennent sont d'abord écrites jusqu'à aujourd'hui.
+	if err := Generer(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
+		return nil, err
 	}
 	ops, err := m.operations(ctx, c, premier, dernier)
 	if err != nil {
@@ -238,18 +249,29 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 		Jours:     jours, Devise: c.Famille.Devise,
 	}.SVG()
 
-	// Opérations fixes du mois précédent pas encore recopiées.
-	deja := map[string]bool{}
-	for _, o := range ops {
-		if o.Fixe == 1 {
-			deja[o.Categorie+"|"+o.Libelle] = true
+	// Ce qui reviendra d'ici la fin du mois (après aujourd'hui).
+	recs, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return nil, err
+	}
+	v.NbRecur = len(recs)
+	for _, p := range Prevues(recs, premier, dernier, maintenant) {
+		cat, ok := CategorieParCle(p.Categorie)
+		if !ok {
+			cat, _ = CategorieParCle("autre")
+		}
+		l := ligneOp{Operation: p, Cat: cat}
+		if p.MembreID.Valid {
+			l.Membre = parID[p.MembreID.Int64]
+		}
+		v.Prevues = append(v.Prevues, l)
+		if p.Sens == "revenu" {
+			v.PrevuNet += p.Montant
+		} else {
+			v.PrevuNet -= p.Montant
 		}
 	}
-	for _, o := range prec {
-		if o.Fixe == 1 && !deja[o.Categorie+"|"+o.Libelle] {
-			v.Fixes++
-		}
-	}
+	v.ResteFin = v.Reste + v.PrevuNet
 	return v, nil
 }
 
@@ -268,6 +290,8 @@ type formOp struct {
 	Montant    string
 	Categories []Categorie
 	Membres    []donnees.Membre
+	Frequences []Frequence
+	Recurrence string // « Chaque mois », si l'opération fait partie d'une récurrence
 	Devise     string
 }
 
@@ -280,7 +304,7 @@ func (m *Module) operation(r *http.Request, c *appli.Contexte) (donnees.Operatio
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	f := formOp{Nouvelle: r.PathValue("id") == "", Categories: Categories, Devise: c.Famille.Devise}
+	f := formOp{Nouvelle: r.PathValue("id") == "", Categories: Categories, Frequences: Frequences, Devise: c.Famille.Devise}
 	var err error
 	if f.Membres, err = m.a.Membres(r.Context(), c); err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -297,7 +321,12 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			m.a.PageErreur(w, r, c, http.StatusNotFound, "Opération introuvable", "Cette opération n'existe plus.")
 			return
 		}
-		f.Montant = strings.Replace(fmt.Sprintf("%d.%02d", f.Op.Montant/100, f.Op.Montant%100), ".", ",", 1)
+		f.Montant = montantSaisie(f.Op.Montant)
+		if f.Op.RecurrenceID.Valid {
+			if rec, err := m.a.Q.RecurrenceParID(r.Context(), donnees.RecurrenceParIDParams{ID: f.Op.RecurrenceID.Int64, FamilleID: c.Famille.ID}); err == nil {
+				f.Recurrence = NomFrequence(rec.Frequence)
+			}
+		}
 	}
 	titre := "Nouvelle opération"
 	if !f.Nouvelle {
@@ -310,7 +339,7 @@ type saisieOp struct {
 	sens, categorie, libelle, jour string
 	montant                        int64
 	membre                         sql.NullInt64
-	fixe                           int64
+	frequence, fin                 string // nouvelle opération qui revient
 }
 
 func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisieOp, string) {
@@ -337,8 +366,12 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisieOp, string) {
 			s.membre = sql.NullInt64{Int64: id, Valid: true}
 		}
 	}
-	if r.PostFormValue("fixe") == "1" {
-		s.fixe = 1
+	if f := r.PostFormValue("frequence"); FrequenceValide(f) {
+		s.frequence = f
+		s.fin = r.PostFormValue("fin")
+		if _, err := time.Parse("2006-01-02", s.fin); s.fin != "" && (err != nil || s.fin < s.jour) {
+			return s, "La date de fin doit suivre la première date."
+		}
 	}
 	return s, ""
 }
@@ -349,9 +382,25 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
-	if _, err := m.a.Q.CreerOperation(r.Context(), donnees.CreerOperationParams{
+	ctx := r.Context()
+	auteur := sql.NullInt64{Int64: c.Membre.ID, Valid: true}
+	if s.frequence != "" {
+		// Opération qui revient : la récurrence écrit elle-même les occurrences
+		// passées ou du jour ; les suivantes viendront à leur date.
+		if _, err := m.a.Q.CreerRecurrence(ctx, donnees.CreerRecurrenceParams{
+			FamilleID: c.Famille.ID, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
+			MembreID: s.membre, Frequence: s.frequence, Debut: s.jour, Fin: s.fin, CreePar: auteur, CreeLe: time.Now().Unix(),
+		}); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		if err := Generer(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+	} else if _, err := m.a.Q.CreerOperation(ctx, donnees.CreerOperationParams{
 		FamilleID: c.Famille.ID, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
-		Jour: s.jour, MembreID: s.membre, Fixe: s.fixe, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+		Jour: s.jour, MembreID: s.membre, CreePar: auteur, CreeLe: time.Now().Unix(),
 	}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -374,7 +423,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	}
 	if err := m.a.Q.ModifierOperation(r.Context(), donnees.ModifierOperationParams{
 		Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle, Jour: s.jour,
-		MembreID: s.membre, Fixe: s.fixe, ID: o.ID, FamilleID: c.Famille.ID,
+		MembreID: s.membre, ID: o.ID, FamilleID: c.Famille.ID,
 	}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -399,61 +448,17 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 	m.a.Rediriger(w, r, "/budget?mois="+o.Jour[:7])
 }
 
-// recopierFixes : les opérations « fixes » du mois précédent sont recopiées
-// dans le mois affiché (même jour du mois, ou le dernier jour s'il n'existe pas).
-func (m *Module) recopierFixes(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	ctx := r.Context()
-	ref := c.Maintenant()
-	if t, err := time.ParseInLocation("2006-01", r.PostFormValue("mois"), c.Lieu); err == nil {
-		ref = t
-	}
-	premier, dernier := mois(ref)
-	ppremier, pdernier := mois(premier.AddDate(0, -1, 0))
-	ops, err1 := m.operations(ctx, c, premier, dernier)
-	prec, err2 := m.operations(ctx, c, ppremier, pdernier)
-	if err1 != nil || err2 != nil {
-		m.a.ErreurInterne(w, r, fmt.Errorf("%v %v", err1, err2))
-		return
-	}
-	deja := map[string]bool{}
-	for _, o := range ops {
-		if o.Fixe == 1 {
-			deja[o.Categorie+"|"+o.Libelle] = true
-		}
-	}
-	n := 0
-	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
-		for _, o := range prec {
-			if o.Fixe != 1 || deja[o.Categorie+"|"+o.Libelle] {
-				continue
-			}
-			jour, _ := strconv.Atoi(o.Jour[8:])
-			jour = min(jour, dernier.Day())
-			if _, err := q.CreerOperation(ctx, donnees.CreerOperationParams{
-				FamilleID: c.Famille.ID, Sens: o.Sens, Montant: o.Montant, Categorie: o.Categorie, Libelle: o.Libelle,
-				Jour: fmt.Sprintf("%s-%02d", premier.Format("2006-01"), jour), MembreID: o.MembreID, Fixe: 1,
-				CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
-			}); err != nil {
-				return err
-			}
-			n++
-		}
-		return nil
-	})
-	if err != nil {
-		m.a.ErreurInterne(w, r, err)
-		return
-	}
-	m.a.Publier(c, mod, "")
-	m.a.Flash(w, appli.Pluriel(n, "opération fixe recopiée", "opérations fixes recopiées"))
-	m.a.Rediriger(w, r, "/budget?mois="+premier.Format("2006-01"))
-}
-
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
+	_ = Generer(ctx, m.a, c.Famille.ID, c.Maintenant())
 	premier, dernier := mois(c.Maintenant())
 	t, err := m.a.Q.TotauxPeriode(ctx, donnees.TotauxPeriodeParams{FamilleID: c.Famille.ID, Du: repetition.CleJour(premier), Au: repetition.CleJour(dernier)})
 	if err != nil || t.Revenus+t.Depenses == 0 {
 		return appli.Resume{Info: "Rien ce mois-ci"}
 	}
 	return appli.Resume{Info: "Reste " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise)}
+}
+
+// montantSaisie : 1234 centimes → « 12,34 » (pour un champ de formulaire).
+func montantSaisie(n int64) string {
+	return fmt.Sprintf("%d,%02d", n/100, n%100)
 }

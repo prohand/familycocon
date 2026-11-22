@@ -76,46 +76,6 @@ func chevauche(d, f, debut, fin time.Time) bool {
 	return d.Before(fin) && (f.After(debut) || !d.Before(debut))
 }
 
-// deplier : les occurrences d'un événement dans la période.
-func deplier(e donnees.Evenement, lieu *time.Location, debut, fin time.Time) [][2]time.Time {
-	d0 := time.Unix(e.Debut, 0).In(lieu)
-	duree := time.Duration(e.Fin-e.Debut) * time.Second
-	var out [][2]time.Time
-	switch e.Repetition {
-	case "semaine":
-		k := 0
-		if ecart := debut.Sub(d0) - duree; ecart > 0 {
-			k = int(ecart/(7*24*time.Hour)) - 1
-			k = max(k, 0)
-		}
-		for ; k < 100000; k++ {
-			d := time.Date(d0.Year(), d0.Month(), d0.Day()+7*k, d0.Hour(), d0.Minute(), 0, 0, lieu)
-			if !d.Before(fin) {
-				break
-			}
-			if chevauche(d, d.Add(duree), debut, fin) {
-				out = append(out, [2]time.Time{d, d.Add(duree)})
-			}
-		}
-	case "an":
-		for k := max(0, debut.Year()-d0.Year()-1); ; k++ {
-			d := time.Date(d0.Year()+k, d0.Month(), d0.Day(), d0.Hour(), d0.Minute(), 0, 0, lieu)
-			if !d.Before(fin) {
-				break
-			}
-			if chevauche(d, d.Add(duree), debut, fin) {
-				out = append(out, [2]time.Time{d, d.Add(duree)})
-			}
-		}
-	default:
-		f := time.Unix(e.Fin, 0).In(lieu)
-		if chevauche(d0, f, debut, fin) {
-			out = append(out, [2]time.Time{d0, f})
-		}
-	}
-	return out
-}
-
 // Occurrences : les occurrences de la période [debut, fin[, triées.
 func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin time.Time) ([]Occurrence, error) {
 	evts, err := m.a.Q.EvenementsPeriode(ctx, donnees.EvenementsPeriodeParams{FamilleID: c.Famille.ID, FinPeriode: fin.Unix(), DebutPeriode: debut.Unix()})
@@ -180,7 +140,8 @@ type Jour struct {
 	Aujourdhui  bool
 	DansMois    bool
 	Occurrences []Occurrence
-	Plus        int // vue mois : événements non montrés
+	Plus        int                 // vue mois : événements non montrés
+	Elements    []appli.ElementJour // tâches du jour (en petit)
 }
 
 type vueAgenda struct {
@@ -193,6 +154,22 @@ type vueAgenda struct {
 	NomsJours  []string
 	Aujourdhui string
 	Ref        string // date de référence de la période affichée
+	Taches     string // tous | moi | non : tâches montrées sous les événements
+	AvecTaches bool   // le module Tâches est activé (le filtre est proposé)
+}
+
+// filtreTaches : réglage « tâches dans l'agenda », gardé par le navigateur.
+func (m *Module) filtreTaches(w http.ResponseWriter, r *http.Request) string {
+	if v := r.URL.Query().Get("taches"); v == "tous" || v == "moi" || v == "non" {
+		if w != nil {
+			m.a.PoserPreference(w, "agenda_taches", v)
+		}
+		return v
+	}
+	if v := m.a.LirePreference(r, "agenda_taches"); v == "moi" || v == "non" {
+		return v
+	}
+	return "tous"
 }
 
 func titreJour(t time.Time) string {
@@ -200,7 +177,7 @@ func titreJour(t time.Time) string {
 	return strings.ToUpper(j[:1]) + j[1:] + " " + strconv.Itoa(t.Day())
 }
 
-func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request) (*vueAgenda, error) {
+func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request, taches string) (*vueAgenda, error) {
 	q := r.URL.Query()
 	maintenant := c.Maintenant()
 	aujourdhui := minuit(maintenant)
@@ -208,7 +185,8 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request) (*
 	if d, err := time.ParseInLocation("2006-01-02", q.Get("date"), c.Lieu); err == nil {
 		ref = d
 	}
-	v := &vueAgenda{Vue: "semaine", NomsJours: repetition.NomsJours[1:], Aujourdhui: repetition.CleJour(aujourdhui)}
+	v := &vueAgenda{Vue: "semaine", NomsJours: repetition.NomsJours[1:], Aujourdhui: repetition.CleJour(aujourdhui),
+		Taches: taches, AvecTaches: c.Actif("taches")}
 	if q.Get("vue") == "mois" {
 		v.Vue = "mois"
 	}
@@ -239,13 +217,24 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request) (*
 	if err != nil {
 		return nil, err
 	}
+	// Tâches (et autres éléments discrets) par jour, selon le filtre.
+	elements := map[string][]appli.ElementJour{}
+	if taches != "non" {
+		for _, e := range m.a.ElementsCalendrier(ctx, c, debut, fin) {
+			if taches == "moi" && e.Membre != nil && e.Membre.ID != c.Membre.ID {
+				continue
+			}
+			elements[e.Jour] = append(elements[e.Jour], e)
+		}
+	}
 	choisi := q.Get("jour")
 	if choisi == "" {
 		choisi = v.Aujourdhui
 	}
 	for j := debut; j.Before(fin); j = j.AddDate(0, 0, 1) {
-		jour := Jour{Date: j, Cle: repetition.CleJour(j), Titre: titreJour(j), Aujourdhui: j.Equal(aujourdhui),
-			DansMois: v.Vue == "semaine" || j.Month() == ref.Month(), Occurrences: duJour(occ, j)}
+		cle := repetition.CleJour(j)
+		jour := Jour{Date: j, Cle: cle, Titre: titreJour(j), Aujourdhui: j.Equal(aujourdhui),
+			DansMois: v.Vue == "semaine" || j.Month() == ref.Month(), Occurrences: duJour(occ, j), Elements: elements[cle]}
 		v.Jours = append(v.Jours, jour)
 	}
 	if v.Vue == "mois" {
@@ -264,7 +253,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request) (*
 }
 
 func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	v, err := m.vue(r.Context(), c, r)
+	v, err := m.vue(r.Context(), c, r, m.filtreTaches(w, r))
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -273,7 +262,7 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 }
 
 func (m *Module) contenu(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	v, err := m.vue(r.Context(), c, r)
+	v, err := m.vue(r.Context(), c, r, m.filtreTaches(nil, r))
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -292,6 +281,17 @@ type formEvt struct {
 	HeureFin   string
 	Membres    []donnees.Membre
 	Choisis    map[int64]bool
+	Choix      []ChoixRepetition
+	Regle      regle  // répétition actuelle (cases des jours)
+	TexteRep   string // « Chaque 2e mardi du mois »
+	Semaine    []caseJour
+}
+
+// caseJour : une case « lun … dim » de la répétition « certains jours ».
+type caseJour struct {
+	N     int
+	Nom   string
+	Coche bool
 }
 
 func (m *Module) evenement(r *http.Request, c *appli.Contexte) (donnees.Evenement, error) {
@@ -308,7 +308,7 @@ func modifiable(c *appli.Contexte, e donnees.Evenement) bool {
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
-	f := &formEvt{Nouveau: r.PathValue("id") == "", Modifiable: true, Choisis: map[int64]bool{}}
+	f := &formEvt{Nouveau: r.PathValue("id") == "", Modifiable: true, Choisis: map[int64]bool{}, Choix: Choix}
 	var err error
 	if f.Membres, err = m.a.Membres(ctx, c); err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -327,6 +327,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Evt, f.Modifiable = e, modifiable(c, e)
+		f.Regle, f.TexteRep = lireRegle(e.Repetition), TexteRepetition(e, c.Lieu)
 		d, fin := c.Heure(e.Debut), c.Heure(e.Fin)
 		f.Date, f.DateFin = repetition.CleJour(d), repetition.CleJour(fin)
 		if e.Journee == 0 {
@@ -343,6 +344,9 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			}
 		}
 	}
+	for i := 1; i <= 7; i++ {
+		f.Semaine = append(f.Semaine, caseJour{N: i, Nom: repetition.NomsJours[i], Coche: f.Regle.Jours[i]})
+	}
 	titre := "Nouvel événement"
 	if !f.Nouveau {
 		titre = f.Evt.Titre
@@ -353,6 +357,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 // saisie : un événement lu dans le formulaire.
 type saisie struct {
 	titre, lieu, note, repetition string
+	repetitionFin                 string
 	debut, fin                    time.Time
 	journee                       bool
 	membres                       []int64
@@ -373,10 +378,16 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 	if utf8.RuneCountInString(s.lieu) > 80 || utf8.RuneCountInString(s.note) > 500 {
 		return s, "Lieu (80 caractères) ou note (500) trop long."
 	}
-	s.repetition = f.Get("repetition")
-	if s.repetition != "" && s.repetition != "semaine" && s.repetition != "an" {
-		return s, "Répétition inconnue."
+	rg := lireRegle(f.Get("repetition"))
+	if rg.Type == "jours" {
+		for i := 1; i <= 7; i++ {
+			rg.Jours[i] = f.Get("rjour"+strconv.Itoa(i)) == "1"
+		}
+		if rg.String() == "jours:" {
+			return s, "Cochez au moins un jour de la semaine."
+		}
 	}
+	s.repetition = rg.String()
 	jour, err := time.ParseInLocation("2006-01-02", f.Get("date"), c.Lieu)
 	if err != nil {
 		return s, "Date invalide."
@@ -386,6 +397,13 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 		if jourFin, err = time.ParseInLocation("2006-01-02", f.Get("date_fin"), c.Lieu); err != nil || jourFin.Before(jour) {
 			return s, "La date de fin doit être après le début."
 		}
+	}
+	if s.repetition != "" && f.Get("repetition_fin") != "" {
+		rf, err := time.ParseInLocation("2006-01-02", f.Get("repetition_fin"), c.Lieu)
+		if err != nil || rf.Before(jour) {
+			return s, "La fin de la répétition doit être après la date de l'événement."
+		}
+		s.repetitionFin = repetition.CleJour(rf)
 	}
 	s.journee = f.Get("journee") == "1" || f.Get("heure_debut") == ""
 	if s.journee {
@@ -451,7 +469,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		var err error
 		e, err = q.CreerEvenement(ctx, donnees.CreerEvenementParams{
 			FamilleID: c.Famille.ID, Titre: s.titre, Lieu: s.lieu, Note: s.note, Debut: s.debut.Unix(), Fin: s.fin.Unix(),
-			Journee: bool01(s.journee), Repetition: s.repetition, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+			Journee: bool01(s.journee), Repetition: s.repetition, RepetitionFin: s.repetitionFin, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 		})
 		if err != nil {
 			return err
@@ -487,7 +505,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
 		if err := q.ModifierEvenement(ctx, donnees.ModifierEvenementParams{
 			Titre: s.titre, Lieu: s.lieu, Note: s.note, Debut: s.debut.Unix(), Fin: s.fin.Unix(),
-			Journee: bool01(s.journee), Repetition: s.repetition, ID: e.ID, FamilleID: c.Famille.ID,
+			Journee: bool01(s.journee), Repetition: s.repetition, RepetitionFin: s.repetitionFin, ID: e.ID, FamilleID: c.Famille.ID,
 		}); err != nil {
 			return err
 		}

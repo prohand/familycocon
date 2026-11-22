@@ -9,12 +9,14 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"familycocon/internal/donnees"
 	"familycocon/internal/webpush"
 )
 
@@ -157,3 +159,60 @@ func contexteDe(t *testing.T, a *App, ident string) *Contexte {
 }
 
 func sqlTexte(s string) sql.NullString { return sql.NullString{String: s, Valid: true} }
+
+func TestRappelsDuMatin(t *testing.T) {
+	a, srv, marie := familleTest(t)
+	ctx, annuler := context.WithCancel(context.Background())
+	defer annuler()
+	if err := a.DemarrerPush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var recus []string
+	a.Push.envoyer = func(_ context.Context, _ *webpush.Abonnement, corps []byte, _ webpush.Options) error {
+		mu.Lock()
+		defer mu.Unlock()
+		recus = append(recus, string(corps))
+		return nil
+	}
+	// Une échéance aujourd'hui, une dans 7 jours, une dans 3 jours (pas de rappel).
+	a.AjouterEcheances("courses", func(_ context.Context, f donnees.Famille, debut, fin time.Time) ([]Echeance, error) {
+		var out []Echeance
+		auj := minuitDe(time.Now().In(lieuFamille(f)))
+		for _, n := range []int{0, 3, 7} {
+			j := auj.AddDate(0, 0, n)
+			if !j.Before(debut) && j.Before(fin) {
+				out = append(out, Echeance{Jour: j, Titre: fmt.Sprintf("Échéance J+%d", n), Emoji: "⏰", Module: "courses"})
+			}
+		}
+		return out, nil
+	})
+	marie.get("/moi")
+	req, _ := http.NewRequest("POST", srv.URL+"/push/abonnement", strings.NewReader(abonnementFactice(t, "marie")))
+	req.Header.Set("X-Jeton", marie.jeton)
+	if rep, err := marie.c.Do(req); err != nil || rep.StatusCode != http.StatusNoContent {
+		t.Fatal("abonnement")
+	}
+	if n := a.EnvoyerRappels(ctx, time.Now()); n != 2 {
+		t.Fatalf("%d rappels, 2 attendus", n)
+	}
+	for i := 0; i < 200; i++ {
+		mu.Lock()
+		l := len(recus)
+		mu.Unlock()
+		if l >= 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	tout := strings.Join(recus, "\n")
+	if len(recus) != 2 || !strings.Contains(tout, "Aujourd'hui : Échéance J+0") || !strings.Contains(tout, "Dans 7 jours : Échéance J+7") {
+		t.Fatalf("rappels reçus : %v", recus)
+	}
+	// Le bloc « À venir » de l'accueil les montre (30 jours).
+	if _, page := marie.get("/"); !strings.Contains(page, "À venir") || !strings.Contains(page, "Échéance J&#43;3") {
+		t.Fatal("bloc À venir")
+	}
+}

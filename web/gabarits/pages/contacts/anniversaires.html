@@ -1,0 +1,25 @@
+{{define "contenu"}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>🎂 Anniversaires</h1>
+  <p>Les prochaines dates, membres et proches</p>
+</section>
+<div class="boutons"><a class="bouton" href="/contacts/nouveau?anniv=1">＋ Anniversaire</a></div>
+{{range .Donnees}}
+<section class="bloc">
+  <h2 class="sous-titre">{{.Mois}}</h2>
+  <div class="carte">
+    {{- range .Liste}}
+    <a class="ligne anniv{{if .Proche}} proche{{end}}" href="{{.URL}}">
+      <span class="date-ronde"><b>{{.Date.Day}}</b></span>
+      {{with .Membre}}<span class="avatar petit c{{.Couleur}}">{{initiale .Nom}}</span>{{else}}<span class="p-emoji">🎂</span>{{end}}
+      <span class="quoi">{{.Nom}}{{if .Age}} <span class="age">{{.Age}} ans</span>{{end}}
+        <small>{{.Quand}}{{if .Idees}} · 🎁 {{.Idees}}{{end}}</small></span>
+    </a>
+    {{- end}}
+  </div>
+</section>
+{{else}}
+<div class="carte vide bloc"><span class="emoji">🎂</span>Aucun anniversaire. Ajoutez ceux de vos proches, et votre date de naissance dans <a href="/moi">Moi</a>.</div>
+{{end}}
+{{end}}

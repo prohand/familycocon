@@ -4,8 +4,11 @@
 SELECT count(*) FROM familles;
 
 -- name: CreerFamille :one
-INSERT INTO familles (nom, fuseau, devise, cree_le) VALUES (?, ?, ?, ?)
+INSERT INTO familles (nom, fuseau, devise, modules, cree_le) VALUES (?, ?, ?, ?, ?)
 RETURNING *;
+
+-- name: ToutesFamilles :many
+SELECT * FROM familles ORDER BY id;
 
 -- name: FamilleParID :one
 SELECT * FROM familles WHERE id = ?;
@@ -17,8 +20,8 @@ UPDATE familles SET nom = ?, fuseau = ?, devise = ? WHERE id = ?;
 UPDATE familles SET modules = ? WHERE id = ?;
 
 -- name: CreerMembre :one
-INSERT INTO membres (famille_id, nom, role, couleur, identifiant, mdp, pin, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO membres (famille_id, nom, role, couleur, identifiant, mdp, pin, push_modules, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: MembreParIdentifiant :one
@@ -37,6 +40,9 @@ ORDER BY id;
 
 -- name: CompterParents :one
 SELECT count(*) FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'parent';
+
+-- name: ModifierNaissance :exec
+UPDATE membres SET naissance = ? WHERE id = ? AND famille_id = ?;
 
 -- name: ModifierProfil :exec
 UPDATE membres SET nom = ?, couleur = ? WHERE id = ? AND famille_id = ?;

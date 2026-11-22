@@ -8,11 +8,11 @@ ORDER BY jour DESC, id DESC;
 SELECT * FROM operations WHERE id = ? AND famille_id = ?;
 
 -- name: CreerOperation :one
-INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, membre_id, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: ModifierOperation :exec
-UPDATE operations SET sens = ?, montant = ?, categorie = ?, libelle = ?, jour = ?, membre_id = ?, fixe = ?
+UPDATE operations SET sens = ?, montant = ?, categorie = ?, libelle = ?, jour = ?, membre_id = ?
 WHERE id = ? AND famille_id = ?;
 
 -- name: SupprimerOperation :exec

@@ -1,0 +1,40 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/notes">‹ Notes</a>
+  <h1>{{if .Nouvelle}}📝 Nouvelle note{{else}}📝 {{if .Note.Titre}}{{.Note.Titre}}{{else}}Note{{end}}{{end}}</h1>
+  {{if not .Modifiable}}<p>Seul son auteur (ou un parent) peut la modifier.</p>{{end}}
+</section>
+<form class="carte note-edition n{{.Note.Couleur}}" method="post" action="{{if .Nouvelle}}/notes{{else}}/notes/{{.Note.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  <fieldset class="sans-bord"{{if not .Modifiable}} disabled{{end}}>
+  <label class="champ"><span>Titre (facultatif)</span><input name="titre" value="{{.Note.Titre}}" maxlength="80"></label>
+  <label class="champ"><span>Note</span><textarea name="texte" rows="10" maxlength="10000"{{if .Nouvelle}} autofocus{{end}}>{{.Note.Texte}}</textarea></label>
+  <fieldset class="couleurs-notes">
+    <legend class="sr">Couleur</legend>
+    {{- range $i := couleurs}}{{if le $i 6}}
+    <label><input type="radio" name="couleur" value="{{$i}}"{{if eq (print $i) (print $.Donnees.Note.Couleur)}} checked{{end}}><span class="n{{$i}}"></span><span class="sr">Couleur {{$i}}</span></label>
+    {{- end}}{{end}}
+  </fieldset>
+  <label class="interrupteur">
+    <span class="emoji">📌</span><span class="nom">Épinglée en haut</span>
+    <input type="checkbox" name="epinglee" value="1"{{if eq .Note.Epinglee 1}} checked{{end}}><span class="glissiere"></span>
+  </label>
+  {{if or .Nouvelle (and .Note.AuteurID.Valid (eq .Note.AuteurID.Int64 $c.Membre.ID))}}
+  <label class="interrupteur">
+    <span class="emoji">🔒</span><span class="nom">Privée <small class="aide">(vous seul la voyez)</small></span>
+    <input type="checkbox" name="privee" value="1"{{if eq .Note.Privee 1}} checked{{end}}><span class="glissiere"></span>
+  </label>
+  {{end}}
+  {{if .Modifiable}}<div class="boutons"><button class="bouton">Enregistrer</button></div>{{end}}
+  </fieldset>
+</form>
+{{if .Supprimable}}
+<form class="bloc" method="post" action="/notes/{{.Note.ID}}/supprimer" hx-confirm="Supprimer cette note ?">
+  {{template "jeton" $c.CSRF}}
+  <button class="bouton danger">Supprimer la note</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

@@ -1,0 +1,23 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>{{.Emoji}} {{.Titre}}</h1>
+</section>
+<div class="boutons"><a class="bouton" href="{{.Nouveau}}">{{.TexteNouveau}}</a></div>
+{{if .Elements}}
+<div class="liste-objets bloc">
+  {{- range .Elements}}
+  <a class="objet" href="{{.URL}}">
+    <span class="grand-emoji">{{.Emoji}}</span>
+    <b>{{.Nom}}</b>
+    {{if .Detail}}<small>{{.Detail}}</small>{{end}}
+    {{if .Alerte}}<span class="alerte">{{.Alerte}}</span>{{end}}
+  </a>
+  {{- end}}
+</div>
+{{else}}
+<div class="carte vide bloc"><span class="emoji">{{.Emoji}}</span>{{.Vide}}</div>
+{{end}}
+{{end}}
+{{end}}

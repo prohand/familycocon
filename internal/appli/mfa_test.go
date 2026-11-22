@@ -146,9 +146,22 @@ func ajouterPasskeyTest(t *testing.T, n *navigateur) *fauxcle.Cle {
 
 func TestPasskeys(t *testing.T) {
 	_, srv, marie := familleTest(t)
+	// Sans protection : conseil sur l'accueil, carte « Sécurité » en rouge.
+	if _, page := marie.get("/"); !strings.Contains(page, "Protégez votre compte") {
+		t.Fatal("conseil de sécurité absent")
+	}
+	if _, page := marie.get("/moi"); !strings.Contains(page, `class="carte bloc carte-securite"`) {
+		t.Fatal("carte Sécurité absente de la page Moi")
+	}
 	cle := ajouterPasskeyTest(t, marie)
 	if _, page := marie.get("/moi/securite"); !strings.Contains(page, "Téléphone") {
 		t.Fatal("passkey absente de la liste")
+	}
+	if _, page := marie.get("/"); strings.Contains(page, "Protégez votre compte") {
+		t.Fatal("conseil encore affiché avec une passkey")
+	}
+	if _, page := marie.get("/moi"); !strings.Contains(page, "carte-securite protegee") || !strings.Contains(page, "1 passkey") {
+		t.Fatal("état de la sécurité absent de la page Moi")
 	}
 
 	// Connexion sans mot de passe.

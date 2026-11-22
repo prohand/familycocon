@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -54,6 +55,7 @@ func fonctionsDeBase(a *App) template.FuncMap {
 			return false
 		},
 		"ajouter":  func(a, b int) int { return a + b },
+		"milliers": Milliers,
 		"couleurs": func() []int { return []int{1, 2, 3, 4, 5, 6, 7, 8} },
 		// {{etoiles 3}} → ⭐⭐⭐
 		"etoiles": func(n int) string { return strings.Repeat("⭐", n) },
@@ -105,4 +107,20 @@ func Montant(centimes int64, devise string) string {
 		s = devise
 	}
 	return fmt.Sprintf("%s%s,%02d %s", signe, b.String(), centimes%100, s)
+}
+
+// Milliers : 123456 → « 123 456 » (espace fine insécable, à la française).
+func Milliers(n int64) string {
+	s := strconv.FormatInt(n, 10)
+	var b strings.Builder
+	if n < 0 {
+		return "-" + Milliers(-n)
+	}
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteRune('\u202f')
+		}
+		b.WriteRune(c)
+	}
+	return b.String()
 }

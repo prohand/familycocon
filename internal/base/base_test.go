@@ -135,3 +135,53 @@ func TestRestaurerEtSauvegardeAuto(t *testing.T) {
 		t.Fatalf("base restaurée : %q %v", nom, err)
 	}
 }
+
+// 0015 : les anciennes opérations « fixes » deviennent des récurrences
+// mensuelles qui partent de leur dernière occurrence.
+func TestMigrationFixes(t *testing.T) {
+	ctx := context.Background()
+	db, err := Ouvrir(filepath.Join(t.TempDir(), NomFichier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	migs, err := lireMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Version(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range migs[:14] {
+		if err := appliquer(ctx, db, m); err != nil {
+			t.Fatal(m.nom, err)
+		}
+	}
+	for _, q := range []string{
+		`INSERT INTO familles (id, nom, cree_le) VALUES (1, 'Martin', 0)`,
+		`INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, fixe, cree_le) VALUES
+		  (1, 'revenu', 250000, 'salaire', 'Salaire', '2026-10-28', 1, 0),
+		  (1, 'revenu', 260000, 'salaire', 'Salaire', '2026-11-28', 1, 0),
+		  (1, 'depense', 8000, 'courses', '', '2026-11-03', 0, 0)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := Migrer(ctx, db, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	var n, montant, faites, liees int
+	var debut, freq string
+	if err := db.QueryRowContext(ctx, `SELECT count(*), max(montant), max(debut), max(frequence), max(faites) FROM recurrences`).
+		Scan(&n, &montant, &debut, &freq, &faites); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 || montant != 260000 || debut != "2026-11-28" || freq != "mois" || faites != 1 {
+		t.Fatalf("récurrence : %d %d %s %s %d", n, montant, debut, freq, faites)
+	}
+	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM operations WHERE recurrence_id IS NOT NULL`).Scan(&liees)
+	if liees != 2 {
+		t.Fatalf("%d opérations liées, attendu 2", liees)
+	}
+}

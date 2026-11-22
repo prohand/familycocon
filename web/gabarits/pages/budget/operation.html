@@ -26,10 +26,16 @@
     <select name="membre"><option value="0">—</option>
       {{- range .Membres}}{{if eq .Role "parent"}}<option value="{{.ID}}"{{if and $.Donnees.Op.MembreID.Valid (eq .ID $.Donnees.Op.MembreID.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}{{end}}
     </select></label>
-  <label class="interrupteur">
-    <span class="emoji">🔁</span><span class="nom">Revient chaque mois <small class="aide">(salaire, loyer…)</small></span>
-    <input type="checkbox" name="fixe" value="1"{{if .Op.Fixe}} checked{{end}}><span class="glissiere"></span>
-  </label>
+  {{if .Nouvelle}}
+  <div class="rangee">
+    <label class="champ"><span>🔁 Revient</span>
+      <select name="frequence"><option value="">Une seule fois</option>{{range .Frequences}}<option value="{{.Cle}}">{{.Nom}}</option>{{end}}</select></label>
+    <label class="champ"><span>Jusqu'au (facultatif)</span><input type="date" name="fin"></label>
+  </div>
+  <p class="aide">Salaire, loyer, crédit… : elle sera ajoutée toute seule à chaque date.</p>
+  {{else if .Recurrence}}
+  <p class="aide">🔁 Revient {{.Recurrence}} : cette modification ne touche que cette fois-ci. <a href="/recurrences/{{.Op.RecurrenceID.Int64}}">Modifier les prochaines fois ›</a></p>
+  {{end}}
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>
 {{if not .Nouvelle}}

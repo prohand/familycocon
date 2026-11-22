@@ -1,0 +1,66 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+{{$d := .}}
+<section class="titre-page">
+  <a class="retour" href="/projets">‹ Projets</a>
+  <h1>{{.P.Emoji}} {{.P.Nom}}</h1>
+  {{if .P.TermineLe}}<p>🎉 Terminé</p>{{else if .Objectif}}<p class="{{if .Retard}}alerte{{end}}">🏁 Objectif : {{.Objectif}}</p>{{end}}
+</section>
+{{if .P.Description}}<section class="carte bloc"><p class="texte-long">{{.P.Description}}</p></section>{{end}}
+
+<section class="carte bloc">
+  <div class="section-titre"><h2>✅ Étapes</h2>{{if .Total}}<span class="aide">{{.NbFaites}} / {{.Total}}</span>{{end}}</div>
+  {{if .Total}}<progress class="progres projets" max="{{.Total}}" value="{{.NbFaites}}"></progress>{{end}}
+  {{- range .Etapes}}
+  <div class="ligne etape{{if .FaiteLe}} faite{{end}}">
+    <form method="post" action="/projets/etapes/{{.ID}}/cocher">
+      {{template "jeton" $c.CSRF}}
+      <button class="coche{{if .FaiteLe}} cochee{{end}}" aria-label="{{if .FaiteLe}}À refaire : {{else}}Fait : {{end}}{{.Texte}}"></button>
+    </form>
+    <span class="quoi">{{.Texte}}{{if .Quand}}<small class="{{if .Retard}}alerte{{end}}">{{.Quand}}</small>{{end}}</span>
+    {{if .Membre}}{{template "avatar-petit" .Membre}}{{end}}
+    {{if $c.EstParent}}<form method="post" action="/projets/etapes/{{.ID}}/supprimer" hx-confirm="Supprimer cette étape ?">{{template "jeton" $c.CSRF}}<button class="crayon" aria-label="Supprimer">🗑️</button></form>{{end}}
+  </div>
+  {{- else}}
+  <p class="aide">Découpez le projet en petites étapes : réserver, acheter, appeler…</p>
+  {{- end}}
+  <details class="ajout-echeance"{{if not .Total}} open{{end}}>
+    <summary class="lien-ajout">＋ Ajouter une étape</summary>
+    <form method="post" action="/projets/{{.P.ID}}/etapes">
+      {{template "jeton" $c.CSRF}}
+      <label class="champ"><span>Quoi ?</span><input name="texte" maxlength="120" required></label>
+      <div class="rangee">
+        <label class="champ"><span>Pour le (facultatif)</span><input type="date" name="jour"></label>
+        <label class="champ"><span>Qui ?</span>
+          <select name="membre"><option value="0">Quelqu'un</option>{{range $d.Membres}}<option value="{{.ID}}">{{.Nom}}</option>{{end}}</select></label>
+      </div>
+      <button class="bouton petit">Ajouter</button>
+    </form>
+  </details>
+</section>
+
+{{if .P.Budget}}
+<section class="carte bloc budget-projet">
+  <h2>💶 Budget</h2>
+  <p>Prévu : <b>{{montant .P.Budget .Devise}}</b> · Dépensé : <b>{{montant .Depense .Devise}}</b></p>
+  <progress class="progres{{if .Depasse}} depasse{{end}}" max="{{.P.Budget}}" value="{{if .Depasse}}{{.P.Budget}}{{else}}{{.Depense}}{{end}}"></progress>
+  <p class="aide{{if .Depasse}} alerte{{end}}">{{if .Depasse}}Dépassé de {{montant .Restant .Devise}}{{else}}Reste {{montant .Restant .Devise}}{{end}}</p>
+</section>
+{{end}}
+
+{{template "bloc-suivi" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Titre" "" "TitreCarnet" "Dépenses"}}
+
+<div class="boutons">
+  <a class="bouton" href="/projets/{{.P.ID}}/modifier">✏️ Modifier</a>
+  <form method="post" action="/projets/{{.P.ID}}/terminer">
+    {{template "jeton" $c.CSRF}}<button class="bouton secondaire">{{if .P.TermineLe}}↩️ Rouvrir{{else}}🎉 Terminer le projet{{end}}</button>
+  </form>
+  {{if $c.EstParent}}
+  <form method="post" action="/projets/{{.P.ID}}/supprimer" hx-confirm="Supprimer {{.P.Nom}}, ses étapes et ses dépenses ?">
+    {{template "jeton" $c.CSRF}}<button class="bouton danger">Supprimer</button>
+  </form>
+  {{end}}
+</div>
+{{end}}
+{{end}}

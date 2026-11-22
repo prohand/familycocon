@@ -11,8 +11,8 @@ import (
 )
 
 const creerOperation = `-- name: CreerOperation :one
-INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le
+INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, membre_id, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id
 `
 
 type CreerOperationParams struct {
@@ -23,7 +23,6 @@ type CreerOperationParams struct {
 	Libelle   string
 	Jour      string
 	MembreID  sql.NullInt64
-	Fixe      int64
 	CreePar   sql.NullInt64
 	CreeLe    int64
 }
@@ -37,7 +36,6 @@ func (q *Queries) CreerOperation(ctx context.Context, arg CreerOperationParams) 
 		arg.Libelle,
 		arg.Jour,
 		arg.MembreID,
-		arg.Fixe,
 		arg.CreePar,
 		arg.CreeLe,
 	)
@@ -54,12 +52,13 @@ func (q *Queries) CreerOperation(ctx context.Context, arg CreerOperationParams) 
 		&i.Fixe,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.RecurrenceID,
 	)
 	return i, err
 }
 
 const modifierOperation = `-- name: ModifierOperation :exec
-UPDATE operations SET sens = ?, montant = ?, categorie = ?, libelle = ?, jour = ?, membre_id = ?, fixe = ?
+UPDATE operations SET sens = ?, montant = ?, categorie = ?, libelle = ?, jour = ?, membre_id = ?
 WHERE id = ? AND famille_id = ?
 `
 
@@ -70,7 +69,6 @@ type ModifierOperationParams struct {
 	Libelle   string
 	Jour      string
 	MembreID  sql.NullInt64
-	Fixe      int64
 	ID        int64
 	FamilleID int64
 }
@@ -83,7 +81,6 @@ func (q *Queries) ModifierOperation(ctx context.Context, arg ModifierOperationPa
 		arg.Libelle,
 		arg.Jour,
 		arg.MembreID,
-		arg.Fixe,
 		arg.ID,
 		arg.FamilleID,
 	)
@@ -91,7 +88,7 @@ func (q *Queries) ModifierOperation(ctx context.Context, arg ModifierOperationPa
 }
 
 const operationParID = `-- name: OperationParID :one
-SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le FROM operations WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id FROM operations WHERE id = ? AND famille_id = ?
 `
 
 type OperationParIDParams struct {
@@ -114,13 +111,14 @@ func (q *Queries) OperationParID(ctx context.Context, arg OperationParIDParams) 
 		&i.Fixe,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.RecurrenceID,
 	)
 	return i, err
 }
 
 const operationsPeriode = `-- name: OperationsPeriode :many
 
-SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le FROM operations WHERE famille_id = ? AND jour >= ?2 AND jour <= ?3
+SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id FROM operations WHERE famille_id = ? AND jour >= ?2 AND jour <= ?3
 ORDER BY jour DESC, id DESC
 `
 
@@ -152,6 +150,7 @@ func (q *Queries) OperationsPeriode(ctx context.Context, arg OperationsPeriodePa
 			&i.Fixe,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.RecurrenceID,
 		); err != nil {
 			return nil, err
 		}

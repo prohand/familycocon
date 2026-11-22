@@ -133,7 +133,7 @@ func (a *App) ajouterEnfant(w http.ResponseWriter, r *http.Request, c *Contexte)
 		}
 		enfant, err := q.CreerMembre(ctx, donnees.CreerMembreParams{
 			FamilleID: c.Famille.ID, Nom: prenom, Role: RoleEnfant, Couleur: couleur,
-			Pin: sql.NullString{String: pin, Valid: true}, CreeLe: time.Now().Unix(),
+			Pin: sql.NullString{String: pin, Valid: true}, PushModules: PushParDefaut, CreeLe: time.Now().Unix(),
 		})
 		if err != nil {
 			return err
@@ -209,7 +209,16 @@ func (a *App) modifierMembre(w http.ResponseWriter, r *http.Request, c *Contexte
 	if err != nil {
 		couleur = m.Couleur
 	}
+	naissance, err := lireNaissance(r.PostFormValue("naissance"))
+	if err != nil {
+		a.Echec(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := a.Q.ModifierProfil(r.Context(), donnees.ModifierProfilParams{Nom: prenom, Couleur: couleur, ID: m.ID, FamilleID: c.Famille.ID}); err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
+	if err := a.Q.ModifierNaissance(r.Context(), donnees.ModifierNaissanceParams{Naissance: naissance, ID: m.ID, FamilleID: c.Famille.ID}); err != nil {
 		a.ErreurInterne(w, r, err)
 		return
 	}

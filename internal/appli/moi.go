@@ -4,8 +4,10 @@ package appli
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"familycocon/internal/donnees"
 )
@@ -21,6 +23,8 @@ type donneesMoi struct {
 	Modules     []ModuleDef // modules qui peuvent notifier
 	Push        []string    // modules choisis
 	Appareils   int64       // appareils abonnés
+	TOTP        bool        // double authentification active
+	NbPasskeys  int64
 }
 
 func (a *App) routesMoi() {
@@ -34,6 +38,8 @@ func (a *App) pageMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	d := donneesMoi{Possibles: RaccourcisPossibles(c), Couleurs: []int{1, 2, 3, 4, 5, 6, 7, 8}, AMotDePasse: c.Membre.Mdp.Valid,
 		Modules: ModulesVisibles(c), Push: strings.Split(c.Membre.PushModules, ",")}
 	d.Appareils, _ = a.Q.CompterAbonnements(r.Context(), c.Membre.ID)
+	d.TOTP = c.Membre.Totp != ""
+	d.NbPasskeys, _ = a.Q.CompterPasskeys(r.Context(), c.Membre.ID)
 	for _, rc := range Raccourcis(c) {
 		d.Choisis = append(d.Choisis, rc.Cle)
 	}
@@ -50,7 +56,16 @@ func (a *App) profilMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	if err != nil {
 		couleur = c.Membre.Couleur
 	}
+	naissance, err := lireNaissance(r.PostFormValue("naissance"))
+	if err != nil {
+		a.Echec(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := a.Q.ModifierProfil(r.Context(), donnees.ModifierProfilParams{Nom: prenom, Couleur: couleur, ID: c.Membre.ID, FamilleID: c.Famille.ID}); err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
+	if err := a.Q.ModifierNaissance(r.Context(), donnees.ModifierNaissanceParams{Naissance: naissance, ID: c.Membre.ID, FamilleID: c.Famille.ID}); err != nil {
 		a.ErreurInterne(w, r, err)
 		return
 	}
@@ -123,4 +138,16 @@ func (a *App) mdpMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	a.Journal.Info("mot de passe changé", "membre", c.Membre.ID)
 	a.Flash(w, "Mot de passe changé ✓ (autres appareils déconnectés)")
 	a.Rediriger(w, r, "/moi")
+}
+
+// lireNaissance : date de naissance d'un membre (« » si vide).
+func lireNaissance(s string) (string, error) {
+	if s == "" {
+		return "", nil
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil || t.After(time.Now()) || t.Year() < 1900 {
+		return "", errors.New("Date de naissance invalide.")
+	}
+	return s, nil
 }

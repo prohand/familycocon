@@ -4,6 +4,15 @@
   <p>{{.Donnees.Date}}</p>
 </section>
 
+{{if .Donnees.ConseilSecurite}}
+<a class="carte conseil-securite" href="/moi/securite">
+  <span class="grand-emoji">🔐</span>
+  <span class="quoi"><b>Protégez votre compte</b>
+    <small>Ajoutez une passkey (empreinte, visage) ou la double authentification : 1 minute.</small></span>
+  <span class="fleche-droite">›</span>
+</a>
+{{end}}
+
 {{if .Donnees.Tuiles}}
 <div class="tuiles">
   {{- range .Donnees.Tuiles}}
@@ -21,4 +30,17 @@
 <div class="carte vide"><span class="emoji">🧺</span>Aucun module n'est activé.
   {{if .C.EstParent}}<p><a class="bouton" href="/famille">Activer des modules</a></p>{{end}}</div>
 {{end}}
+{{end}}
+
+{{/* Bloc « À venir » : anniversaires, échéances (rappels). */}}
+{{define "a-venir"}}
+<div class="section-titre"><h2>⏰ À venir</h2></div>
+<div class="carte">
+  {{- range .Donnees}}
+  <a class="ligne{{if .Proche}} proche{{end}}" href="{{.URL}}">
+    <span class="p-emoji">{{.Emoji}}</span>
+    <span class="quoi">{{.Titre}}<small>{{.Quand}}</small></span>
+  </a>
+  {{- end}}
+</div>
 {{end}}

@@ -21,3 +21,4 @@ sql:
           taches_faite: TacheFaite
           repa: Repas
           missions_faite: MissionFaite
+          animaux: Animal

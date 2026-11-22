@@ -1,0 +1,35 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>🎯 Projets</h1>
+  <p>Vacances, travaux, fêtes… on avance ensemble</p>
+</section>
+<div class="boutons"><a class="bouton" href="/projets/nouveau">＋ Projet</a></div>
+{{if .EnCours}}
+<div class="liste-projets bloc">
+  {{- range .EnCours}}
+  <a class="projet c{{.Couleur}}" href="/projets/{{.ID}}">
+    <span class="grand-emoji">{{.Emoji}}</span>
+    <span class="quoi">{{.Nom}}
+      <small>{{if .NbEtapes}}{{.NbFaites}} / {{.NbEtapes}} étapes{{else}}Pas encore d'étape{{end}}{{if .Objectif}} · {{end}}<span class="{{if .Retard}}alerte{{end}}">{{.Objectif}}</span></small>
+      {{if .NbEtapes}}<progress class="progres projets" max="{{.NbEtapes}}" value="{{.NbFaites}}"></progress>{{end}}
+    </span>
+  </a>
+  {{- end}}
+</div>
+{{else}}
+<div class="carte vide bloc"><span class="emoji">🎯</span>Aucun projet en cours. Les vacances d'été, la chambre du petit, le déménagement…</div>
+{{end}}
+{{if .Termines}}
+<details class="bloc termines">
+  <summary class="sous-titre">🎉 Terminés ({{len .Termines}})</summary>
+  <div class="carte">
+    {{- range .Termines}}
+    <a class="ligne" href="/projets/{{.ID}}"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Nom}}</span><span class="fleche-droite">›</span></a>
+    {{- end}}
+  </div>
+</details>
+{{end}}
+{{end}}
+{{end}}

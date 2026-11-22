@@ -8,6 +8,17 @@ import (
 	"database/sql"
 )
 
+type Abonnement struct {
+	ID            int64
+	FamilleID     int64
+	RecurrenceID  int64
+	Emoji         string
+	EngagementFin string
+	Site          string
+	Notes         string
+	CreeLe        int64
+}
+
 type AbonnementsPush struct {
 	ID       int64
 	MembreID int64
@@ -17,6 +28,19 @@ type AbonnementsPush struct {
 	CreeLe   int64
 }
 
+type Animal struct {
+	ID          int64
+	FamilleID   int64
+	Nom         string
+	Espece      string
+	Race        string
+	Naissance   string
+	Puce        string
+	Veterinaire string
+	Notes       string
+	CreeLe      int64
+}
+
 type Appareil struct {
 	Empreinte []byte
 	FamilleID int64
@@ -24,11 +48,53 @@ type Appareil struct {
 	VueLe     int64
 }
 
+type Carnet struct {
+	ID        int64
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+	Jour      string
+	Libelle   string
+	Montant   int64
+	Km        int64
+	Note      string
+	CreePar   sql.NullInt64
+	CreeLe    int64
+}
+
+type Carte struct {
+	ID         int64
+	FamilleID  int64
+	Enseigne   string
+	Numero     string
+	Format     string
+	Couleur    int64
+	Titulaire  string
+	Notes      string
+	CreeLe     int64
+	UtiliseeLe int64
+}
+
 type CodesSecour struct {
 	MembreID  int64
 	Empreinte []byte
 	CreeLe    int64
 	UtiliseLe int64
+}
+
+type Contact struct {
+	ID        int64
+	FamilleID int64
+	Nom       string
+	Relation  string
+	Naissance string
+	Telephone string
+	Email     string
+	Adresse   string
+	Notes     string
+	Idees     string
+	CreeLe    int64
+	ModifieLe int64
 }
 
 type Echange struct {
@@ -42,18 +108,30 @@ type Echange struct {
 	DecideLe     sql.NullInt64
 }
 
+type Echeance struct {
+	ID             int64
+	FamilleID      int64
+	Module         string
+	ObjetID        int64
+	Libelle        string
+	Jour           string
+	RepetitionMois int64
+	CreeLe         int64
+}
+
 type Evenement struct {
-	ID         int64
-	FamilleID  int64
-	Titre      string
-	Lieu       string
-	Note       string
-	Debut      int64
-	Fin        int64
-	Journee    int64
-	Repetition string
-	CreePar    sql.NullInt64
-	CreeLe     int64
+	ID            int64
+	FamilleID     int64
+	Titre         string
+	Lieu          string
+	Note          string
+	Debut         int64
+	Fin           int64
+	Journee       int64
+	Repetition    string
+	CreePar       sql.NullInt64
+	CreeLe        int64
+	RepetitionFin string
 }
 
 type EvenementsMembre struct {
@@ -101,6 +179,7 @@ type Membre struct {
 	PushModules string
 	Totp        string
 	TotpDernier int64
+	Naissance   string
 }
 
 type Mission struct {
@@ -128,18 +207,32 @@ type MissionFaite struct {
 	DecideLe   sql.NullInt64
 }
 
-type Operation struct {
+type Note struct {
 	ID        int64
 	FamilleID int64
-	Sens      string
-	Montant   int64
-	Categorie string
-	Libelle   string
-	Jour      string
-	MembreID  sql.NullInt64
-	Fixe      int64
-	CreePar   sql.NullInt64
+	AuteurID  sql.NullInt64
+	Titre     string
+	Texte     string
+	Couleur   int64
+	Epinglee  int64
+	Privee    int64
 	CreeLe    int64
+	ModifieLe int64
+}
+
+type Operation struct {
+	ID           int64
+	FamilleID    int64
+	Sens         string
+	Montant      int64
+	Categorie    string
+	Libelle      string
+	Jour         string
+	MembreID     sql.NullInt64
+	Fixe         int64
+	CreePar      sql.NullInt64
+	CreeLe       int64
+	RecurrenceID sql.NullInt64
 }
 
 type Passkey struct {
@@ -153,6 +246,19 @@ type Passkey struct {
 	Nom         string
 	CreeLe      int64
 	UtiliseLe   int64
+}
+
+type Prestataire struct {
+	ID        int64
+	FamilleID int64
+	Nom       string
+	Metier    string
+	Telephone string
+	Email     string
+	Adresse   string
+	Site      string
+	Notes     string
+	CreeLe    int64
 }
 
 type Produit struct {
@@ -179,6 +285,31 @@ type ProduitsConnu struct {
 	VuLe      int64
 }
 
+type Projet struct {
+	ID          int64
+	FamilleID   int64
+	Nom         string
+	Emoji       string
+	Couleur     int64
+	Description string
+	Objectif    string
+	Budget      int64
+	TermineLe   int64
+	CreeLe      int64
+}
+
+type ProjetEtape struct {
+	ID        int64
+	ProjetID  int64
+	FamilleID int64
+	Texte     string
+	Jour      string
+	MembreID  sql.NullInt64
+	FaiteLe   int64
+	FaitePar  sql.NullInt64
+	CreeLe    int64
+}
+
 type Recette struct {
 	FamilleID   int64
 	Cle         string
@@ -195,6 +326,22 @@ type Recompense struct {
 	Emoji     string
 	Prix      int64
 	Active    int64
+	CreeLe    int64
+}
+
+type Recurrence struct {
+	ID        int64
+	FamilleID int64
+	Sens      string
+	Montant   int64
+	Categorie string
+	Libelle   string
+	MembreID  sql.NullInt64
+	Frequence string
+	Debut     string
+	Fin       string
+	Faites    int64
+	CreePar   sql.NullInt64
 	CreeLe    int64
 }
 
@@ -242,4 +389,16 @@ type TacheFaite struct {
 	Occurrence string
 	FaitPar    sql.NullInt64
 	FaitLe     int64
+}
+
+type Vehicule struct {
+	ID              int64
+	FamilleID       int64
+	Nom             string
+	Genre           string
+	Immatriculation string
+	Modele          string
+	Kilometrage     int64
+	Notes           string
+	CreeLe          int64
 }

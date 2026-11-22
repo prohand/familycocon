@@ -26,7 +26,25 @@ var Catalogue = []ModuleDef{
 	{Cle: "taches", Nom: "Tâches", Emoji: "✅", URL: "/taches"},
 	{Cle: "menus", Nom: "Menus", Emoji: "🍽️", URL: "/menus"},
 	{Cle: "budget", Nom: "Budget", Emoji: "💶", URL: "/budget", Parents: true},
+	{Cle: "abonnements", Nom: "Abonnements", Emoji: "📺", URL: "/abonnements", Parents: true},
 	{Cle: "enfants", Nom: "Espace enfants", Emoji: "⭐", URL: "/enfants"},
+	{Cle: "notes", Nom: "Notes", Emoji: "📝", URL: "/notes"},
+	{Cle: "anniversaires", Nom: "Anniversaires", Emoji: "🎂", URL: "/anniversaires"},
+	{Cle: "adresses", Nom: "Adresses", Emoji: "📇", URL: "/adresses"},
+	{Cle: "fidelite", Nom: "Cartes de fidélité", Emoji: "💳", URL: "/fidelite"},
+	{Cle: "vehicules", Nom: "Véhicules", Emoji: "🚗", URL: "/vehicules"},
+	{Cle: "animaux", Nom: "Animaux", Emoji: "🐾", URL: "/animaux"},
+	{Cle: "prestataires", Nom: "Prestataires", Emoji: "🧰", URL: "/prestataires"},
+	{Cle: "projets", Nom: "Projets", Emoji: "🎯", URL: "/projets"},
+}
+
+// ModulesParDefaut : modules activés pour une nouvelle famille (tous).
+func ModulesParDefaut() string {
+	var cles []string
+	for _, m := range Catalogue {
+		cles = append(cles, m.Cle)
+	}
+	return strings.Join(cles, ",")
 }
 
 // ModuleParCle : définition d'un module (ok = faux si la clé est inconnue).

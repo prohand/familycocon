@@ -1,0 +1,27 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/fidelite">‹ Cartes</a>
+</section>
+<section class="carte-caisse">
+  <div class="entete-caisse c{{.Carte.Couleur}}"><b>{{.Carte.Enseigne}}</b>{{if .Carte.Titulaire}}<small>{{.Carte.Titulaire}}</small>{{end}}</div>
+  <div class="code-caisse">
+    {{if .SVG}}{{.SVG}}{{end}}
+    {{if .QR}}<img class="qr-caisse" src="{{.QR}}" alt="QR code de la carte">{{end}}
+    {{if .Probleme}}<p class="message-erreur">{{.Probleme}}</p>{{end}}
+    <p class="numero-caisse">{{.Carte.Numero}}</p>
+  </div>
+</section>
+<p class="aide centre">💡 Montez la luminosité de l'écran pour le lecteur de la caisse.</p>
+{{if .Carte.Notes}}<section class="carte bloc"><p class="texte-long">{{.Carte.Notes}}</p></section>{{end}}
+<div class="boutons">
+  <a class="bouton secondaire" href="/fidelite/{{.Carte.ID}}/modifier">✏️ Modifier</a>
+  {{if $c.EstParent}}
+  <form method="post" action="/fidelite/{{.Carte.ID}}/supprimer" hx-confirm="Supprimer la carte « {{.Carte.Enseigne}} » ?">
+    {{template "jeton" $c.CSRF}}<button class="bouton danger">Supprimer</button>
+  </form>
+  {{end}}
+</div>
+{{end}}
+{{end}}

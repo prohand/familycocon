@@ -1,0 +1,32 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="{{if .Nouveau}}{{if .Anniv}}/anniversaires{{else}}/adresses{{end}}{{else}}/contacts/{{.Contact.ID}}{{end}}">‹ Retour</a>
+  <h1>{{if .Nouveau}}{{if .Anniv}}🎂 Nouvel anniversaire{{else}}📇 Nouveau contact{{end}}{{else}}✏️ {{.Contact.Nom}}{{end}}</h1>
+</section>
+<form class="carte" method="post" action="{{if .Nouveau}}/contacts{{else}}/contacts/{{.Contact.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  {{if .Anniv}}<input type="hidden" name="anniv" value="1">{{end}}
+  <label class="champ"><span>Nom</span><input name="nom" value="{{.Contact.Nom}}" maxlength="80" placeholder="Ex. : Mamie Jeanne" required autofocus></label>
+  <label class="champ"><span>Relation</span>
+    <select name="relation">{{range .Relations}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.Contact.Relation}} selected{{end}}>{{.Emoji}} {{.Nom}}</option>{{end}}</select></label>
+  <div class="rangee">
+    <label class="champ"><span>Date de naissance{{if not .Anniv}} (facultatif){{end}}</span><input type="date" name="naissance" value="{{.Date}}"{{if .Anniv}} required{{end}}></label>
+    <label class="interrupteur etroit"><span class="nom">Année inconnue</span>
+      <input type="checkbox" name="sans_annee" value="1"{{if .SansAnnee}} checked{{end}}><span class="glissiere"></span></label>
+  </div>
+  <label class="champ"><span>Idées de cadeaux</span><textarea name="idees" rows="2" maxlength="1000">{{.Contact.Idees}}</textarea></label>
+  {{if not .Anniv}}
+  <label class="champ"><span>Téléphone</span><input type="tel" name="telephone" value="{{.Contact.Telephone}}" maxlength="30"></label>
+  <label class="champ"><span>E-mail</span><input type="email" name="email" value="{{.Contact.Email}}" maxlength="120"></label>
+  <label class="champ"><span>Adresse</span><textarea name="adresse" rows="3" maxlength="300">{{.Contact.Adresse}}</textarea></label>
+  <label class="champ"><span>Notes</span><textarea name="notes" rows="3" maxlength="2000">{{.Contact.Notes}}</textarea></label>
+  {{else}}
+  <input type="hidden" name="telephone" value="{{.Contact.Telephone}}"><input type="hidden" name="email" value="{{.Contact.Email}}">
+  <input type="hidden" name="adresse" value="{{.Contact.Adresse}}"><input type="hidden" name="notes" value="{{.Contact.Notes}}">
+  {{end}}
+  <div class="boutons"><button class="bouton">Enregistrer</button></div>
+</form>
+{{end}}
+{{end}}
