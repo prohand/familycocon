@@ -1,0 +1,50 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/budget/recurrences">‹ Qui reviennent</a>
+  <h1>🔁 {{if .R.Libelle}}{{.R.Libelle}}{{else}}{{.R.Cat.Nom}}{{end}}</h1>
+  <p>{{.R.Frequence}} · {{if eq .R.Prochaine "Terminée"}}terminée{{else}}prochaine : {{.R.Prochaine}}{{end}}</p>
+</section>
+{{if .R.Abonnement}}<p class="aide bloc">C'est un abonnement : vous pouvez aussi le modifier depuis la page <a href="/abonnements">Abonnements</a>.</p>{{end}}
+<form class="carte" method="post" action="/recurrences/{{.R.ID}}">
+  {{template "jeton" $c.CSRF}}
+  <label class="champ"><span>Montant ({{.Devise}})</span>
+    <input class="gros-montant" name="montant" value="{{.Montant}}" inputmode="decimal" required></label>
+  <fieldset class="categories">
+    <legend>Catégorie</legend>
+    <div class="grille-cat">
+      {{- range .Categories}}
+      <label class="{{.Sens}}"><input type="radio" name="categorie" value="{{.Cle}}"{{if eq .Cle $.Donnees.R.Categorie}} checked{{end}} required>
+        <span><b>{{.Emoji}}</b>{{.Nom}}</span></label>
+      {{- end}}
+    </div>
+  </fieldset>
+  <label class="champ"><span>Libellé</span><input name="libelle" value="{{.R.Libelle}}" maxlength="80"></label>
+  <div class="rangee">
+    <label class="champ"><span>Revient</span>
+      <select name="frequence">{{range .Frequences}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.R.Recurrence.Frequence}} selected{{end}}>{{.Nom}}</option>{{end}}</select></label>
+    <label class="champ"><span>Prochaine fois</span><input type="date" name="prochaine" value="{{.ProchaineJ}}" required></label>
+  </div>
+  <div class="rangee">
+    <label class="champ"><span>Jusqu'au (facultatif)</span><input type="date" name="fin" value="{{.R.Fin}}"></label>
+    <label class="champ"><span>Qui ?</span>
+      <select name="membre"><option value="0">—</option>
+        {{- range .Membres}}{{if eq .Role "parent"}}<option value="{{.ID}}"{{if and $.Donnees.R.MembreID.Valid (eq .ID $.Donnees.R.MembreID.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}{{end}}
+      </select></label>
+  </div>
+  <p class="aide">Les changements valent pour les prochaines fois ; les opérations déjà passées ne bougent pas.</p>
+  <div class="boutons"><button class="bouton">Enregistrer</button></div>
+</form>
+<div class="boutons bloc">
+  {{if ne .R.Prochaine "Terminée"}}
+  <form method="post" action="/recurrences/{{.R.ID}}/arreter" hx-confirm="Arrêter ? Elle ne reviendra plus (l'historique reste).">
+    {{template "jeton" $c.CSRF}}<button class="bouton secondaire">⏹️ Arrêter</button>
+  </form>
+  {{end}}
+  <form method="post" action="/recurrences/{{.R.ID}}/supprimer" hx-confirm="Supprimer{{if .R.Abonnement}} (et l'abonnement){{end}} ? Les opérations passées restent dans le budget.">
+    {{template "jeton" $c.CSRF}}<button class="bouton danger">Supprimer</button>
+  </form>
+</div>
+{{end}}
+{{end}}

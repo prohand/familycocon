@@ -8,6 +8,17 @@ import (
 	"database/sql"
 )
 
+type Abonnement struct {
+	ID            int64
+	FamilleID     int64
+	RecurrenceID  int64
+	Emoji         string
+	EngagementFin string
+	Site          string
+	Notes         string
+	CreeLe        int64
+}
+
 type AbonnementsPush struct {
 	ID       int64
 	MembreID int64
@@ -209,17 +220,18 @@ type Note struct {
 }
 
 type Operation struct {
-	ID        int64
-	FamilleID int64
-	Sens      string
-	Montant   int64
-	Categorie string
-	Libelle   string
-	Jour      string
-	MembreID  sql.NullInt64
-	Fixe      int64
-	CreePar   sql.NullInt64
-	CreeLe    int64
+	ID           int64
+	FamilleID    int64
+	Sens         string
+	Montant      int64
+	Categorie    string
+	Libelle      string
+	Jour         string
+	MembreID     sql.NullInt64
+	Fixe         int64
+	CreePar      sql.NullInt64
+	CreeLe       int64
+	RecurrenceID sql.NullInt64
 }
 
 type Passkey struct {
@@ -313,6 +325,22 @@ type Recompense struct {
 	Emoji     string
 	Prix      int64
 	Active    int64
+	CreeLe    int64
+}
+
+type Recurrence struct {
+	ID        int64
+	FamilleID int64
+	Sens      string
+	Montant   int64
+	Categorie string
+	Libelle   string
+	MembreID  sql.NullInt64
+	Frequence string
+	Debut     string
+	Fin       string
+	Faites    int64
+	CreePar   sql.NullInt64
 	CreeLe    int64
 }
 

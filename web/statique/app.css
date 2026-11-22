@@ -38,6 +38,7 @@
   --animaux: #FBE7C9;       --animaux-t: #9A5B12;
   --prestataires: #EDE3D6;  --prestataires-t: #7A5A3A;
   --projets: #F6E3FF;       --projets-t: #8A3FA8;
+  --abonnements: #FFE4EC;   --abonnements-t: #B23A62;
 
   /* Une couleur par membre de la famille */
   --membre-1: #5B8DEF;
@@ -86,6 +87,7 @@
     --animaux: #3D2C16;       --animaux-t: #F0BF7A;
     --prestataires: #33291F;  --prestataires-t: #D8BB98;
     --projets: #36203F;       --projets-t: #DDA7F2;
+    --abonnements: #3B1F29;   --abonnements-t: #F4A6C0;
 
     --ombre: 0 2px 6px rgba(0, 0, 0, .25), 0 8px 24px rgba(0, 0, 0, .25);
     --ombre-forte: 0 6px 14px rgba(0, 0, 0, .35), 0 18px 40px rgba(0, 0, 0, .35);
@@ -267,6 +269,7 @@ button, input { font: inherit; color: inherit; }
 .tuile.animaux { --bg: var(--animaux); --t: var(--animaux-t); }
 .tuile.prestataires { --bg: var(--prestataires); --t: var(--prestataires-t); }
 .tuile.projets { --bg: var(--projets); --t: var(--projets-t); }
+.tuile.abonnements { --bg: var(--abonnements); --t: var(--abonnements-t); }
 
 /* ---------- Cartes ---------- */
 .carte {
@@ -1284,6 +1287,14 @@ details.termines > summary { cursor: pointer; }
   border-radius: 12px; border: 2px solid var(--bordure); cursor: pointer; }
 .choix-emoji input:checked + span { border-color: var(--corail); background: var(--fond); }
 .choix-emoji input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
+
+/* ---------- Budget : opérations qui reviennent ---------- */
+.lien-recurrences { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;
+  border-radius: var(--rayon); background: var(--carte); box-shadow: var(--ombre); font-weight: 800; color: var(--budget-t); }
+.ligne.prevue { opacity: .6; }
+.ligne.terminee { opacity: .5; }
+.negatif { color: var(--rouge); }
+.pastille-abo { font-size: .7rem; font-weight: 800; padding: 1px 8px; border-radius: 10px; background: var(--abonnements); color: var(--abonnements-t); vertical-align: middle; }
 
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {

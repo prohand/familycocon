@@ -24,12 +24,20 @@
   <a class="bouton" href="/budget/nouvelle">＋ Dépense</a>
   <a class="bouton secondaire" href="/budget/nouvelle?sens=revenu">＋ Revenu</a>
 </div>
-{{if .Fixes}}
-<form class="bloc" method="post" action="/budget/fixes">
-  {{template "jeton" $c.CSRF}}
-  <input type="hidden" name="mois" value="{{.Mois}}">
-  <button class="bouton discret">🔁 Recopier {{pluriel .Fixes "opération fixe" "opérations fixes"}} du mois dernier</button>
-</form>
+<a class="lien-recurrences bloc" href="/budget/recurrences">🔁 Opérations qui reviennent{{if .NbRecur}} ({{.NbRecur}}){{end}} <span class="fleche-droite">›</span></a>
+
+{{if .Prevues}}
+<section class="carte bloc prevues">
+  <div class="section-titre premier"><h2>🔁 À venir ce mois-ci</h2></div>
+  {{- range .Prevues}}
+  <div class="ligne op prevue">
+    <span class="p-emoji">{{.Cat.Emoji}}</span>
+    <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}</small></span>
+    <b class="montant {{.Sens}}">{{if eq .Sens "depense"}}−{{else}}+{{end}}{{montant .Montant $.Donnees.Devise}}</b>
+  </div>
+  {{- end}}
+  <p class="aide">Reste prévu en fin de mois : <b class="{{if lt .ResteFin 0}}negatif{{end}}">{{montant .ResteFin .Devise}}</b></p>
+</section>
 {{end}}
 
 <section class="carte bloc">
@@ -64,7 +72,7 @@
     {{- range .Ops}}
     <a class="ligne op" href="/budget/{{.ID}}">
       <span class="p-emoji">{{.Cat.Emoji}}</span>
-      <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>{{.Cat.Nom}}{{if .Fixe}} · 🔁 chaque mois{{end}}</small></span>
+      <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>{{.Cat.Nom}}{{if .RecurrenceID.Valid}} · 🔁{{end}}</small></span>
       {{with .Membre}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}
       <b class="montant {{.Sens}}">{{if eq .Sens "depense"}}−{{else}}+{{end}}{{montant .Montant $.Donnees.Devise}}</b>
     </a>

@@ -1,0 +1,41 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/budget">‹ Budget</a>
+  <h1>🔁 Opérations qui reviennent</h1>
+  <p>Ajoutées toutes seules au budget, à chaque date</p>
+</section>
+<section class="carte reste bloc">
+  <p class="reste-titre">Chaque mois, en moyenne</p>
+  <p class="reste-montant{{if lt .NetMois 0}} negatif{{end}}">{{montant .NetMois .Devise}}</p>
+  <div class="reste-detail">
+    <span>⬆️ Revenus <b>{{montant .RevenusMois .Devise}}</b></span>
+    <span>⬇️ Dépenses <b>{{montant .DepensesMois .Devise}}</b></span>
+  </div>
+</section>
+<div class="boutons"><a class="bouton" href="/budget/nouvelle">＋ Dépense</a><a class="bouton secondaire" href="/budget/nouvelle?sens=revenu">＋ Revenu</a></div>
+{{template "lignes-recurrences" dict "Titre" "⬆️ Revenus" "L" .Revenus "Devise" .Devise}}
+{{template "lignes-recurrences" dict "Titre" "⬇️ Dépenses" "L" .Depenses "Devise" .Devise}}
+{{if not (or .Revenus .Depenses)}}
+<div class="carte vide bloc"><span class="emoji">🔁</span>Rien pour l'instant. Pour le salaire, le loyer ou un crédit, choisissez « Revient » en ajoutant l'opération.</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "lignes-recurrences"}}
+{{if .L}}
+<section class="bloc">
+  <h2 class="sous-titre">{{.Titre}}</h2>
+  <div class="carte">
+    {{- range .L}}
+    <a class="ligne op{{if eq .Prochaine "Terminée"}} terminee{{end}}" href="/recurrences/{{.ID}}">
+      <span class="p-emoji">{{.Cat.Emoji}}</span>
+      <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}{{if .Abonnement}} <span class="pastille-abo">abonnement</span>{{end}}
+        <small>{{.Frequence}} · {{if eq .Prochaine "Terminée"}}terminée{{else}}prochaine : {{.Prochaine}}{{end}}</small></span>
+      <b class="montant {{.Sens}}">{{montant .Montant $.Devise}}</b>
+    </a>
+    {{- end}}
+  </div>
+</section>
+{{end}}
+{{end}}
