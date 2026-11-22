@@ -49,6 +49,16 @@ tâches ménagères, menus, budget et espace enfants, sur le téléphone de chac
   - missions à étoiles (1 à 5) ; l'enfant coche, un parent valide ou refuse ;
   - récompenses échangées contre des étoiles ;
   - progrès par semaine.
+- **Notes** : partagées avec la famille ou privées, couleurs, épinglées, recherche.
+- **Anniversaires et Adresses** : un carnet de contacts commun (appeler, SMS, e-mail, plan), âge et idées de cadeaux.
+- **Cartes de fidélité** : le code-barres (EAN-13, Code 128) ou le QR code est redessiné à l'écran, à montrer en caisse.
+- **Véhicules, Animaux, Prestataires** :
+  - échéances qui reviennent (contrôle technique, assurance, vaccin, vermifuge, ramonage…) ;
+  - « C'est fait » : la ligne va dans le carnet (date, coût, kilométrage) et l'échéance est reportée ;
+  - prestataires : plombier, nounou, médecin… avec leurs coordonnées et leurs interventions.
+- **Projets** : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
+- **Rappels** : bloc « À venir » sur l'accueil (30 jours) et notification chaque matin à 9 h
+  (anniversaires, échéances, étapes de projet : aujourd'hui et dans 7 jours).
 - **Personnalisation** :
   - modules activables ou désactivables par un parent ;
   - barre du bas personnalisable par chacun ;
@@ -202,7 +212,7 @@ failregex = "msg":"(échec de connexion|mauvais code PIN|connexion refusée : tr
 
 ## Mesures
 
-Mesuré le 22/11/2026, image amd64, compose fourni (`cpus: 0.5`, `mem_limit: 128m`).
+Mesuré le 22/11/2026 (v0.2.0), image amd64, compose fourni (`cpus: 0.5`, `mem_limit: 128m`).
 
 | Mesure | Valeur |
 |---|---|
@@ -212,6 +222,10 @@ Mesuré le 22/11/2026, image amd64, compose fourni (`cpus: 0.5`, `mem_limit: 128
 | RAM au repos (après usage) | 7,3 Mio |
 | RAM en charge (30 pages temps réel + 20 clients) | 19,4 Mio au plus |
 | Débit (limité à 0,5 cœur) | ~190 pages/s, 0 erreur |
+
+Avec les modules ajoutés ensuite (notes, contacts, fidélité, véhicules,
+animaux, prestataires, projets) : binaire 16,3 Mo (amd64), RAM environ
++2 Mio (mesure hors Docker, même méthode avant/après).
 
 ## Développement
 

@@ -21,7 +21,7 @@ Application web d'organisation familiale, auto-hébergée, pensée pour le tél�
 | Image | `scratch` : binaire + certificats + licences | ni shell ni outil ; utilisateur 65532 |
 
 Dépendances directes : `modernc.org/sqlite`, `golang.org/x/crypto`, `rsc.io/qr` (QR code
-de la double authentification, ~30 Ko, BSD). Rien d'autre.
+de la double authentification et des cartes de fidélité, ~30 Ko, BSD). Rien d'autre.
 
 ## 2. Configuration
 Variables d'environnement (`.env.exemple`) : `FC_URL_PUBLIQUE`, `FC_PROXYS`,
@@ -97,3 +97,25 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
   à un membre qui a une page ouverte (il voit déjà la notification à l'écran).
 - Chaque membre choisit les modules qui le notifient (courses : non par défaut).
 - Services de push acceptés : Google, Apple, Mozilla, Microsoft (liste fermée).
+
+## 8. Modules ajoutés après la v0.2.0
+- Ordre validé : Notes, Anniversaires, Adresses, Cartes de fidélité, Véhicules,
+  Animaux, Prestataires, Projets. Inventaires : abandonné.
+- Droits communs : tout le monde consulte, ajoute, corrige et coche ; seuls les
+  parents suppriment. Notes privées : visibles par leur auteur seul.
+- Anniversaires et Adresses partagent une table `contacts` ; la date de naissance
+  des membres sert aussi aux anniversaires.
+- Cartes de fidélité : code-barres dessiné en SVG par le serveur (EAN-13,
+  Code 128), QR code en PNG (`rsc.io/qr`, déjà présent). Aucune image envoyée.
+- Suivi commun (paquet `suivi`, tables `echeances` et `carnet`) pour Véhicules,
+  Animaux, Prestataires et les dépenses des Projets :
+  - une échéance peut revenir tous les N mois ; « C'est fait » écrit une ligne au
+    carnet et reporte l'échéance de N mois à partir de la date où c'est fait ;
+  - un kilométrage saisi au carnet met à jour le compteur (il ne recule jamais).
+- Projets : étapes (date, responsable), objectif, budget ; les dépenses vont au
+  carnet commun (sans échéances : les étapes en tiennent lieu).
+- Rappels (`appli/rappels.go`) : chaque module fournit ses dates ; l'accueil
+  affiche « À venir » (30 jours) ; une notification part à 9 h (fuseau de la
+  famille) pour aujourd'hui et J+7. Réglable dans Moi › Notifications (« Rappels »).
+- Liens tel:, sms:, mailto: construits côté serveur à partir de valeurs nettoyées
+  (chiffres seulement pour le téléphone, http/https seulement pour un site).

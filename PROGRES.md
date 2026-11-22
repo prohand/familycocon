@@ -13,6 +13,13 @@
 | 8. Espace enfants (étoiles, récompenses) | **fait** |
 | 9. PWA + Web Push | **fait** |
 | 10. Sauvegarde / restauration, README, mesures finales | **fait** |
+| MFA : TOTP, codes de secours, passkeys (v0.2.0) | **fait** |
+| Sécurité plus visible (page Moi, conseil sur l'accueil) | **fait** |
+| Notes (partagées et privées) | **fait** |
+| Anniversaires, Adresses, rappels « À venir » + notification du matin | **fait** |
+| Cartes de fidélité | **fait** |
+| Véhicules, Animaux, Prestataires (échéances + carnet) | **fait** |
+| Projets | **fait** |
 
 ## Mesures
 
@@ -20,6 +27,7 @@
 |---|---|---|---|---|---|
 | 22/11/2026 | 1 | 12,7 Mo | 19 Mo (affiché par Docker) | 6,6 Mio | — |
 | 22/11/2026 | 10 | 15,7 Mo (amd64), 14,7 Mo (arm64) | ~16 Mo installée (couches), 6,8 Mo compressée | 8,3 Mio au démarrage, 7,3 Mio après usage | 19,4 Mio (30 SSE + 20 clients, 190 req/s à 0,5 cœur, 0 erreur) |
+| 22/11/2026 | modules | 16,3 Mo (amd64), 15,3 Mo (arm64) | non remesurée (≈ +0,4 Mo) | +2 Mio environ (10 Mio de mémoire propre contre 8 avant, hors Docker) | — |
 
 Notes :
 - La première mesure de l'étape 10 donnait 38,9 Mio au démarrage : l'empreinte
