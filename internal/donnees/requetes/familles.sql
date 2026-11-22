@@ -4,7 +4,7 @@
 SELECT count(*) FROM familles;
 
 -- name: CreerFamille :one
-INSERT INTO familles (nom, fuseau, devise, cree_le) VALUES (?, ?, ?, ?)
+INSERT INTO familles (nom, fuseau, devise, modules, cree_le) VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: FamilleParID :one

@@ -329,7 +329,7 @@ func (a *App) inscription(w http.ResponseWriter, r *http.Request) {
 				return errors.Join(err, errors.New("inscriptions fermées"))
 			}
 		}
-		fam, err := q.CreerFamille(ctx, donnees.CreerFamilleParams{Nom: nomFamille, Fuseau: "Europe/Paris", Devise: "EUR", CreeLe: time.Now().Unix()})
+		fam, err := q.CreerFamille(ctx, donnees.CreerFamilleParams{Nom: nomFamille, Fuseau: "Europe/Paris", Devise: "EUR", Modules: ModulesParDefaut(), CreeLe: time.Now().Unix()})
 		if err != nil {
 			return err
 		}

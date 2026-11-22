@@ -30,6 +30,14 @@
   --menus: #FDEDC4;    --menus-t: #94650A;
   --budget: #CFEDEC;   --budget-t: #23807C;
   --enfants: #FDDCE7;  --enfants-t: #B83E6B;
+  --notes: #FFF1B8;         --notes-t: #8A6A00;
+  --anniversaires: #FFE0D1; --anniversaires-t: #B4532A;
+  --adresses: #D9F1FA;      --adresses-t: #1F7A99;
+  --fidelite: #E3F5D0;      --fidelite-t: #4E7D1E;
+  --vehicules: #E2E6EE;     --vehicules-t: #4A5A78;
+  --animaux: #FBE7C9;       --animaux-t: #9A5B12;
+  --prestataires: #EDE3D6;  --prestataires-t: #7A5A3A;
+  --projets: #F6E3FF;       --projets-t: #8A3FA8;
 
   /* Une couleur par membre de la famille */
   --membre-1: #5B8DEF;
@@ -70,6 +78,14 @@
     --menus: #3A3018;    --menus-t: #F3CE73;
     --budget: #173735;   --budget-t: #84D8D3;
     --enfants: #40222F;  --enfants-t: #F5A3C3;
+    --notes: #3A3215;         --notes-t: #F2D675;
+    --anniversaires: #43271C; --anniversaires-t: #F5A985;
+    --adresses: #173440;      --adresses-t: #8AD3EC;
+    --fidelite: #24361A;      --fidelite-t: #B4E08A;
+    --vehicules: #262B36;     --vehicules-t: #B5C2DA;
+    --animaux: #3D2C16;       --animaux-t: #F0BF7A;
+    --prestataires: #33291F;  --prestataires-t: #D8BB98;
+    --projets: #36203F;       --projets-t: #DDA7F2;
 
     --ombre: 0 2px 6px rgba(0, 0, 0, .25), 0 8px 24px rgba(0, 0, 0, .25);
     --ombre-forte: 0 6px 14px rgba(0, 0, 0, .35), 0 18px 40px rgba(0, 0, 0, .35);
@@ -236,6 +252,14 @@ button, input { font: inherit; color: inherit; }
 .tuile.menus   { --bg: var(--menus);   --t: var(--menus-t); }
 .tuile.budget  { --bg: var(--budget);  --t: var(--budget-t); }
 .tuile.enfants { --bg: var(--enfants); --t: var(--enfants-t); }
+.tuile.notes { --bg: var(--notes); --t: var(--notes-t); }
+.tuile.anniversaires { --bg: var(--anniversaires); --t: var(--anniversaires-t); }
+.tuile.adresses { --bg: var(--adresses); --t: var(--adresses-t); }
+.tuile.fidelite { --bg: var(--fidelite); --t: var(--fidelite-t); }
+.tuile.vehicules { --bg: var(--vehicules); --t: var(--vehicules-t); }
+.tuile.animaux { --bg: var(--animaux); --t: var(--animaux-t); }
+.tuile.prestataires { --bg: var(--prestataires); --t: var(--prestataires-t); }
+.tuile.projets { --bg: var(--projets); --t: var(--projets-t); }
 
 /* ---------- Cartes ---------- */
 .carte {
@@ -1136,6 +1160,41 @@ progress.jauge.etoiles::-moz-progress-bar { background: linear-gradient(90deg, #
 .codes-secours { border: 3px dashed var(--corail); }
 .liste-codes { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 14px; }
 .liste-codes code { font-size: 1rem; font-weight: 800; letter-spacing: .05em; }
+
+
+/* ---------- Notes ---------- */
+.n1 { --fond-n: #FFF1B8; } .n2 { --fond-n: #FFDCD2; } .n3 { --fond-n: #D3F1E1; }
+.n4 { --fond-n: #D7E6FB; } .n5 { --fond-n: #E6DEFA; } .n6 { --fond-n: #FFFFFF; }
+@media (prefers-color-scheme: dark) {
+  .n1 { --fond-n: #3A3215; } .n2 { --fond-n: #43271F; } .n3 { --fond-n: #1E3A2D; }
+  .n4 { --fond-n: #1D2C44; } .n5 { --fond-n: #2C2546; } .n6 { --fond-n: #24201E; }
+}
+.recherche input { padding: 10px 14px; }
+.sous-titre { font-size: 1rem; color: var(--texte-doux); margin: 18px 0 10px; }
+.mur-notes { columns: 2 160px; column-gap: 12px; }
+@media (min-width: 900px) { .mur-notes { columns: 4 200px; } }
+.note {
+  break-inside: avoid; margin: 0 0 12px;
+  background: var(--fond-n); border-radius: var(--rayon); box-shadow: var(--ombre);
+  padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 6px;
+  transition: transform .15s;
+}
+.note:hover { transform: translateY(-2px) rotate(-.4deg); }
+.note h3 { font-size: 1rem; }
+.note-texte { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 600; font-size: .92rem;
+  display: -webkit-box; -webkit-line-clamp: 9; -webkit-box-orient: vertical; overflow: hidden; }
+.note footer { display: flex; align-items: center; gap: 6px; }
+.note-date { flex: 1; font-size: .75rem; font-weight: 700; color: var(--texte-doux); }
+.epingle { border: 0; background: none; cursor: pointer; font-size: 1rem; opacity: .3; filter: grayscale(1); }
+.epingle.actif { opacity: 1; filter: none; }
+.note-edition { background: var(--fond-n); }
+.note-edition .champ input, .note-edition .champ textarea { background: color-mix(in srgb, var(--carte) 70%, transparent); }
+.couleurs-notes { display: flex; gap: 10px; border: 0; padding: 0; margin: 8px 0; }
+.couleurs-notes label { position: relative; cursor: pointer; }
+.couleurs-notes input { position: absolute; opacity: 0; }
+.couleurs-notes span:first-of-type { display: block; width: 34px; height: 34px; border-radius: 10px; background: var(--fond-n); box-shadow: 0 0 0 2px var(--bordure); }
+.couleurs-notes input:checked + span { box-shadow: 0 0 0 3px var(--texte); }
+.couleurs-notes input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 3px; }
 
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {

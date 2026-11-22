@@ -1,0 +1,57 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>📝 Notes</h1>
+</section>
+<div class="barre-actions">
+  <nav class="pilules" aria-label="Filtrer">
+    <a class="pilule{{if eq .Filtre ""}} active{{end}}" href="/notes">Toutes</a>
+    <a class="pilule{{if eq .Filtre "partagees"}} active{{end}}" href="/notes?voir=partagees">👨‍👩‍👧 Partagées</a>
+    <a class="pilule{{if eq .Filtre "privees"}} active{{end}}" href="/notes?voir=privees">🔒 Privées</a>
+  </nav>
+  <a class="bouton" href="/notes/nouvelle{{if eq .Filtre "privees"}}?voir=privees{{end}}">＋ Note</a>
+</div>
+<form class="ajout recherche" method="get" action="/notes">
+  {{if .Filtre}}<input type="hidden" name="voir" value="{{.Filtre}}">{{end}}
+  <input type="search" name="q" value="{{.Recherche}}" placeholder="🔍 Chercher dans les notes" aria-label="Chercher">
+</form>
+{{template "notes" $}}
+{{end}}
+{{end}}
+
+{{define "notes"}}
+{{with .Donnees}}
+<div id="notes" hx-get="/notes/contenu?voir={{.Filtre}}&amp;q={{.Recherche}}" hx-trigger="maj-notes from:body delay:300ms" hx-swap="outerHTML">
+  {{if .Epinglees}}
+  <h2 class="sous-titre">📌 Épinglées</h2>
+  <div class="mur-notes">{{range .Epinglees}}{{template "carte-note" dict "N" . "V" $.Donnees}}{{end}}</div>
+  {{end}}
+  {{if .Autres}}
+  {{if .Epinglees}}<h2 class="sous-titre">Les autres</h2>{{end}}
+  <div class="mur-notes">{{range .Autres}}{{template "carte-note" dict "N" . "V" $.Donnees}}{{end}}</div>
+  {{end}}
+  {{if not (or .Epinglees .Autres)}}
+  <div class="carte vide"><span class="emoji">📝</span>{{if .Recherche}}Aucune note ne contient « {{.Recherche}} ».{{else}}Pas encore de note. Courses de Noël, codes du wifi, idées de vacances…{{end}}</div>
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "carte-note"}}
+{{$n := .N}}
+<article class="note n{{$n.Couleur}}">
+  <a class="note-lien" href="/notes/{{$n.ID}}">
+    {{if $n.Titre}}<h3>{{$n.Titre}}</h3>{{end}}
+    {{if $n.Texte}}<p class="note-texte">{{$n.Texte}}</p>{{end}}
+  </a>
+  <footer>
+    {{with $n.Auteur}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}
+    <span class="note-date">{{if eq $n.Privee 1}}🔒 {{end}}{{$n.Date}}</span>
+    {{if $n.Modifiable}}
+    <button class="epingle{{if eq $n.Epinglee 1}} actif{{end}}" hx-post="/notes/{{$n.ID}}/epingler?voir={{.V.Filtre}}&amp;q={{.V.Recherche}}" hx-target="#notes" hx-swap="outerHTML"
+            aria-label="{{if eq $n.Epinglee 1}}Désépingler{{else}}Épingler{{end}}">📌</button>
+    {{end}}
+  </footer>
+</article>
+{{end}}

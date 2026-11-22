@@ -35,15 +35,16 @@ func (q *Queries) CompterParents(ctx context.Context, familleID int64) (int64, e
 }
 
 const creerFamille = `-- name: CreerFamille :one
-INSERT INTO familles (nom, fuseau, devise, cree_le) VALUES (?, ?, ?, ?)
+INSERT INTO familles (nom, fuseau, devise, modules, cree_le) VALUES (?, ?, ?, ?, ?)
 RETURNING id, nom, fuseau, devise, modules, cree_le
 `
 
 type CreerFamilleParams struct {
-	Nom    string
-	Fuseau string
-	Devise string
-	CreeLe int64
+	Nom     string
+	Fuseau  string
+	Devise  string
+	Modules string
+	CreeLe  int64
 }
 
 func (q *Queries) CreerFamille(ctx context.Context, arg CreerFamilleParams) (Famille, error) {
@@ -51,6 +52,7 @@ func (q *Queries) CreerFamille(ctx context.Context, arg CreerFamilleParams) (Fam
 		arg.Nom,
 		arg.Fuseau,
 		arg.Devise,
+		arg.Modules,
 		arg.CreeLe,
 	)
 	var i Famille

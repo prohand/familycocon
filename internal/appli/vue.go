@@ -27,6 +27,16 @@ var Catalogue = []ModuleDef{
 	{Cle: "menus", Nom: "Menus", Emoji: "🍽️", URL: "/menus"},
 	{Cle: "budget", Nom: "Budget", Emoji: "💶", URL: "/budget", Parents: true},
 	{Cle: "enfants", Nom: "Espace enfants", Emoji: "⭐", URL: "/enfants"},
+	{Cle: "notes", Nom: "Notes", Emoji: "📝", URL: "/notes"},
+}
+
+// ModulesParDefaut : modules activés pour une nouvelle famille (tous).
+func ModulesParDefaut() string {
+	var cles []string
+	for _, m := range Catalogue {
+		cles = append(cles, m.Cle)
+	}
+	return strings.Join(cles, ",")
 }
 
 // ModuleParCle : définition d'un module (ok = faux si la clé est inconnue).
