@@ -72,14 +72,7 @@ func (a *App) Envelopper(h http.Handler) http.Handler {
 					http.Error(e, "Erreur interne", http.StatusInternalServerError)
 				}
 			}
-			niveau := slog.LevelInfo
-			if strings.HasPrefix(r.URL.Path, "/statique/") || r.URL.Path == "/health" || r.URL.Path == "/direct" {
-				niveau = slog.LevelDebug // pas de bruit dans les logs
-			}
-			if e.statut >= 500 {
-				niveau = slog.LevelError
-			}
-			a.Journal.Log(r.Context(), niveau, "requête", "methode", r.Method, "chemin", r.URL.Path,
+			a.Journal.Log(r.Context(), niveauRequete(r.URL.Path, e.statut), "requête", "methode", r.Method, "chemin", r.URL.Path,
 				"statut", e.statut, "duree_ms", time.Since(debut).Milliseconds(), "ip", a.IPClient(r).String())
 		}()
 
@@ -136,4 +129,21 @@ func (a *App) deConfiance(ip netip.Addr) bool {
 		}
 	}
 	return false
+}
+
+// niveauRequete : le niveau de la ligne de journal d'une requête. Les
+// requêtes qui réussissent sont en debug (sinon chaque page et chaque
+// rafraîchissement remplirait le journal) ; les refus (401, 403, 404…) en
+// info, utiles pour repérer des essais d'accès ; trop de tentatives (429)
+// en warn ; les erreurs du serveur en error.
+func niveauRequete(chemin string, statut int) slog.Level {
+	switch {
+	case statut >= 500:
+		return slog.LevelError
+	case statut == http.StatusTooManyRequests:
+		return slog.LevelWarn
+	case statut >= 400 && !strings.HasPrefix(chemin, "/statique/") && chemin != "/favicon.ico":
+		return slog.LevelInfo
+	}
+	return slog.LevelDebug
 }
