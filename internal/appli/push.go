@@ -40,6 +40,7 @@ type Pousseur struct {
 type annonce struct {
 	famille, auteur int64
 	module, texte   string
+	parents         bool // aux parents seulement
 }
 
 // tailleFile : au-delà, les annonces sont perdues (elles restent visibles
@@ -100,6 +101,15 @@ func (p *Pousseur) Annoncer(famille, auteur int64, module, texte string) {
 	}
 }
 
+// AnnoncerParents : comme Annoncer, pour les parents seulement.
+func (p *Pousseur) AnnoncerParents(famille int64, module, texte string) {
+	select {
+	case p.file <- annonce{famille: famille, module: module, texte: texte, parents: true}:
+	default:
+		p.a.Journal.Warn("file des notifications pleine : notification perdue")
+	}
+}
+
 func (p *Pousseur) boucle(ctx context.Context) {
 	for {
 		select {
@@ -121,10 +131,12 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 	url := "/"
 	if m, ok := ModuleParCle(an.module); ok {
 		url = m.URL
+		an.parents = an.parents || m.Parents
 	}
 	corps, _ := json.Marshal(map[string]string{"titre": "FamilyCocon", "texte": an.texte, "url": url, "groupe": an.module})
 	for _, ab := range abos {
-		if !contient(strings.Split(ab.PushModules, ","), an.module) || p.a.Direct.EnLigne(an.famille, ab.MembreID) {
+		if !contient(strings.Split(ab.PushModules, ","), an.module) || p.a.Direct.EnLigne(an.famille, ab.MembreID) ||
+			(an.parents && ab.Role != RoleParent) {
 			continue
 		}
 		envoi, annuler := context.WithTimeout(ctx, 20*time.Second)

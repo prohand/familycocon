@@ -3,6 +3,7 @@
 package main
 
 import (
+	"familycocon/internal/abonnements"
 	"familycocon/internal/agenda"
 	"familycocon/internal/appli"
 	"familycocon/internal/budget"
@@ -25,6 +26,7 @@ func brancherModules(a *appli.App) error {
 	agenda.Brancher(a)
 	menus.Brancher(a)
 	budget.Brancher(a)
+	abonnements.Brancher(a)
 	enfants.Brancher(a)
 	notes.Brancher(a)
 	contacts.Brancher(a)

@@ -20,11 +20,12 @@ import (
 
 // Echeance : une date à venir.
 type Echeance struct {
-	Jour   time.Time // à minuit, dans le fuseau de la famille
-	Titre  string    // « Anniversaire de Mamie (80 ans) »
-	Emoji  string
-	URL    string
-	Module string
+	Jour    time.Time // à minuit, dans le fuseau de la famille
+	Titre   string    // « Anniversaire de Mamie (80 ans) »
+	Emoji   string
+	URL     string
+	Module  string
+	Parents bool // module réservé aux parents (budget, abonnements) : rien pour les enfants
 }
 
 // EcheancesFunc : échéances d'un module pour une famille, du jour debut
@@ -68,6 +69,11 @@ func (a *App) Echeances(ctx context.Context, f donnees.Famille, debut, fin time.
 		if err != nil {
 			a.Journal.Error("échéances", "module", module, "erreur", err)
 			continue
+		}
+		if def, ok := ModuleParCle(module); ok && def.Parents {
+			for i := range l {
+				l[i].Parents = true
+			}
 		}
 		out = append(out, l...)
 	}
@@ -117,7 +123,12 @@ type ligneAVenir struct {
 // blocAVenir : bloc de l'accueil, les 30 prochains jours.
 func (a *App) blocAVenir(ctx context.Context, c *Contexte) (template.HTML, error) {
 	auj := minuitDe(c.Maintenant())
-	ech := a.Echeances(ctx, c.Famille, auj, auj.AddDate(0, 0, 31))
+	var ech []Echeance
+	for _, e := range a.Echeances(ctx, c.Famille, auj, auj.AddDate(0, 0, 31)) {
+		if !e.Parents || c.EstParent() {
+			ech = append(ech, e)
+		}
+	}
 	if len(ech) == 0 {
 		return "", nil
 	}
@@ -167,7 +178,12 @@ func (a *App) EnvoyerRappels(ctx context.Context, maintenant time.Time) int {
 				if decalage == 7 {
 					quand = "Dans 7 jours"
 				}
-				a.Push.Annoncer(f.ID, 0, moduleRappels, fmt.Sprintf("%s %s : %s", e.Emoji, quand, e.Titre))
+				texte := fmt.Sprintf("%s %s : %s", e.Emoji, quand, e.Titre)
+				if e.Parents {
+					a.Push.AnnoncerParents(f.ID, moduleRappels, texte)
+				} else {
+					a.Push.Annoncer(f.ID, 0, moduleRappels, texte)
+				}
 				n++
 			}
 		}

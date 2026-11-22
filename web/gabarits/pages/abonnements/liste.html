@@ -1,0 +1,40 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>📺 Abonnements</h1>
+  <p>Prélevés tout seuls dans le budget</p>
+</section>
+<section class="carte reste bloc">
+  <p class="reste-titre">Chaque mois</p>
+  <p class="reste-montant">{{montant .ParMois .Devise}}</p>
+  <div class="reste-detail"><span>Par an <b>{{montant .ParAn .Devise}}</b></span><span>{{pluriel (len .Actifs) "abonnement" "abonnements"}}</span></div>
+</section>
+<div class="boutons"><a class="bouton" href="/abonnements/nouveau">＋ Abonnement</a></div>
+{{if .Actifs}}
+<div class="carte bloc">
+  {{- range .Actifs}}
+  <a class="ligne abo" href="/abonnements/{{.ID}}">
+    <span class="p-emoji">{{.Emoji}}</span>
+    <span class="quoi">{{.Libelle}}
+      <small>{{.Frequence}} · prochain : {{.Prochain}}</small>
+      {{if .Engagement}}<small class="{{if .Bientot}}alerte{{end}}">🔒 {{.Engagement}}</small>{{end}}</span>
+    <b class="montant depense">{{montant .Montant $.Donnees.Devise}}</b>
+  </a>
+  {{- end}}
+</div>
+{{else}}
+<div class="carte vide bloc"><span class="emoji">📺</span>Aucun abonnement. Ajoutez la box, les téléphones, la musique, les vidéos… pour voir ce qu'ils coûtent par an.</div>
+{{end}}
+{{if .Resilies}}
+<details class="bloc termines">
+  <summary class="sous-titre">Résiliés ({{len .Resilies}})</summary>
+  <div class="carte">
+    {{- range .Resilies}}
+    <a class="ligne terminee" href="/abonnements/{{.ID}}"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Libelle}}</span><span class="fleche-droite">›</span></a>
+    {{- end}}
+  </div>
+</details>
+{{end}}
+{{end}}
+{{end}}

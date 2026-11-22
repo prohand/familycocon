@@ -26,6 +26,7 @@ var Catalogue = []ModuleDef{
 	{Cle: "taches", Nom: "Tâches", Emoji: "✅", URL: "/taches"},
 	{Cle: "menus", Nom: "Menus", Emoji: "🍽️", URL: "/menus"},
 	{Cle: "budget", Nom: "Budget", Emoji: "💶", URL: "/budget", Parents: true},
+	{Cle: "abonnements", Nom: "Abonnements", Emoji: "📺", URL: "/abonnements", Parents: true},
 	{Cle: "enfants", Nom: "Espace enfants", Emoji: "⭐", URL: "/enfants"},
 	{Cle: "notes", Nom: "Notes", Emoji: "📝", URL: "/notes"},
 	{Cle: "anniversaires", Nom: "Anniversaires", Emoji: "🎂", URL: "/anniversaires"},
