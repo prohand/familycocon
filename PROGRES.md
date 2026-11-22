@@ -24,6 +24,7 @@
 | Abonnements (parents), reliés au budget | **fait** |
 | Tâches dans l'agenda | **fait** |
 | Agenda : plus de répétitions + date de fin | **fait** |
+| Contacts (carnet central, vCard, liens avec Prestataires, Animaux, Véhicules, Agenda) | **fait** |
 
 ## Mesures
 

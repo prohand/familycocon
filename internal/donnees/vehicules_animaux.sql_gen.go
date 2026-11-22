@@ -7,10 +7,11 @@ package donnees
 
 import (
 	"context"
+	"database/sql"
 )
 
 const animalParID = `-- name: AnimalParID :one
-SELECT id, famille_id, nom, espece, race, naissance, puce, veterinaire, notes, cree_le FROM animaux WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, nom, espece, race, naissance, puce, veterinaire, notes, cree_le, veterinaire_id FROM animaux WHERE id = ? AND famille_id = ?
 `
 
 type AnimalParIDParams struct {
@@ -32,12 +33,13 @@ func (q *Queries) AnimalParID(ctx context.Context, arg AnimalParIDParams) (Anima
 		&i.Veterinaire,
 		&i.Notes,
 		&i.CreeLe,
+		&i.VeterinaireID,
 	)
 	return i, err
 }
 
 const animauxFamille = `-- name: AnimauxFamille :many
-SELECT id, famille_id, nom, espece, race, naissance, puce, veterinaire, notes, cree_le FROM animaux WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
+SELECT id, famille_id, nom, espece, race, naissance, puce, veterinaire, notes, cree_le, veterinaire_id FROM animaux WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
 `
 
 func (q *Queries) AnimauxFamille(ctx context.Context, familleID int64) ([]Animal, error) {
@@ -60,6 +62,7 @@ func (q *Queries) AnimauxFamille(ctx context.Context, familleID int64) ([]Animal
 			&i.Veterinaire,
 			&i.Notes,
 			&i.CreeLe,
+			&i.VeterinaireID,
 		); err != nil {
 			return nil, err
 		}
@@ -75,20 +78,21 @@ func (q *Queries) AnimauxFamille(ctx context.Context, familleID int64) ([]Animal
 }
 
 const creerAnimal = `-- name: CreerAnimal :one
-INSERT INTO animaux (famille_id, nom, espece, race, naissance, puce, veterinaire, notes, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, espece, race, naissance, puce, veterinaire, notes, cree_le
+INSERT INTO animaux (famille_id, nom, espece, race, naissance, puce, veterinaire, veterinaire_id, notes, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, espece, race, naissance, puce, veterinaire, notes, cree_le, veterinaire_id
 `
 
 type CreerAnimalParams struct {
-	FamilleID   int64
-	Nom         string
-	Espece      string
-	Race        string
-	Naissance   string
-	Puce        string
-	Veterinaire string
-	Notes       string
-	CreeLe      int64
+	FamilleID     int64
+	Nom           string
+	Espece        string
+	Race          string
+	Naissance     string
+	Puce          string
+	Veterinaire   string
+	VeterinaireID sql.NullInt64
+	Notes         string
+	CreeLe        int64
 }
 
 func (q *Queries) CreerAnimal(ctx context.Context, arg CreerAnimalParams) (Animal, error) {
@@ -100,6 +104,7 @@ func (q *Queries) CreerAnimal(ctx context.Context, arg CreerAnimalParams) (Anima
 		arg.Naissance,
 		arg.Puce,
 		arg.Veterinaire,
+		arg.VeterinaireID,
 		arg.Notes,
 		arg.CreeLe,
 	)
@@ -115,58 +120,14 @@ func (q *Queries) CreerAnimal(ctx context.Context, arg CreerAnimalParams) (Anima
 		&i.Veterinaire,
 		&i.Notes,
 		&i.CreeLe,
-	)
-	return i, err
-}
-
-const creerPrestataire = `-- name: CreerPrestataire :one
-INSERT INTO prestataires (famille_id, nom, metier, telephone, email, adresse, site, notes, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, metier, telephone, email, adresse, site, notes, cree_le
-`
-
-type CreerPrestataireParams struct {
-	FamilleID int64
-	Nom       string
-	Metier    string
-	Telephone string
-	Email     string
-	Adresse   string
-	Site      string
-	Notes     string
-	CreeLe    int64
-}
-
-func (q *Queries) CreerPrestataire(ctx context.Context, arg CreerPrestataireParams) (Prestataire, error) {
-	row := q.db.QueryRowContext(ctx, creerPrestataire,
-		arg.FamilleID,
-		arg.Nom,
-		arg.Metier,
-		arg.Telephone,
-		arg.Email,
-		arg.Adresse,
-		arg.Site,
-		arg.Notes,
-		arg.CreeLe,
-	)
-	var i Prestataire
-	err := row.Scan(
-		&i.ID,
-		&i.FamilleID,
-		&i.Nom,
-		&i.Metier,
-		&i.Telephone,
-		&i.Email,
-		&i.Adresse,
-		&i.Site,
-		&i.Notes,
-		&i.CreeLe,
+		&i.VeterinaireID,
 	)
 	return i, err
 }
 
 const creerVehicule = `-- name: CreerVehicule :one
-INSERT INTO vehicules (famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le
+INSERT INTO vehicules (famille_id, nom, genre, immatriculation, modele, kilometrage, notes, garage_id, assureur_id, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id
 `
 
 type CreerVehiculeParams struct {
@@ -177,6 +138,8 @@ type CreerVehiculeParams struct {
 	Modele          string
 	Kilometrage     int64
 	Notes           string
+	GarageID        sql.NullInt64
+	AssureurID      sql.NullInt64
 	CreeLe          int64
 }
 
@@ -189,6 +152,8 @@ func (q *Queries) CreerVehicule(ctx context.Context, arg CreerVehiculeParams) (V
 		arg.Modele,
 		arg.Kilometrage,
 		arg.Notes,
+		arg.GarageID,
+		arg.AssureurID,
 		arg.CreeLe,
 	)
 	var i Vehicule
@@ -202,24 +167,28 @@ func (q *Queries) CreerVehicule(ctx context.Context, arg CreerVehiculeParams) (V
 		&i.Kilometrage,
 		&i.Notes,
 		&i.CreeLe,
+		&i.GarageID,
+		&i.AssureurID,
 	)
 	return i, err
 }
 
 const modifierAnimal = `-- name: ModifierAnimal :exec
-UPDATE animaux SET nom = ?, espece = ?, race = ?, naissance = ?, puce = ?, veterinaire = ?, notes = ? WHERE id = ? AND famille_id = ?
+UPDATE animaux SET nom = ?, espece = ?, race = ?, naissance = ?, puce = ?, veterinaire = ?, veterinaire_id = ?, notes = ?
+WHERE id = ? AND famille_id = ?
 `
 
 type ModifierAnimalParams struct {
-	Nom         string
-	Espece      string
-	Race        string
-	Naissance   string
-	Puce        string
-	Veterinaire string
-	Notes       string
-	ID          int64
-	FamilleID   int64
+	Nom           string
+	Espece        string
+	Race          string
+	Naissance     string
+	Puce          string
+	Veterinaire   string
+	VeterinaireID sql.NullInt64
+	Notes         string
+	ID            int64
+	FamilleID     int64
 }
 
 func (q *Queries) ModifierAnimal(ctx context.Context, arg ModifierAnimalParams) error {
@@ -230,37 +199,7 @@ func (q *Queries) ModifierAnimal(ctx context.Context, arg ModifierAnimalParams) 
 		arg.Naissance,
 		arg.Puce,
 		arg.Veterinaire,
-		arg.Notes,
-		arg.ID,
-		arg.FamilleID,
-	)
-	return err
-}
-
-const modifierPrestataire = `-- name: ModifierPrestataire :exec
-UPDATE prestataires SET nom = ?, metier = ?, telephone = ?, email = ?, adresse = ?, site = ?, notes = ? WHERE id = ? AND famille_id = ?
-`
-
-type ModifierPrestataireParams struct {
-	Nom       string
-	Metier    string
-	Telephone string
-	Email     string
-	Adresse   string
-	Site      string
-	Notes     string
-	ID        int64
-	FamilleID int64
-}
-
-func (q *Queries) ModifierPrestataire(ctx context.Context, arg ModifierPrestataireParams) error {
-	_, err := q.db.ExecContext(ctx, modifierPrestataire,
-		arg.Nom,
-		arg.Metier,
-		arg.Telephone,
-		arg.Email,
-		arg.Adresse,
-		arg.Site,
+		arg.VeterinaireID,
 		arg.Notes,
 		arg.ID,
 		arg.FamilleID,
@@ -269,7 +208,8 @@ func (q *Queries) ModifierPrestataire(ctx context.Context, arg ModifierPrestatai
 }
 
 const modifierVehicule = `-- name: ModifierVehicule :exec
-UPDATE vehicules SET nom = ?, genre = ?, immatriculation = ?, modele = ?, kilometrage = ?, notes = ? WHERE id = ? AND famille_id = ?
+UPDATE vehicules SET nom = ?, genre = ?, immatriculation = ?, modele = ?, kilometrage = ?, notes = ?, garage_id = ?, assureur_id = ?
+WHERE id = ? AND famille_id = ?
 `
 
 type ModifierVehiculeParams struct {
@@ -279,6 +219,8 @@ type ModifierVehiculeParams struct {
 	Modele          string
 	Kilometrage     int64
 	Notes           string
+	GarageID        sql.NullInt64
+	AssureurID      sql.NullInt64
 	ID              int64
 	FamilleID       int64
 }
@@ -291,6 +233,8 @@ func (q *Queries) ModifierVehicule(ctx context.Context, arg ModifierVehiculePara
 		arg.Modele,
 		arg.Kilometrage,
 		arg.Notes,
+		arg.GarageID,
+		arg.AssureurID,
 		arg.ID,
 		arg.FamilleID,
 	)
@@ -318,71 +262,6 @@ func (q *Queries) NoterKilometrage(ctx context.Context, arg NoterKilometragePara
 	return err
 }
 
-const prestataireParID = `-- name: PrestataireParID :one
-SELECT id, famille_id, nom, metier, telephone, email, adresse, site, notes, cree_le FROM prestataires WHERE id = ? AND famille_id = ?
-`
-
-type PrestataireParIDParams struct {
-	ID        int64
-	FamilleID int64
-}
-
-func (q *Queries) PrestataireParID(ctx context.Context, arg PrestataireParIDParams) (Prestataire, error) {
-	row := q.db.QueryRowContext(ctx, prestataireParID, arg.ID, arg.FamilleID)
-	var i Prestataire
-	err := row.Scan(
-		&i.ID,
-		&i.FamilleID,
-		&i.Nom,
-		&i.Metier,
-		&i.Telephone,
-		&i.Email,
-		&i.Adresse,
-		&i.Site,
-		&i.Notes,
-		&i.CreeLe,
-	)
-	return i, err
-}
-
-const prestatairesFamille = `-- name: PrestatairesFamille :many
-SELECT id, famille_id, nom, metier, telephone, email, adresse, site, notes, cree_le FROM prestataires WHERE famille_id = ? ORDER BY metier COLLATE NOCASE, nom COLLATE NOCASE
-`
-
-func (q *Queries) PrestatairesFamille(ctx context.Context, familleID int64) ([]Prestataire, error) {
-	rows, err := q.db.QueryContext(ctx, prestatairesFamille, familleID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Prestataire{}
-	for rows.Next() {
-		var i Prestataire
-		if err := rows.Scan(
-			&i.ID,
-			&i.FamilleID,
-			&i.Nom,
-			&i.Metier,
-			&i.Telephone,
-			&i.Email,
-			&i.Adresse,
-			&i.Site,
-			&i.Notes,
-			&i.CreeLe,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const supprimerAnimal = `-- name: SupprimerAnimal :exec
 DELETE FROM animaux WHERE id = ? AND famille_id = ?
 `
@@ -394,20 +273,6 @@ type SupprimerAnimalParams struct {
 
 func (q *Queries) SupprimerAnimal(ctx context.Context, arg SupprimerAnimalParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerAnimal, arg.ID, arg.FamilleID)
-	return err
-}
-
-const supprimerPrestataire = `-- name: SupprimerPrestataire :exec
-DELETE FROM prestataires WHERE id = ? AND famille_id = ?
-`
-
-type SupprimerPrestataireParams struct {
-	ID        int64
-	FamilleID int64
-}
-
-func (q *Queries) SupprimerPrestataire(ctx context.Context, arg SupprimerPrestataireParams) error {
-	_, err := q.db.ExecContext(ctx, supprimerPrestataire, arg.ID, arg.FamilleID)
 	return err
 }
 
@@ -426,7 +291,7 @@ func (q *Queries) SupprimerVehicule(ctx context.Context, arg SupprimerVehiculePa
 }
 
 const vehiculeParID = `-- name: VehiculeParID :one
-SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le FROM vehicules WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id FROM vehicules WHERE id = ? AND famille_id = ?
 `
 
 type VehiculeParIDParams struct {
@@ -447,13 +312,15 @@ func (q *Queries) VehiculeParID(ctx context.Context, arg VehiculeParIDParams) (V
 		&i.Kilometrage,
 		&i.Notes,
 		&i.CreeLe,
+		&i.GarageID,
+		&i.AssureurID,
 	)
 	return i, err
 }
 
 const vehiculesFamille = `-- name: VehiculesFamille :many
 
-SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le FROM vehicules WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
+SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id FROM vehicules WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
 `
 
 // Vehicules, animaux, prestataires.
@@ -476,6 +343,8 @@ func (q *Queries) VehiculesFamille(ctx context.Context, familleID int64) ([]Vehi
 			&i.Kilometrage,
 			&i.Notes,
 			&i.CreeLe,
+			&i.GarageID,
+			&i.AssureurID,
 		); err != nil {
 			return nil, err
 		}

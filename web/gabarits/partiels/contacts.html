@@ -1,0 +1,15 @@
+{{/* Choix d'un contact du carnet (vétérinaire, garage, assureur…).
+     Reçoit : dict "Nom" (champ) "Titre" "Choisi" (sql.NullInt64) "Contacts" ([]donnees.Contact). */}}
+{{define "choix-contact"}}
+{{$choisi := .Choisi}}
+<label class="champ"><span>{{.Titre}}</span>
+  <select name="{{.Nom}}">
+    <option value="0">— Aucun contact —</option>
+    <optgroup label="Professionnels">
+      {{- range .Contacts}}{{if .Pro}}<option value="{{.ID}}"{{if and $choisi.Valid (eq .ID $choisi.Int64)}} selected{{end}}>{{.Nom}}{{if .Metier}} ({{.Metier}}){{end}}</option>{{end}}{{end}}
+    </optgroup>
+    <optgroup label="Autres contacts">
+      {{- range .Contacts}}{{if not .Pro}}<option value="{{.ID}}"{{if and $choisi.Valid (eq .ID $choisi.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}{{end}}
+    </optgroup>
+  </select></label>
+{{end}}

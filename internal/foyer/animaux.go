@@ -112,6 +112,9 @@ func (m *Module) ficheAnimal(w http.ResponseWriter, r *http.Request, c *appli.Co
 	if x.Puce != "" {
 		v.Infos = append(v.Infos, "🔖 Puce / tatouage : "+x.Puce)
 	}
+	if ct, ok := m.citer(r.Context(), c, "🩺 Vétérinaire", x.VeterinaireID); ok {
+		v.Contacts = append(v.Contacts, ct)
+	}
 	if x.Veterinaire != "" {
 		v.Infos = append(v.Infos, "🩺 "+x.Veterinaire)
 	}
@@ -122,9 +125,10 @@ func (m *Module) ficheAnimal(w http.ResponseWriter, r *http.Request, c *appli.Co
 }
 
 type formAnimal struct {
-	Nouveau bool
-	A       donnees.Animal
-	Especes any
+	Nouveau  bool
+	A        donnees.Animal
+	Especes  any
+	Contacts []donnees.Contact
 }
 
 func (m *Module) formAnimal(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -137,6 +141,7 @@ func (m *Module) formAnimal(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.A = x
 	}
+	f.Contacts = m.contactsChoix(r.Context(), c)
 	m.a.Afficher(w, r, c, "foyer/animal", "Animal", modAnimaux, f)
 }
 
@@ -163,7 +168,7 @@ func (m *Module) enregistrerAnimal(w http.ResponseWriter, r *http.Request, c *ap
 	id := idDe(r)
 	if r.PathValue("id") == "" {
 		x, err := m.a.Q.CreerAnimal(ctx, donnees.CreerAnimalParams{FamilleID: c.Famille.ID, Nom: nom, Espece: espece, Race: race,
-			Naissance: naissance, Puce: puce, Veterinaire: veto, Notes: notes, CreeLe: time.Now().Unix()})
+			Naissance: naissance, Puce: puce, Veterinaire: veto, VeterinaireID: m.lireContact(r, c, "veterinaire_id"), Notes: notes, CreeLe: time.Now().Unix()})
 		if err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
@@ -175,7 +180,7 @@ func (m *Module) enregistrerAnimal(w http.ResponseWriter, r *http.Request, c *ap
 			return
 		}
 		if err := m.a.Q.ModifierAnimal(ctx, donnees.ModifierAnimalParams{Nom: nom, Espece: espece, Race: race, Naissance: naissance,
-			Puce: puce, Veterinaire: veto, Notes: notes, ID: id, FamilleID: c.Famille.ID}); err != nil {
+			Puce: puce, Veterinaire: veto, VeterinaireID: m.lireContact(r, c, "veterinaire_id"), Notes: notes, ID: id, FamilleID: c.Famille.ID}); err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		}

@@ -39,6 +39,7 @@
   --prestataires: #EDE3D6;  --prestataires-t: #7A5A3A;
   --projets: #F6E3FF;       --projets-t: #8A3FA8;
   --abonnements: #FFE4EC;   --abonnements-t: #B23A62;
+  --contacts: #DDF3F7;      --contacts-t: #1F7486;
 
   /* Une couleur par membre de la famille */
   --membre-1: #5B8DEF;
@@ -88,6 +89,7 @@
     --prestataires: #33291F;  --prestataires-t: #D8BB98;
     --projets: #36203F;       --projets-t: #DDA7F2;
     --abonnements: #3B1F29;   --abonnements-t: #F4A6C0;
+    --contacts: #17343A;      --contacts-t: #8FD6E4;
 
     --ombre: 0 2px 6px rgba(0, 0, 0, .25), 0 8px 24px rgba(0, 0, 0, .25);
     --ombre-forte: 0 6px 14px rgba(0, 0, 0, .35), 0 18px 40px rgba(0, 0, 0, .35);
@@ -270,6 +272,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tuile.prestataires { --bg: var(--prestataires); --t: var(--prestataires-t); }
 .tuile.projets { --bg: var(--projets); --t: var(--projets-t); }
 .tuile.abonnements { --bg: var(--abonnements); --t: var(--abonnements-t); }
+.tuile.contacts { --bg: var(--contacts); --t: var(--contacts-t); }
 
 /* ---------- Cartes ---------- */
 .carte {
@@ -1320,6 +1323,24 @@ details.termines > summary { cursor: pointer; }
 .jours-repetition input:checked + span { border-color: var(--agenda-t); background: var(--agenda); color: var(--agenda-t); }
 .jours-repetition input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
 .cache { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ---------- Contacts ---------- */
+.favoris { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; }
+.favori-contact { position: relative; flex: none; width: 84px; text-align: center; }
+.favori-contact > a:first-child { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: .8rem; }
+.favori-contact .avatar { width: 56px; height: 56px; font-size: 1.4rem; }
+.favori-contact b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 84px; }
+.favori-contact .appel { position: absolute; top: 34px; right: 6px; width: 28px; height: 28px; border-radius: 50%;
+  background: var(--carte); box-shadow: var(--ombre); display: grid; place-items: center; font-size: .9rem; }
+.sous-titre.lettre { font-size: 1rem; color: var(--contacts-t); }
+.ligne.contact { gap: 8px; }
+.ligne.contact .quoi-lien { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ligne.contact .appel { font-size: 1.2rem; padding: 6px 8px; border-radius: 12px; }
+.ligne.contact .appel:hover, .fiche .appel:hover { background: var(--fond); }
+.fiche .appel { font-size: 1.2rem; padding: 6px 8px; border-radius: 12px; }
+select[multiple] { min-height: 7em; }
+details.vcard > summary { cursor: pointer; }
+details.plus-champs > summary { cursor: pointer; margin-bottom: 10px; }
 
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {

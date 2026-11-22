@@ -41,7 +41,8 @@ tâches ménagères, menus, budget et espace enfants, sur le téléphone de chac
 - **Agenda** : vue semaine et vue mois, couleur par personne ; répétitions : chaque jour, certains jours,
   chaque semaine, toutes les 2 semaines, chaque mois (même date ou « le 2e mardi »), tous les 2 mois,
   trimestriel, semestriel, chaque année, avec date de fin ;
-  les tâches ménagères du jour y apparaissent en petit (toutes, les miennes, ou masquées).
+  les tâches ménagères du jour y apparaissent en petit (toutes, les miennes, ou masquées) ;
+  un événement peut citer des contacts (rendez-vous chez le dentiste, goûter chez Léo).
 - **Tâches ménagères** : à qui, quand (une fois, chaque jour, certains jours, chaque semaine), qui a fait quoi.
 - **Menus de la semaine** : midi et soir ; un clic envoie les ingrédients dans la liste de courses.
 - **Budget** (parents) :
@@ -56,12 +57,17 @@ tâches ménagères, menus, budget et espace enfants, sur le téléphone de chac
   - récompenses échangées contre des étoiles ;
   - progrès par semaine.
 - **Notes** : partagées avec la famille ou privées, couleurs, épinglées, recherche.
-- **Anniversaires et Adresses** : un carnet de contacts commun (appeler, SMS, e-mail, plan), âge et idées de cadeaux.
+- **Contacts** : le carnet central de la famille :
+  - mobile, fixe, travail, e-mail, adresse, société, métier, site ; favoris en haut, groupes libres (« Foot de Léo ») ;
+  - recherche par nom, numéro ou métier ; appel direct depuis la liste ;
+  - import et export vCard (.vcf) pour récupérer les contacts du téléphone (parents).
+- **Anniversaires et Adresses** : deux vues du carnet (les dates à venir avec l'âge et les idées de cadeaux ; les adresses avec le plan).
 - **Cartes de fidélité** : le code-barres (EAN-13, Code 128) ou le QR code est redessiné à l'écran, à montrer en caisse.
 - **Véhicules, Animaux, Prestataires** :
   - échéances qui reviennent (contrôle technique, assurance, vaccin, vermifuge, ramonage…) ;
   - « C'est fait » : la ligne va dans le carnet (date, coût, kilométrage) et l'échéance est reportée ;
-  - prestataires : plombier, nounou, médecin… avec leurs coordonnées et leurs interventions.
+  - prestataires : les contacts « pro » du carnet (plombier, nounou, médecin…), avec leurs interventions ;
+  - vétérinaire d'un animal, garage et assurance d'un véhicule choisis dans le carnet (appel direct).
 - **Projets** : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
 - **Rappels** : bloc « À venir » sur l'accueil (30 jours) et notification chaque matin à 9 h
   (anniversaires, échéances, étapes de projet : aujourd'hui et dans 7 jours).

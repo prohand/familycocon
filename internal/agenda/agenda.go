@@ -49,10 +49,17 @@ func Brancher(a *appli.App) {
 
 // Occurrence : un événement à une date (un événement répété en a plusieurs).
 type Occurrence struct {
-	Evt     donnees.Evenement
-	Debut   time.Time
-	Fin     time.Time
-	Membres []*donnees.Membre // vide : toute la famille
+	Evt      donnees.Evenement
+	Debut    time.Time
+	Fin      time.Time
+	Membres  []*donnees.Membre // vide : toute la famille
+	Contacts []ContactEvt      // contacts du carnet cités (dentiste, Léo…)
+}
+
+// ContactEvt : un contact cité par un événement.
+type ContactEvt struct {
+	ID       int64
+	Nom, Tel string
 }
 
 // Heure : « 10:00 », « Journée ».
@@ -74,6 +81,30 @@ func (o Occurrence) HeureFin() string {
 // chevauche : l'occurrence touche-t-elle la période [debut, fin[ ?
 func chevauche(d, f, debut, fin time.Time) bool {
 	return d.Before(fin) && (f.After(debut) || !d.Before(debut))
+}
+
+// contactsParEvenement : les contacts cités, par événement.
+func (m *Module) contactsParEvenement(ctx context.Context, c *appli.Contexte) (map[int64][]ContactEvt, error) {
+	l, err := m.a.Q.ContactsEvenementsFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return nil, err
+	}
+	out := map[int64][]ContactEvt{}
+	for _, x := range l {
+		out[x.EvenementID] = append(out[x.EvenementID], ContactEvt{ID: x.ID, Nom: x.Nom, Tel: lienTel(x.Telephone)})
+	}
+	return out, nil
+}
+
+// lienTel : chiffres et « + » au début seulement (lien tel:).
+func lienTel(t string) string {
+	var b []rune
+	for _, r := range t {
+		if (r >= '0' && r <= '9') || (r == '+' && len(b) == 0) {
+			b = append(b, r)
+		}
+	}
+	return string(b)
 }
 
 // Occurrences : les occurrences de la période [debut, fin[, triées.
@@ -100,10 +131,14 @@ func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin 
 			parEvt[p.EvenementID] = append(parEvt[p.EvenementID], mb)
 		}
 	}
+	contacts, err := m.contactsParEvenement(ctx, c)
+	if err != nil {
+		return nil, err
+	}
 	var out []Occurrence
 	for _, e := range evts {
 		for _, dates := range deplier(e, c.Lieu, debut, fin) {
-			out = append(out, Occurrence{Evt: e, Debut: dates[0], Fin: dates[1], Membres: parEvt[e.ID]})
+			out = append(out, Occurrence{Evt: e, Debut: dates[0], Fin: dates[1], Membres: parEvt[e.ID], Contacts: contacts[e.ID]})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -285,6 +320,9 @@ type formEvt struct {
 	Regle      regle  // répétition actuelle (cases des jours)
 	TexteRep   string // « Chaque 2e mardi du mois »
 	Semaine    []caseJour
+	Contacts   []donnees.Contact // carnet (liste de choix)
+	Cites      map[int64]bool    // contacts cités par l'événement
+	ContactsEv []ContactEvt
 }
 
 // caseJour : une case « lun … dim » de la répétition « certains jours ».
@@ -308,7 +346,10 @@ func modifiable(c *appli.Contexte, e donnees.Evenement) bool {
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
-	f := &formEvt{Nouveau: r.PathValue("id") == "", Modifiable: true, Choisis: map[int64]bool{}, Choix: Choix}
+	f := &formEvt{Nouveau: r.PathValue("id") == "", Modifiable: true, Choisis: map[int64]bool{}, Choix: Choix, Cites: map[int64]bool{}}
+	if c.Actif("contacts") || c.Actif("adresses") {
+		f.Contacts, _ = m.a.Q.ContactsFamille(ctx, c.Famille.ID)
+	}
 	var err error
 	if f.Membres, err = m.a.Membres(ctx, c); err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -328,6 +369,12 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.Evt, f.Modifiable = e, modifiable(c, e)
 		f.Regle, f.TexteRep = lireRegle(e.Repetition), TexteRepetition(e, c.Lieu)
+		if cites, err := m.contactsParEvenement(ctx, c); err == nil {
+			f.ContactsEv = cites[e.ID]
+			for _, x := range f.ContactsEv {
+				f.Cites[x.ID] = true
+			}
+		}
 		d, fin := c.Heure(e.Debut), c.Heure(e.Fin)
 		f.Date, f.DateFin = repetition.CleJour(d), repetition.CleJour(fin)
 		if e.Journee == 0 {
@@ -361,6 +408,7 @@ type saisie struct {
 	debut, fin                    time.Time
 	journee                       bool
 	membres                       []int64
+	contacts                      []int64
 }
 
 func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
@@ -435,6 +483,16 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 			s.membres = append(s.membres, mb.ID)
 		}
 	}
+	// Contacts cités : seulement ceux de la famille, 10 au plus.
+	for _, v := range f["contacts"] {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 || len(s.contacts) == 10 {
+			continue
+		}
+		if _, err := m.a.Q.ContactParID(r.Context(), donnees.ContactParIDParams{ID: id, FamilleID: c.Famille.ID}); err == nil {
+			s.contacts = append(s.contacts, id)
+		}
+	}
 	return s, ""
 }
 
@@ -443,6 +501,18 @@ func bool01(b bool) int64 {
 		return 1
 	}
 	return 0
+}
+
+func enregistrerContacts(ctx context.Context, q *donnees.Queries, evt int64, contacts []int64) error {
+	if err := q.ViderContactsEvenement(ctx, evt); err != nil {
+		return err
+	}
+	for _, id := range contacts {
+		if err := q.AjouterContactEvenement(ctx, donnees.AjouterContactEvenementParams{EvenementID: evt, ContactID: id}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (m *Module) enregistrerMembres(ctx context.Context, q *donnees.Queries, evt int64, membres []int64) error {
@@ -474,7 +544,10 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		if err != nil {
 			return err
 		}
-		return m.enregistrerMembres(ctx, q, e.ID, s.membres)
+		if err := m.enregistrerMembres(ctx, q, e.ID, s.membres); err != nil {
+			return err
+		}
+		return enregistrerContacts(ctx, q, e.ID, s.contacts)
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -509,7 +582,10 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		}); err != nil {
 			return err
 		}
-		return m.enregistrerMembres(ctx, q, e.ID, s.membres)
+		if err := m.enregistrerMembres(ctx, q, e.ID, s.membres); err != nil {
+			return err
+		}
+		return enregistrerContacts(ctx, q, e.ID, s.contacts)
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)

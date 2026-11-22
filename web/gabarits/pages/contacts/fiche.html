@@ -2,26 +2,33 @@
 {{$c := .C}}
 {{with .Donnees}}
 <section class="titre-page">
-  <a class="retour" href="{{if .Adresses}}/adresses{{else}}/anniversaires{{end}}">‹ {{if .Adresses}}Adresses{{else}}Anniversaires{{end}}</a>
-  <h1>{{.Contact.Nom}}</h1>
-  <p>{{.Relation}}</p>
+  <a class="retour" href="{{.Retour}}">‹ {{.TitreRetour}}</a>
+  <h1>{{.Contact.Nom}}{{if .Contact.Favori}} ⭐{{end}}</h1>
+  <p>{{if .Contact.Metier}}{{.Contact.Metier}}{{if .Contact.Societe}} · {{.Contact.Societe}}{{end}}{{else if .Contact.Societe}}{{.Contact.Societe}}{{else}}{{.Relation}}{{end}}</p>
 </section>
 <div class="actions-contact">
-  {{if .Tel}}<a class="action" href="tel:{{.Tel}}"><span class="emoji">📞</span>Appeler</a>
-  <a class="action" href="sms:{{.Tel}}"><span class="emoji">💬</span>SMS</a>{{end}}
+  {{- range $i, $t := .Telephones}}{{if eq $i 0}}
+  <a class="action" href="tel:{{$t.Lien}}"><span class="emoji">📞</span>Appeler</a>
+  <a class="action" href="sms:{{$t.Lien}}"><span class="emoji">💬</span>SMS</a>{{end}}{{end}}
   {{if .Contact.Email}}<a class="action" href="mailto:{{.Contact.Email}}"><span class="emoji">✉️</span>E-mail</a>{{end}}
   {{if .Carte}}<a class="action" href="{{.Carte}}" target="_blank" rel="noopener noreferrer"><span class="emoji">🗺️</span>Plan</a>{{end}}
+  {{if .Site}}<a class="action" href="{{.Site}}" target="_blank" rel="noopener noreferrer"><span class="emoji">🌐</span>Site</a>{{end}}
 </div>
 <section class="carte bloc fiche">
-  {{if .Contact.Telephone}}<div class="ligne"><span class="p-emoji">📞</span><span class="quoi">{{.Contact.Telephone}}</span></div>{{end}}
+  {{- range .Telephones}}<div class="ligne"><span class="p-emoji">📞</span><a class="quoi" href="tel:{{.Lien}}">{{.Numero}}<small>{{.Nom}}</small></a></div>{{end}}
   {{if .Contact.Email}}<div class="ligne"><span class="p-emoji">✉️</span><span class="quoi">{{.Contact.Email}}</span></div>{{end}}
   {{if .Contact.Adresse}}<div class="ligne"><span class="p-emoji">🏠</span><span class="quoi texte-long">{{.Contact.Adresse}}</span></div>{{end}}
   {{if .Naissance}}<div class="ligne"><span class="p-emoji">🎂</span><span class="quoi">{{.Naissance}}</span></div>{{end}}
   {{if .Contact.Idees}}<div class="ligne"><span class="p-emoji">🎁</span><span class="quoi texte-long">{{.Contact.Idees}}</span></div>{{end}}
   {{if .Contact.Notes}}<div class="ligne"><span class="p-emoji">📝</span><span class="quoi texte-long">{{.Contact.Notes}}</span></div>{{end}}
+  {{if .Groupes}}<div class="ligne"><span class="p-emoji">🏷️</span><span class="quoi">{{range .Groupes}}<a class="pastille ctous" href="/contacts?filtre={{.}}">{{.}}</a> {{end}}</span></div>{{end}}
 </section>
+{{if .Prestataire}}<a class="lien-recurrences bloc" href="/prestataires/{{.Contact.ID}}">🧰 Rendez-vous et interventions <span class="fleche-droite">›</span></a>{{end}}
 <div class="boutons">
   <a class="bouton" href="/contacts/{{.Contact.ID}}/modifier">✏️ Modifier</a>
+  <form method="post" action="/contacts/{{.Contact.ID}}/favori">
+    {{template "jeton" $c.CSRF}}<button class="bouton secondaire">{{if .Contact.Favori}}☆ Retirer des favoris{{else}}⭐ Favori{{end}}</button>
+  </form>
   {{if $c.EstParent}}
   <form method="post" action="/contacts/{{.Contact.ID}}/supprimer" hx-confirm="Supprimer {{.Contact.Nom}} ?">
     {{template "jeton" $c.CSRF}}<button class="bouton danger">Supprimer</button>

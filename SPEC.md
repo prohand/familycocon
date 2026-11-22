@@ -135,3 +135,20 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
 - Agenda : les modules peuvent y montrer des éléments discrets (`AjouterCalendrier`).
   Les tâches « chaque jour » et « certains jours » y sont, à partir de leur
   création. Filtre « Toutes / Les miennes / Masquées » gardé dans un cookie.
+
+## 10. Contacts, carnet central
+- Une seule table `contacts` (migration 0017) : Contacts (tout le carnet),
+  Adresses (ceux qui ont une adresse), Anniversaires (ceux qui ont une date)
+  et Prestataires (ceux marqués « pro ») en sont des vues. Une seule fiche,
+  modifiable partout.
+- Les anciens prestataires sont devenus des contacts « pro » ; leurs
+  échéances et interventions ont suivi (table `prestataires` supprimée).
+- Animaux (`veterinaire_id`), Véhicules (`garage_id`, `assureur_id`) et Agenda
+  (`evenements_contacts`) citent un contact ; s'il est supprimé, le lien
+  disparaît, la fiche reste.
+- Groupes : étiquettes libres dans une colonne (séparées par des virgules,
+  10 au plus).
+- vCard écrit à la main : export 3.0 (lignes pliées à 75 octets), import
+  2.1 / 3.0 / 4.0 (quoted-printable, Latin-1, anniversaire sans année,
+  « 1604 » d'Apple). Photos ignorées. Doublon = même nom et même téléphone.
+  Import et export réservés aux parents ; 8 Mo au plus pour l'envoi.

@@ -185,3 +185,61 @@ func TestMigrationFixes(t *testing.T) {
 		t.Fatalf("%d opérations liées, attendu 2", liees)
 	}
 }
+
+// 0017 : les prestataires deviennent des contacts « pro » ; leurs échéances
+// et leur carnet suivent le nouvel identifiant.
+func TestMigrationPrestataires(t *testing.T) {
+	ctx := context.Background()
+	db, err := Ouvrir(filepath.Join(t.TempDir(), NomFichier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	migs, err := lireMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Version(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range migs[:16] {
+		if err := appliquer(ctx, db, m); err != nil {
+			t.Fatal(m.nom, err)
+		}
+	}
+	for _, q := range []string{
+		`INSERT INTO familles (id, nom, cree_le) VALUES (1, 'Martin', 0)`,
+		// Un contact existant (id 1) : le prestataire 1 deviendra le contact 2.
+		`INSERT INTO contacts (id, famille_id, nom, cree_le, modifie_le) VALUES (1, 1, 'Mamie', 0, 0)`,
+		`INSERT INTO prestataires (id, famille_id, nom, metier, telephone, site, cree_le) VALUES (1, 1, 'Plomberie Martin', 'Plombier', '0612', 'https://p.example', 0)`,
+		`INSERT INTO echeances (famille_id, module, objet_id, libelle, jour, cree_le) VALUES (1, 'prestataires', 1, 'Entretien', '2027-01-01', 0)`,
+		`INSERT INTO carnet (famille_id, module, objet_id, jour, libelle, montant, cree_le) VALUES (1, 'prestataires', 1, '2026-10-01', 'Fuite', 9000, 0)`,
+		`INSERT INTO vehicules (id, famille_id, nom, cree_le) VALUES (1, 1, 'Clio', 0)`,
+		`INSERT INTO echeances (famille_id, module, objet_id, libelle, jour, cree_le) VALUES (1, 'vehicules', 1, 'CT', '2027-01-01', 0)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	if _, err := Migrer(ctx, db, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	var id, pro int
+	var metier, site string
+	if err := db.QueryRowContext(ctx, `SELECT id, pro, metier, site FROM contacts WHERE nom = 'Plomberie Martin'`).Scan(&id, &pro, &metier, &site); err != nil {
+		t.Fatal(err)
+	}
+	if id != 2 || pro != 1 || metier != "Plombier" || site != "https://p.example" {
+		t.Fatalf("contact : %d %d %s %s", id, pro, metier, site)
+	}
+	var e, c, v int
+	_ = db.QueryRowContext(ctx, `SELECT objet_id FROM echeances WHERE module = 'prestataires'`).Scan(&e)
+	_ = db.QueryRowContext(ctx, `SELECT objet_id FROM carnet WHERE module = 'prestataires'`).Scan(&c)
+	_ = db.QueryRowContext(ctx, `SELECT objet_id FROM echeances WHERE module = 'vehicules'`).Scan(&v)
+	if e != 2 || c != 2 || v != 1 {
+		t.Fatalf("suivi : échéance %d, carnet %d, véhicule %d", e, c, v)
+	}
+	if _, err := db.ExecContext(ctx, `SELECT 1 FROM prestataires`); err == nil {
+		t.Fatal("table prestataires encore là")
+	}
+}
