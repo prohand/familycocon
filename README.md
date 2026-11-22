@@ -235,7 +235,7 @@ deploy/               exemples Nginx et Traefik
 scripts/              sauvegarde et restauration
 ```
 
-Une version se publie en poussant un tag `vX.Y.Z`. La CI construit l'image amd64 + arm64 sur `ghcr.io` et une Release avec les binaires.
+Publier une version, sans terminal : sur GitHub, *Actions* › *Release* › *Run workflow*, puis saisir la version (ex. `0.1.0`). On peut aussi pousser un tag `vX.Y.Z`. La CI refait les tests, publie l'image amd64 + arm64 sur `ghcr.io`, crée le tag et la Release avec les binaires.
 
 Les choix techniques et le modèle de menaces sont dans [`SPEC.md`](SPEC.md), l'avancement dans [`PROGRES.md`](PROGRES.md).
 

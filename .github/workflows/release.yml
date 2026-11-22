@@ -1,12 +1,23 @@
-# Publication d'une version : pousser un tag « vX.Y.Z » (ex. v0.1.0).
-#   - image ghcr.io/<propriétaire>/familycocon:X.Y.Z (+ :latest pour une
+# Publication d'une version, de deux façons :
+#   - depuis GitHub, sans terminal : Actions › Release › Run workflow, puis
+#     saisir la version (ex. 0.1.0). Le tag vX.Y.Z est créé sur le commit
+#     de la branche choisie (main) ;
+#   - ou en poussant un tag « vX.Y.Z ».
+# Publie :
+#   - l'image ghcr.io/<propriétaire>/familycocon:X.Y.Z (+ :latest pour une
 #     version finale, pas pour une préversion « -rc1 »), amd64 et arm64 ;
-#   - Release GitHub avec les binaires linux/amd64 et linux/arm64.
+#   - une Release GitHub avec les binaires linux/amd64 et linux/arm64.
 name: Release
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version à publier, sans « v » (ex. 0.1.0)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -15,8 +26,46 @@ env:
   GOTOOLCHAIN: go1.27.4
 
 jobs:
+  preparation:
+    name: Version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Version et tag
+        id: version
+        env:
+          SAISIE: ${{ inputs.version }}
+          REF: ${{ github.ref_name }}
+          EVENEMENT: ${{ github.event_name }}
+        run: |
+          set -eu
+          if [ "$EVENEMENT" = "workflow_dispatch" ]; then
+            version="${SAISIE#v}"
+            # Le tag ne doit pas déjà exister (pas de version publiée deux fois).
+            if git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+              echo "::error::le tag v$version existe déjà"
+              exit 1
+            fi
+          else
+            version="${REF#v}"
+          fi
+          if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::version invalide : $version (attendu : X.Y.Z ou X.Y.Z-rc1)"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
   verification:
     name: Contrôles et tests
+    needs: preparation
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -32,7 +81,7 @@ jobs:
 
   image:
     name: Image Docker publiée
-    needs: verification
+    needs: [preparation, verification]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -52,15 +101,13 @@ jobs:
       - name: Étiquettes (X.Y.Z, et latest pour une version finale)
         id: etiquettes
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.preparation.outputs.version }}
         run: |
           set -eu
-          version="${TAG#v}"
           proprio=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
           base="ghcr.io/$proprio/familycocon"
-          tags="$base:$version"
-          if [ "${version#*-}" = "$version" ]; then tags="$tags,$base:latest"; fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          tags="$base:$VERSION"
+          if [ "${VERSION#*-}" = "$VERSION" ]; then tags="$tags,$base:latest"; fi
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
       - name: Construction et publication
         uses: docker/build-push-action@v7
@@ -75,12 +122,12 @@ jobs:
           no-cache: true
           tags: ${{ steps.etiquettes.outputs.tags }}
           build-args: |
-            VERSION=${{ steps.etiquettes.outputs.version }}
+            VERSION=${{ needs.preparation.outputs.version }}
             COMMIT=${{ github.sha }}
 
   release:
     name: Release GitHub (binaires)
-    needs: verification
+    needs: [preparation, verification, image]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -95,17 +142,18 @@ jobs:
           cache: false
       - name: Binaires
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.preparation.outputs.version }}
         run: |
           set -eu
-          make binaires VERSION="${TAG#v}"
+          make binaires VERSION="$VERSION"
           cd dist && sha256sum familycocon-* > SHA256SUMS
-      - name: Publication
+      - name: Publication (crée le tag s'il n'existe pas encore)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ needs.preparation.outputs.tag }}
         run: |
           set -eu
           pre=""
           if [ "${TAG#*-}" != "$TAG" ]; then pre="--prerelease"; fi
-          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --title "FamilyCocon $TAG" --generate-notes $pre
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "FamilyCocon $TAG" --generate-notes $pre
