@@ -73,7 +73,7 @@ func NouveauNavigateur(t *testing.T, srv *httptest.Server) *Navigateur {
 	return &Navigateur{t: t, srv: srv, C: &http.Client{Jar: jar}}
 }
 
-var reJeton = regexp.MustCompile(`name="_jeton" value="([^"]+)"`)
+var reJeton = regexp.MustCompile(`name="_jeton" value="([^"]+)"|"X-Jeton": "([^"]+)"`)
 
 func (n *Navigateur) lire(rep *http.Response, err error) (int, string) {
 	n.t.Helper()
@@ -83,7 +83,7 @@ func (n *Navigateur) lire(rep *http.Response, err error) (int, string) {
 	defer rep.Body.Close()
 	b, _ := io.ReadAll(rep.Body)
 	if m := reJeton.FindSubmatch(b); m != nil {
-		n.Jeton = string(m[1])
+		n.Jeton = string(m[1]) + string(m[2])
 	}
 	return rep.StatusCode, string(b)
 }

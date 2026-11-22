@@ -55,6 +55,8 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		},
 		"ajouter":  func(a, b int) int { return a + b },
 		"couleurs": func() []int { return []int{1, 2, 3, 4, 5, 6, 7, 8} },
+		// {{etoiles 3}} → ⭐⭐⭐
+		"etoiles": func(n int) string { return strings.Repeat("⭐", n) },
 		// Initiales des jours, index 1 (lundi) à 7 (dimanche).
 		"joursSemaine": func() []string { return []string{"", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"} },
 	}

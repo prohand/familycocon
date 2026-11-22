@@ -57,6 +57,9 @@ var raccourcisFixes = []Raccourci{
 // RaccourcisParDefaut : la barre d'un nouveau membre.
 const RaccourcisParDefaut = "accueil,agenda,courses,moi"
 
+// RaccourcisEnfant : la barre d'un nouvel enfant.
+const RaccourcisEnfant = "accueil,enfants,taches,moi"
+
 // RaccourcisPossibles : ce qu'un membre peut mettre dans sa barre
 // (modules activés et permis, plus Accueil, Moi et, pour un parent, Famille).
 func RaccourcisPossibles(c *Contexte) []Raccourci {

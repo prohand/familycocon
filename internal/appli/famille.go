@@ -131,11 +131,15 @@ func (a *App) ajouterEnfant(w http.ResponseWriter, r *http.Request, c *Contexte)
 				return err
 			}
 		}
-		_, err = q.CreerMembre(ctx, donnees.CreerMembreParams{
+		enfant, err := q.CreerMembre(ctx, donnees.CreerMembreParams{
 			FamilleID: c.Famille.ID, Nom: prenom, Role: RoleEnfant, Couleur: couleur,
 			Pin: sql.NullString{String: pin, Valid: true}, CreeLe: time.Now().Unix(),
 		})
-		return err
+		if err != nil {
+			return err
+		}
+		// La barre du bas d'un enfant mène d'abord à son espace.
+		return q.ModifierRaccourcis(ctx, donnees.ModifierRaccourcisParams{Raccourcis: RaccourcisEnfant, ID: enfant.ID})
 	})
 	if err != nil {
 		a.ErreurInterne(w, r, err)

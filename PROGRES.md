@@ -10,7 +10,7 @@
 | 5. Agenda (mois, semaine) | **fait** |
 | 6. Menus de la semaine → courses | **fait** |
 | 7. Budget + courbe SVG | **fait** |
-| 8. Espace enfants (étoiles, récompenses) | à faire |
+| 8. Espace enfants (étoiles, récompenses) | **fait** |
 | 9. PWA + Web Push | à faire |
 | 10. Sauvegarde / restauration, README, mesures finales | à faire |
 

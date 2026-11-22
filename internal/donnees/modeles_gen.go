@@ -15,6 +15,17 @@ type Appareil struct {
 	VueLe     int64
 }
 
+type Echange struct {
+	ID           int64
+	RecompenseID int64
+	EnfantID     int64
+	Prix         int64
+	Etat         string
+	DemandeLe    int64
+	DecidePar    sql.NullInt64
+	DecideLe     sql.NullInt64
+}
+
 type Evenement struct {
 	ID         int64
 	FamilleID  int64
@@ -73,6 +84,31 @@ type Membre struct {
 	CreeLe      int64
 }
 
+type Mission struct {
+	ID         int64
+	FamilleID  int64
+	EnfantID   int64
+	Titre      string
+	Emoji      string
+	Etoiles    int64
+	Categorie  string
+	Repetition string
+	Active     int64
+	CreePar    sql.NullInt64
+	CreeLe     int64
+}
+
+type MissionFaite struct {
+	ID         int64
+	MissionID  int64
+	Occurrence string
+	Etat       string
+	Etoiles    int64
+	CocheLe    int64
+	DecidePar  sql.NullInt64
+	DecideLe   sql.NullInt64
+}
+
 type Operation struct {
 	ID        int64
 	FamilleID int64
@@ -118,6 +154,16 @@ type Recette struct {
 	Ingredients string
 	Compte      int64
 	VuLe        int64
+}
+
+type Recompense struct {
+	ID        int64
+	FamilleID int64
+	Titre     string
+	Emoji     string
+	Prix      int64
+	Active    int64
+	CreeLe    int64
 }
 
 type Repas struct {
