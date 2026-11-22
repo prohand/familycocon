@@ -7,6 +7,7 @@ import (
 	"context"
 	"html/template"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -44,7 +45,10 @@ type Ajout struct {
 func (a *App) AjouterResume(module string, f ResumeFunc) { a.resumes[module] = f }
 
 // AjouterBloc : le module ajoute un bloc à l'accueil.
-func (a *App) AjouterBloc(b BlocAccueil) { a.blocs = append(a.blocs, b) }
+func (a *App) AjouterBloc(b BlocAccueil) {
+	a.blocs = append(a.blocs, b)
+	sort.SliceStable(a.blocs, func(i, j int) bool { return a.blocs[i].Ordre < a.blocs[j].Ordre })
+}
 
 // AjouterAction : le module ajoute une action au bouton « + ».
 func (a *App) AjouterAction(aj Ajout) { a.ajouts = append(a.ajouts, aj) }

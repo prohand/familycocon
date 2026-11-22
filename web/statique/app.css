@@ -814,6 +814,49 @@ progress.progres::-moz-progress-bar { background: linear-gradient(90deg, var(--c
 .reglages-liste > summary { cursor: pointer; font-weight: 800; }
 .reglages-liste form { margin-top: 12px; }
 
+
+/* ---------- Tâches ---------- */
+.barre-actions { display: flex; align-items: center; gap: 10px; }
+.barre-actions .pilules { flex: 1; min-width: 0; }
+.liste-taches { padding-top: 6px; padding-bottom: 6px; }
+.liste-taches.discret { opacity: .75; }
+.ligne.tache .quoi small { font-size: .8rem; }
+button.coche { background: transparent; cursor: pointer; padding: 0; }
+button.coche:hover { border-color: var(--taches-t); }
+.coche.cochee { background: var(--taches-t); border-color: var(--taches-t); animation: pop .3s ease; }
+.coche.cochee::after { transform: rotate(45deg) scale(1); }
+.coche.attente { border-style: dashed; }
+.ligne.faite .quoi { opacity: .5; text-decoration: line-through; text-decoration-thickness: 2px; }
+.ligne.faite .quoi small { text-decoration: none; display: block; }
+.scores { display: flex; gap: 18px; flex-wrap: wrap; }
+.score { display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 700; font-size: .85rem; }
+.score b { font-size: 1.3rem; color: var(--taches-t); }
+.jour-histo { font-size: .85rem; color: var(--texte-doux); margin: 12px 0 2px; text-transform: none; }
+.jour-histo:first-child { margin-top: 0; }
+
+/* Choix de la répétition */
+.repetition { border: 0; padding: 0; margin: 14px 0; }
+.repetition legend { font-weight: 800; font-size: .9rem; margin-bottom: 8px; padding: 0; }
+.pilules-choix, .jours-semaine { display: flex; flex-wrap: wrap; gap: 8px; }
+.pilules-choix label, .jours-semaine label { position: relative; cursor: pointer; }
+.pilules-choix input, .jours-semaine input { position: absolute; opacity: 0; }
+.pilules-choix span, .jours-semaine span {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--bordure);
+  background: var(--fond);
+  font-weight: 800;
+  font-size: .88rem;
+  color: var(--texte-doux);
+  transition: background .15s, color .15s;
+}
+.pilules-choix input:checked + span, .jours-semaine input:checked + span { background: var(--texte); border-color: var(--texte); color: var(--fond); }
+.pilules-choix input:focus-visible + span, .jours-semaine input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
+.jours-semaine { display: none; margin-top: 10px; }
+.jours-semaine span { width: 46px; padding: 8px 0; text-align: center; }
+.repetition:has(input[value="jours"]:checked) .jours-semaine { display: flex; }
+
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

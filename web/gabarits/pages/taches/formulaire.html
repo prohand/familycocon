@@ -1,0 +1,27 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/taches">‹ Tâches</a>
+  <h1>{{if .Nouvelle}}✨ Nouvelle tâche{{else}}✏️ {{.Tache.Titre}}{{end}}</h1>
+</section>
+<form class="carte" method="post" action="{{if .Nouvelle}}/taches{{else}}/taches/{{.Tache.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  <label class="champ"><span>Quoi ?</span>
+    <input name="titre" value="{{.Tache.Titre}}" placeholder="Ex. : Sortir les poubelles" maxlength="80" required{{if .Nouvelle}} autofocus{{end}}></label>
+  <label class="champ"><span>Pour qui ?</span>
+    <select name="assigne">
+      <option value="0">Tout le monde</option>
+      {{- range .Membres}}<option value="{{.ID}}"{{if and $.Donnees.Tache.AssigneA.Valid (eq .ID $.Donnees.Tache.AssigneA.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}
+    </select></label>
+  {{template "choix-repetition" .Regle}}
+  <div class="boutons"><button class="bouton">{{if .Nouvelle}}Ajouter la tâche{{else}}Enregistrer{{end}}</button></div>
+</form>
+{{if and (not .Nouvelle) $c.EstParent}}
+<form class="bloc" method="post" action="/taches/{{.Tache.ID}}/supprimer" hx-confirm="Supprimer cette tâche ? (l'historique est gardé)">
+  {{template "jeton" $c.CSRF}}
+  <button class="bouton danger">Supprimer la tâche</button>
+</form>
+{{end}}
+{{end}}
+{{end}}

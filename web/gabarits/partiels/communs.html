@@ -23,3 +23,26 @@
   <label class="champ"><span>Le même, encore une fois</span>
     <input type="password" name="mdp2" autocomplete="new-password" minlength="10" maxlength="128" required></label>
 {{end}}
+
+{{/* Choix de la répétition (tâches ménagères, espace enfants) : reçoit une
+     repetition.Regle. Les cases des jours ne s'affichent que pour
+     « Certains jours » (CSS :has). */}}
+{{define "choix-repetition"}}
+<fieldset class="repetition">
+  <legend>Quand ?</legend>
+  <div class="pilules-choix">
+    <label><input type="radio" name="repetition" value="unique"{{if eq .Type ""}} checked{{end}}><span>Une fois</span></label>
+    <label><input type="radio" name="repetition" value="jour"{{if eq .Type "jour"}} checked{{end}}><span>Chaque jour</span></label>
+    <label><input type="radio" name="repetition" value="jours"{{if eq .Type "jours"}} checked{{end}}><span>Certains jours</span></label>
+    <label><input type="radio" name="repetition" value="semaine"{{if eq .Type "semaine"}} checked{{end}}><span>Chaque semaine</span></label>
+  </div>
+  <div class="jours-semaine">
+    {{- range $i, $nom := joursSemaine}}{{if $i}}
+    <label><input type="checkbox" name="jour{{$i}}" value="1"{{if index $.Jours $i}} checked{{end}}><span>{{$nom}}</span></label>
+    {{- end}}{{end}}
+  </div>
+</fieldset>
+{{end}}
+
+{{/* Avatar d'un membre (ou « tout le monde » si nil). */}}
+{{define "avatar-petit"}}{{if .}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{else}}<span class="avatar petit ctous" title="Tout le monde">∗</span>{{end}}{{end}}

@@ -142,3 +142,18 @@ func TestMontant(t *testing.T) {
 		}
 	}
 }
+
+func TestNotifierASCII(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Notifier(rec, "Bravo Léa ! 🎉", false)
+	h := rec.Header().Get("HX-Trigger")
+	for _, r := range h {
+		if r > 127 {
+			t.Fatalf("caractère non ASCII dans l'en-tête : %q", h)
+		}
+	}
+	var v map[string]map[string]any
+	if err := json.Unmarshal([]byte(h), &v); err != nil || v["fc-toast"]["texte"] != "Bravo Léa ! 🎉" {
+		t.Fatalf("relu : %v (%v)", v, err)
+	}
+}

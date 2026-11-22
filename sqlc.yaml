@@ -15,3 +15,7 @@ sql:
         output_files_suffix: _gen
         output_db_file_name: db_gen.go
         output_models_file_name: modeles_gen.go
+        # Noms au singulier que sqlc ne sait pas deviner en français.
+        rename:
+          tach: Tache
+          taches_faite: TacheFaite

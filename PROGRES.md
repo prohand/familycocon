@@ -6,7 +6,7 @@
 | 1. Socle : config, base, serveur, /health, Docker, CI | **fait** |
 | 2. Comptes, rôles, invitations, PIN, réglages (modules, raccourcis) | **fait** |
 | 3. Courses + temps réel (SSE) + notifications | **fait** |
-| 4. Tâches ménagères | à faire |
+| 4. Tâches ménagères | **fait** |
 | 5. Agenda (mois, semaine) | à faire |
 | 6. Menus de la semaine → courses | à faire |
 | 7. Budget + courbe SVG | à faire |

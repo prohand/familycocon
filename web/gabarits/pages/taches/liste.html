@@ -1,0 +1,101 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>✅ Tâches</h1>
+  <p>Qui fait quoi à la maison</p>
+</section>
+<div class="barre-actions">
+  <nav class="pilules" aria-label="Filtrer">
+    <a class="pilule{{if eq .Pour 0}} active{{end}}" href="/taches">Toutes</a>
+    {{- range .Membres}}
+    <a class="pilule{{if eq .ID $.Donnees.Pour}} active{{end}}" href="/taches?pour={{.ID}}">{{.Nom}}</a>
+    {{- end}}
+  </nav>
+  <a class="bouton" href="/taches/nouvelle">＋ Tâche</a>
+</div>
+{{template "taches" $}}
+{{end}}
+{{end}}
+
+{{define "taches"}}
+{{$c := .C}}
+{{with .Donnees}}
+<div id="taches" hx-get="/taches/contenu?pour={{.Pour}}" hx-trigger="maj-taches from:body delay:300ms" hx-swap="outerHTML">
+  <section class="bloc">
+    <div class="section-titre"><h2>Aujourd'hui</h2><span class="aide">{{pluriel (len .AFaire) "à faire" "à faire"}}</span></div>
+    <div class="carte liste-taches">
+      {{- range .AFaire}}{{template "ligne-tache" dict "L" . "Pour" $.Donnees.Pour}}{{end}}
+      {{- range .Faites}}{{template "ligne-tache" dict "L" . "Pour" $.Donnees.Pour}}{{end}}
+      {{- if not (or .AFaire .Faites)}}<p class="vide"><span class="emoji">🌤️</span>Rien à faire aujourd'hui.</p>{{end}}
+    </div>
+  </section>
+
+  {{if .PlusTard}}
+  <section class="bloc">
+    <div class="section-titre"><h2>Les autres jours</h2></div>
+    <div class="carte liste-taches discret">
+      {{- range .PlusTard}}{{template "ligne-tache" dict "L" . "Pour" $.Donnees.Pour}}{{end}}
+    </div>
+  </section>
+  {{end}}
+
+  {{if .Scores}}
+  <section class="bloc">
+    <div class="section-titre"><h2>🏆 Cette semaine</h2></div>
+    <div class="carte scores">
+      {{- range .Scores}}
+      <div class="score"><span class="avatar c{{.Membre.Couleur}}">{{initiale .Membre.Nom}}</span><b>{{.Nombre}}</b><span>{{.Membre.Nom}}</span></div>
+      {{- end}}
+    </div>
+  </section>
+  {{end}}
+
+  {{if .Histo}}
+  <section class="bloc">
+    <div class="section-titre"><h2>📜 Qui a fait quoi</h2></div>
+    <div class="carte">
+      {{- range .Histo}}
+      <h3 class="jour-histo">{{.Jour}}</h3>
+      {{- range .Lignes}}
+      <div class="ligne"><span class="heure">{{.Heure}}</span><span>{{.Emoji}}</span><span class="quoi">{{.Titre}}</span>{{template "avatar-petit" .ParQui}}</div>
+      {{- end}}
+      {{- end}}
+    </div>
+  </section>
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "ligne-tache"}}
+{{$l := .L}}
+<div class="ligne tache{{if $l.Faite}} faite{{end}}">
+  {{- if $l.Faite}}
+  <button class="coche cochee"{{if $l.Decochable}} hx-post="/taches/{{$l.ID}}/defaire" hx-vals='{"pour": "{{$.Pour}}"}' hx-target="#taches" hx-swap="outerHTML" aria-label="Décocher {{$l.Titre}}"{{else}} disabled aria-label="Fait"{{end}}></button>
+  {{- else if $l.AFaire}}
+  <button class="coche" hx-post="/taches/{{$l.ID}}/faire" hx-vals='{"pour": "{{$.Pour}}"}' hx-target="#taches" hx-swap="outerHTML" aria-label="J'ai fait {{$l.Titre}}"></button>
+  {{- else}}
+  <span class="coche attente" title="Pas aujourd'hui"></span>
+  {{- end}}
+  <span class="p-emoji">{{$l.Emoji}}</span>
+  <span class="quoi">{{$l.Titre}}
+    <small>{{if $l.Faite}}{{with $l.ParQui}}par {{.Nom}} {{end}}à {{$l.FaiteLe}}{{else}}{{with $l.Assigne}}{{.Nom}}{{else}}Tout le monde{{end}} · {{$l.Regle.Texte}}{{end}}</small></span>
+  {{template "avatar-petit" $l.Assigne}}
+  {{if $l.Modifiable}}<a class="crayon" href="/taches/{{$l.ID}}/modifier" aria-label="Modifier {{$l.Titre}}">✏️</a>{{end}}
+</div>
+{{end}}
+
+{{/* Bloc de l'accueil : tâches du jour pas encore faites. */}}
+{{define "accueil-taches"}}
+<div class="section-titre"><h2>Tâches du jour</h2><a href="/taches">Tout voir ›</a></div>
+<div class="carte">
+  {{- range .Donnees}}
+  <div class="ligne">
+    {{template "avatar-petit" .Assigne}}
+    <span>{{.Emoji}}</span>
+    <span class="quoi">{{.Titre}}<small>{{.Regle.Texte}}</small></span>
+  </div>
+  {{- end}}
+</div>
+{{end}}

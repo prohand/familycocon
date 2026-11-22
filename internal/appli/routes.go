@@ -5,9 +5,12 @@ package appli
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 // Gestionnaire : une page ou une action pour un membre connecté.
@@ -93,7 +96,26 @@ func (a *App) RedirigerComplet(w http.ResponseWriter, r *http.Request, url strin
 // requête htmx (événement « fc-toast » lu par app.js).
 func Notifier(w http.ResponseWriter, texte string, erreur bool) {
 	b, _ := json.Marshal(map[string]any{"fc-toast": map[string]any{"texte": texte, "erreur": erreur}})
-	w.Header().Set("HX-Trigger", string(b))
+	w.Header().Set("HX-Trigger", jsonASCII(b))
+}
+
+// jsonASCII : les navigateurs lisent les en-têtes HTTP en latin-1 ; les
+// accents et emojis sont donc écrits \uXXXX dans le JSON (paires de
+// substitution UTF-16 au-delà de U+FFFF).
+func jsonASCII(b []byte) string {
+	var s strings.Builder
+	for _, r := range string(b) {
+		switch {
+		case r < 0x80:
+			s.WriteRune(r)
+		case r <= 0xFFFF:
+			fmt.Fprintf(&s, "\\u%04x", r)
+		default:
+			r1, r2 := utf16.EncodeRune(r)
+			fmt.Fprintf(&s, "\\u%04x\\u%04x", r1, r2)
+		}
+	}
+	return s.String()
 }
 
 // Flash : notification affichée sur la PAGE SUIVANTE (après une redirection).

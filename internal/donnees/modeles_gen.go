@@ -86,3 +86,23 @@ type Session struct {
 	VueLe     int64
 	ExpireLe  int64
 }
+
+type Tache struct {
+	ID         int64
+	FamilleID  int64
+	Titre      string
+	Emoji      string
+	AssigneA   sql.NullInt64
+	Repetition string
+	Active     int64
+	CreePar    sql.NullInt64
+	CreeLe     int64
+}
+
+type TacheFaite struct {
+	ID         int64
+	TacheID    int64
+	Occurrence string
+	FaitPar    sql.NullInt64
+	FaitLe     int64
+}
