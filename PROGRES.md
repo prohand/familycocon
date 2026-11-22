@@ -8,7 +8,7 @@
 | 3. Courses + temps réel (SSE) + notifications | **fait** |
 | 4. Tâches ménagères | **fait** |
 | 5. Agenda (mois, semaine) | **fait** |
-| 6. Menus de la semaine → courses | à faire |
+| 6. Menus de la semaine → courses | **fait** |
 | 7. Budget + courbe SVG | à faire |
 | 8. Espace enfants (étoiles, récompenses) | à faire |
 | 9. PWA + Web Push | à faire |

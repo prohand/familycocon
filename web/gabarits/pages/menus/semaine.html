@@ -1,0 +1,53 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>🍽️ Menus</h1>
+  <p>Qu'est-ce qu'on mange ?</p>
+</section>
+{{template "menus" $}}
+{{end}}
+{{end}}
+
+{{define "menus"}}
+{{with .Donnees}}
+<div id="menus" hx-get="/menus/contenu?date={{.Ref}}" hx-trigger="maj-menus from:body delay:300ms" hx-swap="outerHTML">
+  <div class="navigation-periode">
+    <a class="fleche" href="/menus?date={{.Precedent}}" aria-label="Semaine précédente">‹</a>
+    <h2>{{.Titre}}</h2>
+    <a class="fleche" href="/menus?date={{.Suivant}}" aria-label="Semaine suivante">›</a>
+  </div>
+  {{if and .Courses .AjoutPossible}}
+  <p class="centre">
+    <button class="bouton" hx-post="/menus/semaine/courses" hx-vals='{"date": "{{.Ref}}"}' hx-target="#menus" hx-swap="outerHTML">
+      🛒 Tous les ingrédients de la semaine aux courses</button>
+  </p>
+  {{end}}
+  <div class="semaine">
+    {{- range .Jours}}
+    <section class="carte jour-menu{{if .Aujourdhui}} aujourdhui{{end}}">
+      <h3>{{.Titre}}{{if .Aujourdhui}} <span class="etiquette">aujourd'hui</span>{{end}}</h3>
+      {{template "creneau" dict "Cr" .Midi "Courses" $.Donnees.Courses}}
+      {{template "creneau" dict "Cr" .Soir "Courses" $.Donnees.Courses}}
+    </section>
+    {{- end}}
+  </div>
+</div>
+{{end}}
+{{end}}
+
+{{define "creneau"}}
+{{$cr := .Cr}}
+<div class="creneau{{if $cr.Repas}} rempli{{end}}">
+  <span class="moment">{{$cr.Libelle}}</span>
+  {{if $cr.Repas}}
+  <a class="plat" href="/menus/{{$cr.Jour}}/{{$cr.Moment}}">{{$cr.Repas.Nom}}{{if $cr.NbIngr}}<small>{{pluriel $cr.NbIngr "ingrédient" "ingrédients"}}</small>{{end}}</a>
+  {{if and .Courses $cr.NbIngr}}
+    {{if eq $cr.Repas.DansCourses 1}}<span class="dans-courses" title="Ingrédients dans la liste de courses">🛒✓</span>
+    {{else}}<button class="mini" hx-post="/menus/{{$cr.Jour}}/{{$cr.Moment}}/courses" hx-target="#menus" hx-swap="outerHTML" title="Ajouter les ingrédients aux courses" aria-label="Ajouter les ingrédients de {{$cr.Repas.Nom}} aux courses">🛒＋</button>{{end}}
+  {{end}}
+  {{else}}
+  <a class="plat vide-plat" href="/menus/{{$cr.Jour}}/{{$cr.Moment}}">＋ Prévoir</a>
+  {{end}}
+</div>
+{{end}}

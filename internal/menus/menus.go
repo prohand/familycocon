@@ -1,0 +1,331 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+// Package menus : les menus de la semaine (midi et soir). Chaque plat a sa
+// liste d'ingrédients, qu'un clic ajoute à la liste de courses. Les plats
+// sont retenus comme recettes : la prochaine fois, leurs ingrédients
+// reviennent tout seuls.
+//
+// Droits : tout le monde propose un plat ; seuls les parents vident un créneau.
+package menus
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+	"unicode/utf8"
+
+	"familycocon/internal/appli"
+	"familycocon/internal/courses"
+	"familycocon/internal/donnees"
+	"familycocon/internal/repetition"
+)
+
+// Module : le module Menus.
+type Module struct{ a *appli.App }
+
+const mod = "menus"
+
+// Brancher ajoute les routes du module.
+func Brancher(a *appli.App) {
+	m := &Module{a: a}
+	a.Route("GET /menus", mod, appli.Membre, m.page)
+	a.Route("GET /menus/contenu", mod, appli.Membre, m.contenu)
+	a.Route("POST /menus/semaine/courses", mod, appli.Membre, m.semaineAuxCourses)
+	a.Route("GET /menus/{jour}/{moment}", mod, appli.Membre, m.formulaire)
+	a.Route("POST /menus/{jour}/{moment}", mod, appli.Membre, m.enregistrer)
+	a.Route("POST /menus/{jour}/{moment}/courses", mod, appli.Membre, m.auxCourses)
+	a.Route("POST /menus/{jour}/{moment}/vider", mod, appli.Parent, m.vider)
+
+	a.AjouterResume(mod, m.resume)
+	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "🍽️", Texte: "Un repas", URL: "/menus"})
+}
+
+// Creneau : un repas (midi ou soir) d'un jour.
+type Creneau struct {
+	Jour   string // 2026-11-22
+	Moment string // midi | soir
+	Repas  *donnees.Repas
+	NbIngr int
+}
+
+// Libelle : « ☀️ Midi », « 🌙 Soir ».
+func (c Creneau) Libelle() string {
+	if c.Moment == "midi" {
+		return "☀️ Midi"
+	}
+	return "🌙 Soir"
+}
+
+type jourMenu struct {
+	Cle        string
+	Titre      string
+	Aujourdhui bool
+	Midi, Soir Creneau
+}
+
+type vueMenus struct {
+	Titre         string
+	Ref           string
+	Precedent     string
+	Suivant       string
+	Jours         []jourMenu
+	AjoutPossible int  // plats dont les ingrédients ne sont pas encore dans les courses
+	Courses       bool // module Courses activé
+}
+
+func lignes(s string) []string {
+	var out []string
+	for _, l := range strings.Split(s, "\n") {
+		if l = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "-•*")); l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time) (*vueMenus, error) {
+	lundi := repetition.Lundi(ref)
+	dimanche := lundi.AddDate(0, 0, 6)
+	v := &vueMenus{
+		Ref:       repetition.CleJour(lundi),
+		Precedent: repetition.CleJour(lundi.AddDate(0, 0, -7)),
+		Suivant:   repetition.CleJour(lundi.AddDate(0, 0, 7)),
+		Courses:   c.Actif("courses"),
+		Titre:     fmt.Sprintf("Semaine du %d %s", lundi.Day(), appli.MoisFR(lundi.Month())),
+	}
+	repas, err := m.a.Q.RepasPeriode(ctx, donnees.RepasPeriodeParams{FamilleID: c.Famille.ID, Du: repetition.CleJour(lundi), Au: repetition.CleJour(dimanche)})
+	if err != nil {
+		return nil, err
+	}
+	trouver := func(jour, moment string) Creneau {
+		cr := Creneau{Jour: jour, Moment: moment}
+		for i := range repas {
+			if repas[i].Jour == jour && repas[i].Moment == moment {
+				cr.Repas = &repas[i]
+				cr.NbIngr = len(lignes(repas[i].Ingredients))
+				if cr.NbIngr > 0 && repas[i].DansCourses == 0 {
+					v.AjoutPossible++
+				}
+			}
+		}
+		return cr
+	}
+	aujourdhui := repetition.CleJour(c.Maintenant())
+	for j := lundi; !j.After(dimanche); j = j.AddDate(0, 0, 1) {
+		cle := repetition.CleJour(j)
+		jour := appli.JourFR(j)
+		v.Jours = append(v.Jours, jourMenu{
+			Cle: cle, Titre: strings.ToUpper(jour[:1]) + jour[1:] + fmt.Sprintf(" %d", j.Day()), Aujourdhui: cle == aujourdhui,
+			Midi: trouver(cle, "midi"), Soir: trouver(cle, "soir"),
+		})
+	}
+	return v, nil
+}
+
+func reference(r *http.Request, c *appli.Contexte) time.Time {
+	q := r.URL.Query().Get("date")
+	if q == "" {
+		q = r.PostFormValue("date")
+	}
+	if d, err := time.ParseInLocation("2006-01-02", q, c.Lieu); err == nil {
+		return d
+	}
+	return c.Maintenant()
+}
+
+func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	v, err := m.vue(r.Context(), c, reference(r, c))
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Afficher(w, r, c, "menus/semaine", "Menus", mod, v)
+}
+
+func (m *Module) renvoyer(w http.ResponseWriter, r *http.Request, c *appli.Contexte, ref time.Time) {
+	if !appli.EstHtmx(r) {
+		http.Redirect(w, r, "/menus?date="+repetition.CleJour(ref), http.StatusSeeOther)
+		return
+	}
+	v, err := m.vue(r.Context(), c, ref)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Fragment(w, r, c, "menus/semaine", "menus", v)
+}
+
+func (m *Module) contenu(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	m.renvoyer(w, r, c, reference(r, c))
+}
+
+// creneau : jour et moment de l'adresse, vérifiés.
+func creneau(r *http.Request, c *appli.Contexte) (time.Time, string, bool) {
+	j, err := time.ParseInLocation("2006-01-02", r.PathValue("jour"), c.Lieu)
+	moment := r.PathValue("moment")
+	return j, moment, err == nil && (moment == "midi" || moment == "soir")
+}
+
+type formRepas struct {
+	Creneau  Creneau
+	Titre    string
+	Recettes []string
+	Courses  bool
+}
+
+func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	j, moment, ok := creneau(r, c)
+	if !ok {
+		m.a.PageErreur(w, r, c, http.StatusNotFound, "Créneau inconnu", "Ce repas n'existe pas.")
+		return
+	}
+	f := formRepas{Creneau: Creneau{Jour: repetition.CleJour(j), Moment: moment}, Courses: c.Actif("courses")}
+	if rp, err := m.a.Q.RepasDuCreneau(ctx, donnees.RepasDuCreneauParams{FamilleID: c.Famille.ID, Jour: f.Creneau.Jour, Moment: moment}); err == nil {
+		f.Creneau.Repas = &rp
+	}
+	jour := appli.JourFR(j)
+	f.Titre = strings.ToUpper(jour[:1]) + jour[1:] + fmt.Sprintf(" %d, ", j.Day()) + map[string]string{"midi": "midi", "soir": "soir"}[moment]
+	f.Recettes, _ = m.a.Q.RecettesConnues(ctx, c.Famille.ID)
+	m.a.Afficher(w, r, c, "menus/repas", f.Titre, mod, f)
+}
+
+func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	j, moment, ok := creneau(r, c)
+	if !ok {
+		m.a.Echec(w, r, http.StatusNotFound, "Créneau inconnu.")
+		return
+	}
+	nom := strings.TrimSpace(r.PostFormValue("nom"))
+	ingr := strings.Join(lignes(r.PostFormValue("ingredients")), "\n")
+	if n := utf8.RuneCountInString(nom); n < 1 || n > 80 {
+		m.a.Echec(w, r, http.StatusBadRequest, "Le nom du plat doit faire entre 1 et 80 caractères.")
+		return
+	}
+	if utf8.RuneCountInString(ingr) > 2000 || len(lignes(ingr)) > 40 {
+		m.a.Echec(w, r, http.StatusBadRequest, "40 ingrédients au plus.")
+		return
+	}
+	cle := courses.Cle(nom)
+	// Recette connue et aucun ingrédient saisi : on reprend les siens.
+	if ingr == "" {
+		if rec, err := m.a.Q.RecetteParCle(ctx, donnees.RecetteParCleParams{FamilleID: c.Famille.ID, Cle: cle}); err == nil {
+			ingr = rec.Ingredients
+		}
+	}
+	if _, err := m.a.Q.EnregistrerRepas(ctx, donnees.EnregistrerRepasParams{
+		FamilleID: c.Famille.ID, Jour: repetition.CleJour(j), Moment: moment, Nom: nom, Ingredients: ingr,
+		CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+	}); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if err := m.a.Q.RetenirRecette(ctx, donnees.RetenirRecetteParams{FamilleID: c.Famille.ID, Cle: cle, Nom: nom, Ingredients: ingr, VuLe: time.Now().Unix()}); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Publier(c, mod, fmt.Sprintf("%s a prévu « %s » 🍽️", c.Membre.Nom, nom))
+	m.a.Flash(w, "Repas enregistré ✓")
+	m.a.Rediriger(w, r, "/menus?date="+repetition.CleJour(j))
+}
+
+func (m *Module) vider(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	j, moment, ok := creneau(r, c)
+	if !ok {
+		m.a.Echec(w, r, http.StatusNotFound, "Créneau inconnu.")
+		return
+	}
+	if err := m.a.Q.ViderRepas(r.Context(), donnees.ViderRepasParams{FamilleID: c.Famille.ID, Jour: repetition.CleJour(j), Moment: moment}); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Publier(c, mod, "")
+	m.a.Flash(w, "Créneau vidé")
+	m.a.Rediriger(w, r, "/menus?date="+repetition.CleJour(j))
+}
+
+// ajouterAuxCourses : les ingrédients d'un repas vont dans la liste de courses.
+func (m *Module) ajouterAuxCourses(ctx context.Context, c *appli.Contexte, rp donnees.Repas) (int, error) {
+	n, err := courses.AjouterProduits(ctx, m.a, c, lignes(rp.Ingredients))
+	if err != nil {
+		return n, err
+	}
+	return n, m.a.Q.MarquerDansCourses(ctx, rp.ID)
+}
+
+func (m *Module) auxCourses(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	if !c.Actif("courses") {
+		m.a.Echec(w, r, http.StatusBadRequest, "Le module Courses est désactivé.")
+		return
+	}
+	j, moment, ok := creneau(r, c)
+	if !ok {
+		m.a.Echec(w, r, http.StatusNotFound, "Créneau inconnu.")
+		return
+	}
+	rp, err := m.a.Q.RepasDuCreneau(ctx, donnees.RepasDuCreneauParams{FamilleID: c.Famille.ID, Jour: repetition.CleJour(j), Moment: moment})
+	if err != nil {
+		m.a.Echec(w, r, http.StatusNotFound, "Pas de repas à ce créneau.")
+		return
+	}
+	n, err := m.ajouterAuxCourses(ctx, c, rp)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Publier(c, "courses", fmt.Sprintf("%s a ajouté les ingrédients de « %s » aux courses 🛒", c.Membre.Nom, rp.Nom))
+	m.a.Publier(c, mod, "")
+	appli.Notifier(w, appli.Pluriel(n, "ingrédient ajouté", "ingrédients ajoutés")+" aux courses 🛒", false)
+	m.renvoyer(w, r, c, j)
+}
+
+func (m *Module) semaineAuxCourses(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	if !c.Actif("courses") {
+		m.a.Echec(w, r, http.StatusBadRequest, "Le module Courses est désactivé.")
+		return
+	}
+	ref := reference(r, c)
+	lundi := repetition.Lundi(ref)
+	repas, err := m.a.Q.RepasPeriode(ctx, donnees.RepasPeriodeParams{FamilleID: c.Famille.ID, Du: repetition.CleJour(lundi), Au: repetition.CleJour(lundi.AddDate(0, 0, 6))})
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	total := 0
+	for _, rp := range repas {
+		if rp.DansCourses == 1 || rp.Ingredients == "" {
+			continue
+		}
+		n, err := m.ajouterAuxCourses(ctx, c, rp)
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		total += n
+	}
+	if total > 0 {
+		m.a.Publier(c, "courses", fmt.Sprintf("%s a ajouté les ingrédients de la semaine aux courses 🛒", c.Membre.Nom))
+		m.a.Publier(c, mod, "")
+	}
+	appli.Notifier(w, appli.Pluriel(total, "ingrédient ajouté", "ingrédients ajoutés")+" aux courses 🛒", false)
+	m.renvoyer(w, r, c, ref)
+}
+
+func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
+	maintenant := c.Maintenant()
+	moment, libelle := "soir", "Ce soir"
+	if maintenant.Hour() < 14 {
+		moment, libelle = "midi", "Ce midi"
+	}
+	rp, err := m.a.Q.RepasDuCreneau(ctx, donnees.RepasDuCreneauParams{FamilleID: c.Famille.ID, Jour: repetition.CleJour(maintenant), Moment: moment})
+	if err != nil {
+		return appli.Resume{Info: libelle + " : à prévoir"}
+	}
+	return appli.Resume{Info: libelle + " : " + rp.Nom}
+}

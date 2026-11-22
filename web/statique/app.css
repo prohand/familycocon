@@ -940,6 +940,24 @@ button.coche:hover { border-color: var(--taches-t); }
 .choix-membres input:focus-visible + .pastille { outline: 3px solid var(--corail); outline-offset: 2px; }
 .champ textarea { resize: vertical; font-family: inherit; }
 
+
+/* ---------- Menus ---------- */
+.jour-menu { padding: 14px 18px; }
+.jour-menu.aujourdhui { box-shadow: 0 0 0 2.5px var(--menus-t), var(--ombre); }
+.jour-menu h3 { font-size: 1rem; margin-bottom: 6px; }
+.creneau { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+.creneau + .creneau { border-top: 1px solid var(--bordure); }
+.creneau .moment { width: 74px; flex: none; font-weight: 800; font-size: .85rem; color: var(--texte-doux); }
+.creneau .plat { flex: 1; min-width: 0; font-weight: 800; }
+.creneau .plat small { display: block; font-weight: 600; color: var(--texte-doux); font-size: .8rem; }
+.creneau .vide-plat { color: var(--menus-t); font-weight: 700; }
+.creneau.rempli .plat:hover { color: var(--menus-t); }
+.mini {
+  border: 0; cursor: pointer; border-radius: 999px; padding: 6px 10px;
+  background: var(--courses); color: var(--courses-t); font-weight: 800; font-size: .8rem;
+}
+.dans-courses { font-size: .8rem; font-weight: 800; color: var(--courses-t); opacity: .7; }
+
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

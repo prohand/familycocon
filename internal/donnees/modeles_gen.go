@@ -97,6 +97,27 @@ type ProduitsConnu struct {
 	VuLe      int64
 }
 
+type Recette struct {
+	FamilleID   int64
+	Cle         string
+	Nom         string
+	Ingredients string
+	Compte      int64
+	VuLe        int64
+}
+
+type Repas struct {
+	ID          int64
+	FamilleID   int64
+	Jour        string
+	Moment      string
+	Nom         string
+	Ingredients string
+	DansCourses int64
+	CreePar     sql.NullInt64
+	CreeLe      int64
+}
+
 type Session struct {
 	Empreinte []byte
 	MembreID  int64
