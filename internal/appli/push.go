@@ -206,6 +206,9 @@ func (a *App) choixNotifications(w http.ResponseWriter, r *http.Request, c *Cont
 		return
 	}
 	var choix []string
+	if r.PostForm.Get("push_"+moduleRappels) == "1" {
+		choix = append(choix, moduleRappels)
+	}
 	for _, m := range Catalogue {
 		if r.PostForm.Get("push_"+m.Cle) == "1" {
 			choix = append(choix, m.Cle)

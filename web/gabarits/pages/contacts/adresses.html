@@ -1,0 +1,30 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>📇 Adresses</h1>
+</section>
+<div class="barre-actions">
+  <form class="ajout recherche" method="get" action="/adresses">
+    <input type="search" name="q" value="{{.Recherche}}" placeholder="🔍 Chercher un nom, un numéro…" aria-label="Chercher">
+  </form>
+  <a class="bouton" href="/contacts/nouveau">＋ Contact</a>
+</div>
+{{range .Groupes}}
+<section class="bloc">
+  <h2 class="sous-titre">{{.Emoji}} {{.Nom}}</h2>
+  <div class="carte">
+    {{- range .Contacts}}
+    <a class="ligne" href="/contacts/{{.ID}}">
+      <span class="avatar petit ctous">{{initiale .Nom}}</span>
+      <span class="quoi">{{.Nom}}<small>{{if .Telephone}}📞 {{.Telephone}}{{end}}{{if and .Telephone .Email}} · {{end}}{{if .Email}}✉️ {{.Email}}{{end}}</small></span>
+      <span class="fleche-droite">›</span>
+    </a>
+    {{- end}}
+  </div>
+</section>
+{{else}}
+<div class="carte vide bloc"><span class="emoji">📇</span>{{if .Recherche}}Personne ne correspond à « {{.Recherche}} ».{{else}}Le carnet est vide : ajoutez mamie, la nounou, les voisins…{{end}}</div>
+{{end}}
+{{end}}
+{{end}}

@@ -336,7 +336,7 @@ func (a *App) inscription(w http.ResponseWriter, r *http.Request) {
 		m, err = q.CreerMembre(ctx, donnees.CreerMembreParams{
 			FamilleID: fam.ID, Nom: prenom, Role: RoleParent, Couleur: 1,
 			Identifiant: sql.NullString{String: ident, Valid: true},
-			Mdp:         sql.NullString{String: empreinte, Valid: true}, CreeLe: time.Now().Unix(),
+			Mdp:         sql.NullString{String: empreinte, Valid: true}, PushModules: PushParDefaut, CreeLe: time.Now().Unix(),
 		})
 		return err
 	})
@@ -433,7 +433,7 @@ func (a *App) accepterInvitation(w http.ResponseWriter, r *http.Request) {
 		m, err = q.CreerMembre(ctx, donnees.CreerMembreParams{
 			FamilleID: inv.FamilleID, Nom: prenom, Role: inv.Role, Couleur: couleur,
 			Identifiant: sql.NullString{String: ident, Valid: true},
-			Mdp:         sql.NullString{String: empreinte, Valid: true}, CreeLe: time.Now().Unix(),
+			Mdp:         sql.NullString{String: empreinte, Valid: true}, PushModules: PushParDefaut, CreeLe: time.Now().Unix(),
 		})
 		return err
 	})

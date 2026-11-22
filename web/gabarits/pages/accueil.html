@@ -31,3 +31,16 @@
   {{if .C.EstParent}}<p><a class="bouton" href="/famille">Activer des modules</a></p>{{end}}</div>
 {{end}}
 {{end}}
+
+{{/* Bloc « À venir » : anniversaires, échéances (rappels). */}}
+{{define "a-venir"}}
+<div class="section-titre"><h2>⏰ À venir</h2></div>
+<div class="carte">
+  {{- range .Donnees}}
+  <a class="ligne{{if .Proche}} proche{{end}}" href="{{.URL}}">
+    <span class="p-emoji">{{.Emoji}}</span>
+    <span class="quoi">{{.Titre}}<small>{{.Quand}}</small></span>
+  </a>
+  {{- end}}
+</div>
+{{end}}

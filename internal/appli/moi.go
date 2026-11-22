@@ -4,8 +4,10 @@ package appli
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"familycocon/internal/donnees"
 )
@@ -54,7 +56,16 @@ func (a *App) profilMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	if err != nil {
 		couleur = c.Membre.Couleur
 	}
+	naissance, err := lireNaissance(r.PostFormValue("naissance"))
+	if err != nil {
+		a.Echec(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
 	if err := a.Q.ModifierProfil(r.Context(), donnees.ModifierProfilParams{Nom: prenom, Couleur: couleur, ID: c.Membre.ID, FamilleID: c.Famille.ID}); err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
+	if err := a.Q.ModifierNaissance(r.Context(), donnees.ModifierNaissanceParams{Naissance: naissance, ID: c.Membre.ID, FamilleID: c.Famille.ID}); err != nil {
 		a.ErreurInterne(w, r, err)
 		return
 	}
@@ -127,4 +138,16 @@ func (a *App) mdpMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	a.Journal.Info("mot de passe changé", "membre", c.Membre.ID)
 	a.Flash(w, "Mot de passe changé ✓ (autres appareils déconnectés)")
 	a.Rediriger(w, r, "/moi")
+}
+
+// lireNaissance : date de naissance d'un membre (« » si vide).
+func lireNaissance(s string) (string, error) {
+	if s == "" {
+		return "", nil
+	}
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil || t.After(time.Now()) || t.Year() < 1900 {
+		return "", errors.New("Date de naissance invalide.")
+	}
+	return s, nil
 }

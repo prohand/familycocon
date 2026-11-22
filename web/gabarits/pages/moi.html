@@ -26,6 +26,7 @@
   <form method="post" action="/moi/profil">
     {{template "jeton" $c.CSRF}}
     <label class="champ"><span>Prénom</span><input name="prenom" value="{{$c.Membre.Nom}}" maxlength="40" required></label>
+    <label class="champ"><span>Date de naissance (pour les anniversaires)</span><input type="date" name="naissance" value="{{$c.Membre.Naissance}}"></label>
     <span class="aide">Ma couleur (agenda, listes…)</span>
     {{template "choix-couleur" dict "Nom" "couleur" "Choisie" $c.Membre.Couleur}}
     <button class="bouton">Enregistrer</button>
@@ -56,6 +57,11 @@
   <p class="aide" id="etat-push"></p>
   <form method="post" action="/moi/notifications">
     {{template "jeton" $c.CSRF}}
+    <label class="interrupteur">
+      <span class="emoji">⏰</span><span class="nom">Rappels <small class="aide">(anniversaires, échéances : le jour même et 7 jours avant)</small></span>
+      <input type="checkbox" name="push_rappels" value="1"{{if contient .Push "rappels"}} checked{{end}}>
+      <span class="glissiere"></span>
+    </label>
     {{- range .Modules}}
     <label class="interrupteur">
       <span class="emoji">{{.Emoji}}</span><span class="nom">{{.Nom}}</span>

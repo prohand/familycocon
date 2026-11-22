@@ -101,7 +101,7 @@ func (a *App) pageAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		d.Tuiles = append(d.Tuiles, t)
 	}
 	for _, b := range a.blocs {
-		if !c.Actif(b.Module) {
+		if b.Module != "" && !c.Actif(b.Module) { // "" : bloc commun (« À venir »)
 			continue
 		}
 		h, err := b.Rendre(ctx, c)

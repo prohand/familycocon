@@ -16,6 +16,7 @@ func (a *App) Demarrer(ctx context.Context) {
 	if err := a.DemarrerPush(ctx); err != nil {
 		a.Journal.Error("notifications push indisponibles", "erreur", err)
 	}
+	go a.rappelsQuotidiens(ctx)
 	if a.Config.SauvegardeA != "" {
 		go a.sauvegardesAuto(ctx)
 	}

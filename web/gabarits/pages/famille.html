@@ -32,6 +32,7 @@
       <form method="post" action="/famille/membres/{{.ID}}">
         {{template "jeton" $c.CSRF}}
         <label class="champ"><span>Prénom</span><input name="prenom" value="{{.Nom}}" maxlength="40" required></label>
+        <label class="champ"><span>Date de naissance</span><input type="date" name="naissance" value="{{.Naissance}}"></label>
         {{template "choix-couleur" dict "Nom" "couleur" "Choisie" .Couleur}}
         <button class="bouton petit">Enregistrer</button>
       </form>

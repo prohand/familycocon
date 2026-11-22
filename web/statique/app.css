@@ -1196,6 +1196,19 @@ progress.jauge.etoiles::-moz-progress-bar { background: linear-gradient(90deg, #
 .couleurs-notes input:checked + span { box-shadow: 0 0 0 3px var(--texte); }
 .couleurs-notes input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 3px; }
 
+
+/* ---------- Anniversaires, adresses, rappels ---------- */
+.date-ronde { width: 40px; height: 40px; border-radius: 12px; flex: none; display: grid; place-items: center;
+  background: var(--anniversaires); color: var(--anniversaires-t); font-size: 1.05rem; }
+.ligne.proche .quoi small { color: var(--corail); font-weight: 800; }
+.age { font-size: .8rem; font-weight: 800; color: var(--anniversaires-t); background: var(--anniversaires); padding: 1px 8px; border-radius: 999px; }
+.actions-contact { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.actions-contact .action { align-items: center; padding: 12px 6px; font-size: .85rem; }
+.actions-contact .action .emoji { font-size: 1.6rem; }
+.texte-long { white-space: pre-wrap; overflow-wrap: anywhere; }
+.barre-actions .recherche { flex: 1; margin: 0; }
+.interrupteur.etroit { flex: 0 1 auto; padding: 6px 0; }
+
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

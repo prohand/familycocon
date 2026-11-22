@@ -31,6 +31,21 @@ type CodesSecour struct {
 	UtiliseLe int64
 }
 
+type Contact struct {
+	ID        int64
+	FamilleID int64
+	Nom       string
+	Relation  string
+	Naissance string
+	Telephone string
+	Email     string
+	Adresse   string
+	Notes     string
+	Idees     string
+	CreeLe    int64
+	ModifieLe int64
+}
+
 type Echange struct {
 	ID           int64
 	RecompenseID int64
@@ -101,6 +116,7 @@ type Membre struct {
 	PushModules string
 	Totp        string
 	TotpDernier int64
+	Naissance   string
 }
 
 type Mission struct {
