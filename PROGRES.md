@@ -20,6 +20,9 @@
 | Cartes de fidélité | **fait** |
 | Véhicules, Animaux, Prestataires (échéances + carnet) | **fait** |
 | Projets | **fait** |
+| Budget : opérations qui reviennent (automatiques) | **fait** |
+| Abonnements (parents), reliés au budget | **fait** |
+| Tâches dans l'agenda | **fait** |
 
 ## Mesures
 

@@ -1296,6 +1296,20 @@ details.termines > summary { cursor: pointer; }
 .negatif { color: var(--rouge); }
 .pastille-abo { font-size: .7rem; font-weight: 800; padding: 1px 8px; border-radius: 10px; background: var(--abonnements); color: var(--abonnements-t); vertical-align: middle; }
 
+/* ---------- Agenda : tâches du jour, en petit ---------- */
+.pilules.petites { justify-content: center; align-items: center; margin-bottom: 10px; }
+.pilules.petites .pilule { padding: 4px 12px; font-size: .8rem; }
+.elements-jour { list-style: none; margin: 6px 0 0; padding: 6px 0 0; border-top: 1px dashed var(--bordure); }
+.elements-jour li { display: flex; align-items: center; gap: 6px; font-size: .82rem; font-weight: 700; color: var(--texte-doux); padding: 2px 0; }
+.elements-jour li a { flex: 1; display: flex; align-items: center; gap: 6px; color: inherit; }
+.elements-jour li.faite a { text-decoration: line-through; opacity: .6; }
+.coche-mini { width: 12px; height: 12px; border-radius: 4px; border: 2px solid var(--taches-t); flex: none; }
+.elements-jour li.faite .coche-mini { background: var(--taches-t); }
+.avatar.mini { width: 18px; height: 18px; font-size: .62rem; border-width: 1.5px; }
+.points-taches { display: flex; gap: 2px; flex-wrap: wrap; margin-top: auto; }
+.points-taches i { width: 5px; height: 5px; border-radius: 50%; background: var(--taches-t); opacity: .7; }
+.points-taches i.faite { opacity: .25; }
+
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

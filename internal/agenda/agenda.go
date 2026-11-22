@@ -180,7 +180,8 @@ type Jour struct {
 	Aujourdhui  bool
 	DansMois    bool
 	Occurrences []Occurrence
-	Plus        int // vue mois : événements non montrés
+	Plus        int                 // vue mois : événements non montrés
+	Elements    []appli.ElementJour // tâches du jour (en petit)
 }
 
 type vueAgenda struct {
@@ -193,6 +194,22 @@ type vueAgenda struct {
 	NomsJours  []string
 	Aujourdhui string
 	Ref        string // date de référence de la période affichée
+	Taches     string // tous | moi | non : tâches montrées sous les événements
+	AvecTaches bool   // le module Tâches est activé (le filtre est proposé)
+}
+
+// filtreTaches : réglage « tâches dans l'agenda », gardé par le navigateur.
+func (m *Module) filtreTaches(w http.ResponseWriter, r *http.Request) string {
+	if v := r.URL.Query().Get("taches"); v == "tous" || v == "moi" || v == "non" {
+		if w != nil {
+			m.a.PoserPreference(w, "agenda_taches", v)
+		}
+		return v
+	}
+	if v := m.a.LirePreference(r, "agenda_taches"); v == "moi" || v == "non" {
+		return v
+	}
+	return "tous"
 }
 
 func titreJour(t time.Time) string {
@@ -200,7 +217,7 @@ func titreJour(t time.Time) string {
 	return strings.ToUpper(j[:1]) + j[1:] + " " + strconv.Itoa(t.Day())
 }
 
-func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request) (*vueAgenda, error) {
+func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request, taches string) (*vueAgenda, error) {
 	q := r.URL.Query()
 	maintenant := c.Maintenant()
 	aujourdhui := minuit(maintenant)
@@ -208,7 +225,8 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request) (*
 	if d, err := time.ParseInLocation("2006-01-02", q.Get("date"), c.Lieu); err == nil {
 		ref = d
 	}
-	v := &vueAgenda{Vue: "semaine", NomsJours: repetition.NomsJours[1:], Aujourdhui: repetition.CleJour(aujourdhui)}
+	v := &vueAgenda{Vue: "semaine", NomsJours: repetition.NomsJours[1:], Aujourdhui: repetition.CleJour(aujourdhui),
+		Taches: taches, AvecTaches: c.Actif("taches")}
 	if q.Get("vue") == "mois" {
 		v.Vue = "mois"
 	}
@@ -239,13 +257,24 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request) (*
 	if err != nil {
 		return nil, err
 	}
+	// Tâches (et autres éléments discrets) par jour, selon le filtre.
+	elements := map[string][]appli.ElementJour{}
+	if taches != "non" {
+		for _, e := range m.a.ElementsCalendrier(ctx, c, debut, fin) {
+			if taches == "moi" && e.Membre != nil && e.Membre.ID != c.Membre.ID {
+				continue
+			}
+			elements[e.Jour] = append(elements[e.Jour], e)
+		}
+	}
 	choisi := q.Get("jour")
 	if choisi == "" {
 		choisi = v.Aujourdhui
 	}
 	for j := debut; j.Before(fin); j = j.AddDate(0, 0, 1) {
-		jour := Jour{Date: j, Cle: repetition.CleJour(j), Titre: titreJour(j), Aujourdhui: j.Equal(aujourdhui),
-			DansMois: v.Vue == "semaine" || j.Month() == ref.Month(), Occurrences: duJour(occ, j)}
+		cle := repetition.CleJour(j)
+		jour := Jour{Date: j, Cle: cle, Titre: titreJour(j), Aujourdhui: j.Equal(aujourdhui),
+			DansMois: v.Vue == "semaine" || j.Month() == ref.Month(), Occurrences: duJour(occ, j), Elements: elements[cle]}
 		v.Jours = append(v.Jours, jour)
 	}
 	if v.Vue == "mois" {
@@ -264,7 +293,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request) (*
 }
 
 func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	v, err := m.vue(r.Context(), c, r)
+	v, err := m.vue(r.Context(), c, r, m.filtreTaches(w, r))
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -273,7 +302,7 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 }
 
 func (m *Module) contenu(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	v, err := m.vue(r.Context(), c, r)
+	v, err := m.vue(r.Context(), c, r, m.filtreTaches(nil, r))
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return

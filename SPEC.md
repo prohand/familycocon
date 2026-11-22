@@ -119,3 +119,19 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
   famille) pour aujourd'hui et J+7. Réglable dans Moi › Notifications (« Rappels »).
 - Liens tel:, sms:, mailto: construits côté serveur à partir de valeurs nettoyées
   (chiffres seulement pour le téléphone, http/https seulement pour un site).
+
+## 9. Budget récurrent, abonnements, tâches dans l'agenda
+- Table `recurrences` (migration 0015) : l'occurrence n°k tombe à début + k
+  périodes (le 31 devient le dernier jour du mois) ; `faites` compte les
+  occurrences écrites. Pas de tâche de fond : les occurrences dues sont écrites
+  à l'ouverture du budget, de l'accueil ou des abonnements (une seule fois,
+  même si deux pages s'ouvrent en même temps).
+- Modifier une récurrence ne touche que les prochaines fois. Supprimer une
+  récurrence garde les opérations passées.
+- Les anciennes opérations « fixes » sont devenues des récurrences mensuelles.
+- Abonnements : une récurrence + emoji, fin d'engagement, page de gestion,
+  notes (jamais de mot de passe). Réservé aux parents ; leurs rappels et
+  notifications ne vont jamais aux enfants.
+- Agenda : les modules peuvent y montrer des éléments discrets (`AjouterCalendrier`).
+  Les tâches « chaque jour » et « certains jours » y sont, à partir de leur
+  création. Filtre « Toutes / Les miennes / Masquées » gardé dans un cookie.

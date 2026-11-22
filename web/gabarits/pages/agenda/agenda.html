@@ -24,6 +24,14 @@
     <a class="fleche" href="/agenda?vue={{.Vue}}&amp;date={{.Suivant}}" aria-label="Période suivante">›</a>
   </div>
   <p class="centre-petit"><a class="lien-discret" href="/agenda?vue={{.Vue}}">Aujourd'hui</a></p>
+  {{if .AvecTaches}}
+  <nav class="pilules petites" aria-label="Tâches dans l'agenda">
+    <span class="aide">✅ Tâches :</span>
+    <a class="pilule{{if eq .Taches "tous"}} active{{end}}" href="/agenda?vue={{.Vue}}&amp;date={{.Ref}}&amp;taches=tous">Toutes</a>
+    <a class="pilule{{if eq .Taches "moi"}} active{{end}}" href="/agenda?vue={{.Vue}}&amp;date={{.Ref}}&amp;taches=moi">Les miennes</a>
+    <a class="pilule{{if eq .Taches "non"}} active{{end}}" href="/agenda?vue={{.Vue}}&amp;date={{.Ref}}&amp;taches=non">Masquées</a>
+  </nav>
+  {{end}}
 
   {{if eq .Vue "semaine"}}
   <div class="semaine">
@@ -33,7 +41,8 @@
         <h3>{{.Titre}}{{if .Aujourdhui}} <span class="etiquette">aujourd'hui</span>{{end}}</h3>
         <a class="ajout-jour" href="/agenda/nouveau?date={{.Cle}}" aria-label="Ajouter le {{.Titre}}">＋</a>
       </div>
-      {{- range .Occurrences}}{{template "ligne-evt" .}}{{else}}<p class="rien">—</p>{{end}}
+      {{- range .Occurrences}}{{template "ligne-evt" .}}{{else}}{{if not .Elements}}<p class="rien">—</p>{{end}}{{end}}
+      {{template "elements-jour" .Elements}}
     </section>
     {{- end}}
   </div>
@@ -48,6 +57,7 @@
       <span class="evt-mini {{if .Membres}}c{{(index .Membres 0).Couleur}}{{else}}ctous{{end}}">{{.Evt.Titre}}</span>
       {{- end}}
       {{if .Plus}}<span class="plus-evt">+{{.Plus}}</span>{{end}}
+      {{if .Elements}}<span class="points-taches" title="{{len .Elements}} tâche(s)">{{range .Elements}}<i class="{{if .Faite}}faite{{end}}"></i>{{end}}</span>{{end}}
     </a>
     {{- end}}
   </div>
@@ -57,11 +67,23 @@
       <h3>{{.Titre}}</h3>
       <a class="ajout-jour" href="/agenda/nouveau?date={{.Cle}}" aria-label="Ajouter le {{.Titre}}">＋</a>
     </div>
-    {{- range .Occurrences}}{{template "ligne-evt" .}}{{else}}<p class="rien">Rien de prévu.</p>{{end}}
+    {{- range .Occurrences}}{{template "ligne-evt" .}}{{else}}{{if not .Elements}}<p class="rien">Rien de prévu.</p>{{end}}{{end}}
+    {{template "elements-jour" .Elements}}
   </section>
   {{end}}
   {{end}}
 </div>
+{{end}}
+{{end}}
+
+{{/* Tâches du jour : en petit, sous les événements. */}}
+{{define "elements-jour"}}
+{{if .}}
+<ul class="elements-jour">
+  {{- range .}}
+  <li class="{{if .Faite}}faite{{end}}"><a href="{{.URL}}"><span class="coche-mini" aria-hidden="true"></span>{{.Emoji}} {{.Titre}}</a>{{with .Membre}}<span class="avatar mini c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}</li>
+  {{- end}}
+</ul>
 {{end}}
 {{end}}
 

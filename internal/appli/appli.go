@@ -44,28 +44,30 @@ type App struct {
 	Push *Pousseur
 
 	// Fonctions de gabarit ajoutées par les modules avant Charger.
-	fonctions template.FuncMap
-	resumes   map[string]ResumeFunc
-	echeances map[string]EcheancesFunc
-	blocs     []BlocAccueil
-	ajouts    []Ajout
+	fonctions  template.FuncMap
+	resumes    map[string]ResumeFunc
+	echeances  map[string]EcheancesFunc
+	calendrier map[string]CalendrierFunc
+	blocs      []BlocAccueil
+	ajouts     []Ajout
 }
 
 // Nouvelle prépare l'application (sans encore charger les gabarits : les
 // modules peuvent d'abord ajouter leurs fonctions avec AjouterFonctions).
 func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error) {
 	a := &App{
-		Config:    cfg,
-		DB:        db,
-		Q:         donnees.New(db),
-		Journal:   journal,
-		Mux:       http.NewServeMux(),
-		Demarre:   time.Now(),
-		Limiteur:  NouveauLimiteur(),
-		Direct:    nouveauDirect(),
-		Memoire:   NouvelleMemoireCourte(2000),
-		resumes:   map[string]ResumeFunc{},
-		echeances: map[string]EcheancesFunc{},
+		Config:     cfg,
+		DB:         db,
+		Q:          donnees.New(db),
+		Journal:    journal,
+		Mux:        http.NewServeMux(),
+		Demarre:    time.Now(),
+		Limiteur:   NouveauLimiteur(),
+		Direct:     nouveauDirect(),
+		Memoire:    NouvelleMemoireCourte(2000),
+		resumes:    map[string]ResumeFunc{},
+		echeances:  map[string]EcheancesFunc{},
+		calendrier: map[string]CalendrierFunc{},
 	}
 	sous, err := fs.Sub(web.Fichiers, "statique")
 	if err != nil {
