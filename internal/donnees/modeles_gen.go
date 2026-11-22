@@ -73,6 +73,20 @@ type Membre struct {
 	CreeLe      int64
 }
 
+type Operation struct {
+	ID        int64
+	FamilleID int64
+	Sens      string
+	Montant   int64
+	Categorie string
+	Libelle   string
+	Jour      string
+	MembreID  sql.NullInt64
+	Fixe      int64
+	CreePar   sql.NullInt64
+	CreeLe    int64
+}
+
 type Produit struct {
 	ID        int64
 	ListeID   int64

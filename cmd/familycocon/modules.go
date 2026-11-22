@@ -5,6 +5,7 @@ package main
 import (
 	"familycocon/internal/agenda"
 	"familycocon/internal/appli"
+	"familycocon/internal/budget"
 	"familycocon/internal/courses"
 	"familycocon/internal/menus"
 	"familycocon/internal/taches"
@@ -16,5 +17,6 @@ func brancherModules(a *appli.App) error {
 	taches.Brancher(a)
 	agenda.Brancher(a)
 	menus.Brancher(a)
+	budget.Brancher(a)
 	return nil
 }

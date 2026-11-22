@@ -1,0 +1,78 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>💶 Budget</h1>
+</section>
+<div class="navigation-periode">
+  <a class="fleche" href="/budget?mois={{.Precedent}}" aria-label="Mois précédent">‹</a>
+  <h2>{{.Titre}}</h2>
+  <a class="fleche" href="/budget?mois={{.Suivant}}" aria-label="Mois suivant">›</a>
+</div>
+
+<section class="carte reste bloc">
+  <p class="reste-titre">Reste à vivre</p>
+  <p class="reste-montant{{if lt .Reste 0}} negatif{{end}}">{{montant .Reste .Devise}}</p>
+  <div class="reste-detail">
+    <span>⬆️ Revenus <b>{{montant .Revenus .Devise}}</b></span>
+    <span>⬇️ Dépenses <b>{{montant .Depenses .Devise}}</b></span>
+  </div>
+</section>
+
+<div class="boutons">
+  <a class="bouton" href="/budget/nouvelle">＋ Dépense</a>
+  <a class="bouton secondaire" href="/budget/nouvelle?sens=revenu">＋ Revenu</a>
+</div>
+{{if .Fixes}}
+<form class="bloc" method="post" action="/budget/fixes">
+  {{template "jeton" $c.CSRF}}
+  <input type="hidden" name="mois" value="{{.Mois}}">
+  <button class="bouton discret">🔁 Recopier {{pluriel .Fixes "opération fixe" "opérations fixes"}} du mois dernier</button>
+</form>
+{{end}}
+
+<section class="carte bloc">
+  <div class="section-titre premier"><h2>Dépenses du mois{{with .Filtre}} · filtrées{{end}}</h2></div>
+  {{.Courbe}}
+  <p class="legende"><span class="trait actuel"></span>Ce mois-ci <span class="trait precedent"></span>Mois précédent</p>
+</section>
+
+{{if .ParCat}}
+<section class="carte bloc">
+  <div class="section-titre premier"><h2>Par catégorie</h2></div>
+  {{- range .ParCat}}
+  <a class="barre-cat" href="/budget?mois={{$.Donnees.Mois}}&amp;cat={{.Cat.Cle}}">
+    <span class="nom-cat">{{.Cat.Emoji}} {{.Cat.Nom}}</span>
+    <b>{{montant .Montant $.Donnees.Devise}}</b>
+    <progress class="jauge" max="{{$.Donnees.MaxCat}}" value="{{.Montant}}"></progress>
+  </a>
+  {{- end}}
+</section>
+{{end}}
+
+<section class="bloc">
+  <nav class="pilules" aria-label="Filtrer par catégorie">
+    <a class="pilule{{if not .Filtre}} active{{end}}" href="/budget?mois={{.Mois}}">Tout</a>
+    {{- range .Pilules}}
+    <a class="pilule{{if eq .Cle $.Donnees.Filtre}} active{{end}}" href="/budget?mois={{$.Donnees.Mois}}&amp;cat={{.Cle}}">{{.Emoji}} {{.Nom}}</a>
+    {{- end}}
+  </nav>
+  {{- range .Jours}}
+  <h3 class="jour-histo">{{.Titre}}</h3>
+  <div class="carte operations">
+    {{- range .Ops}}
+    <a class="ligne op" href="/budget/{{.ID}}">
+      <span class="p-emoji">{{.Cat.Emoji}}</span>
+      <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>{{.Cat.Nom}}{{if .Fixe}} · 🔁 chaque mois{{end}}</small></span>
+      {{with .Membre}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}
+      <b class="montant {{.Sens}}">{{if eq .Sens "depense"}}−{{else}}+{{end}}{{montant .Montant $.Donnees.Devise}}</b>
+    </a>
+    {{- end}}
+  </div>
+  {{- else}}
+  <div class="carte vide"><span class="emoji">🪙</span>Aucune opération ce mois-ci.</div>
+  {{- end}}
+</section>
+{{end}}
+{{end}}
