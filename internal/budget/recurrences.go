@@ -31,8 +31,9 @@ type Frequence struct {
 
 // Frequences proposées.
 var Frequences = []Frequence{
-	{"semaine", "Chaque semaine", 0}, {"mois", "Chaque mois", 1},
-	{"trimestre", "Tous les 3 mois", 3}, {"annee", "Chaque année", 12},
+	{"semaine", "Chaque semaine", 0}, {"mois", "Chaque mois", 1}, {"2mois", "Tous les 2 mois", 2},
+	{"trimestre", "Tous les 3 mois (trimestre)", 3}, {"semestre", "Tous les 6 mois (semestre)", 6},
+	{"annee", "Chaque année", 12},
 }
 
 func frequence(cle string) (Frequence, bool) {

@@ -12,7 +12,7 @@ CREATE TABLE recurrences (
   categorie  TEXT    NOT NULL,
   libelle    TEXT    NOT NULL DEFAULT '',
   membre_id  INTEGER REFERENCES membres(id) ON DELETE SET NULL,
-  frequence  TEXT    NOT NULL CHECK (frequence IN ('semaine', 'mois', 'trimestre', 'annee')),
+  frequence  TEXT    NOT NULL CHECK (frequence IN ('semaine', 'mois', '2mois', 'trimestre', 'semestre', 'annee')),
   debut      TEXT    NOT NULL,             -- première occurrence
   fin        TEXT    NOT NULL DEFAULT '',  -- dernière date possible, '' : sans fin
   faites     INTEGER NOT NULL DEFAULT 0,

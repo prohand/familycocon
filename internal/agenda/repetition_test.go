@@ -32,6 +32,9 @@ func TestReglesRepetition(t *testing.T) {
 		{"dernier mardi", evt("2026-12-29 20:00", "mois-rang", ""), "2027-01-01 00:00", "2027-02-01 00:00", []string{"2027-01-26"}},
 		{"29 février", evt("2024-02-29 00:00", "an", ""), "2025-02-01 00:00", "2025-03-01 00:00", []string{"2025-02-28"}},
 		{"pas avant le début", evt("2026-11-20 10:00", "jour", ""), "2026-11-16 00:00", "2026-11-23 00:00", []string{"2026-11-20", "2026-11-21", "2026-11-22"}},
+		{"trimestriel", evt("2026-01-15 09:00", "trimestre", ""), "2026-01-01 00:00", "2027-01-01 00:00", []string{"2026-01-15", "2026-04-15", "2026-07-15", "2026-10-15"}},
+		{"semestriel, le 31", evt("2026-08-31 09:00", "semestre", ""), "2026-08-01 00:00", "2027-09-01 00:00", []string{"2026-08-31", "2027-02-28", "2027-08-31"}},
+		{"tous les 2 mois", evt("2026-11-05 09:00", "2mois", "2027-03-31"), "2026-11-01 00:00", "2027-12-01 00:00", []string{"2026-11-05", "2027-01-05", "2027-03-05"}},
 		{"chaque semaine, heure d'hiver", evt("2026-10-14 10:00", "semaine", ""), "2026-11-16 00:00", "2026-11-23 00:00", []string{"2026-11-18"}},
 	}
 	for _, c := range cas {
@@ -49,6 +52,9 @@ func TestReglesRepetition(t *testing.T) {
 	}
 	// Textes.
 	if s := TexteRepetition(evt("2026-11-10 20:00", "mois-rang", "2027-06-30"), paris); s != "Chaque 2e mardi du mois, jusqu'au 30 juin 2027" {
+		t.Errorf("texte : %q", s)
+	}
+	if s := TexteRepetition(evt("2026-01-15 09:00", "trimestre", ""), paris); s != "Tous les 3 mois, le 15" {
 		t.Errorf("texte : %q", s)
 	}
 	if s := TexteRepetition(evt("2026-11-03 17:00", "jours:2,4", ""), paris); s != "Chaque mar, jeu" {

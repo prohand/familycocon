@@ -39,14 +39,15 @@ tâches ménagères, menus, budget et espace enfants, sur le téléphone de chac
   - « 2 baguettes » et « 1 kg de pommes » sont compris tout seuls ;
   - le rayon choisi pour un produit est retenu.
 - **Agenda** : vue semaine et vue mois, couleur par personne ; répétitions : chaque jour, certains jours,
-  chaque semaine, toutes les 2 semaines, chaque mois (même date ou « le 2e mardi »), chaque année, avec date de fin ;
+  chaque semaine, toutes les 2 semaines, chaque mois (même date ou « le 2e mardi »), tous les 2 mois,
+  trimestriel, semestriel, chaque année, avec date de fin ;
   les tâches ménagères du jour y apparaissent en petit (toutes, les miennes, ou masquées).
 - **Tâches ménagères** : à qui, quand (une fois, chaque jour, certains jours, chaque semaine), qui a fait quoi.
 - **Menus de la semaine** : midi et soir ; un clic envoie les ingrédients dans la liste de courses.
 - **Budget** (parents) :
   - « reste à vivre » du mois et courbe des dépenses ;
   - catégories et filtres ;
-  - opérations qui reviennent (chaque semaine, mois, trimestre ou année), ajoutées toutes seules ;
+  - opérations qui reviennent (chaque semaine, mois, 2 mois, trimestre, semestre ou année), ajoutées toutes seules ;
   - « à venir ce mois-ci » et reste prévu en fin de mois.
 - **Abonnements** (parents) : box, téléphone, musique, assurance… prélevés tout seuls dans le budget ;
   coût par mois et par an, fin d'engagement, rappel avant un renouvellement annuel.

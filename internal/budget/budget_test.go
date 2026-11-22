@@ -112,7 +112,10 @@ func TestOccurrence(t *testing.T) {
 			t.Errorf("%s %s n°%d : %v, attendu %s", c.debut, c.freq, c.k, j, c.attendu)
 		}
 	}
-	if ParMois(1200, "annee") != 100 || ParMois(1200, "semaine") != 5200 {
+	if j, _ := Occurrence("2026-08-31", "semestre", 1); j.Format("2006-01-02") != "2027-02-28" {
+		t.Errorf("semestre : %v", j)
+	}
+	if ParMois(1200, "annee") != 100 || ParMois(1200, "semaine") != 5200 || ParMois(1200, "semestre") != 200 {
 		t.Error("ParMois")
 	}
 }

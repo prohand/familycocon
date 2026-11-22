@@ -361,7 +361,7 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	return appli.Resume{Info: appli.Montant(parMois, c.Famille.Devise) + " par mois"}
 }
 
-// echeances : renouvellement des abonnements non mensuels, et fins
+// echeances : renouvellement des abonnements trimestriels, semestriels ou annuels, et fins
 // d'engagement (le bon moment pour résilier ou renégocier).
 func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin time.Time) ([]appli.Echeance, error) {
 	l, err := m.a.Q.ListeAbonnements(ctx, f.ID)
@@ -376,7 +376,7 @@ func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin ti
 		if !actif {
 			continue
 		}
-		if x.Frequence == "annee" || x.Frequence == "trimestre" {
+		if x.Frequence == "annee" || x.Frequence == "semestre" || x.Frequence == "trimestre" {
 			// Les occurrences dans la période (souvent une seule).
 			for k := 0; k < 5 && repetition.CleJour(j) < au; k++ {
 				if cle := repetition.CleJour(j); cle >= du {

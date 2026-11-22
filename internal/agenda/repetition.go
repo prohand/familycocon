@@ -20,6 +20,9 @@ import (
 //	"semaine"     chaque semaine
 //	"2semaines"   toutes les 2 semaines
 //	"mois"        chaque mois, à la même date (le 31 → dernier jour du mois)
+//	"2mois"       tous les 2 mois (même date)
+//	"trimestre"   tous les 3 mois (même date)
+//	"semestre"    tous les 6 mois (même date)
 //	"mois-rang"   chaque mois, le même jour de la semaine (ex. le 2e mardi)
 //	"an"          chaque année
 //
@@ -33,7 +36,8 @@ var Choix = []ChoixRepetition{
 	{"", "Non"}, {"jour", "Chaque jour"}, {"jours", "Certains jours de la semaine"},
 	{"semaine", "Chaque semaine"}, {"2semaines", "Toutes les 2 semaines"},
 	{"mois", "Chaque mois, à la même date"}, {"mois-rang", "Chaque mois, le même jour (ex. le 2e mardi)"},
-	{"an", "Chaque année"},
+	{"2mois", "Tous les 2 mois"}, {"trimestre", "Tous les 3 mois (trimestriel)"},
+	{"semestre", "Tous les 6 mois (semestriel)"}, {"an", "Chaque année"},
 }
 
 // regle : une répétition décodée.
@@ -96,6 +100,9 @@ func TexteRepetition(e donnees.Evenement, lieu *time.Location) string {
 		t = "Chaque " + strings.Join(l, ", ")
 	case "mois":
 		t = "Chaque mois, le " + strconv.Itoa(d0.Day())
+	case "2mois", "trimestre", "semestre":
+		t = map[string]string{"2mois": "Tous les 2 mois", "trimestre": "Tous les 3 mois", "semestre": "Tous les 6 mois"}[r.Type] +
+			", le " + strconv.Itoa(d0.Day())
 	case "mois-rang":
 		t = "Chaque " + rangs[rang(d0)] + " " + appli.JourFR(d0) + " du mois"
 	case "an":
@@ -179,11 +186,9 @@ func deplier(e donnees.Evenement, lieu *time.Location, debut, fin time.Time) [][
 			}
 		}
 
-	case "mois", "mois-rang", "an":
-		pas := 1
-		if r.Type == "an" {
-			pas = 12
-		}
+	case "mois", "2mois", "trimestre", "semestre", "mois-rang", "an":
+		pas := map[string]int{"2mois": 2, "trimestre": 3, "semestre": 6, "an": 12}[r.Type]
+		pas = max(pas, 1)
 		// On commence un peu avant la période (événements de plusieurs jours).
 		k := ((debut.Year()-d0.Year())*12 + int(debut.Month()) - int(d0.Month()) - 2) / pas
 		k = max(k, 0)
