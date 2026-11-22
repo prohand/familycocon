@@ -38,7 +38,7 @@ CREATE TABLE sessions (
   cree_le    INTEGER NOT NULL,
   vue_le     INTEGER NOT NULL,
   expire_le  INTEGER NOT NULL
-) WITHOUT ROWID;
+);
 CREATE INDEX sessions_membre ON sessions(membre_id);
 
 -- Lien d'invitation : à usage unique, valable 7 jours.
@@ -49,7 +49,7 @@ CREATE TABLE invitations (
   cree_par   INTEGER REFERENCES membres(id) ON DELETE SET NULL,
   cree_le    INTEGER NOT NULL,
   expire_le  INTEGER NOT NULL
-) WITHOUT ROWID;
+);
 
 -- Appareil de confiance : sur cet appareil, les enfants de la famille
 -- se connectent en touchant leur avatar puis en tapant leur code PIN.
@@ -58,4 +58,4 @@ CREATE TABLE appareils (
   famille_id INTEGER NOT NULL REFERENCES familles(id) ON DELETE CASCADE,
   cree_le    INTEGER NOT NULL,
   vue_le     INTEGER NOT NULL
-) WITHOUT ROWID;
+);

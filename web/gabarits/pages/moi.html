@@ -1,0 +1,60 @@
+{{define "contenu"}}
+{{$c := .C}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1><span class="avatar c{{$c.Membre.Couleur}}">{{initiale $c.Membre.Nom}}</span> {{$c.Membre.Nom}}</h1>
+  <p>{{if $c.EstParent}}Parent{{else}}Enfant{{end}} · {{$c.Famille.Nom}}</p>
+</section>
+
+{{with .Donnees}}
+{{if $c.EstParent}}
+<p><a class="bouton secondaire" href="/famille">🏡 Réglages de la famille</a></p>
+{{end}}
+
+<section class="carte bloc">
+  <h2>🎨 Mon profil</h2>
+  <form method="post" action="/moi/profil">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Prénom</span><input name="prenom" value="{{$c.Membre.Nom}}" maxlength="40" required></label>
+    <span class="aide">Ma couleur (agenda, listes…)</span>
+    {{template "choix-couleur" dict "Nom" "couleur" "Choisie" $c.Membre.Couleur}}
+    <button class="bouton">Enregistrer</button>
+  </form>
+</section>
+
+<section class="carte bloc">
+  <h2>📌 Ma barre du bas</h2>
+  <p class="aide">Les 4 raccourcis autour du bouton « + ».</p>
+  <form method="post" action="/moi/raccourcis">
+    {{template "jeton" $c.CSRF}}
+    <div class="rangee">
+      {{- range $i, $choisi := .Choisis}}
+      <label class="champ"><span>{{if lt $i 2}}Gauche{{else}}Droite{{end}} {{if or (eq $i 0) (eq $i 2)}}1{{else}}2{{end}}</span>
+        <select name="r{{ajouter $i 1}}">
+          {{- range $.Donnees.Possibles}}<option value="{{.Cle}}"{{if eq .Cle $choisi}} selected{{end}}>{{.Emoji}} {{.Nom}}</option>{{end -}}
+        </select></label>
+      {{- end}}
+    </div>
+    <button class="bouton">Enregistrer</button>
+  </form>
+</section>
+
+{{if .AMotDePasse}}
+<section class="carte bloc">
+  <h2>🔑 Mot de passe</h2>
+  <form method="post" action="/moi/mdp">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Mot de passe actuel</span><input type="password" name="actuel" autocomplete="current-password" required></label>
+    <label class="champ"><span>Nouveau (10 caractères ou plus)</span><input type="password" name="nouveau" autocomplete="new-password" minlength="10" required></label>
+    <label class="champ"><span>Le même, encore une fois</span><input type="password" name="nouveau2" autocomplete="new-password" minlength="10" required></label>
+    <button class="bouton">Changer le mot de passe</button>
+  </form>
+</section>
+{{end}}
+
+<form class="bloc" method="post" action="/deconnexion">
+  {{template "jeton" $c.CSRF}}
+  <button class="bouton danger large">{{if $c.EstParent}}Se déconnecter{{else}}Changer d'utilisateur{{end}}</button>
+</form>
+{{end}}
+{{end}}

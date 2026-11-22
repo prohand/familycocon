@@ -7,15 +7,370 @@ package donnees
 
 import (
 	"context"
+	"database/sql"
 )
 
 const compterFamilles = `-- name: CompterFamilles :one
+
 SELECT count(*) FROM familles
 `
 
+// Familles et membres.
 func (q *Queries) CompterFamilles(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, compterFamilles)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const compterParents = `-- name: CompterParents :one
+SELECT count(*) FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'parent'
+`
+
+func (q *Queries) CompterParents(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterParents, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const creerFamille = `-- name: CreerFamille :one
+INSERT INTO familles (nom, fuseau, devise, cree_le) VALUES (?, ?, ?, ?)
+RETURNING id, nom, fuseau, devise, modules, cree_le
+`
+
+type CreerFamilleParams struct {
+	Nom    string
+	Fuseau string
+	Devise string
+	CreeLe int64
+}
+
+func (q *Queries) CreerFamille(ctx context.Context, arg CreerFamilleParams) (Famille, error) {
+	row := q.db.QueryRowContext(ctx, creerFamille,
+		arg.Nom,
+		arg.Fuseau,
+		arg.Devise,
+		arg.CreeLe,
+	)
+	var i Famille
+	err := row.Scan(
+		&i.ID,
+		&i.Nom,
+		&i.Fuseau,
+		&i.Devise,
+		&i.Modules,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
+const creerMembre = `-- name: CreerMembre :one
+INSERT INTO membres (famille_id, nom, role, couleur, identifiant, mdp, pin, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le
+`
+
+type CreerMembreParams struct {
+	FamilleID   int64
+	Nom         string
+	Role        string
+	Couleur     int64
+	Identifiant sql.NullString
+	Mdp         sql.NullString
+	Pin         sql.NullString
+	CreeLe      int64
+}
+
+func (q *Queries) CreerMembre(ctx context.Context, arg CreerMembreParams) (Membre, error) {
+	row := q.db.QueryRowContext(ctx, creerMembre,
+		arg.FamilleID,
+		arg.Nom,
+		arg.Role,
+		arg.Couleur,
+		arg.Identifiant,
+		arg.Mdp,
+		arg.Pin,
+		arg.CreeLe,
+	)
+	var i Membre
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.Nom,
+		&i.Role,
+		&i.Couleur,
+		&i.Identifiant,
+		&i.Mdp,
+		&i.Pin,
+		&i.Raccourcis,
+		&i.Actif,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
+const enfantsAvecPin = `-- name: EnfantsAvecPin :many
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'enfant' AND pin IS NOT NULL
+ORDER BY id
+`
+
+func (q *Queries) EnfantsAvecPin(ctx context.Context, familleID int64) ([]Membre, error) {
+	rows, err := q.db.QueryContext(ctx, enfantsAvecPin, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Membre{}
+	for rows.Next() {
+		var i Membre
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Nom,
+			&i.Role,
+			&i.Couleur,
+			&i.Identifiant,
+			&i.Mdp,
+			&i.Pin,
+			&i.Raccourcis,
+			&i.Actif,
+			&i.CreeLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const familleParID = `-- name: FamilleParID :one
+SELECT id, nom, fuseau, devise, modules, cree_le FROM familles WHERE id = ?
+`
+
+func (q *Queries) FamilleParID(ctx context.Context, id int64) (Famille, error) {
+	row := q.db.QueryRowContext(ctx, familleParID, id)
+	var i Famille
+	err := row.Scan(
+		&i.ID,
+		&i.Nom,
+		&i.Fuseau,
+		&i.Devise,
+		&i.Modules,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
+const membreParID = `-- name: MembreParID :one
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le FROM membres WHERE id = ? AND famille_id = ? AND actif = 1
+`
+
+type MembreParIDParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) MembreParID(ctx context.Context, arg MembreParIDParams) (Membre, error) {
+	row := q.db.QueryRowContext(ctx, membreParID, arg.ID, arg.FamilleID)
+	var i Membre
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.Nom,
+		&i.Role,
+		&i.Couleur,
+		&i.Identifiant,
+		&i.Mdp,
+		&i.Pin,
+		&i.Raccourcis,
+		&i.Actif,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
+const membreParIdentifiant = `-- name: MembreParIdentifiant :one
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le FROM membres WHERE identifiant = ? AND actif = 1
+`
+
+func (q *Queries) MembreParIdentifiant(ctx context.Context, identifiant sql.NullString) (Membre, error) {
+	row := q.db.QueryRowContext(ctx, membreParIdentifiant, identifiant)
+	var i Membre
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.Nom,
+		&i.Role,
+		&i.Couleur,
+		&i.Identifiant,
+		&i.Mdp,
+		&i.Pin,
+		&i.Raccourcis,
+		&i.Actif,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
+const membresDeFamille = `-- name: MembresDeFamille :many
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le FROM membres WHERE famille_id = ? AND actif = 1
+ORDER BY CASE role WHEN 'parent' THEN 0 ELSE 1 END, id
+`
+
+func (q *Queries) MembresDeFamille(ctx context.Context, familleID int64) ([]Membre, error) {
+	rows, err := q.db.QueryContext(ctx, membresDeFamille, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Membre{}
+	for rows.Next() {
+		var i Membre
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Nom,
+			&i.Role,
+			&i.Couleur,
+			&i.Identifiant,
+			&i.Mdp,
+			&i.Pin,
+			&i.Raccourcis,
+			&i.Actif,
+			&i.CreeLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const modifierFamille = `-- name: ModifierFamille :exec
+UPDATE familles SET nom = ?, fuseau = ?, devise = ? WHERE id = ?
+`
+
+type ModifierFamilleParams struct {
+	Nom    string
+	Fuseau string
+	Devise string
+	ID     int64
+}
+
+func (q *Queries) ModifierFamille(ctx context.Context, arg ModifierFamilleParams) error {
+	_, err := q.db.ExecContext(ctx, modifierFamille,
+		arg.Nom,
+		arg.Fuseau,
+		arg.Devise,
+		arg.ID,
+	)
+	return err
+}
+
+const modifierMdp = `-- name: ModifierMdp :exec
+UPDATE membres SET mdp = ? WHERE id = ?
+`
+
+type ModifierMdpParams struct {
+	Mdp sql.NullString
+	ID  int64
+}
+
+func (q *Queries) ModifierMdp(ctx context.Context, arg ModifierMdpParams) error {
+	_, err := q.db.ExecContext(ctx, modifierMdp, arg.Mdp, arg.ID)
+	return err
+}
+
+const modifierModules = `-- name: ModifierModules :exec
+UPDATE familles SET modules = ? WHERE id = ?
+`
+
+type ModifierModulesParams struct {
+	Modules string
+	ID      int64
+}
+
+func (q *Queries) ModifierModules(ctx context.Context, arg ModifierModulesParams) error {
+	_, err := q.db.ExecContext(ctx, modifierModules, arg.Modules, arg.ID)
+	return err
+}
+
+const modifierPin = `-- name: ModifierPin :exec
+UPDATE membres SET pin = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierPinParams struct {
+	Pin       sql.NullString
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) ModifierPin(ctx context.Context, arg ModifierPinParams) error {
+	_, err := q.db.ExecContext(ctx, modifierPin, arg.Pin, arg.ID, arg.FamilleID)
+	return err
+}
+
+const modifierProfil = `-- name: ModifierProfil :exec
+UPDATE membres SET nom = ?, couleur = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierProfilParams struct {
+	Nom       string
+	Couleur   int64
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) ModifierProfil(ctx context.Context, arg ModifierProfilParams) error {
+	_, err := q.db.ExecContext(ctx, modifierProfil,
+		arg.Nom,
+		arg.Couleur,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
+}
+
+const modifierRaccourcis = `-- name: ModifierRaccourcis :exec
+UPDATE membres SET raccourcis = ? WHERE id = ?
+`
+
+type ModifierRaccourcisParams struct {
+	Raccourcis string
+	ID         int64
+}
+
+func (q *Queries) ModifierRaccourcis(ctx context.Context, arg ModifierRaccourcisParams) error {
+	_, err := q.db.ExecContext(ctx, modifierRaccourcis, arg.Raccourcis, arg.ID)
+	return err
+}
+
+const retirerMembre = `-- name: RetirerMembre :exec
+UPDATE membres SET actif = 0, identifiant = NULL, mdp = NULL, pin = NULL
+WHERE id = ? AND famille_id = ?
+`
+
+type RetirerMembreParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+// Un membre retire n'est pas efface (l'historique " qui a fait quoi " reste
+// lisible) : il est desactive, perd ses identifiants et ses sessions.
+func (q *Queries) RetirerMembre(ctx context.Context, arg RetirerMembreParams) error {
+	_, err := q.db.ExecContext(ctx, retirerMembre, arg.ID, arg.FamilleID)
+	return err
 }

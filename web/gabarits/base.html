@@ -3,11 +3,48 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#FFF8F1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#181514" media="(prefers-color-scheme: dark)">
+  <meta name="htmx-config" content='{"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"scrollIntoViewOnBoost":false,"responseHandling":[{"code":"204","swap":false},{"code":"[234]..","swap":true,"error":false},{"code":"...","swap":false,"error":true}]}'>
   <title>{{.Titre}} · FamilyCocon</title>
   <link rel="icon" href="{{statique "img/logo.svg"}}" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="{{statique "img/icone-192.png"}}">
+  <link rel="preload" href="/statique/fonts/nunito.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{statique "app.css"}}">
+  <script src="{{statique "js/htmx.min.js"}}" defer></script>
+  <script src="{{statique "js/sse.min.js"}}" defer></script>
+  <script src="{{statique "js/app.js"}}" defer></script>
 </head>
-<body>
-<main class="conteneur">{{template "contenu" .}}</main>
+{{- if .C}}
+<body hx-boost="true" hx-headers='{"X-Jeton": "{{.C.CSRF}}"}' hx-ext="sse" sse-connect="/direct" data-membre="{{.C.Membre.ID}}">
+<header class="entete">
+  <div class="conteneur">
+    <a class="logo-lien" href="/" aria-label="Accueil"><img class="logo" src="{{statique "img/logo.svg"}}" alt=""></a>
+    <div class="famille">{{.C.Famille.Nom}}<small>FamilyCocon</small></div>
+    <a class="membres" href="/moi" aria-label="Mon profil">
+      {{- range .Membres}}<span class="avatar c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end -}}
+    </a>
+  </div>
+</header>
+<main class="conteneur" id="contenu">
+{{template "contenu" .}}
+</main>
+<nav class="nav-bas" aria-label="Navigation principale">
+  {{- range .Gauche}}
+  <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{.Emoji}}</span>{{.Nom}}</a>
+  {{- end}}
+  <a class="plus" href="/ajouter" aria-label="Ajouter">+</a>
+  {{- range .Droite}}
+  <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{.Emoji}}</span>{{.Nom}}</a>
+  {{- end}}
+</nav>
+{{- else}}
+<body class="sans-barre">
+<main class="page-seule" id="contenu">
+{{template "contenu" .}}
+</main>
+{{- end}}
+<div id="toasts" class="toasts" aria-live="polite">{{if .Flash}}<div class="toast">{{.Flash}}</div>{{end}}</div>
 </body>
 </html>{{end}}

@@ -1,0 +1,25 @@
+{{/* Morceaux réutilisés par plusieurs pages. */}}
+
+{{/* Choix de couleur : dict "Nom" (nom du champ) "Choisie" (int64) */}}
+{{define "choix-couleur"}}
+<fieldset class="couleurs">
+  <legend class="sr">Couleur</legend>
+  {{- range $i := couleurs}}
+  <label><input type="radio" name="{{$.Nom}}" value="{{$i}}"{{if eq (print $i) (print $.Choisie)}} checked{{end}}><span class="c{{$i}}"></span><span class="sr">Couleur {{$i}}</span></label>
+  {{- end}}
+</fieldset>
+{{end}}
+
+{{/* Champ caché du jeton anti-CSRF (formulaires sans htmx). */}}
+{{define "jeton"}}<input type="hidden" name="_jeton" value="{{.}}">{{end}}
+
+{{/* Identifiant + mot de passe (inscription, invitation). */}}
+{{define "champs-compte"}}
+  <label class="champ"><span>Identifiant (pour se connecter)</span>
+    <input name="identifiant" value="{{.Identifiant}}" autocomplete="username" autocapitalize="none"
+           pattern="[A-Za-z0-9._@\-]{3,64}" title="3 à 64 caractères : lettres sans accent, chiffres, . _ - @" required></label>
+  <label class="champ"><span>Mot de passe (10 caractères ou plus)</span>
+    <input type="password" name="mdp" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+  <label class="champ"><span>Le même, encore une fois</span>
+    <input type="password" name="mdp2" autocomplete="new-password" minlength="10" maxlength="128" required></label>
+{{end}}

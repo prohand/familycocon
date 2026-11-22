@@ -57,7 +57,8 @@ func fonctionsDeBase(a *App) template.FuncMap {
 			}
 			return false
 		},
-		"ajouter": func(a, b int) int { return a + b },
+		"ajouter":  func(a, b int) int { return a + b },
+		"couleurs": func() []int { return []int{1, 2, 3, 4, 5, 6, 7, 8} },
 	}
 }
 

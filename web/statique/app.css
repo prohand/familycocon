@@ -36,6 +36,11 @@
   --membre-2: #E86A92;
   --membre-3: #34B387;
   --membre-4: #F2A23A;
+  --membre-5: #9B6BDF;
+  --membre-6: #19A7B8;
+  --membre-7: #E5534B;
+  --membre-8: #7A8B3A;
+  --rouge: #D9483B;
 
   --rayon: 20px;
   --rayon-petit: 14px;
@@ -219,6 +224,11 @@ button, input { font: inherit; color: inherit; }
   background: var(--carte);
   opacity: .25;
 }
+
+/* Blocs du jour (agenda, tâches) : dans la grille, sur 2 colonnes ;
+   sur PC, ils remplissent les cases libres après les tuiles. */
+.bloc-accueil { grid-column: span 2; }
+.bloc-accueil .section-titre { margin-top: 6px; }
 
 .tuile.courses { --bg: var(--courses); --t: var(--courses-t); }
 .tuile.agenda  { --bg: var(--agenda);  --t: var(--agenda-t); }
@@ -512,16 +522,26 @@ button, input { font: inherit; color: inherit; }
   }
 }
 
-/* ---------- Notification en bas de l'écran ---------- */
-.toast {
+/* ---------- Notifications en bas de l'écran ---------- */
+.toasts {
   position: fixed;
   z-index: 30;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: calc(var(--nav-h) + 22px + env(safe-area-inset-bottom));
-  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  pointer-events: none;
+  padding: 0 16px;
+}
+@media (min-width: 900px) { .toasts { bottom: 110px; } }
+.toast {
   display: flex;
   align-items: center;
   gap: 10px;
+  max-width: 100%;
   padding: 10px 18px 10px 10px;
   border-radius: 999px;
   background: var(--texte);
@@ -529,19 +549,225 @@ button, input { font: inherit; color: inherit; }
   font-weight: 700;
   font-size: .92rem;
   box-shadow: var(--ombre-forte);
-  white-space: nowrap;
-  animation: toast-entre .45s cubic-bezier(.3, 1.4, .5, 1) both, toast-sort .4s ease 6s forwards;
+  animation: toast-entre .45s cubic-bezier(.3, 1.4, .5, 1) both, toast-sort .4s ease 4.5s forwards;
 }
+.toast:not(:has(.avatar)) { padding-left: 18px; }
+.toast.erreur { background: var(--rouge); color: #fff; }
 .toast .avatar { border-color: var(--texte); }
-@media (min-width: 900px) { .toast { bottom: 110px; } }
-
 @keyframes toast-entre {
-  from { opacity: 0; transform: translate(-50%, 24px) scale(.9); }
-  to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  from { opacity: 0; transform: translateY(24px) scale(.9); }
+  to { opacity: 1; transform: none; }
 }
 @keyframes toast-sort {
-  to { opacity: 0; transform: translate(-50%, 16px); }
+  to { opacity: 0; transform: translateY(16px); }
 }
+
+
+/* ---------- Couleurs des membres (classes : pas de style dans les pages) ---------- */
+.c1 { --c: var(--membre-1); } .c2 { --c: var(--membre-2); }
+.c3 { --c: var(--membre-3); } .c4 { --c: var(--membre-4); }
+.c5 { --c: var(--membre-5); } .c6 { --c: var(--membre-6); }
+.c7 { --c: var(--membre-7); } .c8 { --c: var(--membre-8); }
+.ctous { --c: var(--corail); }
+.avatar.grand { width: 72px; height: 72px; font-size: 1.8rem; border-width: 4px; }
+
+/* ---------- En-tête : liens ---------- */
+.entete .logo-lien { display: flex; }
+.entete .membres { cursor: pointer; }
+
+/* ---------- Blocs de formulaire ---------- */
+.bloc { margin-top: 18px; }
+.bloc h2 { font-size: 1.15rem; margin-bottom: 4px; }
+.bloc > p.aide, .aide { color: var(--texte-doux); font-weight: 600; font-size: .9rem; margin: 2px 0 12px; }
+.champ { display: block; margin: 12px 0; }
+.champ > span { display: block; font-weight: 800; font-size: .9rem; margin-bottom: 6px; }
+.champ input, .champ select, .champ textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: var(--rayon-petit);
+  border: 1.5px solid var(--bordure);
+  background: var(--fond);
+  font-weight: 700;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.champ input:focus, .champ select:focus, .champ textarea:focus {
+  border-color: var(--corail);
+  box-shadow: 0 0 0 4px var(--corail-doux);
+}
+.rangee { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
+.rangee > .champ { flex: 1 1 160px; margin: 6px 0; }
+.boutons { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+.bouton.secondaire { background: var(--fond); color: var(--texte); border: 1.5px solid var(--bordure); }
+.bouton.secondaire:hover { background: var(--bordure); }
+.bouton.danger { background: transparent; color: var(--rouge); border: 1.5px solid currentColor; }
+.bouton.danger:hover { background: var(--rouge); color: #fff; }
+.bouton.petit { padding: 7px 14px; font-size: .85rem; }
+.bouton.large { width: 100%; padding: 14px; font-size: 1.05rem; }
+.message-erreur {
+  background: color-mix(in srgb, var(--rouge) 12%, var(--carte));
+  color: var(--rouge);
+  border-radius: var(--rayon-petit);
+  padding: 10px 14px;
+  font-weight: 800;
+  margin: 10px 0;
+}
+
+/* Choix de couleur : pastilles rondes */
+.couleurs { display: flex; gap: 10px; flex-wrap: wrap; border: 0; padding: 0; margin: 8px 0; }
+.couleurs label { position: relative; cursor: pointer; }
+.couleurs input { position: absolute; opacity: 0; }
+.couleurs span {
+  display: block;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 3px solid var(--carte);
+  box-shadow: 0 0 0 2px var(--bordure);
+  transition: transform .15s, box-shadow .15s;
+}
+.couleurs input:checked + span { box-shadow: 0 0 0 3px var(--texte); transform: scale(1.08); }
+.couleurs input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 3px; }
+
+/* Interrupteurs (modules activés) */
+.interrupteur {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  cursor: pointer;
+  font-weight: 800;
+}
+.interrupteur + .interrupteur { border-top: 1px solid var(--bordure); }
+.interrupteur .emoji { font-size: 1.5rem; width: 34px; text-align: center; }
+.interrupteur .nom { flex: 1; }
+.interrupteur input { position: absolute; opacity: 0; }
+.interrupteur .glissiere {
+  width: 50px;
+  height: 30px;
+  border-radius: 15px;
+  background: var(--bordure);
+  position: relative;
+  transition: background .2s;
+  flex: none;
+}
+.interrupteur .glissiere::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, .2);
+  transition: transform .2s cubic-bezier(.3, 1.4, .5, 1);
+}
+.interrupteur input:checked + .glissiere { background: var(--corail); }
+.interrupteur input:checked + .glissiere::after { transform: translateX(20px); }
+.interrupteur input:focus-visible + .glissiere { outline: 3px solid var(--corail); outline-offset: 2px; }
+
+/* Liste des membres */
+.membre-ligne { display: flex; align-items: center; gap: 12px; padding: 12px 0; }
+.membre-ligne + .membre-ligne, details.membre + details.membre { border-top: 1px solid var(--bordure); }
+.membre-ligne .quoi { flex: 1; font-weight: 800; }
+.membre-ligne .quoi small { display: block; color: var(--texte-doux); font-weight: 600; }
+details.membre > summary { list-style: none; cursor: pointer; }
+details.membre > summary::-webkit-details-marker { display: none; }
+details.membre[open] > summary { padding-bottom: 4px; }
+details.membre .reglages-membre { padding: 0 0 14px 46px; }
+.etiquette {
+  font-size: .72rem;
+  font-weight: 800;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--fond);
+  color: var(--texte-doux);
+}
+
+/* Lien d'invitation à copier */
+.lien-copie { display: flex; gap: 8px; margin-top: 10px; }
+.lien-copie input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: var(--rayon-petit);
+  border: 1.5px dashed var(--corail);
+  background: var(--corail-doux);
+  font-weight: 700;
+  font-size: .85rem;
+}
+
+/* ---------- Pages de connexion ---------- */
+.page-seule {
+  max-width: 440px;
+  margin: 0 auto;
+  padding: 32px 16px 24px;
+}
+.page-seule .marque { text-align: center; margin-bottom: 18px; }
+.page-seule .marque img { width: 84px; height: 84px; }
+.page-seule .marque h1 { font-size: 1.7rem; margin-top: 4px; }
+.page-seule .marque p { color: var(--texte-doux); font-weight: 700; margin: 4px 0 0; }
+body.sans-barre { padding-bottom: 24px; }
+.enfants-choix { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; margin: 8px 0 4px; }
+.enfants-choix a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-weight: 800;
+  transition: transform .15s;
+}
+.enfants-choix a:active { transform: scale(.94); }
+.separateur { text-align: center; color: var(--texte-doux); font-weight: 700; margin: 18px 0 6px; font-size: .9rem; }
+.pin {
+  font-size: 2rem !important;
+  letter-spacing: .5em;
+  text-align: center;
+  padding: 14px !important;
+}
+.lien-discret { color: var(--texte-doux); font-weight: 700; font-size: .9rem; text-decoration: underline; }
+
+/* ---------- Bouton « + » : liste d'actions ---------- */
+.actions { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+@media (min-width: 900px) { .actions { grid-template-columns: repeat(4, 1fr); } }
+.action {
+  background: var(--carte);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-weight: 800;
+  transition: transform .15s;
+}
+.action:hover { transform: translateY(-2px); }
+.action .emoji { font-size: 2.2rem; }
+
+.vide { text-align: center; color: var(--texte-doux); font-weight: 700; padding: 26px 10px; }
+.vide .emoji { display: block; font-size: 2.6rem; margin-bottom: 6px; }
+
+/* Barre de progression : élément <progress> (pas de style dans la page) */
+progress.progres {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  border: 0;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--bordure);
+  overflow: hidden;
+  margin-top: 10px;
+}
+progress.progres::-webkit-progress-bar { background: var(--bordure); border-radius: 5px; }
+progress.progres::-webkit-progress-value { background: linear-gradient(90deg, var(--courses-t), #5CC995); border-radius: 5px; }
+progress.progres::-moz-progress-bar { background: linear-gradient(90deg, var(--courses-t), #5CC995); border-radius: 5px; }
+
+/* Indicateur htmx (requête en cours) */
+.htmx-request.bouton { opacity: .6; pointer-events: none; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {

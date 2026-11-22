@@ -34,20 +34,28 @@ type App struct {
 	Mux      *http.ServeMux
 	Demarre  time.Time
 
+	// Limite des tentatives de connexion.
+	Limiteur *Limiteur
+
 	// Fonctions de gabarit ajoutées par les modules avant Charger.
 	fonctions template.FuncMap
+	resumes   map[string]ResumeFunc
+	blocs     []BlocAccueil
+	ajouts    []Ajout
 }
 
 // Nouvelle prépare l'application (sans encore charger les gabarits : les
 // modules peuvent d'abord ajouter leurs fonctions avec AjouterFonctions).
 func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error) {
 	a := &App{
-		Config:  cfg,
-		DB:      db,
-		Q:       donnees.New(db),
-		Journal: journal,
-		Mux:     http.NewServeMux(),
-		Demarre: time.Now(),
+		Config:   cfg,
+		DB:       db,
+		Q:        donnees.New(db),
+		Journal:  journal,
+		Mux:      http.NewServeMux(),
+		Demarre:  time.Now(),
+		Limiteur: NouveauLimiteur(),
+		resumes:  map[string]ResumeFunc{},
 	}
 	sous, err := fs.Sub(web.Fichiers, "statique")
 	if err != nil {
@@ -58,6 +66,10 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 	}
 	a.fonctions = fonctionsDeBase(a)
 	a.routesDeBase()
+	a.routesComptes()
+	a.routesAccueil()
+	a.routesFamille()
+	a.routesMoi()
 	return a, nil
 }
 

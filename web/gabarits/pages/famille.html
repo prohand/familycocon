@@ -1,0 +1,121 @@
+{{define "contenu"}}
+{{$c := .C}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>🏡 Ma famille</h1>
+  <p>Réglages, modules et membres</p>
+</section>
+
+{{with .Donnees}}
+{{if .Lien}}
+<section class="carte bloc">
+  <h2>📨 Lien d'invitation</h2>
+  <p class="aide">Envoyez ce lien à la personne invitée (SMS, messagerie…). Il marche une seule fois, pendant 7 jours.</p>
+  <div class="lien-copie">
+    <input id="lien-invitation" value="{{.Lien}}" readonly aria-label="Lien d'invitation">
+    <button class="bouton petit" type="button" data-copier="#lien-invitation">Copier</button>
+  </div>
+</section>
+{{end}}
+
+<section class="carte bloc">
+  <h2>👨‍👩‍👧 Membres</h2>
+  {{- range .Membres}}
+  <details class="membre">
+    <summary class="membre-ligne">
+      <span class="avatar c{{.Couleur}}">{{initiale .Nom}}</span>
+      <span class="quoi">{{.Nom}}{{if eq .ID $c.Membre.ID}} (moi){{end}}
+        <small>{{if eq .Role "parent"}}Parent{{else}}Enfant{{end}}{{if .Identifiant.Valid}} · {{.Identifiant.String}}{{end}}{{if .Pin.Valid}} · code PIN{{end}}</small></span>
+      <span class="etiquette">Modifier</span>
+    </summary>
+    <div class="reglages-membre">
+      <form method="post" action="/famille/membres/{{.ID}}">
+        {{template "jeton" $c.CSRF}}
+        <label class="champ"><span>Prénom</span><input name="prenom" value="{{.Nom}}" maxlength="40" required></label>
+        {{template "choix-couleur" dict "Nom" "couleur" "Choisie" .Couleur}}
+        <button class="bouton petit">Enregistrer</button>
+      </form>
+      {{if eq .Role "enfant"}}
+      <form method="post" action="/famille/membres/{{.ID}}/pin" class="rangee">
+        {{template "jeton" $c.CSRF}}
+        <label class="champ"><span>Nouveau code PIN</span>
+          <input name="pin" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" required></label>
+        <button class="bouton petit secondaire">Changer le code</button>
+      </form>
+      {{end}}
+      {{if ne .ID $c.Membre.ID}}
+      <form method="post" action="/famille/membres/{{.ID}}/retirer" hx-confirm="Retirer {{.Nom}} de la famille ?">
+        {{template "jeton" $c.CSRF}}
+        <p><button class="bouton petit danger">Retirer de la famille</button></p>
+      </form>
+      {{end}}
+    </div>
+  </details>
+  {{- end}}
+</section>
+
+<section class="carte bloc">
+  <h2>⭐ Ajouter un enfant</h2>
+  <p class="aide">L'enfant se connecte en touchant son prénom puis en tapant son code PIN, sur un appareil où un parent s'est déjà connecté.</p>
+  <form method="post" action="/famille/enfants">
+    {{template "jeton" $c.CSRF}}
+    <div class="rangee">
+      <label class="champ"><span>Prénom</span><input name="prenom" maxlength="40" required></label>
+      <label class="champ"><span>Code PIN (4 à 6 chiffres)</span>
+        <input name="pin" inputmode="numeric" pattern="[0-9]{4,6}" maxlength="6" autocomplete="off" required></label>
+    </div>
+    {{template "choix-couleur" dict "Nom" "couleur" "Choisie" 0}}
+    <button class="bouton">Ajouter l'enfant</button>
+  </form>
+</section>
+
+<section class="carte bloc">
+  <h2>📨 Inviter un adulte (ou un ado)</h2>
+  <p class="aide">Crée un lien d'invitation : la personne choisit elle-même son identifiant et son mot de passe.</p>
+  <form method="post" action="/famille/invitations" class="rangee">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Rôle</span>
+      <select name="role"><option value="parent">Parent</option><option value="enfant">Enfant (avec mot de passe)</option></select></label>
+    <button class="bouton">Créer le lien</button>
+  </form>
+  {{if .Invitations}}
+  <form method="post" action="/famille/invitations/annuler">
+    {{template "jeton" $c.CSRF}}
+    <p class="aide">{{pluriel .Invitations "invitation en cours" "invitations en cours"}}.
+      <button class="bouton petit secondaire">Tout annuler</button></p>
+  </form>
+  {{end}}
+</section>
+
+<section class="carte bloc">
+  <h2>🧩 Modules</h2>
+  <p class="aide">Un module désactivé disparaît pour toute la famille (ses données sont gardées).</p>
+  <form method="post" action="/famille/modules">
+    {{template "jeton" $c.CSRF}}
+    {{- range .Catalogue}}
+    <label class="interrupteur">
+      <span class="emoji">{{.Emoji}}</span><span class="nom">{{.Nom}}{{if .Parents}} <small class="etiquette">parents</small>{{end}}</span>
+      <input type="checkbox" name="module_{{.Cle}}" value="1"{{if $c.Actif .Cle}} checked{{end}}>
+      <span class="glissiere"></span>
+    </label>
+    {{- end}}
+    <div class="boutons"><button class="bouton">Enregistrer les modules</button></div>
+  </form>
+</section>
+
+<section class="carte bloc">
+  <h2>⚙️ Réglages</h2>
+  <form method="post" action="/famille/reglages">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Nom de la famille</span><input name="nom" value="{{$c.Famille.Nom}}" maxlength="60" required></label>
+    <div class="rangee">
+      <label class="champ"><span>Fuseau horaire</span>
+        <select name="fuseau">{{range .Fuseaux}}<option{{if eq . $c.Famille.Fuseau}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+      <label class="champ"><span>Monnaie</span>
+        <select name="devise">{{range .Devises}}<option{{if eq . $c.Famille.Devise}} selected{{end}}>{{.}}</option>{{end}}</select></label>
+    </div>
+    <button class="bouton">Enregistrer</button>
+  </form>
+</section>
+{{end}}
+{{end}}
