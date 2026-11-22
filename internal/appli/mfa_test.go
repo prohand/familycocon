@@ -76,6 +76,13 @@ func TestDoubleAuthentificationTOTP(t *testing.T) {
 	if len(codes) != 10 || !strings.Contains(page, "Activée") {
 		t.Fatalf("activation : %d codes", len(codes))
 	}
+	// Recharger la page des codes (adresse du formulaire) ramène à la page
+	// Sécurité, sans « Method Not Allowed » ni réafficher les codes.
+	for _, chemin := range []string{"/moi/securite/totp/activer", "/moi/securite/codes"} {
+		if c, p := marie.get(chemin); c != 200 || !strings.Contains(p, "Passkeys") || strings.Contains(p, codes[0][1]) {
+			t.Fatalf("GET %s : %d", chemin, c)
+		}
+	}
 
 	// Nouvelle connexion : le mot de passe ne suffit plus.
 	n := nouveauNavigateur(t, srv)

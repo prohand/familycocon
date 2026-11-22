@@ -142,6 +142,12 @@ func (a *App) routesMFA() {
 	a.Route("POST /moi/securite/totp/activer", "", Membre, a.activerTOTP)
 	a.Route("POST /moi/securite/totp/desactiver", "", Membre, a.desactiverTOTP)
 	a.Route("POST /moi/securite/codes", "", Membre, a.nouveauxCodes)
+	// Ouvertes directement (rechargement, favori) : retour à la page Sécurité.
+	for _, chemin := range []string{"/moi/securite/totp/activer", "/moi/securite/codes", "/moi/securite/totp/desactiver"} {
+		a.Mux.HandleFunc("GET "+chemin, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/moi/securite", http.StatusSeeOther)
+		})
+	}
 	a.Route("GET /moi/securite/passkeys/defi", "", Membre, a.defiInscription)
 	a.Route("POST /moi/securite/passkeys", "", Membre, a.ajouterPasskey)
 	a.Route("POST /moi/securite/passkeys/{id}/supprimer", "", Membre, a.supprimerPasskey)
@@ -389,6 +395,10 @@ type donneesSecurite struct {
 
 func (a *App) afficherSecurite(w http.ResponseWriter, r *http.Request, c *Contexte, codes []string) {
 	ctx := r.Context()
+	// Page affichée en réponse à un formulaire (activation, nouveaux codes) :
+	// l'adresse affichée redevient /moi/securite, pour qu'un rechargement ne
+	// redemande pas une adresse qui n'accepte que les formulaires.
+	w.Header().Set("HX-Push-Url", "/moi/securite")
 	if !c.Membre.Mdp.Valid {
 		a.PageErreur(w, r, c, http.StatusBadRequest, "Pas besoin", "Ce compte se connecte avec un code PIN, sur un appareil de confiance.")
 		return

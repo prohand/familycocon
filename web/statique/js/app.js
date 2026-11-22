@@ -254,7 +254,9 @@ if ("serviceWorker" in navigator) {
       });
     }).then(function (r) {
       if (!r.ok) return lire(r);
-      window.location.reload();
+      // Pas reload() : la page peut être à une adresse de formulaire
+      // (après l'activation de la double authentification).
+      window.location.href = "/moi/securite";
     });
   }
   function montrer() {
