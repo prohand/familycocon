@@ -1,0 +1,23 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="{{if .Nouveau}}/vehicules{{else}}/vehicules/{{.V.ID}}{{end}}">‹ Retour</a>
+  <h1>{{if .Nouveau}}🚗 Nouveau véhicule{{else}}✏️ {{.V.Nom}}{{end}}</h1>
+</section>
+<form class="carte" method="post" action="{{if .Nouveau}}/vehicules{{else}}/vehicules/{{.V.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  <label class="champ"><span>Nom</span><input name="nom" value="{{.V.Nom}}" maxlength="60" placeholder="Ex. : La Clio" required autofocus></label>
+  <label class="champ"><span>Genre</span>
+    <select name="genre">{{range .Genres}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.V.Genre}} selected{{end}}>{{.Emoji}} {{.Nom}}</option>{{end}}</select></label>
+  <div class="rangee">
+    <label class="champ"><span>Immatriculation</span><input name="immatriculation" value="{{.V.Immatriculation}}" maxlength="20" autocomplete="off"></label>
+    <label class="champ"><span>Kilométrage</span><input name="kilometrage" value="{{if .V.Kilometrage}}{{.V.Kilometrage}}{{end}}" inputmode="numeric"></label>
+  </div>
+  <label class="champ"><span>Marque et modèle</span><input name="modele" value="{{.V.Modele}}" maxlength="80"></label>
+  <label class="champ"><span>Notes (facultatif)</span><textarea name="notes" rows="2" maxlength="1000">{{.V.Notes}}</textarea></label>
+  {{if .Nouveau}}<p class="aide">Ensuite, ajoutez les échéances : contrôle technique, assurance, vidange…</p>{{end}}
+  <div class="boutons"><button class="bouton">Enregistrer</button></div>
+</form>
+{{end}}
+{{end}}

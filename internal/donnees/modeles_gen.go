@@ -17,11 +17,38 @@ type AbonnementsPush struct {
 	CreeLe   int64
 }
 
+type Animal struct {
+	ID          int64
+	FamilleID   int64
+	Nom         string
+	Espece      string
+	Race        string
+	Naissance   string
+	Puce        string
+	Veterinaire string
+	Notes       string
+	CreeLe      int64
+}
+
 type Appareil struct {
 	Empreinte []byte
 	FamilleID int64
 	CreeLe    int64
 	VueLe     int64
+}
+
+type Carnet struct {
+	ID        int64
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+	Jour      string
+	Libelle   string
+	Montant   int64
+	Km        int64
+	Note      string
+	CreePar   sql.NullInt64
+	CreeLe    int64
 }
 
 type Carte struct {
@@ -68,6 +95,17 @@ type Echange struct {
 	DemandeLe    int64
 	DecidePar    sql.NullInt64
 	DecideLe     sql.NullInt64
+}
+
+type Echeance struct {
+	ID             int64
+	FamilleID      int64
+	Module         string
+	ObjetID        int64
+	Libelle        string
+	Jour           string
+	RepetitionMois int64
+	CreeLe         int64
 }
 
 type Evenement struct {
@@ -197,6 +235,19 @@ type Passkey struct {
 	UtiliseLe   int64
 }
 
+type Prestataire struct {
+	ID        int64
+	FamilleID int64
+	Nom       string
+	Metier    string
+	Telephone string
+	Email     string
+	Adresse   string
+	Site      string
+	Notes     string
+	CreeLe    int64
+}
+
 type Produit struct {
 	ID        int64
 	ListeID   int64
@@ -284,4 +335,16 @@ type TacheFaite struct {
 	Occurrence string
 	FaitPar    sql.NullInt64
 	FaitLe     int64
+}
+
+type Vehicule struct {
+	ID              int64
+	FamilleID       int64
+	Nom             string
+	Genre           string
+	Immatriculation string
+	Modele          string
+	Kilometrage     int64
+	Notes           string
+	CreeLe          int64
 }

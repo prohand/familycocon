@@ -1233,6 +1233,28 @@ progress.jauge.etoiles::-moz-progress-bar { background: linear-gradient(90deg, #
 .qr-caisse { width: 240px; height: 240px; image-rendering: pixelated; }
 .numero-caisse { font-family: ui-monospace, monospace; font-size: 1.2rem; font-weight: 700; letter-spacing: .08em; margin: 10px 0 0; color: #111; overflow-wrap: anywhere; }
 
+
+/* ---------- Suivi : échéances et carnet ---------- */
+.echeance { padding: 6px 0; }
+.echeance + .echeance { border-top: 1px solid var(--bordure); }
+.echeance.retard .quoi small { color: var(--rouge); font-weight: 800; }
+.echeance.proche .quoi small { color: var(--corail); font-weight: 800; }
+details.fait > summary, details.ajout-echeance > summary { list-style: none; cursor: pointer; display: inline-block; }
+details.fait > summary::-webkit-details-marker, details.ajout-echeance > summary::-webkit-details-marker { display: none; }
+details.fait[open] > summary { margin-bottom: 4px; }
+.lien-ajout { color: var(--corail); font-weight: 800; margin-top: 10px; }
+.ligne .heure small { display: block; font-weight: 600; font-size: .72rem; }
+.fiche-tete { display: flex; align-items: center; gap: 14px; }
+.fiche-tete .grand-emoji { font-size: 3rem; }
+.fiche-tete .quoi small { display: block; color: var(--texte-doux); font-weight: 700; }
+.liste-objets { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.objet { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 18px 10px;
+  border-radius: var(--rayon); background: var(--bg, var(--carte)); box-shadow: var(--ombre); transition: transform .15s; }
+.objet:hover { transform: translateY(-2px); }
+.objet .grand-emoji { font-size: 2.6rem; }
+.objet small { color: var(--texte-doux); font-weight: 700; }
+.objet .alerte { color: var(--rouge); font-weight: 800; font-size: .78rem; }
+
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
