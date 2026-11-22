@@ -272,6 +272,31 @@ type ProduitsConnu struct {
 	VuLe      int64
 }
 
+type Projet struct {
+	ID          int64
+	FamilleID   int64
+	Nom         string
+	Emoji       string
+	Couleur     int64
+	Description string
+	Objectif    string
+	Budget      int64
+	TermineLe   int64
+	CreeLe      int64
+}
+
+type ProjetEtape struct {
+	ID        int64
+	ProjetID  int64
+	FamilleID int64
+	Texte     string
+	Jour      string
+	MembreID  sql.NullInt64
+	FaiteLe   int64
+	FaitePar  sql.NullInt64
+	CreeLe    int64
+}
+
 type Recette struct {
 	FamilleID   int64
 	Cle         string

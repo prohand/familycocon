@@ -1255,6 +1255,29 @@ details.fait[open] > summary { margin-bottom: 4px; }
 .objet small { color: var(--texte-doux); font-weight: 700; }
 .objet .alerte { color: var(--rouge); font-weight: 800; font-size: .78rem; }
 
+/* ---------- Projets ---------- */
+.alerte, .ligne .quoi small.alerte { color: var(--rouge); font-weight: 800; }
+.liste-projets { display: grid; gap: 12px; }
+.projet { display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: var(--rayon);
+  background: var(--carte); box-shadow: var(--ombre); border-left: 6px solid var(--c); transition: transform .15s; }
+.projet:hover { transform: translateY(-2px); }
+.projet .grand-emoji { font-size: 2.4rem; }
+.projet .quoi { flex: 1; font-weight: 800; }
+.projet .quoi small { display: block; color: var(--texte-doux); font-weight: 700; }
+progress.progres.projets::-webkit-progress-value { background: linear-gradient(90deg, var(--projets-t), #C77DDB); }
+progress.progres.projets::-moz-progress-bar { background: linear-gradient(90deg, var(--projets-t), #C77DDB); }
+progress.progres.depasse::-webkit-progress-value { background: var(--rouge); }
+progress.progres.depasse::-moz-progress-bar { background: var(--rouge); }
+.ligne.etape form { display: contents; }
+.ligne.etape .coche.cochee { background: var(--projets-t); border-color: var(--projets-t); }
+details.termines > summary { cursor: pointer; }
+.choix-emoji { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
+.choix-emoji input { position: absolute; opacity: 0; }
+.choix-emoji span { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; font-size: 1.5rem;
+  border-radius: 12px; border: 2px solid var(--bordure); cursor: pointer; }
+.choix-emoji input:checked + span { border-color: var(--corail); background: var(--fond); }
+.choix-emoji input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
+
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }

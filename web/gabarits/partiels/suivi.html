@@ -2,6 +2,7 @@
      Reçoit : dict "S" (*suivi.Bloc) "J" (jeton CSRF) "P" (parent ?) "Titre" "TitreCarnet". */}}
 {{define "bloc-suivi"}}
 {{$s := .S}}{{$j := .J}}{{$p := .P}}
+{{if not $s.SansEcheances}}
 <section class="carte bloc">
   <h2>⏰ {{.Titre}}</h2>
   {{- range $s.Echeances}}
@@ -43,10 +44,12 @@
     </form>
   </details>
 </section>
+{{end}}
 
 <section class="carte bloc">
   <h2>📒 {{.TitreCarnet}}</h2>
-  {{if $s.TotalAnnee}}<p class="aide">Dépensé cette année : <b>{{montant $s.TotalAnnee $s.Devise}}</b></p>{{end}}
+  {{if $s.SansEcheances}}{{if $s.Total}}<p class="aide">Dépensé en tout : <b>{{montant $s.Total $s.Devise}}</b></p>{{end}}
+  {{else if $s.TotalAnnee}}<p class="aide">Dépensé cette année : <b>{{montant $s.TotalAnnee $s.Devise}}</b></p>{{end}}
   {{- range $s.Carnet}}
   <div class="ligne">
     <span class="heure">{{slice .Jour 8 10}}/{{slice .Jour 5 7}}<small>{{slice .Jour 0 4}}</small></span>

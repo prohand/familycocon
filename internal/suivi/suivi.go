@@ -39,6 +39,8 @@ type Objet struct {
 	Emoji   string
 	Modeles []Modele
 	AvecKm  bool
+	// SansEcheances : seulement le carnet (projets : les étapes tiennent lieu d'échéances).
+	SansEcheances bool
 	// Nom : le nom de l'objet {id} de la famille ; ok = faux s'il n'existe pas.
 	Nom func(ctx context.Context, famille, id int64) (nom string, ok bool)
 	// URL : la fiche de l'objet.
@@ -67,6 +69,9 @@ func Brancher(a *appli.App) *Suivi {
 // Enregistrer : un module confie ses objets au suivi (et ses échéances aux rappels).
 func (s *Suivi) Enregistrer(o Objet) {
 	s.objets[o.Module] = o
+	if o.SansEcheances {
+		return
+	}
 	s.a.AjouterEcheances(o.Module, func(ctx context.Context, f donnees.Famille, debut, fin time.Time) ([]appli.Echeance, error) {
 		l, err := s.a.Q.EcheancesPeriode(ctx, donnees.EcheancesPeriodeParams{FamilleID: f.ID, Module: o.Module,
 			Du: debut.Format("2006-01-02"), Au: fin.Format("2006-01-02")})
@@ -99,22 +104,24 @@ type LigneEcheance struct {
 
 // Bloc : échéances et carnet d'un objet (affichés sur sa fiche).
 type Bloc struct {
-	Module     string
-	ObjetID    int64
-	Echeances  []LigneEcheance
-	Carnet     []donnees.Carnet
-	TotalAnnee int64
-	Modeles    []Modele
-	AvecKm     bool
-	Devise     string
-	Aujourdhui string
+	Module        string
+	ObjetID       int64
+	Echeances     []LigneEcheance
+	Carnet        []donnees.Carnet
+	TotalAnnee    int64
+	Total         int64 // depuis le début (100 dernières lignes)
+	SansEcheances bool
+	Modeles       []Modele
+	AvecKm        bool
+	Devise        string
+	Aujourdhui    string
 }
 
 // Bloc : les échéances et le carnet de l'objet.
 func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, objet int64) (*Bloc, error) {
 	o := s.objets[module]
 	auj := c.Maintenant()
-	b := &Bloc{Module: module, ObjetID: objet, Modeles: o.Modeles, AvecKm: o.AvecKm, Devise: c.Famille.Devise, Aujourdhui: auj.Format("2006-01-02")}
+	b := &Bloc{Module: module, ObjetID: objet, Modeles: o.Modeles, AvecKm: o.AvecKm, SansEcheances: o.SansEcheances, Devise: c.Famille.Devise, Aujourdhui: auj.Format("2006-01-02")}
 	ech, err := s.a.Q.EcheancesObjet(ctx, donnees.EcheancesObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet})
 	if err != nil {
 		return nil, err
@@ -137,6 +144,7 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 	}
 	annee := strconv.Itoa(auj.Year())
 	for _, l := range b.Carnet {
+		b.Total += l.Montant
 		if strings.HasPrefix(l.Jour, annee) {
 			b.TotalAnnee += l.Montant
 		}
@@ -170,7 +178,7 @@ func lireJour(v string) (string, bool) {
 func (s *Suivi) ajouterEcheance(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	objet, _ := strconv.ParseInt(r.PathValue("objet"), 10, 64)
 	o, ok := s.cible(r, c, r.PathValue("module"), objet)
-	if !ok {
+	if !ok || o.SansEcheances {
 		s.a.Echec(w, r, http.StatusNotFound, "Introuvable.")
 		return
 	}

@@ -13,6 +13,7 @@ import (
 	"familycocon/internal/foyer"
 	"familycocon/internal/menus"
 	"familycocon/internal/notes"
+	"familycocon/internal/projets"
 	"familycocon/internal/suivi"
 	"familycocon/internal/taches"
 )
@@ -28,6 +29,8 @@ func brancherModules(a *appli.App) error {
 	notes.Brancher(a)
 	contacts.Brancher(a)
 	fidelite.Brancher(a)
-	foyer.Brancher(a, suivi.Brancher(a))
+	s := suivi.Brancher(a) // échéances et carnet communs
+	foyer.Brancher(a, s)
+	projets.Brancher(a, s)
 	return nil
 }
