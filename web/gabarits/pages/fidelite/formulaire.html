@@ -1,0 +1,22 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="{{if .Nouvelle}}/fidelite{{else}}/fidelite/{{.Carte.ID}}{{end}}">‹ Retour</a>
+  <h1>{{if .Nouvelle}}💳 Nouvelle carte{{else}}✏️ {{.Carte.Enseigne}}{{end}}</h1>
+</section>
+<form class="carte" method="post" action="{{if .Nouvelle}}/fidelite{{else}}/fidelite/{{.Carte.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  <label class="champ"><span>Enseigne</span><input name="enseigne" value="{{.Carte.Enseigne}}" maxlength="60" placeholder="Ex. : Supermarché du coin" required autofocus></label>
+  <label class="champ"><span>Numéro (sous le code-barres de la carte)</span>
+    <input name="numero" value="{{.Carte.Numero}}" maxlength="100" autocomplete="off" inputmode="text" required></label>
+  <label class="champ"><span>Type de code</span>
+    <select name="format">{{range .Formats}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.Carte.Format}} selected{{end}}>{{.Nom}}</option>{{end}}</select></label>
+  <label class="champ"><span>Titulaire (facultatif)</span><input name="titulaire" value="{{.Carte.Titulaire}}" maxlength="60"></label>
+  <span class="aide">Couleur</span>
+  {{template "choix-couleur" dict "Nom" "couleur" "Choisie" .Carte.Couleur}}
+  <label class="champ"><span>Notes (facultatif)</span><textarea name="notes" rows="2" maxlength="500">{{.Carte.Notes}}</textarea></label>
+  <div class="boutons"><button class="bouton">Enregistrer</button></div>
+</form>
+{{end}}
+{{end}}

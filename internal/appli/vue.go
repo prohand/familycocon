@@ -30,6 +30,7 @@ var Catalogue = []ModuleDef{
 	{Cle: "notes", Nom: "Notes", Emoji: "📝", URL: "/notes"},
 	{Cle: "anniversaires", Nom: "Anniversaires", Emoji: "🎂", URL: "/anniversaires"},
 	{Cle: "adresses", Nom: "Adresses", Emoji: "📇", URL: "/adresses"},
+	{Cle: "fidelite", Nom: "Cartes de fidélité", Emoji: "💳", URL: "/fidelite"},
 }
 
 // ModulesParDefaut : modules activés pour une nouvelle famille (tous).

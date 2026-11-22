@@ -24,6 +24,19 @@ type Appareil struct {
 	VueLe     int64
 }
 
+type Carte struct {
+	ID         int64
+	FamilleID  int64
+	Enseigne   string
+	Numero     string
+	Format     string
+	Couleur    int64
+	Titulaire  string
+	Notes      string
+	CreeLe     int64
+	UtiliseeLe int64
+}
+
 type CodesSecour struct {
 	MembreID  int64
 	Empreinte []byte
