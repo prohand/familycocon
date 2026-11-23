@@ -271,22 +271,36 @@ document.addEventListener("change", function (e) {
 });
 
 // Véhicule : reprise d'une sauvegarde Fuelio (input[data-fuelio] = adresse
-// d'envoi). Le fichier part tel quel (il peut être gros : photos comprises),
-// puis la fiche est rechargée avec le bilan.
+// d'envoi). Le fichier part tel quel (il peut peser des centaines de Mo,
+// photos comprises) ; l'avancement s'affiche, puis la fiche est rechargée
+// avec le bilan.
 document.addEventListener("change", function (e) {
   var p = e.target;
   if (!p.matches || !p.matches("input[data-fuelio]") || !p.files || !p.files[0]) return;
   var jeton = "";
   try { jeton = JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) {}
-  window.fcToast("Reprise en cours… (patientez)");
-  fetch(p.getAttribute("data-fuelio"), { method: "POST", credentials: "same-origin",
-    headers: { "X-Jeton": jeton, "HX-Request": "true", "Content-Type": "application/octet-stream" }, body: p.files[0] })
-    .then(function (rep) {
-      if (rep.ok) { window.location.assign(rep.headers.get("HX-Location") || window.location.href); return; }
-      var msg = "Reprise impossible";
-      try { msg = JSON.parse(rep.headers.get("HX-Trigger"))["fc-toast"].texte || msg; } catch (_) {}
-      window.fcToast(msg, true);
-    }).catch(function () { window.fcToast("Envoi interrompu", true); });
+  var x = new XMLHttpRequest();
+  var palier = -1;
+  x.open("POST", p.getAttribute("data-fuelio"));
+  x.setRequestHeader("X-Jeton", jeton);
+  x.setRequestHeader("HX-Request", "true");
+  x.setRequestHeader("Content-Type", "application/octet-stream");
+  x.upload.onprogress = function (ev) {
+    if (!ev.lengthComputable) return;
+    var pc = Math.floor(ev.loaded * 10 / ev.total) * 10;
+    if (pc === palier) return;
+    palier = pc;
+    window.fcToast(pc < 100 ? "Envoi du fichier… " + pc + " %" : "Lecture des pleins et des photos… (patientez)");
+  };
+  x.onload = function () {
+    if (x.status >= 200 && x.status < 300) { window.location.assign(x.getResponseHeader("HX-Location") || window.location.href); return; }
+    var msg = "Reprise impossible";
+    try { msg = JSON.parse(x.getResponseHeader("HX-Trigger"))["fc-toast"].texte || msg; } catch (_) {}
+    window.fcToast(msg, true);
+  };
+  x.onerror = function () { window.fcToast("Envoi interrompu", true); };
+  window.fcToast("Envoi du fichier…");
+  x.send(p.files[0]);
   p.value = "";
 });
 

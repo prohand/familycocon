@@ -5,6 +5,8 @@ package fuelio
 import (
 	"archive/zip"
 	"bytes"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -110,8 +112,14 @@ func TestOuvrirZip(t *testing.T) {
 	if len(s.Vehicules) != 2 || s.Vehicules[1].Nom != "Kangoo" || len(s.Images) != 1 {
 		t.Fatalf("%d véhicules, %d images", len(s.Vehicules), len(s.Images))
 	}
-	if b, err := s.Images[0].Lire(); err != nil || string(b) != "jpeg" {
-		t.Fatalf("image : %q %v", b, err)
+	r, err := s.Images[0].Ouvrir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	contenu, _ := io.ReadAll(r)
+	r.Close()
+	if string(contenu) != "jpeg" {
+		t.Fatalf("image : %q", contenu)
 	}
 }
 
@@ -129,6 +137,98 @@ func TestRapprocher(t *testing.T) {
 	for nom, attendu := range cas {
 		if i := Rapprocher(nom, v.Lignes); i != attendu {
 			t.Errorf("%s : %d, attendu %d", nom, i, attendu)
+		}
+	}
+}
+
+// csvComplet : un véhicule au format des sauvegardes complètes récentes
+// (« Date », « Fuel (L) », guid, partie « ## Pictures »). Les pleins et les
+// dépenses ont les mêmes UniqueId (1, 2…), comme dans Fuelio.
+func csvComplet(nom string) string {
+	return "\"## Vehicle\"\n\"Name\",\"Description\",\"DistUnit\",\"FuelUnit\",\"guid\"\n\"" + nom + "\",\"\",\"0\",\"0\",\"v1\"\n" +
+		"\"## Log\"\n\"Date\",\"Odo (km)\",\"Fuel (L)\",\"Full\",\"Price\",\"l/100km\",\"City\",\"Notes\",\"UniqueId\",\"guid\",\"lastupdated\"\n" +
+		"\"2025-01-10 10:00\",\"1000\",\"40\",\"1\",\"70\",\"0\",\"\",\"\",\"1\",\"aaaa-log-1\",\"0\"\n" +
+		"\"2025-02-10 10:00\",\"1600\",\"41\",\"1\",\"71\",\"0\",\"\",\"\",\"2\",\"aaaa-log-2\",\"0\"\n" +
+		"\"2025-03-10 10:00\",\"2200\",\"42\",\"1\",\"72\",\"0\",\"\",\"\",\"3\",\"aaaa-log-3\",\"0\"\n" +
+		"\"## CostCategories\"\n\"CostTypeID\",\"Name\",\"priority\",\"color\"\n\"1\",\"Entretien\",\"0\",\"0\"\n" +
+		"\"## Costs\"\n\"CostTitle\",\"Date\",\"Odo\",\"CostTypeID\",\"Notes\",\"Cost\",\"isTemplate\",\"isIncome\",\"UniqueId\",\"guid\"\n" +
+		"\"Vidange\",\"2025-01-20\",\"1200\",\"1\",\"\",\"90\",\"0\",\"0\",\"1\",\"bbbb-cost-1\"\n" +
+		"\"Pneus\",\"2025-02-20\",\"1800\",\"1\",\"\",\"300\",\"0\",\"0\",\"2\",\"bbbb-cost-2\"\n" +
+		"\"## Category\"\n\"IdCategory\",\"Name\",\"guid\",\"lastupdated\"\n" +
+		"\"## TripLog\"\n\"title\",\"StartName\"\n" +
+		"\"## FavStations\"\n\"Name\",\"Latitude\"\n" +
+		"\"## Pictures\"\n\"Filename\",\"Note\",\"Type\",\"target_id\"\n" +
+		"\"A.png\",\"\",\"1\",\"1\"\n" + // plein 1 ou dépense 1 : le type tranche
+		"\"B.png\",\"\",\"1\",\"3\"\n" + // seul un plein porte 3 : type 1 = plein
+		"\"C.png\",\"\",\"2\",\"2\"\n" +
+		"\"D.png\",\"\",\"2\",\"bbbb-cost-1\"\n" + // guid d'une dépense : type 2 = dépense
+		"\"E.png\",\"\",\"3\",\"1\"\n" + // trajet : laissé de côté
+		"\"F.png\",\"\",\"1\",\"99\"\n" + // ligne inconnue
+		"\"manque.png\",\"\",\"2\",\"1\"\n" // fichier absent
+}
+
+// fichierComplet : le .fuelio (ZIP) avec pictures.data (un ZIP dedans).
+func fichierComplet(t *testing.T, methode uint16) string {
+	t.Helper()
+	var images bytes.Buffer
+	zi := zip.NewWriter(&images)
+	for _, n := range []string{"A.png", "B.png", "C.png", "D.png", "E.png", "F.png", "autre-vehicule.png"} {
+		w, _ := zi.Create(n)
+		_, _ = w.Write([]byte("image " + n))
+	}
+	_ = zi.Close()
+	var b bytes.Buffer
+	z := zip.NewWriter(&b)
+	w, _ := z.CreateHeader(&zip.FileHeader{Name: "pictures.data", Method: methode})
+	_, _ = w.Write(images.Bytes())
+	for i, nom := range []string{"Kangoo", "Clio", "Vélo"} {
+		w, _ = z.Create(fmt.Sprintf("vehicle-%d-local.csv", i+1))
+		_, _ = w.Write([]byte(csvComplet(nom)))
+	}
+	_ = z.Close()
+	chemin := filepath.Join(t.TempDir(), "Fuelio_2026-11-23.fuelio")
+	_ = os.WriteFile(chemin, b.Bytes(), 0o600)
+	return chemin
+}
+
+func TestSauvegardeComplete(t *testing.T) {
+	for _, methode := range []uint16{zip.Store, zip.Deflate} {
+		chemin := fichierComplet(t, methode)
+		s, err := Ouvrir(chemin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(s.Vehicules) != 3 || len(s.Images) != 7 {
+			t.Fatalf("%d véhicules, %d images", len(s.Vehicules), len(s.Images))
+		}
+		v := s.Vehicules[1]
+		if v.Nom != "Clio" || len(v.Lignes) != 5 || v.Lignes[0].Litres != 4000 || v.Lignes[0].Guid != "aaaa-log-1" || len(v.Photos) != 7 {
+			t.Fatalf("véhicule : %q, %d lignes, %d photos, %+v", v.Nom, len(v.Lignes), len(v.Photos), v.Lignes[0])
+		}
+		liens, sans := Rattacher(v, s.Images)
+		obtenu := map[string]string{}
+		for _, l := range liens {
+			obtenu[l.Image.Nom] = v.Lignes[l.Ligne].Jour + " " + v.Lignes[l.Ligne].Libelle
+			r, err := l.Image.Ouvrir()
+			if err != nil {
+				t.Fatal(err)
+			}
+			contenu, _ := io.ReadAll(r)
+			r.Close()
+			if string(contenu) != "image "+l.Image.Nom {
+				t.Fatalf("contenu de %s : %q", l.Image.Nom, contenu)
+			}
+		}
+		attendu := map[string]string{"A.png": "2025-01-10 Plein", "B.png": "2025-03-10 Plein", "C.png": "2025-02-20 Pneus", "D.png": "2025-01-20 Vidange"}
+		if fmt.Sprint(obtenu) != fmt.Sprint(attendu) || sans != 3 {
+			t.Fatalf("méthode %d : %v, %d laissées de côté", methode, obtenu, sans)
+		}
+		if err := s.Fermer(); err != nil {
+			t.Fatal(err)
+		}
+		// Le fichier provisoire (ZIP compressé) est effacé.
+		if l, _ := filepath.Glob(filepath.Join(filepath.Dir(chemin), "fuelio-*")); len(l) != 0 {
+			t.Fatalf("fichier provisoire gardé : %v", l)
 		}
 	}
 }

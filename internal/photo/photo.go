@@ -7,12 +7,14 @@
 package photo
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"image"
 	"image/color"
 	"image/jpeg"
 	_ "image/png" // captures d'écran
+	"io"
 	"sync"
 )
 
@@ -34,13 +36,33 @@ var ErrPhoto = errors.New("photo illisible")
 
 // Preparer : la photo (JPEG ou PNG) réduite et réécrite en JPEG.
 func Preparer(donnees []byte) ([]byte, error) {
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(donnees))
+	return PreparerFlux(func() (io.ReadCloser, error) { return io.NopCloser(bytes.NewReader(donnees)), nil })
+}
+
+// fluxMax : taille lue au plus pour une photo (fichier compressé).
+const fluxMax = 64 << 20
+
+// PreparerFlux : comme Preparer, mais la photo est lue par morceaux (dans
+// un ZIP, par exemple) au lieu d'être d'abord gardée en mémoire. ouvrir est
+// appelée deux fois : une pour la taille, une pour l'image.
+func PreparerFlux(ouvrir func() (io.ReadCloser, error)) ([]byte, error) {
+	r, err := ouvrir()
+	if err != nil {
+		return nil, err
+	}
+	cfg, _, err := image.DecodeConfig(bufio.NewReader(io.LimitReader(r, fluxMax)))
+	_ = r.Close()
 	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > PixelsMax {
 		return nil, ErrPhoto
 	}
 	une.Lock()
 	defer une.Unlock()
-	img, _, err := image.Decode(bytes.NewReader(donnees))
+	r, err = ouvrir()
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	img, _, err := image.Decode(bufio.NewReader(io.LimitReader(r, fluxMax)))
 	if err != nil {
 		return nil, ErrPhoto
 	}

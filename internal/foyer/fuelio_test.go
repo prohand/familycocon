@@ -89,7 +89,7 @@ func TestRepriseFuelio(t *testing.T) {
 		t.Fatalf("reprise : %d %s", code, msg)
 	}
 	_, page = marie.Get("/vehicules/" + id)
-	for _, attendu := range []string{"2 pleins et 1 dépense repris", "1 photo jointe", "1 photo sans ligne", "Vidange", "Lyon", "45\u202f890 km"} {
+	for _, attendu := range []string{"2 pleins et 1 dépense repris", "1 photo jointe", "1 photo laissée de côté", "Vidange", "Lyon", "45\u202f890 km"} {
 		if !strings.Contains(page, attendu) {
 			t.Errorf("fiche sans « %s »", attendu)
 		}

@@ -38,7 +38,7 @@ var fuelioUn sync.Mutex
 
 // fuelioRetour : ce que la reprise a fait.
 type fuelioRetour struct {
-	pleins, depenses, deja, photos, sansLigne int
+	pleins, depenses, deja, photos, sansLigne int  // sansLigne : photos non jointes
 	plein                                     bool // carnet plein : la fin n'est pas reprise
 }
 
@@ -61,7 +61,7 @@ func (x fuelioRetour) message() string {
 		t += " · " + appli.Pluriel(x.photos, "photo jointe", "photos jointes")
 	}
 	if x.sansLigne > 0 {
-		t += " · " + appli.Pluriel(x.sansLigne, "photo sans ligne", "photos sans ligne")
+		t += " · " + appli.Pluriel(x.sansLigne, "photo laissée de côté", "photos laissées de côté")
 	}
 	if x.plein {
 		t += " · carnet plein"
@@ -182,27 +182,18 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 	// veille) : les lignes sont déjà écrites, leurs photos ne doivent pas
 	// manquer.
 	ctx = context.WithoutCancel(ctx)
-	for _, img := range sv.Images {
-		i := fuelio.Rapprocher(img.Nom, v.Lignes)
-		if i < 0 {
-			ret.sansLigne++
-			continue
+	liens, sansLigne := fuelio.Rattacher(v, sv.Images)
+	ret.sansLigne = sansLigne
+	for _, l := range liens {
+		if ids[l.Ligne] == 0 {
+			continue // ligne déjà là avant : ses photos aussi
 		}
-		if ids[i] == 0 {
-			continue
+		jpeg, err := photo.PreparerFlux(l.Image.Ouvrir)
+		if err == nil {
+			err = suivi.AjouterPiece(ctx, m.a, m.a.Q, c.Famille.ID, ids[l.Ligne], c.Membre.ID, jpeg)
 		}
-		brut, err := img.Lire()
 		if err != nil {
-			ret.sansLigne++
-			continue
-		}
-		jpeg, err := photo.Preparer(brut)
-		if err != nil {
-			ret.sansLigne++
-			continue
-		}
-		if err := suivi.AjouterPiece(ctx, m.a, m.a.Q, c.Famille.ID, ids[i], c.Membre.ID, jpeg); err != nil {
-			m.a.Journal.Warn("fuelio : photo non gardée", "fichier", img.Nom, "erreur", err)
+			m.a.Journal.Warn("fuelio : photo non gardée", "fichier", l.Image.Nom, "erreur", err)
 			ret.sansLigne++
 			continue
 		}

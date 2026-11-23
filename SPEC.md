@@ -365,9 +365,19 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   Les pleins (date, km, litres, prix, ville et notes) et les dépenses
   (titre ou catégorie ; modèles et recettes ignorés) vont au carnet, pas au
   budget. Miles et gallons convertis. Une ligne déjà présente n'est pas
-  reprise deux fois. Le fichier (128 Mio au plus) est écrit sur le disque
-  le temps de la lecture, jamais gardé en mémoire, puis effacé ; une reprise
-  à la fois. Photos : rattachées à la ligne dont le nom de fichier cite
-  l'identifiant (`UniqueId`) ou, à défaut, la date (une seule ligne ce
-  jour-là) ; dans le doute, laissées de côté et comptées dans le bilan.
-  À confirmer sur une vraie sauvegarde (le format interne n'est pas publié).
+  reprise deux fois. Le fichier (1 Gio au plus ; ~300 Mo pour quelques
+  années de tickets) est écrit sur le disque le temps de la lecture, jamais
+  gardé en mémoire, puis effacé ; une reprise à la fois, 30 min au plus.
+  Format de la sauvegarde complète (vu sur une vraie, 11/2026) : un ZIP
+  avec `vehicle-N-local.csv` (un par véhicule ; celui qui porte le nom du
+  véhicule est repris) et `pictures.data`, lui-même un ZIP des photos
+  (`<GUID>.png`). Un ZIP interne rangé sans compression est lu en place,
+  sinon décompressé dans un fichier provisoire. Photos décodées par
+  morceaux depuis le ZIP (`photo.PreparerFlux`), une à la fois.
+  Rattachement : la partie `## Pictures` du CSV (`Filename`, `Type`,
+  `target_id`) donne la ligne (guid ou UniqueId). Pleins et dépenses ont
+  les mêmes UniqueId (1, 2…) : le type tranche. Ses valeurs n'étant pas
+  publiées, elles sont déduites des photos sans ambiguïté (un seul type par
+  sorte de ligne, à 4 contre 1 au moins) ; les autres (trajets…) et les
+  cas douteux sont laissés de côté et comptés dans le bilan. Sans
+  `## Pictures` : nom du fichier (identifiant, sinon date).

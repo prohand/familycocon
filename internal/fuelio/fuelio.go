@@ -26,6 +26,7 @@ import (
 	"math"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -36,9 +37,9 @@ import (
 // Limites (garde-fous contre un fichier piégé ou démesuré).
 const (
 	LignesMax    = 20000    // lignes lues par véhicule
-	ImagesMax    = 3000     // photos lues dans le ZIP
-	ImageMax     = 16 << 20 // taille d'une photo une fois décompressée
+	ImagesMax    = 20000    // photos lues dans le ZIP
 	csvMax       = 16 << 20 // taille d'un CSV une fois décompressé
+	interneMax   = 2 << 30  // ZIP dans le ZIP (pictures.data), une fois décompressé
 	VehiculesMax = 50
 )
 
@@ -51,16 +52,25 @@ type Ligne struct {
 	Jour    string // AAAA-MM-JJ
 	Libelle string
 	Note    string
-	Montant int64 // centimes
-	Km      int64 // kilomètres (convertis si le compteur est en miles)
-	Litres  int64 // centilitres (pleins)
-	Cle     string
+	Montant int64  // centimes
+	Km      int64  // kilomètres (convertis si le compteur est en miles)
+	Litres  int64  // centilitres (pleins)
+	Cle     string // UniqueId de Fuelio
+	Guid    string // guid de Fuelio (versions récentes)
+}
+
+// Photo : une ligne de la partie « ## Pictures » du CSV : le fichier
+// (dans pictures.data), son type (plein, dépense… : un nombre propre à
+// Fuelio) et l'identifiant de la ligne qu'il illustre.
+type Photo struct {
+	Fichier, Type, Cible string
 }
 
 // Vehicule : un véhicule de la sauvegarde.
 type Vehicule struct {
 	Nom    string
 	Lignes []Ligne
+	Photos []Photo
 }
 
 // Image : une photo trouvée dans le ZIP (lue plus tard, une à la fois).
@@ -69,66 +79,65 @@ type Image struct {
 	f   *zip.File
 }
 
-// Lire : le contenu de la photo (borné à ImageMax).
-func (i Image) Lire() ([]byte, error) {
-	if i.f.UncompressedSize64 > ImageMax {
-		return nil, ErrFormat
-	}
-	r, err := i.f.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	b, err := io.ReadAll(io.LimitReader(r, ImageMax+1))
-	if err == nil && len(b) > ImageMax {
-		err = ErrFormat
-	}
-	return b, err
-}
+// Ouvrir : le contenu de la photo, lu par morceaux.
+func (i Image) Ouvrir() (io.ReadCloser, error) { return i.f.Open() }
 
 // Sauvegarde : ce qui a été lu dans le fichier.
 type Sauvegarde struct {
 	Vehicules []Vehicule
 	Images    []Image
-	zip       *zip.ReadCloser
+	fermer    []func() error // fichiers ouverts et provisoires
+	dossier   string         // où écrire un fichier provisoire
 }
 
-// Fermer : ferme le ZIP (les images ne sont plus lisibles ensuite).
+// Fermer : ferme les fichiers (les images ne sont plus lisibles ensuite)
+// et efface les fichiers provisoires.
 func (s *Sauvegarde) Fermer() error {
-	if s.zip != nil {
-		return s.zip.Close()
+	var err error
+	for i := len(s.fermer) - 1; i >= 0; i-- {
+		if e := s.fermer[i](); e != nil && err == nil {
+			err = e
+		}
 	}
-	return nil
+	s.fermer = nil
+	return err
 }
 
-// Ouvrir : lit le fichier (ZIP ou CSV) posé sur le disque.
+// Ouvrir : lit le fichier (ZIP ou CSV) posé sur le disque. Un fichier
+// provisoire peut être écrit dans le même dossier (ZIP dans le ZIP) ;
+// Fermer l'efface.
 func Ouvrir(chemin string) (*Sauvegarde, error) {
 	f, err := os.Open(chemin)
 	if err != nil {
 		return nil, err
 	}
+	s := &Sauvegarde{dossier: filepath.Dir(chemin)}
+	s.fermer = append(s.fermer, f.Close)
 	debut := make([]byte, 4)
 	n, _ := io.ReadFull(f, debut)
-	_ = f.Close()
-	s := &Sauvegarde{}
 	if n == 4 && string(debut) == "PK\x03\x04" {
-		z, err := zip.OpenReader(chemin)
+		info, err := f.Stat()
 		if err != nil {
+			_ = s.Fermer()
+			return nil, err
+		}
+		z, err := zip.NewReader(f, info.Size())
+		if err != nil {
+			_ = s.Fermer()
 			return nil, ErrFormat
 		}
-		s.zip = z
-		if err := s.lireZip(); err != nil {
-			_ = z.Close()
+		if err := s.parcourir(z, f, 0); err != nil {
+			_ = s.Fermer()
 			return nil, err
 		}
 	} else {
-		f, err := os.Open(chemin)
-		if err != nil {
+		if _, err := f.Seek(0, io.SeekStart); err != nil {
+			_ = s.Fermer()
 			return nil, err
 		}
-		defer f.Close()
 		v, err := LireCSV(io.LimitReader(f, csvMax))
 		if err != nil {
+			_ = s.Fermer()
 			return nil, err
 		}
 		s.Vehicules = []Vehicule{v}
@@ -140,11 +149,12 @@ func Ouvrir(chemin string) (*Sauvegarde, error) {
 	return s, nil
 }
 
-// lireZip : les CSV de Fuelio (ceux qui ont une partie « ## Log ») et les
-// photos. Un ZIP dans le ZIP (sauvegarde de synchronisation rangée dans la
-// sauvegarde complète) est lu aussi, sur un seul niveau.
-func (s *Sauvegarde) lireZip() error {
-	for _, f := range s.zip.File {
+// parcourir : les CSV de Fuelio (ceux qui ont une partie « ## Log ») et les
+// photos. Un ZIP dans le ZIP (pictures.data de la sauvegarde complète, ou
+// ZIP de synchro) est lu aussi, sur un seul niveau. base : le fichier qui
+// porte ce ZIP (pour lire un ZIP interne rangé sans compression).
+func (s *Sauvegarde) parcourir(z *zip.Reader, base io.ReaderAt, niveau int) error {
+	for _, f := range z.File {
 		nom := strings.ToLower(f.Name)
 		switch {
 		case strings.HasSuffix(nom, "/"):
@@ -160,26 +170,13 @@ func (s *Sauvegarde) lireZip() error {
 			if v, err := LireCSV(bytes.NewReader(b)); err == nil {
 				s.Vehicules = append(s.Vehicules, v)
 			}
-		case strings.HasSuffix(nom, ".zip"):
-			b, err := lireEntree(f, csvMax)
+		case niveau == 0 && estZip(f):
+			interne, err := s.ouvrirInterne(f, base)
 			if err != nil {
-				continue
+				continue // photos illisibles : les pleins sont repris quand même
 			}
-			z, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
-			if err != nil {
-				continue
-			}
-			for _, g := range z.File {
-				if !strings.HasSuffix(strings.ToLower(g.Name), ".csv") {
-					continue
-				}
-				c, err := lireEntree(g, csvMax)
-				if err != nil || !bytes.Contains(c, []byte("## Log")) {
-					continue
-				}
-				if v, err := LireCSV(bytes.NewReader(c)); err == nil {
-					s.Vehicules = append(s.Vehicules, v)
-				}
+			if err := s.parcourir(interne, nil, 1); err != nil {
+				return err
 			}
 		}
 		if len(s.Vehicules) > VehiculesMax {
@@ -187,6 +184,52 @@ func (s *Sauvegarde) lireZip() error {
 		}
 	}
 	return nil
+}
+
+// estZip : le fichier commence comme un ZIP (pictures.data, .zip).
+func estZip(f *zip.File) bool {
+	r, err := f.Open()
+	if err != nil {
+		return false
+	}
+	defer r.Close()
+	debut := make([]byte, 4)
+	n, _ := io.ReadFull(r, debut)
+	return n == 4 && string(debut) == "PK\x03\x04"
+}
+
+// ouvrirInterne : un ZIP rangé dans le ZIP. Sans compression, il est lu en
+// place ; sinon il est d'abord décompressé dans un fichier provisoire (il
+// peut peser des centaines de Mo : jamais en mémoire).
+func (s *Sauvegarde) ouvrirInterne(f *zip.File, base io.ReaderAt) (*zip.Reader, error) {
+	if f.Method == zip.Store && base != nil && f.UncompressedSize64 == f.CompressedSize64 {
+		debut, err := f.DataOffset()
+		if err == nil {
+			taille := int64(f.UncompressedSize64)
+			return zip.NewReader(io.NewSectionReader(base, debut, taille), taille)
+		}
+	}
+	if f.UncompressedSize64 > interneMax {
+		return nil, ErrFormat
+	}
+	tmp, err := os.CreateTemp(s.dossier, "fuelio-*.tmp")
+	if err != nil {
+		return nil, err
+	}
+	s.fermer = append(s.fermer, func() error { return os.Remove(tmp.Name()) }, tmp.Close)
+	r, err := f.Open()
+	if err != nil {
+		return nil, err
+	}
+	n, err := io.Copy(tmp, io.LimitReader(r, interneMax+1))
+	_ = r.Close()
+	if err != nil {
+		return nil, err
+	}
+	if n > interneMax {
+		return nil, ErrFormat
+	}
+	return zip.NewReader(tmp, n)
 }
 
 func estImage(nom string) bool {
@@ -343,7 +386,7 @@ func LireCSV(r io.Reader) (Vehicule, error) {
 		if !ok {
 			continue
 		}
-		x := Ligne{Plein: true, Jour: jour, Libelle: "Plein", Km: km(log.col(l, "Odo")), Cle: log.col(l, "UniqueId")}
+		x := Ligne{Plein: true, Jour: jour, Libelle: "Plein", Km: km(log.col(l, "Odo")), Cle: log.col(l, "UniqueId"), Guid: log.col(l, "guid")}
 		if log.col(l, "Full") == "0" {
 			x.Libelle = "Plein partiel"
 		}
@@ -359,7 +402,7 @@ func LireCSV(r io.Reader) (Vehicule, error) {
 		x.Note = joindre(log.col(l, "City"), log.col(l, "Notes"))
 		v.Lignes = append(v.Lignes, x)
 		if len(v.Lignes) >= LignesMax {
-			return v, nil
+			break
 		}
 	}
 
@@ -380,7 +423,7 @@ func LireCSV(r io.Reader) (Vehicule, error) {
 			if !ok {
 				continue
 			}
-			x := Ligne{Jour: jour, Km: km(cp.col(l, "Odo")), Note: cp.col(l, "Notes"), Cle: cp.col(l, "UniqueId")}
+			x := Ligne{Jour: jour, Km: km(cp.col(l, "Odo")), Note: cp.col(l, "Notes"), Cle: cp.col(l, "UniqueId"), Guid: cp.col(l, "guid")}
 			x.Libelle = cp.col(l, "CostTitle")
 			if x.Libelle == "" {
 				x.Libelle = categories[cp.col(l, "CostTypeID")]
@@ -394,6 +437,15 @@ func LireCSV(r io.Reader) (Vehicule, error) {
 			v.Lignes = append(v.Lignes, x)
 			if len(v.Lignes) >= LignesMax {
 				break
+			}
+		}
+	}
+	// Les photos : fichier, type et ligne illustrée.
+	if pp := parties["pictures"]; pp != nil {
+		for _, l := range pp.lignes {
+			ph := Photo{Fichier: pp.col(l, "Filename"), Type: pp.col(l, "Type"), Cible: pp.col(l, "target_id")}
+			if ph.Fichier != "" && ph.Cible != "" && len(v.Photos) < ImagesMax {
+				v.Photos = append(v.Photos, ph)
 			}
 		}
 	}
@@ -522,4 +574,106 @@ func joursCites(nom string) []string {
 		}
 	}
 	return l
+}
+
+// Lien : une photo et la ligne qu'elle illustre (place dans Vehicule.Lignes).
+type Lien struct {
+	Image Image
+	Ligne int
+}
+
+// Rattacher : les photos du véhicule et leur ligne.
+//   - Sauvegarde complète : la partie « ## Pictures » cite, pour chaque
+//     photo, son fichier (dans pictures.data) et l'identifiant de sa ligne
+//     (guid, ou UniqueId). Les pleins et les dépenses ont chacun leurs
+//     UniqueId (1, 2, 3… des deux côtés) : le type de la photo dit lequel.
+//     Fuelio ne publie pas ses numéros de type : ils sont déduits des photos
+//     sans doute possible (un seul plein ou une seule dépense porte cet
+//     identifiant), et un type n'est retenu que s'il désigne nettement une
+//     seule sorte de ligne.
+//   - Sinon : le nom du fichier (voir Rapprocher).
+//
+// sansLigne : photos du véhicule laissées de côté (fichier absent, ligne
+// introuvable ou douteuse). Dans le doute, une photo n'est jamais rattachée.
+func Rattacher(v Vehicule, images []Image) (liens []Lien, sansLigne int) {
+	if len(v.Photos) == 0 {
+		for _, img := range images {
+			if i := Rapprocher(img.Nom, v.Lignes); i >= 0 {
+				liens = append(liens, Lien{Image: img, Ligne: i})
+			} else {
+				sansLigne++
+			}
+		}
+		return liens, sansLigne
+	}
+	parNom := make(map[string]Image, len(images))
+	for _, img := range images {
+		parNom[strings.ToLower(path.Base(img.Nom))] = img
+	}
+	candidats := func(p Photo) []int {
+		var l []int
+		for i, x := range v.Lignes {
+			if (x.Guid != "" && strings.EqualFold(x.Guid, p.Cible)) || (x.Cle != "" && x.Cle == p.Cible) {
+				l = append(l, i)
+			}
+		}
+		return l
+	}
+	// Votes : pour chaque type, combien de photos sûres vont à un plein
+	// [1] ou à une dépense [0].
+	votes := map[string]*[2]int{}
+	for _, p := range v.Photos {
+		c := candidats(p)
+		if len(c) == 0 {
+			continue
+		}
+		plein := v.Lignes[c[0]].Plein
+		pareil := true
+		for _, i := range c[1:] {
+			pareil = pareil && v.Lignes[i].Plein == plein
+		}
+		if !pareil {
+			continue
+		}
+		if votes[p.Type] == nil {
+			votes[p.Type] = &[2]int{}
+		}
+		if plein {
+			votes[p.Type][1]++
+		} else {
+			votes[p.Type][0]++
+		}
+	}
+	// Un type par sorte de ligne : celui qui a le plus de votes nets (au
+	// moins 4 contre 1) ; les autres (trajets…) sont laissés de côté.
+	meilleur := [2]string{}
+	score := [2]int{}
+	for t, n := range votes {
+		for sorte := 0; sorte < 2; sorte++ {
+			if n[sorte] > 0 && n[sorte] >= 4*n[1-sorte] && n[sorte] > score[sorte] {
+				meilleur[sorte], score[sorte] = t, n[sorte]
+			}
+		}
+	}
+	for _, p := range v.Photos {
+		img, ok := parNom[strings.ToLower(path.Base(strings.ReplaceAll(p.Fichier, `\`, "/")))]
+		sorte := -1
+		for s := 0; s < 2; s++ {
+			if score[s] > 0 && meilleur[s] == p.Type {
+				sorte = s
+			}
+		}
+		var garde []int
+		for _, i := range candidats(p) {
+			if sorte >= 0 && v.Lignes[i].Plein == (sorte == 1) {
+				garde = append(garde, i)
+			}
+		}
+		if !ok || len(garde) != 1 {
+			sansLigne++
+			continue
+		}
+		liens = append(liens, Lien{Image: img, Ligne: garde[0]})
+	}
+	return liens, sansLigne
 }
