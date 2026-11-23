@@ -232,3 +232,25 @@ func TestSauvegardeComplete(t *testing.T) {
 		}
 	}
 }
+
+// Dates au format choisi dans Fuelio et lignes écartées comptées.
+func TestDatesEtEcarts(t *testing.T) {
+	csv := "\"## Vehicle\"\n\"Name\",\"DistUnit\",\"FuelUnit\"\n\"Clio\",\"0\",\"0\"\n" +
+		"\"## Log\"\n\"Date\",\"Odo (km)\",\"Fuel (L)\",\"Full\",\"Price\",\"UniqueId\"\n" +
+		"\"15/03/2024 18:22\",\"1000\",\"40\",\"1\",\"70\",\"1\"\n" +
+		"\"??\",\"1100\",\"40\",\"1\",\"70\",\"2\"\n" +
+		"\"## Costs\"\n\"CostTitle\",\"Date\",\"Odo\",\"CostTypeID\",\"Notes\",\"Cost\",\"isTemplate\",\"isIncome\",\"UniqueId\"\n" +
+		"\"Vidange\",\"20.03.2024\",\"1200\",\"1\",\"\",\"90\",\"0\",\"0\",\"3\"\n" +
+		"\"Modele\",\"2024-03-20\",\"0\",\"1\",\"\",\"90\",\"true\",\"0\",\"4\"\n" +
+		"\"Revente\",\"2024-03-20\",\"0\",\"1\",\"\",\"90\",\"0\",\"1\",\"5\"\n"
+	v, err := LireCSV(strings.NewReader(csv))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(v.Lignes) != 2 || v.Lignes[0].Jour != "2024-03-15" || v.Lignes[1].Jour != "2024-03-20" || v.Lignes[1].Libelle != "Vidange" {
+		t.Fatalf("lignes : %+v", v.Lignes)
+	}
+	if e := v.Ecart; e.PleinsSansDate != 1 || e.DepensesLues != 3 || e.Modeles != 1 || e.Recettes != 1 || e.DepensesSansDate != 0 {
+		t.Fatalf("écarts : %+v", e)
+	}
+}

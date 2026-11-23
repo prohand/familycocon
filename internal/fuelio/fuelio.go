@@ -71,6 +71,16 @@ type Vehicule struct {
 	Nom    string
 	Lignes []Ligne
 	Photos []Photo
+	Ecart  Ecart // lignes de la sauvegarde laissées de côté (et pourquoi)
+}
+
+// Ecart : les lignes lues mais pas reprises, pour le dire à l'utilisateur.
+type Ecart struct {
+	PleinsSansDate   int // plein dont la date est illisible
+	DepensesLues     int // lignes de « ## Costs » (toutes)
+	DepensesSansDate int // dépense dont la date est illisible
+	Modeles          int // modèle de dépense répétée (pas une dépense faite)
+	Recettes         int // recette (revente…), pas une dépense
 }
 
 // Image : une photo trouvée dans le ZIP (lue plus tard, une à la fois).
@@ -384,6 +394,7 @@ func LireCSV(r io.Reader) (Vehicule, error) {
 	for _, l := range log.lignes {
 		jour, ok := lireJour(log.col(l, "Data", "Date"))
 		if !ok {
+			v.Ecart.PleinsSansDate++
 			continue
 		}
 		x := Ligne{Plein: true, Jour: jour, Libelle: "Plein", Km: km(log.col(l, "Odo")), Cle: log.col(l, "UniqueId"), Guid: log.col(l, "guid")}
@@ -415,12 +426,19 @@ func LireCSV(r io.Reader) (Vehicule, error) {
 	}
 	if cp := parties["costs"]; cp != nil {
 		for _, l := range cp.lignes {
+			v.Ecart.DepensesLues++
 			// Modèles de dépenses répétées et recettes : pas des dépenses faites.
-			if cp.col(l, "isTemplate") == "1" || cp.col(l, "isIncome") == "1" {
+			if vrai(cp.col(l, "isTemplate")) {
+				v.Ecart.Modeles++
 				continue
 			}
-			jour, ok := lireJour(cp.col(l, "Date"))
+			if vrai(cp.col(l, "isIncome")) {
+				v.Ecart.Recettes++
+				continue
+			}
+			jour, ok := lireJour(cp.col(l, "Date", "Data"))
 			if !ok {
+				v.Ecart.DepensesSansDate++
 				continue
 			}
 			x := Ligne{Jour: jour, Km: km(cp.col(l, "Odo")), Note: cp.col(l, "Notes"), Cle: cp.col(l, "UniqueId"), Guid: cp.col(l, "guid")}
@@ -456,16 +474,22 @@ func LireCSV(r io.Reader) (Vehicule, error) {
 	return v, nil
 }
 
-// lireJour : « 2024-03-15 18:22 » ou « 2024-03-15 » → « 2024-03-15 ».
+// vrai : « 1 » ou « true » (selon la version de Fuelio).
+func vrai(s string) bool { return s == "1" || strings.EqualFold(s, "true") }
+
+// lireJour : « 2024-03-15 18:22 », « 2024-03-15 », « 15/03/2024 » ou
+// « 15.03.2024 » (format choisi dans Fuelio) → « 2024-03-15 ».
 func lireJour(s string) (string, bool) {
 	if len(s) < 10 {
 		return "", false
 	}
-	t, err := time.Parse("2006-01-02", s[:10])
-	if err != nil || t.Year() < 1950 || t.Year() > 2200 {
-		return "", false
+	for _, f := range []string{"2006-01-02", "02/01/2006", "02.01.2006", "02-01-2006", "2006/01/02"} {
+		t, err := time.Parse(f, s[:10])
+		if err == nil && t.Year() >= 1950 && t.Year() <= 2200 {
+			return t.Format("2006-01-02"), true
+		}
 	}
-	return s[:10], true
+	return "", false
 }
 
 // nombre : « 45.67 » ou « 45,67 ».
