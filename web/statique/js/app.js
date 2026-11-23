@@ -990,22 +990,45 @@ if ("serviceWorker" in navigator) {
   var GARDE = { B: "b", STRONG: "b", I: "i", EM: "i", U: "u", S: "s", STRIKE: "s", DEL: "s", CODE: "code",
     H1: "h1", H2: "h2", H3: "h3", H4: "h3", H5: "h3", H6: "h3", UL: "ul", OL: "ol", LI: "li",
     BLOCKQUOTE: "blockquote", P: "div", DIV: "div", BR: "br", HR: "hr", A: "a", PRE: "div", TR: "div", TABLE: "div" };
+  // La mise en forme écrite en style (Google Docs, Word…) : gras, italique,
+  // souligné, barré ; « font-weight: normal » annule un <b>.
+  // (L'attribut est lu comme du texte : la CSP de la page empêche le
+  // navigateur d'appliquer les styles collés.)
+  function styles(n) {
+    var a = (n.getAttribute("style") || "").toLowerCase(), l = [];
+    var val = function (nom) { var m = new RegExp("(?:^|;)\\s*" + nom + "\\s*:\\s*([^;!]+)").exec(a); return m ? m[1].trim() : ""; };
+    var g = val("font-weight");
+    if (g === "bold" || g === "bolder" || +g >= 600) l.push("b");
+    if (val("font-style") === "italic") l.push("i");
+    var d = val("text-decoration") + " " + val("text-decoration-line");
+    if (/underline/.test(d)) l.push("u");
+    if (/line-through/.test(d)) l.push("s");
+    return { ajout: l, sansGras: g === "normal" || g === "lighter" || (g !== "" && +g < 600) };
+  }
   function nettoyer(src, dst) {
     src.childNodes.forEach(function (n) {
       if (n.nodeType === 3) { dst.appendChild(document.createTextNode(n.nodeValue)); return; }
       if (n.nodeType !== 1 || /^(SCRIPT|STYLE|META|LINK|TITLE|NOSCRIPT|TEMPLATE|IFRAME|OBJECT|SVG|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(n.tagName)) return;
-      var tag = GARDE[n.tagName];
-      if (!tag) { nettoyer(n, dst); return; }
+      var tag = GARDE[n.tagName], st = styles(n);
+      if (tag === "b" && st.sansGras) tag = null; // Google Docs : <b style="font-weight:normal"> autour de tout
+      // Gras, italique… donnés par le style : des balises autour du contenu.
+      var ici = dst;
+      st.ajout.forEach(function (t) { if (t !== tag) { var x = document.createElement(t); ici.appendChild(x); ici = x; } });
+      if (!tag) { nettoyer(n, ici); return; }
       var e = document.createElement(tag);
       if (tag === "a") {
         var h = n.getAttribute("href") || "";
-        if (!/^(https?:\/\/|mailto:)/.test(h)) { nettoyer(n, dst); return; }
+        if (!/^(https?:\/\/|mailto:)/.test(h)) { nettoyer(n, ici); return; }
         e.setAttribute("href", h);
       }
-      dst.appendChild(e);
+      ici.appendChild(e);
       nettoyer(n, e);
     });
   }
+  // Un texte brut qui porte déjà des balises (« <b>…</b> ») ou des signes
+  // de mise en forme (« **gras** », « # titre », « - [ ] case »…).
+  var BALISES = /<\/?(b|strong|i|em|u|s|a|p|div|br|ul|ol|li|h[1-6]|blockquote|code|span)\b[^>]*>/i;
+  var SIGNES = /\*\*[^*\n]+\*\*|~~[^~\n]+~~|\+\+[^+\n]+\+\+|(^|\n)\s*#{1,3} \S|(^|\n)\s*(?:[-*] )?\[[ xX]\] |\[[^\]\n]+\]\((?:https?:\/\/|mailto:)|(^|[\s(])_[^_\n]+_(?=$|[\s.,;:!?)])|(^|\n)\s*> \S|`[^`\n]+`/;
 
   // --- Petits outils de sélection --------------------------------------------
 
@@ -1154,18 +1177,44 @@ if ("serviceWorker" in navigator) {
       var images = Array.prototype.filter.call(cd.files || [], function (f) { return /^image\//.test(f.type); });
       e.preventDefault();
       if (images.length) { memo(); images.forEach(function (f) { envoyer(f, blocCurseur(ed)); }); return; }
-      var html = cd.getData("text/html");
+      var html = cd.getData("text/html"), brut = cd.getData("text/plain");
+      // Texte brut qui contient des balises : lu comme du HTML.
+      if (!html && BALISES.test(brut)) html = brut;
       if (html) {
         var src = new DOMParser().parseFromString(html, "text/html").body;
         var propre = document.createElement("div");
         nettoyer(src, propre);
+        // Les signes écrits en clair dans le HTML (« **gras** ») : mis en forme aussi.
+        if (!propre.querySelector("*") && SIGNES.test(propre.textContent)) { collerSignes(propre.textContent); return; }
         document.execCommand("insertHTML", false, propre.innerHTML);
         aplatir(ed);
+        maj();
+      } else if (SIGNES.test(brut)) {
+        collerSignes(brut);
       } else {
-        document.execCommand("insertText", false, cd.getData("text/plain"));
+        document.execCommand("insertText", false, brut);
+        maj();
       }
-      maj();
     });
+    // Texte avec des signes (« **gras** »…) : le serveur le met en forme
+    // comme une note enregistrée (même règles), puis il est inséré.
+    function collerSignes(brut) {
+      var r = window.getSelection().rangeCount ? window.getSelection().getRangeAt(0).cloneRange() : null;
+      fetch("/riche/apercu", { method: "POST", credentials: "same-origin",
+        headers: { "X-Jeton": jeton(), "Content-Type": "application/json" }, body: JSON.stringify({ texte: brut }) })
+        .then(function (rep) { if (!rep.ok) throw new Error("refusé"); return rep.text(); })
+        .then(function (h) {
+          ed.focus();
+          if (r) { var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); }
+          // Une seule ligne de texte : collée dans la ligne en cours.
+          var une = /^<div>(?:(?!<div|<\/div>)[\s\S])*<\/div>$/.test(h) ? h.slice(5, -6) : h;
+          document.execCommand("insertHTML", false, une);
+          aplatir(ed);
+          garantirLignes(ed);
+          maj();
+        })
+        .catch(function () { document.execCommand("insertText", false, brut); maj(); });
+    }
     // Une photo de la note ne se glisse pas (↑ ↓ la déplacent).
     ed.addEventListener("dragstart", function (e) { if (e.target.closest && e.target.closest("figure[data-photo]")) e.preventDefault(); });
     // Glisser une image dans la note.

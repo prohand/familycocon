@@ -84,6 +84,7 @@ type donneesAccueil struct {
 func (a *App) routesAccueil() {
 	a.Route("GET /{$}", "", Membre, a.pageAccueil)
 	a.Route("GET /ajouter", "", Membre, a.pageAjouter)
+	a.Route("POST /riche/apercu", "", Membre, a.apercuRiche)
 	a.Route("GET /partager", "", Membre, a.pagePartager)
 	a.Route("GET /chercher", "", Membre, a.pageChercher)
 }
