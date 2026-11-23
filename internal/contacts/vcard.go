@@ -362,7 +362,8 @@ func lireVCards(ctx context.Context, r io.Reader) ([]saisie, error) {
 				if s.nom == "" {
 					s.nom = prenomNom
 				}
-				s.notes = strings.Join(notes, "\n")
+				// Coupées tout de suite : 3000 cartes ne gardent pas 3000 longues notes.
+				s.notes = borner(strings.Join(notes, "\n"), 2000)
 				if s.nom != "" {
 					if len(out) == CartesMax {
 						return errTropDeCartes

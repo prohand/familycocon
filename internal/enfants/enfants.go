@@ -106,22 +106,34 @@ func (m *Module) missionsDuJour(ctx context.Context, c *appli.Contexte) ([]Carte
 	if err != nil {
 		return nil, err
 	}
+	// Rangées par mission et occurrence : une recherche directe par carte.
+	type cleFaite struct {
+		mission    int64
+		occurrence string
+	}
+	parCle := make(map[cleFaite]donnees.MissionFaite, len(faites))
+	for _, f := range faites {
+		parCle[cleFaite{f.MissionID, f.Occurrence}] = f
+	}
 	for i := range cartes {
 		cle, _ := cartes[i].Regle.Occurrence(maintenant)
-		for _, f := range faites {
-			if f.MissionID != cartes[i].ID || f.Occurrence != cle {
-				continue
-			}
-			// Une mission « une fois » validée un autre jour ne revient pas.
-			if !cartes[i].Regle.Repete() && f.Etat == Validee && f.DecideLe.Valid &&
-				repetition.CleJour(c.Heure(f.DecideLe.Int64)) != repetition.CleJour(maintenant) {
-				cartes[i].Etat = "finie"
-				continue
-			}
-			cartes[i].Etat = f.Etat
-			cartes[i].FaiteID = f.ID
-			cartes[i].JusteValidee = f.Etat == Validee && f.DecideLe.Valid && time.Now().Unix()-f.DecideLe.Int64 < 120
+		f, ok := parCle[cleFaite{cartes[i].ID, cle}]
+		if !ok {
+			continue
 		}
+		// Une mission « une fois » validée un autre jour ne revient pas : elle
+		// est archivée (les étoiles restent), et ne sera plus relue à chaque page.
+		if !cartes[i].Regle.Repete() && f.Etat == Validee && f.DecideLe.Valid &&
+			repetition.CleJour(c.Heure(f.DecideLe.Int64)) != repetition.CleJour(maintenant) {
+			cartes[i].Etat = "finie"
+			if err := m.a.Q.RetirerMission(ctx, donnees.RetirerMissionParams{ID: cartes[i].ID, FamilleID: c.Famille.ID}); err != nil {
+				m.a.Journal.Error("enfants : archivage d'une mission finie", "erreur", err)
+			}
+			continue
+		}
+		cartes[i].Etat = f.Etat
+		cartes[i].FaiteID = f.ID
+		cartes[i].JusteValidee = f.Etat == Validee && f.DecideLe.Valid && time.Now().Unix()-f.DecideLe.Int64 < 120
 	}
 	return cartes, nil
 }

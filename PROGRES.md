@@ -25,6 +25,7 @@
 | Tâches dans l'agenda | **fait** |
 | Agenda : plus de répétitions + date de fin | **fait** |
 | Contacts (carnet central, vCard, liens avec Prestataires, Animaux, Véhicules, Agenda) | **fait** |
+| Revue sécurité, bugs, design, performance (v0.4.3, SPEC § 12) | **fait** |
 
 ## Mesures
 
@@ -33,6 +34,7 @@
 | 22/11/2026 | 1 | 12,7 Mo | 19 Mo (affiché par Docker) | 6,6 Mio | — |
 | 22/11/2026 | 10 | 15,7 Mo (amd64), 14,7 Mo (arm64) | ~16 Mo installée (couches), 6,8 Mo compressée | 8,3 Mio au démarrage, 7,3 Mio après usage | 19,4 Mio (30 SSE + 20 clients, 190 req/s à 0,5 cœur, 0 erreur) |
 | 22/11/2026 | modules | 16,3 Mo (amd64), 15,3 Mo (arm64) | non remesurée (≈ +0,4 Mo) | +2 Mio environ (10 Mio de mémoire propre contre 8 avant, hors Docker) | — |
+| 23/11/2026 | revue v0.4.3 | 16,9 Mo (amd64), contre 16,6 avant | non remesurée | 11,2 Mio de mémoire propre au démarrage, comme avant (hors Docker) | 27,6 Mio de mémoire totale du processus après un parcours de toutes les pages (hors Docker) |
 
 Notes :
 - La première mesure de l'étape 10 donnait 38,9 Mio au démarrage : l'empreinte

@@ -54,7 +54,8 @@
 <div class="boutons">
   <a class="bouton" href="/projets/{{.P.ID}}/modifier">✏️ Modifier</a>
   <form method="post" action="/projets/{{.P.ID}}/terminer">
-    {{template "jeton" $c.CSRF}}<button class="bouton secondaire">{{if .P.TermineLe}}↩️ Rouvrir{{else}}🎉 Terminer le projet{{end}}</button>
+    {{template "jeton" $c.CSRF}}<input type="hidden" name="termine" value="{{if .P.TermineLe}}0{{else}}1{{end}}">
+    <button class="bouton secondaire">{{if .P.TermineLe}}↩️ Rouvrir{{else}}🎉 Terminer le projet{{end}}</button>
   </form>
   {{if $c.EstParent}}
   <form method="post" action="/projets/{{.P.ID}}/supprimer" hx-confirm="Supprimer {{.P.Nom}}, ses étapes et ses dépenses ?">

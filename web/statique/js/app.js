@@ -22,6 +22,25 @@
   }
   window.fcToast = toast;
 
+  // Double clic : les boutons d'un formulaire sont désactivés pendant
+  // l'envoi (pas de dépense ou de produit ajouté deux fois).
+  function boutons(e) {
+    var elt = e.detail && e.detail.elt;
+    if (!elt || !elt.tagName) return [];
+    if (elt.tagName === "FORM") return elt.querySelectorAll("button");
+    return elt.tagName === "BUTTON" ? [elt] : [];
+  }
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    boutons(e).forEach(function (b) {
+      if (!b.disabled) { b.disabled = true; b.setAttribute("data-envoi", "1"); }
+    });
+  });
+  document.addEventListener("htmx:afterRequest", function (e) {
+    boutons(e).forEach(function (b) {
+      if (b.getAttribute("data-envoi")) { b.disabled = false; b.removeAttribute("data-envoi"); }
+    });
+  });
+
   // Notification demandée par le serveur (en-tête HX-Trigger : « fc-toast »).
   document.addEventListener("fc-toast", function (e) {
     var d = e.detail || {};

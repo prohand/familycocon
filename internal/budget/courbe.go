@@ -108,7 +108,7 @@ func arrondiHaut(v int64) int64 {
 // court : « 1,5 k€ », « 300 € ».
 func court(centimes int64, devise string) string {
 	// Le symbole de la devise : celui d'appli.Montant (« 0,00 € » sans le « 0,00 »).
-	sym := strings.TrimPrefix(appli.Montant(0, devise), "0,00 ")
+	sym := strings.TrimSpace(strings.TrimPrefix(appli.Montant(0, devise), "0,00"))
 	e := centimes / 100
 	if e >= 1000 {
 		k := strconv.FormatFloat(float64(e)/1000, 'f', 1, 64)

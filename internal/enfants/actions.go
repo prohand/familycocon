@@ -67,12 +67,18 @@ func (m *Module) faire(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Echec(w, r, http.StatusBadRequest, "Cette mission n'est pas pour aujourd'hui.")
 		return
 	}
-	if err := m.a.Q.CocherMission(r.Context(), donnees.CocherMissionParams{MissionID: mi.ID, Occurrence: cle, Etoiles: mi.Etoiles, CocheLe: time.Now().Unix()}); err != nil {
+	n, err := m.a.Q.CocherMission(r.Context(), donnees.CocherMissionParams{MissionID: mi.ID, FamilleID: c.Famille.ID, Occurrence: cle,
+		Etoiles: mi.Etoiles, CocheLe: time.Now().Unix()})
+	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	m.a.Publier(c, mod, fmt.Sprintf("%s a fini « %s » %s : à valider", c.Membre.Nom, mi.Titre, mi.Emoji))
-	appli.Notifier(w, "Super ! Un parent va vérifier 👀", false)
+	// Déjà cochée ou déjà validée (double envoi) : rien n'a changé, les
+	// parents ne sont pas notifiés une seconde fois.
+	if n > 0 {
+		m.a.Publier(c, mod, fmt.Sprintf("%s a fini « %s » %s : à valider", c.Membre.Nom, mi.Titre, mi.Emoji))
+		appli.Notifier(w, "Super ! Un parent va vérifier 👀", false)
+	}
 	m.renvoyer(w, r, c, mi.EnfantID)
 }
 
@@ -88,7 +94,7 @@ func (m *Module) annuler(w http.ResponseWriter, r *http.Request, c *appli.Contex
 		return
 	}
 	cle, _ := repetition.Lire(mi.Repetition).Occurrence(c.Maintenant())
-	if err := m.a.Q.AnnulerCoche(r.Context(), donnees.AnnulerCocheParams{MissionID: mi.ID, Occurrence: cle}); err != nil {
+	if err := m.a.Q.AnnulerCoche(r.Context(), donnees.AnnulerCocheParams{MissionID: mi.ID, Occurrence: cle, FamilleID: c.Famille.ID}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
@@ -111,23 +117,34 @@ func (m *Module) decider(w http.ResponseWriter, r *http.Request, c *appli.Contex
 		return
 	}
 	n, err := m.a.Q.DeciderMission(ctx, donnees.DeciderMissionParams{
-		Etat: etat, DecidePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, DecideLe: sql.NullInt64{Int64: time.Now().Unix(), Valid: true}, ID: f.ID,
+		Etat: etat, DecidePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, DecideLe: sql.NullInt64{Int64: time.Now().Unix(), Valid: true}, ID: f.ID, FamilleID: c.Famille.ID,
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
 	if n > 0 {
-		enfant, _ := m.a.Q.MembreParID(ctx, donnees.MembreParIDParams{ID: f.EnfantID, FamilleID: c.Famille.ID})
+		enfant := m.nomEnfant(r, c, f.EnfantID)
 		if etat == Validee {
-			m.a.Publier(c, mod, fmt.Sprintf("Bravo %s ! +%d ⭐ pour « %s »", enfant.Nom, f.Etoiles, f.Titre))
-			appli.Notifier(w, fmt.Sprintf("+%d ⭐ pour %s", f.Etoiles, enfant.Nom), false)
+			m.a.Publier(c, mod, fmt.Sprintf("Bravo %s ! +%d ⭐ pour « %s »", enfant, f.Etoiles, f.Titre))
+			appli.Notifier(w, fmt.Sprintf("+%d ⭐ pour %s", f.Etoiles, enfant), false)
 		} else {
-			m.a.Publier(c, mod, fmt.Sprintf("%s : « %s » est à refaire 💪", enfant.Nom, f.Titre))
+			m.a.Publier(c, mod, fmt.Sprintf("%s : « %s » est à refaire 💪", enfant, f.Titre))
 			appli.Notifier(w, "Mission à refaire", false)
 		}
 	}
 	m.renvoyer(w, r, c, f.EnfantID)
+}
+
+// nomEnfant : le prénom pour les notifications (« l'enfant » si la lecture
+// échoue : la notification reste lisible, l'erreur va au journal).
+func (m *Module) nomEnfant(r *http.Request, c *appli.Contexte, id int64) string {
+	e, err := m.a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: id, FamilleID: c.Famille.ID})
+	if err != nil {
+		m.a.Journal.Error("enfants : lecture de l'enfant", "membre", id, "erreur", err)
+		return "l'enfant"
+	}
+	return e.Nom
 }
 
 func (m *Module) recompense(r *http.Request, c *appli.Contexte) (donnees.Recompense, error) {
@@ -153,8 +170,15 @@ func (m *Module) demander(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	}
 	// Vérifié et enregistré dans une transaction : deux demandes en même
 	// temps ne dépensent pas deux fois les mêmes étoiles.
-	pasAssez := false
+	pasAssez, deja := false, false
 	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		// Déjà demandée et pas encore décidée (double envoi) : pas de seconde demande.
+		if n, err := q.EchangeEnAttente(ctx, donnees.EchangeEnAttenteParams{RecompenseID: rec.ID, EnfantID: c.Membre.ID}); err != nil {
+			return err
+		} else if n > 0 {
+			deja = true
+			return nil
+		}
 		g, err := q.EtoilesGagnees(ctx, c.Membre.ID)
 		if err != nil {
 			return err
@@ -178,6 +202,10 @@ func (m *Module) demander(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.Echec(w, r, http.StatusBadRequest, "Pas encore assez d'étoiles ⭐")
 		return
 	}
+	if deja {
+		m.renvoyer(w, r, c, c.Membre.ID)
+		return
+	}
 	m.a.Publier(c, mod, fmt.Sprintf("%s voudrait « %s » %s (%d ⭐)", c.Membre.Nom, rec.Titre, rec.Emoji, rec.Prix))
 	appli.Notifier(w, "Demande envoyée aux parents 🎁", false)
 	m.renvoyer(w, r, c, c.Membre.ID)
@@ -199,18 +227,18 @@ func (m *Module) deciderEchange(w http.ResponseWriter, r *http.Request, c *appli
 		return
 	}
 	n, err := m.a.Q.DeciderEchange(ctx, donnees.DeciderEchangeParams{
-		Etat: etat, DecidePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, DecideLe: sql.NullInt64{Int64: time.Now().Unix(), Valid: true}, ID: e.ID,
+		Etat: etat, DecidePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, DecideLe: sql.NullInt64{Int64: time.Now().Unix(), Valid: true}, ID: e.ID, FamilleID: c.Famille.ID,
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
 	if n > 0 {
-		enfant, _ := m.a.Q.MembreParID(ctx, donnees.MembreParIDParams{ID: e.EnfantID, FamilleID: c.Famille.ID})
+		enfant := m.nomEnfant(r, c, e.EnfantID)
 		if etat == "confirme" {
-			m.a.Publier(c, mod, fmt.Sprintf("🎉 %s a gagné « %s » %s !", enfant.Nom, e.Titre, e.Emoji))
+			m.a.Publier(c, mod, fmt.Sprintf("🎉 %s a gagné « %s » %s !", enfant, e.Titre, e.Emoji))
 		} else {
-			m.a.Publier(c, mod, fmt.Sprintf("%s : « %s » sera pour une autre fois", enfant.Nom, e.Titre))
+			m.a.Publier(c, mod, fmt.Sprintf("%s : « %s » sera pour une autre fois", enfant, e.Titre))
 		}
 	}
 	m.renvoyer(w, r, c, e.EnfantID)

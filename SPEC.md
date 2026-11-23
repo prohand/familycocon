@@ -177,3 +177,58 @@ Aucun accès aux données d'une autre famille n'a été trouvé.
 Non corrigé (choix à faire) : changer de mot de passe ne retire pas les
 passkeys ; un inconnu peut bloquer un compte 15 min et plus en ratant le mot
 de passe (la passkey reste possible) ; sessions glissantes sans durée maximale (corrigé : FC_SESSION_MAX_JOURS, 1 an par défaut).
+
+## 12. Revue de sécurité, bugs, design et performance (23/11/2026, v0.4.3)
+Quatre relectures (authentification, modules, socle/front, déploiement). Aucun
+accès aux données d'une autre famille, aucun contournement de rôle trouvé.
+Corrigé, avec un test par point quand c'est testable :
+- **Sécurité** : pages privées en `Cache-Control: no-store`, historique htmx
+  non gardé, cache du navigateur vidé à la déconnexion ; changement de mot de
+  passe et suppression d'une passkey limités comme les autres actions sensibles
+  (mot de passe redemandé, 5 essais) ; inscriptions limitées par adresse
+  (5 par quart d'heure) ; l'identifiant tapé n'est plus écrit au journal ;
+  listes de formulaire bornées avant toute requête ; plafonds de lignes par
+  famille (listes, produits, tâches, événements, notes, contacts, cartes,
+  projets, échéances, carnet) ; `/health` ne donne la version qu'au réseau
+  local ; copies de la base non lisibles par les autres comptes de l'hôte ;
+  actions GitHub épinglées par empreinte, publication depuis `main` seulement,
+  `govulncheck` avant de publier.
+- **Bugs** : totaux du carnet (projets, véhicules, animaux) calculés en SQL et
+  non sur les 100 dernières lignes ; menus → courses dans une transaction, sans
+  doublon ; rappels du matin envoyés même avec une page ouverte, rattrapés
+  après un arrêt (jour noté dans la table `serveur`, jusqu'à 20 h) et jamais
+  perdus par une file pleine ; retour sur la page affichée après une session
+  expirée ; déconnexion qui n'attend plus le service worker ; kilométrage
+  illisible refusé ; courbe du mois précédent à la bonne échelle ; membre
+  retiré : tâches rendues à tous, notes privées, passkeys et codes effacés
+  (migration 0018 pour les retraits passés) ; doubles envois sans effet
+  (boutons désactivés pendant l'envoi, et contrôle côté serveur) ; dates
+  bornées partout (1900 à aujourd'hui + 50 ans, 2200 pour l'agenda et les menus).
+- **Exploitation** : migration en échec : 3 copies « avant-migration » au plus ;
+  sauvegarde automatique écrite sous un nom provisoire puis renommée ;
+  restauration en flux, avec `fsync`, refusée si un serveur tourne sur le même
+  dossier (verrou `familycocon.verrou`), script qui relance le service si le
+  fichier est refusé ; tâches de fond protégées des paniques ; exemple Nginx
+  pour l'import de 8 Mio ; `FC_URL_PUBLIQUE` avec chemin et `FC_DONNEES` avec
+  `?`, `#` ou apostrophe refusés au démarrage.
+- **Performance** : membres lus une fois par requête ; tuile et bloc de
+  l'accueil partagent leur calcul ; alertes du foyer, récurrences et rappels
+  sans requête par ligne ; tâches et missions « une fois » terminées non
+  relues ; agenda borné à la période ; liste des notes abrégée ; index
+  manquants (migration 0019) ; import vCard en flux (allocations divisées par
+  deux) ; envois push par 4 en parallèle ; cache du service worker renommé à
+  chaque version (l'ancien est supprimé), police versionnée.
+- **Design** : aides communes (`appli.MembresParID`, `TitreJour`,
+  `PeutModifier`, `contacts.LienTel`/`LienMail`/`SiteSur`, `budget.LireJour`,
+  `Replanifier`) à la place des copies ; requêtes par id filtrées aussi par
+  famille ; requêtes mortes et dossier `mockup/` supprimés.
+
+Non fait (à décider) :
+- un module se déclare toujours à trois endroits (`Catalogue`,
+  `cmd/familycocon/modules.go`, migration) ;
+- l'image de construction Docker est épinglée par tag, pas par empreinte
+  (Dependabot la suit) ; l'image est publiée avant la Release GitHub ;
+- abonnements, cartes, foyer, suivi et contacts publient leurs changements,
+  mais leurs pages n'ont pas encore de bloc qui se rafraîchit tout seul ;
+- sur l'accueil d'un parent, abonnements et anniversaires sont encore lus
+  deux fois (tuile et « À venir »).

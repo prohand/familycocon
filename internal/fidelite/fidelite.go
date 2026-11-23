@@ -60,13 +60,36 @@ func Brancher(a *appli.App) {
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "💳", Texte: "Une carte de fidélité", URL: "/fidelite/nouvelle"})
 }
 
+// CartesMax : cartes par famille (garde-fou).
+const CartesMax = 200
+
+// ligneCarte : une carte dans la liste, et la fin de son numéro.
+type ligneCarte struct {
+	donnees.Carte
+	Fin string
+}
+
+// finNumero : les 4 derniers caractères (pas les 4 derniers octets : un
+// numéro peut contenir des lettres accentuées, formats « QR » et « aucun »).
+func finNumero(numero string) string {
+	r := []rune(numero)
+	if len(r) <= 4 {
+		return numero
+	}
+	return string(r[len(r)-4:])
+}
+
 func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	cartes, err := m.a.Q.CartesFamille(r.Context(), c.Famille.ID)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	m.a.Afficher(w, r, c, "fidelite/cartes", "Cartes de fidélité", mod, cartes)
+	lignes := make([]ligneCarte, 0, len(cartes))
+	for _, ct := range cartes {
+		lignes = append(lignes, ligneCarte{Carte: ct, Fin: finNumero(ct.Numero)})
+	}
+	m.a.Afficher(w, r, c, "fidelite/cartes", "Cartes de fidélité", mod, lignes)
 }
 
 func (m *Module) trouver(r *http.Request, c *appli.Contexte) (donnees.Carte, bool) {
@@ -121,7 +144,9 @@ func (m *Module) carte(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		return
 	}
 	// Les cartes les plus montrées remontent en haut de la liste.
-	_ = m.a.Q.CarteUtilisee(r.Context(), donnees.CarteUtiliseeParams{UtiliseeLe: time.Now().Unix(), ID: ct.ID})
+	if err := m.a.Q.CarteUtilisee(r.Context(), donnees.CarteUtiliseeParams{UtiliseeLe: time.Now().Unix(), ID: ct.ID, FamilleID: c.Famille.ID}); err != nil {
+		m.a.Journal.Error("fidélité : carte utilisée", "erreur", err)
+	}
 	m.a.Afficher(w, r, c, "fidelite/carte", ct.Enseigne, mod, Dessin(ct))
 }
 
@@ -189,6 +214,13 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
+	if n, err := m.a.Q.CompterCartes(r.Context(), c.Famille.ID); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	} else if n >= CartesMax {
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Trop de cartes (%d au plus) : supprimez-en d'abord.", CartesMax))
+		return
+	}
 	ct, err := m.a.Q.CreerCarte(r.Context(), donnees.CreerCarteParams{
 		FamilleID: c.Famille.ID, Enseigne: s.enseigne, Numero: s.numero, Format: s.format, Couleur: s.couleur,
 		Titulaire: s.titulaire, Notes: s.notes, CreeLe: time.Now().Unix(),
@@ -220,6 +252,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Carte enregistrée ✓")
 	m.a.Rediriger(w, r, fmt.Sprintf("/fidelite/%d", ct.ID))
 }
@@ -234,6 +267,7 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Carte « "+ct.Enseigne+" » supprimée")
 	m.a.Rediriger(w, r, "/fidelite")
 }

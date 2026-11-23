@@ -96,7 +96,8 @@ func TestParcoursComplet(t *testing.T) {
 	marie.Htmx = true
 	marie.Post("/enfants/validations/"+essai.Trouver(t, page, `/enfants/validations/(\d+)/valider`)+"/valider", nil)
 
-	// Deux demandes en même temps : une seule passe (5 étoiles pour un prix de 5).
+	// Deux demandes en même temps : une seule est enregistrée (5 étoiles pour
+	// un prix de 5) ; l'autre est sans effet (double envoi) ou refusée.
 	var wg sync.WaitGroup
 	codes := make([]int, 2)
 	for i := range codes {
@@ -107,8 +108,16 @@ func TestParcoursComplet(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	if !(codes[0] == 200 && codes[1] == 400 || codes[0] == 400 && codes[1] == 200) {
-		t.Fatalf("demandes simultanées : %v", codes)
+	for _, code := range codes {
+		if code != 200 && code != 400 {
+			t.Fatalf("demandes simultanées : %v", codes)
+		}
+	}
+	marie.Htmx = false
+	_, page = marie.Get("/enfants")
+	marie.Htmx = true
+	if n := len(regexp.MustCompile(`/enfants/echanges/\d+/confirmer`).FindAllString(page, -1)); n != 1 {
+		t.Fatalf("%d demandes en attente au lieu d'une (codes %v)", n, codes)
 	}
 	_, frag = lea.Get("/enfants/contenu")
 	if !strings.Contains(frag, "<b>0</b>") || !strings.Contains(frag, "Demandée") {

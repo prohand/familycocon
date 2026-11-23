@@ -171,6 +171,12 @@ func (a *App) Echec(w http.ResponseWriter, r *http.Request, statut int, message 
 
 // ErreurInterne : écrit l'erreur dans le journal, répond 500 sans détail.
 func (a *App) ErreurInterne(w http.ResponseWriter, r *http.Request, err error) {
+	// Navigateur parti avant la réponse (page quittée, flux temps réel
+	// fermé) : ce n'est pas une erreur du serveur, et personne n'attend plus.
+	if r.Context().Err() != nil {
+		a.Journal.Debug("requête abandonnée par le navigateur", "chemin", r.URL.Path)
+		return
+	}
 	a.Journal.Error("erreur interne", "chemin", r.URL.Path, "erreur", err)
 	a.Echec(w, r, http.StatusInternalServerError, "Erreur interne : réessayez dans un instant.")
 }

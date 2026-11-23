@@ -9,7 +9,7 @@
   {{- range .Donnees}}
   <a class="carte-fidelite c{{.Couleur}}" href="/fidelite/{{.ID}}">
     <b>{{.Enseigne}}</b>
-    <small>{{if .Titulaire}}{{.Titulaire}} · {{end}}…{{if gt (len .Numero) 4}}{{slice .Numero (ajouter (len .Numero) -4)}}{{else}}{{.Numero}}{{end}}</small>
+    <small>{{if .Titulaire}}{{.Titulaire}} · {{end}}…{{.Fin}}</small>
   </a>
   {{- else}}
   <div class="carte vide"><span class="emoji">💳</span>Aucune carte. Ajoutez celles du supermarché, de la pharmacie, de la boulangerie…</div>

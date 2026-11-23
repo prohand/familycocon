@@ -147,7 +147,8 @@ func LienMail(email string) template.URL {
 	if !EmailValide(email) {
 		return ""
 	}
-	return template.URL("mailto:" + url.PathEscape(email)) // #nosec G203 -- adresse échappée
+	// PathEscape échappe « ? » (début des champs cc, body…) ; « & » en plus, par prudence.
+	return template.URL("mailto:" + strings.ReplaceAll(url.PathEscape(email), "&", "%26")) // #nosec G203 -- adresse échappée
 }
 
 // EmailValide : une adresse plausible (un « @ », pas d'espace ni de < > ").

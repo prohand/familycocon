@@ -5,6 +5,7 @@ package abonnements
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -112,5 +113,35 @@ func TestAbonnementsRevue(t *testing.T) {
 	marie.Post("/abonnements", map[string]string{"nom": "Cent", "montant": "100", "frequence": "annee", "prochain": jour(30)})
 	if _, page := marie.Get("/abonnements"); !strings.Contains(page, "340,00") {
 		t.Fatal("total annuel inexact")
+	}
+}
+
+// Un abonnement reste une dépense, même modifié par la page des opérations
+// qui reviennent (revue du 23/11/2026).
+func TestAbonnementJamaisRevenu(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, brancher)
+	marie := essai.Famille(t, srv)
+	jour := time.Now().AddDate(0, 0, 5).Format("2006-01-02")
+	marie.Get("/abonnements/nouveau")
+	marie.Post("/abonnements", map[string]string{"nom": "Musique", "montant": "9,99", "frequence": "mois", "prochain": jour})
+	recs, _ := a.Q.RecurrencesFamille(context.Background(), 1)
+	if len(recs) != 1 {
+		t.Fatalf("%d récurrences", len(recs))
+	}
+	id := strconv.FormatInt(recs[0].ID, 10)
+	champs := map[string]string{"montant": "9,99", "categorie": "salaire", "libelle": "Musique", "frequence": "mois", "prochaine": jour}
+	if code, _ := marie.Post("/recurrences/"+id, champs); code != http.StatusBadRequest {
+		t.Fatalf("abonnement passé en revenu : %d", code)
+	}
+	champs["categorie"] = "loisirs"
+	if code, _ := marie.Post("/recurrences/"+id, champs); code != 200 {
+		t.Fatalf("changement de catégorie de dépense : %d", code)
+	}
+	if x, _ := a.Q.RecurrenceParID(context.Background(), donnees.RecurrenceParIDParams{ID: recs[0].ID, FamilleID: 1}); x.Sens != "depense" || x.Categorie != "loisirs" {
+		t.Fatalf("récurrence : %+v", x)
+	}
+	// Date de fin d'engagement absurde refusée.
+	if code, _ := marie.Post("/abonnements", map[string]string{"nom": "X", "montant": "1", "frequence": "mois", "prochain": jour, "engagement_fin": "9999-01-01"}); code != http.StatusBadRequest {
+		t.Fatalf("engagement en 9999 : %d", code)
 	}
 }
