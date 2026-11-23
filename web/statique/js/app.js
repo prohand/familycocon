@@ -1049,11 +1049,23 @@ if ("serviceWorker" in navigator) {
     f.className = "photo-texte";
     f.contentEditable = "false";
     f.setAttribute("data-photo", id);
-    f.innerHTML = '<a target="_blank" rel="noopener"><img alt="Photo de la note"></a>' +
-      '<button type="button" class="retirer-photo" aria-label="Retirer la photo du texte">✕</button>';
-    f.querySelector("a").href = "/notes/photos/" + id;
+    f.setAttribute("draggable", "false");
+    f.innerHTML = '<img alt="Photo de la note" draggable="false"><span class="outils-photo">' +
+      '<button type="button" class="monter-photo" aria-label="Monter la photo">↑</button>' +
+      '<button type="button" class="descendre-photo" aria-label="Descendre la photo">↓</button>' +
+      '<button type="button" class="retirer-photo" aria-label="Retirer la photo du texte">✕</button></span>';
     f.querySelector("img").src = "/notes/photos/" + id;
     return f;
+  }
+  // Une photo ou une séparation n'est pas une ligne où l'on écrit : il en
+  // faut toujours une avant (en tête) et après (à la fin, entre deux photos),
+  // sinon le curseur ne peut pas y aller.
+  function figee(n) { return n && n.nodeType === 1 && (n.hasAttribute("data-photo") || n.tagName === "HR"); }
+  function garantirLignes(ed) {
+    if (figee(ed.firstChild)) ed.insertBefore(ligneVide(), ed.firstChild);
+    Array.prototype.slice.call(ed.children).forEach(function (n) {
+      if (figee(n) && (!n.nextSibling || figee(n.nextSibling))) ed.insertBefore(ligneVide(), n.nextSibling);
+    });
   }
   function caseVide(texte) {
     var d = document.createElement("div");
@@ -1091,6 +1103,7 @@ if ("serviceWorker" in navigator) {
     ed.setAttribute("aria-label", "Texte de la note");
     ed.appendChild(modele.content.cloneNode(true));
     if (!ed.firstChild) ed.appendChild(ligneVide());
+    garantirLignes(ed);
     t.hidden = true;
     // Hors du <label> du textarea (un clic dans un label irait au textarea caché).
     var lieu = t.closest("label") || t;
@@ -1123,6 +1136,7 @@ if ("serviceWorker" in navigator) {
     lieu.parentNode.insertBefore(barre, ed);
 
     var maj = function () { t.value = texte(ed); };
+    ed.addEventListener("input", function () { garantirLignes(ed); });
     var derniere = null; // bloc du curseur avant de toucher un bouton
     var memo = function () { var b = blocCurseur(ed); if (b) derniere = b; };
     ed.addEventListener("input", maj);
@@ -1139,7 +1153,7 @@ if ("serviceWorker" in navigator) {
       if (!cd) return;
       var images = Array.prototype.filter.call(cd.files || [], function (f) { return /^image\//.test(f.type); });
       e.preventDefault();
-      if (images.length) { images.forEach(envoyer); return; }
+      if (images.length) { memo(); images.forEach(function (f) { envoyer(f, blocCurseur(ed)); }); return; }
       var html = cd.getData("text/html");
       if (html) {
         var src = new DOMParser().parseFromString(html, "text/html").body;
@@ -1152,6 +1166,8 @@ if ("serviceWorker" in navigator) {
       }
       maj();
     });
+    // Une photo de la note ne se glisse pas (↑ ↓ la déplacent).
+    ed.addEventListener("dragstart", function (e) { if (e.target.closest && e.target.closest("figure[data-photo]")) e.preventDefault(); });
     // Glisser une image dans la note.
     ed.addEventListener("dragover", function (e) { if (e.dataTransfer && Array.prototype.some.call(e.dataTransfer.types, function (x) { return x === "Files"; })) e.preventDefault(); });
     ed.addEventListener("drop", function (e) {
@@ -1162,7 +1178,7 @@ if ("serviceWorker" in navigator) {
         var r = document.caretRangeFromPoint(e.clientX, e.clientY);
         if (r) { var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); memo(); }
       }
-      fs.forEach(envoyer);
+      fs.forEach(function (f) { envoyer(f, blocCurseur(ed)); });
     });
     // Cases cochées dans l'éditeur ; ✕ d'une photo ; lien touché.
     ed.addEventListener("change", maj);
@@ -1178,15 +1194,31 @@ if ("serviceWorker" in navigator) {
         maj();
         return;
       }
+      var mv = e.target.closest(".monter-photo, .descendre-photo");
+      if (mv) {
+        e.preventDefault();
+        var fg = mv.closest("figure"), haut = mv.classList.contains("monter-photo");
+        // Saute par-dessus le bloc voisin (une ligne vide comprise).
+        var voisin = haut ? fg.previousElementSibling : fg.nextElementSibling;
+        if (voisin) {
+          if (haut) ed.insertBefore(fg, voisin); else ed.insertBefore(fg, voisin.nextSibling);
+          garantirLignes(ed);
+          maj();
+          fg.scrollIntoView({ block: "nearest" });
+        }
+        return;
+      }
       var x = e.target.closest(".retirer-photo");
       if (x) {
         e.preventDefault();
         var f = x.closest("figure");
         f.parentNode.removeChild(f);
+        garantirLignes(ed);
         maj();
         window.fcToast("Photo retirée du texte : elle reste en bas de la note");
         return;
       }
+      if (e.target.closest("figure[data-photo]")) { e.preventDefault(); return; }
       var a = e.target.closest("a[href]");
       if (a && !a.closest("figure")) {
         e.preventDefault();
@@ -1310,7 +1342,7 @@ if ("serviceWorker" in navigator) {
       Array.prototype.forEach.call(fichier.files || [], envoyer);
       fichier.value = "";
     });
-    function envoyer(f) {
+    function envoyer(f, ou) {
       if (!avecPhotos) { window.fcToast("Les photos se mettent dans les notes", true); return; }
       if (!id) { window.fcToast("Enregistrez d'abord la note (📷), puis collez la photo", true); return; }
       if (!window.createImageBitmap) { window.fcToast("Photo non prise en charge par ce navigateur", true); return; }
@@ -1318,7 +1350,7 @@ if ("serviceWorker" in navigator) {
       attente.contentEditable = "false";
       attente.className = "photo-attente";
       attente.textContent = "⏳ Envoi de la photo…";
-      derniere = poser(ed, attente, derniere || blocCurseur(ed));
+      derniere = poser(ed, attente, ou || derniere || blocCurseur(ed));
       window.fcReduirePhoto(f, 1600).then(function (blob) {
         return fetch("/notes/" + id + "/photos?place=1", { method: "POST", credentials: "same-origin",
           headers: { "X-Jeton": jeton(), "Content-Type": "image/jpeg" }, body: blob });
@@ -1328,7 +1360,8 @@ if ("serviceWorker" in navigator) {
       }).then(function (r) {
         var fig = figure(String(r.id));
         ed.replaceChild(fig, attente);
-        derniere = fig.nextSibling;
+        garantirLignes(ed);
+        derniere = fig.nextSibling; // la ligne sous la photo : on y écrit
         ed.focus();
         curseurAuBout(derniere);
         maj();
@@ -1344,6 +1377,7 @@ if ("serviceWorker" in navigator) {
       b.addEventListener("click", function () {
         var f = figure(b.getAttribute("data-placer"));
         derniere = poser(ed, f, derniere || ed.lastChild);
+        garantirLignes(ed);
         var p = b.closest(".piece");
         if (p) p.parentNode.removeChild(p);
         maj();

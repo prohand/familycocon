@@ -1616,8 +1616,10 @@ dialog.fenetre form { padding: 14px 16px 18px; }
 .editeur-note[contenteditable="false"] { min-height: 0; }
 figure.photo-texte { position: relative; margin: 8px 0; }
 figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; border-radius: 12px; }
-figure.photo-texte .retirer-photo { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; border: 0;
-  background: rgba(0, 0, 0, .6); color: #fff; font-size: 1rem; cursor: pointer; }
+.outils-photo { position: absolute; top: 6px; right: 6px; display: flex; gap: 6px; }
+.outils-photo button { width: 36px; height: 36px; border-radius: 50%; border: 0;
+  background: rgba(0, 0, 0, .6); color: #fff; font-size: 1rem; font-weight: 800; cursor: pointer; }
+.editeur-note figure.photo-texte img { -webkit-user-drag: none; user-select: none; }
 .photo-attente { color: var(--texte-doux); font-style: italic; }
 .piece .placer { display: block; margin-top: 4px; border: 0; background: none; color: var(--corail-fonce); font: inherit; font-weight: 800; font-size: .8rem; cursor: pointer; }
 .piece .placer[hidden] { display: none; }
