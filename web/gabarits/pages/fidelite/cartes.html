@@ -5,6 +5,8 @@
   <p>Touchez une carte pour la montrer en caisse</p>
 </section>
 <div class="boutons"><a class="bouton" href="/fidelite/nouvelle">＋ Carte</a></div>
+{{/* Bloc rechargé tout seul quand un autre membre change quelque chose (voir Vue.Adresse). */}}
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-fidelite from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 <div class="cartes-fidelite bloc">
   {{- range .Donnees}}
   <a class="carte-fidelite c{{.Couleur}}" href="/fidelite/{{.ID}}">
@@ -14,5 +16,6 @@
   {{- else}}
   <div class="carte vide"><span class="emoji">💳</span>Aucune carte. Ajoutez celles du supermarché, de la pharmacie, de la boulangerie…</div>
   {{- end}}
+</div>
 </div>
 {{end}}

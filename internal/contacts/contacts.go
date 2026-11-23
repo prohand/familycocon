@@ -24,7 +24,12 @@ import (
 )
 
 // Module : Contacts, Adresses et Anniversaires.
-type Module struct{ a *appli.App }
+type Module struct {
+	a *appli.App
+	// naissances : contacts qui ont une date de naissance, lus une seule fois
+	// par requête (tuile de l'accueil et « À venir »).
+	naissances appli.MemoRequete[[]donnees.Contact]
+}
 
 const (
 	modContacts     = "contacts"

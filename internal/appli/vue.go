@@ -140,6 +140,9 @@ type Vue struct {
 	Barre   []Raccourci      // 4 raccourcis : 2 à gauche du « + », 2 à droite
 	Flash   string           // notification à afficher au chargement
 	Chemin  string
+	// Adresse : chemin et paramètres de la page ; un bloc s'y recharge
+	// lui-même quand un autre membre change quelque chose (hx-get + hx-select).
+	Adresse string
 	Donnees any
 }
 
@@ -160,7 +163,7 @@ func (v *Vue) Actif(r Raccourci) bool {
 // NouvelleVue prépare la mise en page. w peut être nil (fragment : pas de
 // notification « flash » à lire).
 func (a *App) NouvelleVue(w http.ResponseWriter, r *http.Request, c *Contexte, titre, module string) *Vue {
-	v := &Vue{Titre: titre, Module: module, C: c, Chemin: r.URL.Path}
+	v := &Vue{Titre: titre, Module: module, C: c, Chemin: r.URL.Path, Adresse: r.URL.RequestURI()}
 	if w == nil {
 		return v // fragment : ni en-tête ni barre
 	}
