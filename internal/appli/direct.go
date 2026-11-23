@@ -4,6 +4,7 @@ package appli
 
 import (
 	"encoding/json"
+	"familycocon/internal/donnees"
 	"fmt"
 	"net/http"
 	"sync"
@@ -60,6 +61,26 @@ func (d *Direct) abonner(famille, membre int64) chan []byte {
 	}
 	d.abonnes[famille] = append(l, abonne{ch: ch, membre: membre})
 	return ch
+}
+
+// FermerMembre : ferme les pages ouvertes d'un membre (retiré, sécurité
+// réinitialisée) ; elles ne reçoivent plus rien.
+func (d *Direct) FermerMembre(famille, membre int64) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	var garde []abonne
+	for _, x := range d.abonnes[famille] {
+		if x.membre == membre {
+			close(x.ch)
+			continue
+		}
+		garde = append(garde, x)
+	}
+	if len(garde) == 0 {
+		delete(d.abonnes, famille)
+	} else {
+		d.abonnes[famille] = garde
+	}
 }
 
 func (d *Direct) desabonner(famille int64, ch chan []byte) {
@@ -180,6 +201,11 @@ func (a *App) direct(w http.ResponseWriter, r *http.Request, c *Contexte) {
 				return
 			}
 		case <-minuteur.C:
+			// La session existe-t-elle encore (déconnexion, membre retiré,
+			// sécurité réinitialisée) ? Sinon, plus rien n'est envoyé.
+			if _, err := a.Q.SessionParEmpreinte(r.Context(), donnees.SessionParEmpreinteParams{Empreinte: c.jeton, ExpireLe: time.Now().Unix()}); err != nil {
+				return
+			}
 			if _, err := fmt.Fprint(w, ": pouls\n\n"); err != nil {
 				return
 			}

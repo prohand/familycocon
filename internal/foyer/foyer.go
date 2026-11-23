@@ -96,7 +96,8 @@ func (m *Module) lireContact(r *http.Request, c *appli.Contexte, champ string) s
 
 // citer : le contact id (s'il existe encore), pour la fiche.
 func (m *Module) citer(ctx context.Context, c *appli.Contexte, role string, id sql.NullInt64) (ContactCite, bool) {
-	if !id.Valid {
+	// Rien si aucun module ne montre le carnet.
+	if !id.Valid || !(c.Actif("contacts") || c.Actif("adresses") || c.Actif("prestataires")) {
 		return ContactCite{}, false
 	}
 	x, err := m.a.Q.ContactParID(ctx, donnees.ContactParIDParams{ID: id.Int64, FamilleID: c.Famille.ID})

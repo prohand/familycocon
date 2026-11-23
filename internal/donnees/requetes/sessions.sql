@@ -35,7 +35,7 @@ SELECT invitations.*, familles.nom AS famille_nom
 FROM invitations JOIN familles ON familles.id = invitations.famille_id
 WHERE invitations.empreinte = ? AND invitations.expire_le > ?;
 
--- name: SupprimerInvitation :exec
+-- name: SupprimerInvitation :execrows
 DELETE FROM invitations WHERE empreinte = ?;
 
 -- name: InvitationsEnCours :many
@@ -58,3 +58,6 @@ UPDATE appareils SET vue_le = ? WHERE empreinte = ?;
 
 -- name: PurgerAppareils :execrows
 DELETE FROM appareils WHERE vue_le <= ?;
+
+-- name: SupprimerAppareilsFamille :exec
+DELETE FROM appareils WHERE famille_id = ?;

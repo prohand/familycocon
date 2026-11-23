@@ -40,3 +40,9 @@ DELETE FROM carnet WHERE id = ? AND famille_id = ?;
 
 -- name: SupprimerCarnetObjet :exec
 DELETE FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ?;
+
+-- name: ReporterEcheanceSiJour :execrows
+UPDATE echeances SET jour = sqlc.arg(nouveau) WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND jour = sqlc.arg(ancien);
+
+-- name: SupprimerEcheanceSiJour :execrows
+DELETE FROM echeances WHERE id = ? AND famille_id = ? AND jour = ?;

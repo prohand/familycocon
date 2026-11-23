@@ -131,9 +131,12 @@ func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin 
 			parEvt[p.EvenementID] = append(parEvt[p.EvenementID], mb)
 		}
 	}
-	contacts, err := m.contactsParEvenement(ctx, c)
-	if err != nil {
-		return nil, err
+	// Contacts cités : seulement si un module montre le carnet.
+	contacts := map[int64][]ContactEvt{}
+	if c.Actif("contacts") || c.Actif("adresses") {
+		if contacts, err = m.contactsParEvenement(ctx, c); err != nil {
+			return nil, err
+		}
 	}
 	var out []Occurrence
 	for _, e := range evts {
@@ -369,7 +372,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.Evt, f.Modifiable = e, modifiable(c, e)
 		f.Regle, f.TexteRep = lireRegle(e.Repetition), TexteRepetition(e, c.Lieu)
-		if cites, err := m.contactsParEvenement(ctx, c); err == nil {
+		if cites, err := m.contactsParEvenement(ctx, c); err == nil && f.Contacts != nil {
 			f.ContactsEv = cites[e.ID]
 			for _, x := range f.ContactsEv {
 				f.Cites[x.ID] = true

@@ -160,3 +160,12 @@ func (q *Queries) SupprimerAbonnement(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, supprimerAbonnement, id)
 	return err
 }
+
+const supprimerAbonnementsPushMembre = `-- name: SupprimerAbonnementsPushMembre :exec
+DELETE FROM abonnements_push WHERE membre_id = ?
+`
+
+func (q *Queries) SupprimerAbonnementsPushMembre(ctx context.Context, membreID int64) error {
+	_, err := q.db.ExecContext(ctx, supprimerAbonnementsPushMembre, membreID)
+	return err
+}

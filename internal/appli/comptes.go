@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,10 @@ const (
 	seuilIP     = 10 // échecs par adresse en 15 min
 	seuilCompte = 20 // échecs par compte en 15 min (venus de plusieurs adresses)
 	seuilPin    = 5  // échecs de code PIN par enfant en 15 min
+	// seuilConfirmation : mauvais mots de passe redemandés (action sensible) par membre en 15 min.
+	seuilConfirmation = 5
+	// seuilDefis : défis de passkey demandés sans être connecté, par adresse en 15 min.
+	seuilDefis = 30
 )
 
 func (a *App) routesComptes() {
@@ -69,9 +74,19 @@ func (a *App) inscriptionPermise(ctx context.Context) bool {
 	return false
 }
 
-// suiteSure : adresse de retour après connexion, sur ce site seulement.
+// suiteSure : adresse de retour après connexion, sur ce site seulement
+// (chemin local : pas de « // », de « \ », de caractère de contrôle, que
+// les navigateurs retirent ou transforment en « / »).
 func suiteSure(s string) string {
-	if !strings.HasPrefix(s, "/") || strings.HasPrefix(s, "//") || strings.HasPrefix(s, "/\\") || strings.HasPrefix(s, "/connexion") {
+	if !strings.HasPrefix(s, "/") || strings.HasPrefix(s, "//") || strings.HasPrefix(s, "/connexion") || len(s) > 500 {
+		return "/"
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f || r == '\\' {
+			return "/"
+		}
+	}
+	if u, err := url.Parse(s); err != nil || u.Scheme != "" || u.Host != "" || strings.HasPrefix(u.Path, "//") {
 		return "/"
 	}
 	return s
@@ -120,6 +135,9 @@ func (a *App) connexion(w http.ResponseWriter, r *http.Request) {
 	mdp := r.PostFormValue("mdp")
 	f := formConnexion{Identifiant: ident, Suite: suiteSure(r.PostFormValue("suite"))}
 	ip := a.IPClient(r)
+	if len(ident) > 64 { // aucun identifiant n'est si long (et la clé du limiteur reste petite)
+		ident = ident[:64]
+	}
 	cleCompte := "compte|" + strings.ToLower(ident)
 
 	fin, attente, ok := a.Limiteur.Essayer(time.Now(), Limite{CleIP(ip), seuilIP}, Limite{cleCompte, seuilCompte})
@@ -186,7 +204,9 @@ func (a *App) enfantDeLAppareil(r *http.Request) (donnees.Membre, bool) {
 		return donnees.Membre{}, false
 	}
 	m, err := a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: id, FamilleID: fam})
-	if err != nil || m.Role != RoleEnfant || !m.Pin.Valid {
+	// Le code PIN est réservé aux comptes sans mot de passe : il ne doit pas
+	// contourner la double authentification d'un ado qui a son propre compte.
+	if err != nil || m.Role != RoleEnfant || !m.Pin.Valid || m.Mdp.Valid {
 		return donnees.Membre{}, false
 	}
 	return m, true
@@ -423,8 +443,9 @@ func (a *App) accepterInvitation(w http.ResponseWriter, r *http.Request) {
 	var m donnees.Membre
 	err = a.Transaction(ctx, func(q *donnees.Queries) error {
 		// L'invitation est supprimée dans la même transaction : usage unique.
-		if err := q.SupprimerInvitation(ctx, inv.Empreinte); err != nil {
-			return err
+		// Deux envois simultanés du même lien : le second ne supprime rien.
+		if n, err := q.SupprimerInvitation(ctx, inv.Empreinte); err != nil || n != 1 {
+			return errors.Join(err, errInvitationUtilisee)
 		}
 		couleur, err := couleurLibre(ctx, q, inv.FamilleID)
 		if err != nil {
@@ -441,6 +462,10 @@ func (a *App) accepterInvitation(w http.ResponseWriter, r *http.Request) {
 		if estDoublon(err) {
 			f.Erreur = "Cet identifiant est déjà pris."
 			a.afficherAnonyme(w, r, http.StatusConflict, "comptes/invitation", "Invitation", f)
+			return
+		}
+		if errors.Is(err, errInvitationUtilisee) {
+			a.PageErreur(w, r, nil, http.StatusNotFound, "Invitation expirée", "Ce lien d'invitation a déjà servi.")
 			return
 		}
 		a.ErreurInterne(w, r, err)
@@ -475,3 +500,6 @@ func couleurLibre(ctx context.Context, q *donnees.Queries, famille int64) (int64
 	}
 	return int64(len(membres)%8) + 1, nil
 }
+
+// errInvitationUtilisee : le lien a déjà servi (deux envois en même temps).
+var errInvitationUtilisee = errors.New("invitation déjà utilisée")

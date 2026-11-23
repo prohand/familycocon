@@ -86,7 +86,7 @@
 </section>
 {{end}}
 
-<form class="bloc" method="post" action="/deconnexion">
+<form class="bloc" method="post" action="/deconnexion" data-deconnexion hx-boost="false">
   {{template "jeton" $c.CSRF}}
   <button class="bouton danger large">{{if $c.EstParent}}Se déconnecter{{else}}Changer d'utilisateur{{end}}</button>
 </form>

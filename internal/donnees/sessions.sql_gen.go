@@ -290,6 +290,15 @@ func (q *Queries) SessionParEmpreinte(ctx context.Context, arg SessionParEmprein
 	return i, err
 }
 
+const supprimerAppareilsFamille = `-- name: SupprimerAppareilsFamille :exec
+DELETE FROM appareils WHERE famille_id = ?
+`
+
+func (q *Queries) SupprimerAppareilsFamille(ctx context.Context, familleID int64) error {
+	_, err := q.db.ExecContext(ctx, supprimerAppareilsFamille, familleID)
+	return err
+}
+
 const supprimerAutresSessions = `-- name: SupprimerAutresSessions :exec
 DELETE FROM sessions WHERE membre_id = ? AND empreinte <> ?
 `
@@ -304,13 +313,16 @@ func (q *Queries) SupprimerAutresSessions(ctx context.Context, arg SupprimerAutr
 	return err
 }
 
-const supprimerInvitation = `-- name: SupprimerInvitation :exec
+const supprimerInvitation = `-- name: SupprimerInvitation :execrows
 DELETE FROM invitations WHERE empreinte = ?
 `
 
-func (q *Queries) SupprimerInvitation(ctx context.Context, empreinte []byte) error {
-	_, err := q.db.ExecContext(ctx, supprimerInvitation, empreinte)
-	return err
+func (q *Queries) SupprimerInvitation(ctx context.Context, empreinte []byte) (int64, error) {
+	result, err := q.db.ExecContext(ctx, supprimerInvitation, empreinte)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const supprimerSession = `-- name: SupprimerSession :exec

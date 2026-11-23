@@ -15,6 +15,7 @@ package suivi
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -227,18 +228,30 @@ func lireCarnet(r *http.Request) (jour, libelle, note string, montant, km int64,
 	return jour, libelle, note, montant, km, ""
 }
 
-func (s *Suivi) ecrireCarnet(ctx context.Context, c *appli.Contexte, o Objet, objet int64, jour, libelle, note string, montant, km int64) error {
-	if _, err := s.a.Q.AjouterCarnet(ctx, donnees.AjouterCarnetParams{
+func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.Contexte, o Objet, objet int64, jour, libelle, note string, montant, km int64) error {
+	_, err := q.AjouterCarnet(ctx, donnees.AjouterCarnetParams{
 		FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet, Jour: jour, Libelle: libelle, Montant: montant, Km: km,
 		Note: note, CreePar: memberID(c), CreeLe: time.Now().Unix(),
-	}); err != nil {
-		return err
-	}
+	})
+	return err
+}
+
+// noterKm : un kilométrage saisi met la fiche à jour (hors transaction).
+func noterKm(ctx context.Context, c *appli.Contexte, o Objet, objet, km int64) {
 	if km > 0 && o.NoterKm != nil {
 		o.NoterKm(ctx, c.Famille.ID, objet, km)
 	}
-	return nil
 }
+
+// AjouterMois : n mois plus tard, le même jour, ou le dernier jour du mois
+// s'il n'existe pas (31 janvier + 1 mois = 28 février, pas 3 mars).
+func AjouterMois(t time.Time, n int) time.Time {
+	premier := time.Date(t.Year(), t.Month()+time.Month(n), 1, 0, 0, 0, 0, t.Location())
+	return premier.AddDate(0, 0, min(t.Day(), premier.AddDate(0, 1, -1).Day())-1)
+}
+
+// errDejaFaite : l'échéance a déjà été notée (double envoi).
+var errDejaFaite = errors.New("échéance déjà notée")
 
 func (s *Suivi) ajouterCarnet(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	objet, _ := strconv.ParseInt(r.PathValue("objet"), 10, 64)
@@ -255,10 +268,11 @@ func (s *Suivi) ajouterCarnet(w http.ResponseWriter, r *http.Request, c *appli.C
 		s.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.ecrireCarnet(r.Context(), c, o, objet, jour, libelle, note, montant, km); err != nil {
+	if err := s.ecrireCarnet(r.Context(), s.a.Q, c, o, objet, jour, libelle, note, montant, km); err != nil {
 		s.a.ErreurInterne(w, r, err)
 		return
 	}
+	noterKm(r.Context(), c, o, objet, km)
 	s.a.Flash(w, "Ajouté au carnet ✓")
 	s.a.Rediriger(w, r, o.URL(objet))
 }
@@ -282,23 +296,38 @@ func (s *Suivi) faite(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		s.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.ecrireCarnet(ctx, c, o, e.ObjetID, jour, e.Libelle, note, montant, km); err != nil {
+	// Une seule fois, même si le bouton est envoyé deux fois : l'échéance
+	// n'est reportée (ou retirée) que si elle est encore à sa date.
+	var suivante time.Time
+	err = s.a.Transaction(ctx, func(q *donnees.Queries) error {
+		var n int64
+		var err error
+		if e.RepetitionMois > 0 {
+			// Reportée à partir de la date où elle a été faite.
+			fait, _ := time.Parse("2006-01-02", jour)
+			suivante = AjouterMois(fait, int(e.RepetitionMois))
+			n, err = q.ReporterEcheanceSiJour(ctx, donnees.ReporterEcheanceSiJourParams{Nouveau: suivante.Format("2006-01-02"),
+				ID: e.ID, FamilleID: c.Famille.ID, Ancien: e.Jour})
+		} else {
+			n, err = q.SupprimerEcheanceSiJour(ctx, donnees.SupprimerEcheanceSiJourParams{ID: e.ID, FamilleID: c.Famille.ID, Jour: e.Jour})
+		}
+		if err != nil || n != 1 {
+			return errors.Join(err, errDejaFaite)
+		}
+		return s.ecrireCarnet(ctx, q, c, o, e.ObjetID, jour, e.Libelle, note, montant, km)
+	})
+	switch {
+	case errors.Is(err, errDejaFaite):
+		s.a.Flash(w, "Déjà noté ✓")
+	case err != nil:
 		s.a.ErreurInterne(w, r, err)
 		return
-	}
-	if e.RepetitionMois > 0 {
-		// Reportée à partir de la date où elle a été faite.
-		fait, _ := time.Parse("2006-01-02", jour)
-		suivante := fait.AddDate(0, int(e.RepetitionMois), 0).Format("2006-01-02")
-		err = s.a.Q.ReporterEcheance(ctx, donnees.ReporterEcheanceParams{Jour: suivante, ID: e.ID, FamilleID: c.Famille.ID})
-		s.a.Flash(w, fmt.Sprintf("Fait ✓ Prochaine fois : %s", appli.DateLongue(fait.AddDate(0, int(e.RepetitionMois), 0))))
-	} else {
-		err = s.a.Q.SupprimerEcheance(ctx, donnees.SupprimerEcheanceParams{ID: e.ID, FamilleID: c.Famille.ID})
+	case e.RepetitionMois > 0:
+		noterKm(ctx, c, o, e.ObjetID, km)
+		s.a.Flash(w, fmt.Sprintf("Fait ✓ Prochaine fois : %s", appli.DateLongue(suivante)))
+	default:
+		noterKm(ctx, c, o, e.ObjetID, km)
 		s.a.Flash(w, "Fait ✓")
-	}
-	if err != nil {
-		s.a.ErreurInterne(w, r, err)
-		return
 	}
 	s.a.Rediriger(w, r, o.URL(e.ObjetID))
 }
@@ -307,7 +336,7 @@ func (s *Suivi) supprimerEcheance(w http.ResponseWriter, r *http.Request, c *app
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	e, err := s.a.Q.EcheanceParID(r.Context(), donnees.EcheanceParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[e.Module]
-	if err != nil || !ok {
+	if err != nil || !ok || !c.Actif(e.Module) {
 		s.a.Echec(w, r, http.StatusNotFound, "Échéance introuvable.")
 		return
 	}
@@ -323,7 +352,7 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := s.a.Q.LigneCarnetParID(r.Context(), donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok {
+	if err != nil || !ok || !c.Actif(l.Module) {
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}

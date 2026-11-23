@@ -27,3 +27,6 @@ WHERE membres.famille_id = ? AND membres.actif = 1 AND membres.id <> sqlc.arg(au
 
 -- name: ModifierPushModules :exec
 UPDATE membres SET push_modules = ? WHERE id = ?;
+
+-- name: SupprimerAbonnementsPushMembre :exec
+DELETE FROM abonnements_push WHERE membre_id = ?;

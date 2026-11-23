@@ -343,6 +343,30 @@ func (q *Queries) ReporterEcheance(ctx context.Context, arg ReporterEcheancePara
 	return err
 }
 
+const reporterEcheanceSiJour = `-- name: ReporterEcheanceSiJour :execrows
+UPDATE echeances SET jour = ?1 WHERE id = ?2 AND famille_id = ?3 AND jour = ?4
+`
+
+type ReporterEcheanceSiJourParams struct {
+	Nouveau   string
+	ID        int64
+	FamilleID int64
+	Ancien    string
+}
+
+func (q *Queries) ReporterEcheanceSiJour(ctx context.Context, arg ReporterEcheanceSiJourParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, reporterEcheanceSiJour,
+		arg.Nouveau,
+		arg.ID,
+		arg.FamilleID,
+		arg.Ancien,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const supprimerCarnetObjet = `-- name: SupprimerCarnetObjet :exec
 DELETE FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ?
 `
@@ -370,6 +394,24 @@ type SupprimerEcheanceParams struct {
 func (q *Queries) SupprimerEcheance(ctx context.Context, arg SupprimerEcheanceParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerEcheance, arg.ID, arg.FamilleID)
 	return err
+}
+
+const supprimerEcheanceSiJour = `-- name: SupprimerEcheanceSiJour :execrows
+DELETE FROM echeances WHERE id = ? AND famille_id = ? AND jour = ?
+`
+
+type SupprimerEcheanceSiJourParams struct {
+	ID        int64
+	FamilleID int64
+	Jour      string
+}
+
+func (q *Queries) SupprimerEcheanceSiJour(ctx context.Context, arg SupprimerEcheanceSiJourParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, supprimerEcheanceSiJour, arg.ID, arg.FamilleID, arg.Jour)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const supprimerLigneCarnet = `-- name: SupprimerLigneCarnet :exec
