@@ -6,7 +6,7 @@
 </section>
 <div class="boutons"><a class="bouton" href="/fidelite/nouvelle">＋ Carte</a></div>
 {{/* Bloc rechargé tout seul quand un autre membre change quelque chose (voir Vue.Adresse). */}}
-<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-fidelite from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-fidelite from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*">
 <div class="cartes-fidelite bloc">
   {{- range .Donnees}}
   <a class="carte-fidelite c{{.Couleur}}" href="/fidelite/{{.ID}}">
