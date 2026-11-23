@@ -6,7 +6,7 @@
 </section>
 <div class="boutons"><a class="bouton" href="{{.Nouveau}}">{{.TexteNouveau}}</a></div>
 {{/* Bloc rechargé tout seul quand un autre membre change quelque chose (voir Vue.Adresse). */}}
-<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-{{$.Module}} from:body delay:300ms{{if eq $.Module "prestataires"}}, maj-contacts from:body delay:300ms{{end}}, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-{{$.Module}} from:body delay:300ms{{if eq $.Module "prestataires"}}, maj-contacts from:body delay:300ms{{end}}, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*">
 {{if .Elements}}
 <div class="liste-objets bloc">
   {{- range .Elements}}

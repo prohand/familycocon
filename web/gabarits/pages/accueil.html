@@ -15,7 +15,7 @@
 
 {{/* Tuiles et blocs rechargés quand un autre membre change quelque chose
      (événement « maj » envoyé par app.js à chaque message temps réel). */}}
-<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj from:body delay:1s, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj from:body delay:1s, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*">
 {{if .Donnees.Tuiles}}
 <div class="tuiles">
   {{- range .Donnees.Tuiles}}

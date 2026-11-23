@@ -323,3 +323,11 @@ Choix validés ensuite :
   gabarit `emoji`. Icône d'application : nid crème sur fond corail
   (`icone.svg`, PNG 180, 192, 512 dont « maskable »), badge de notification
   monochrome (`badge-96.png`).
+
+### Correctif v0.5.1 : pages vides après un clic
+Les liens d'un bloc qui se recharge lui-même (`hx-select="#maj"`) héritaient
+de ce réglage : un clic (navigation hx-boost) ne gardait de la page suivante
+que son bloc `#maj`, ou rien. Visible dès le premier clic sur une tuile de
+l'accueil (v0.5.0), et sur certaines listes depuis la v0.4.4. Ces blocs ont
+maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
+`hx-select` sans lui.
