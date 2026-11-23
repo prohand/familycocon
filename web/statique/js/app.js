@@ -1180,27 +1180,21 @@ if ("serviceWorker" in navigator) {
       e.preventDefault();
       if (images.length) { memo(); images.forEach(function (f) { envoyer(f, blocCurseur(ed)); }); return; }
       var html = cd.getData("text/html"), brut = cd.getData("text/plain");
-      // Texte brut qui contient des balises : lu comme du HTML.
-      if (!html && BALISES.test(brut)) html = brut;
+      // Texte qui porte des signes ou des balises écrits en clair (Méli-Mélo :
+      // « **<u>Pneu :</u>** », « ![](attachment:680) ») : le serveur le met en forme.
+      var aSignes = function (t) { return SIGNES.test(t) || BALISES.test(t) || /!\[[^\]\n]*\]\(/.test(t); };
       if (html) {
         var src = new DOMParser().parseFromString(html, "text/html").body;
         var propre = document.createElement("div");
         nettoyer(src, propre);
-        // Balises montrées comme du texte par le site copié (« &lt;b&gt; ») : relues comme du HTML.
-        if (!propre.querySelector(MISE_EN_FORME) && BALISES.test(propre.textContent)) {
-          var src2 = new DOMParser().parseFromString(propre.textContent, "text/html").body;
-          propre = document.createElement("div");
-          nettoyer(src2, propre);
-        }
-        // Signes écrits en clair (« **gras** ») et aucune mise en forme HTML : mis en forme aussi.
         if (!propre.querySelector(MISE_EN_FORME)) {
           var lignes = brut || propre.innerText || propre.textContent;
-          if (SIGNES.test(lignes)) { collerSignes(lignes); return; }
+          if (aSignes(lignes)) { collerSignes(lignes); return; }
         }
         document.execCommand("insertHTML", false, propre.innerHTML);
         aplatir(ed);
         maj();
-      } else if (SIGNES.test(brut)) {
+      } else if (aSignes(brut)) {
         collerSignes(brut);
       } else {
         document.execCommand("insertText", false, brut);

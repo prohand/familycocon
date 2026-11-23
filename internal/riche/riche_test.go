@@ -58,3 +58,25 @@ func TestSimpleEtEchapper(t *testing.T) {
 		t.Errorf("Echapper puis relire : %q", s)
 	}
 }
+
+// Texte copié de Méli-Mélo : Markdown et balises mêlés, image jointe.
+func TestDepuisCollage(t *testing.T) {
+	colle := "**<u>Pneu :</u>**\nContinental dw06+ :\n\n![](attachment:680)\n\n" +
+		"https://www.reddit.com/r/mazda3/comments/1izlduv/the_pothole_won_are_the_continental_dws06_still/\n" +
+		"Pirelli *p0* as3plus :\n<b>Bac</b> de coffre<br>https://www.walser-shop.fr/bac-de-coffre-xtr-pour-mazda-3-hatchback-bp-11/2018-auj.\n" +
+		"![photo](https://exemple.fr/a.jpg) &amp; <a href=\"https://b.fr\">lien</a>\n* puce"
+	got := DepuisCollage(colle)
+	want := "**++Pneu :++**\nContinental dw06+ :\n\n🖼️ (image à coller à part)\n\n" +
+		"https://www.reddit.com/r/mazda3/comments/1izlduv/the_pothole_won_are_the_continental_dws06_still/\n" +
+		"Pirelli _p0_ as3plus :\n**Bac** de coffre\nhttps://www.walser-shop.fr/bac-de-coffre-xtr-pour-mazda-3-hatchback-bp-11/2018-auj.\n" +
+		"[🖼️ photo](https://exemple.fr/a.jpg) & [lien](https://b.fr)\n* puce"
+	if got != want {
+		t.Fatalf("\n%q\n%q", got, want)
+	}
+	h := string(HTML(got, Options{Mode: Edition}))
+	for _, attendu := range []string{"<strong><u>Pneu :</u></strong>", "<em>p0</em>", `href="https://www.walser-shop.fr/bac-de-coffre-xtr-pour-mazda-3-hatchback-bp-11/2018-auj"`, "<ul><li>puce</li></ul>"} {
+		if !strings.Contains(h, attendu) {
+			t.Errorf("sans %q :\n%s", attendu, h)
+		}
+	}
+}
