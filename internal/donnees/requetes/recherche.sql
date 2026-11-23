@@ -15,7 +15,7 @@ ORDER BY id DESC LIMIT 8;
 
 -- name: ChercherProjets :many
 SELECT id, nom, emoji, termine_le FROM projets
-WHERE famille_id = sqlc.arg(famille_id)
+WHERE famille_id = sqlc.arg(famille_id) AND perso_de IN (0, sqlc.arg(membre))
   AND (instr(plier(nom), plier(sqlc.arg(motif))) > 0 OR instr(plier(description), plier(sqlc.arg(motif))) > 0)
 ORDER BY termine_le, id DESC LIMIT 8;
 

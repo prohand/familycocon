@@ -6,7 +6,8 @@ package web
 
 import "embed"
 
-// Fichiers : gabarits/ et statique/.
+// Fichiers : gabarits/, statique/ et ocr/ (lecture des tickets de carburant
+// dans le navigateur : Tesseract.js, gardé compressé, servi à part).
 //
-//go:embed gabarits statique
+//go:embed gabarits statique ocr
 var Fichiers embed.FS

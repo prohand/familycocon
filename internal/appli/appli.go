@@ -57,7 +57,15 @@ type App struct {
 	ajouts     []Ajout
 	partages   []Partage
 	recherches map[string]RechercheFunc
+	departs    []DepartFunc
 }
+
+// DepartFunc : ce qu'un module efface quand un membre quitte la famille
+// (ce qui était privé à ce membre), dans la transaction du départ.
+type DepartFunc func(ctx context.Context, q *donnees.Queries, famille, membre int64) error
+
+// AjouterDepart : le module efface ce qui était privé au membre qui part.
+func (a *App) AjouterDepart(f DepartFunc) { a.departs = append(a.departs, f) }
 
 // Nouvelle prépare l'application (sans encore charger les gabarits : les
 // modules peuvent d'abord ajouter leurs fonctions avec AjouterFonctions).
@@ -125,6 +133,7 @@ func (a *App) Handler() http.Handler { return a.Envelopper(a.Mux) }
 
 func (a *App) routesDeBase() {
 	a.Mux.HandleFunc("GET /health", a.sante)
+	a.Mux.HandleFunc("GET /ocr/{fichier...}", a.servirOCR)
 	a.Mux.HandleFunc("GET /statique/{fichier...}", func(w http.ResponseWriter, r *http.Request) {
 		a.Statique.Servir(w, r, r.PathValue("fichier"), true)
 	})

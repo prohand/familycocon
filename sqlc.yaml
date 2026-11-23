@@ -23,5 +23,6 @@ sql:
           missions_faite: MissionFaite
           animaux: Animal
           garanty: Garantie
+          photos_note: PhotoNote
           etoiles_bonu: EtoilesBonus
           evenements_exception: EvenementsException

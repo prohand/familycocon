@@ -50,7 +50,7 @@ func (a *App) ElementsCalendrier(ctx context.Context, c *Contexte, debut, fin ti
 	// étapes de projet, renouvellements…) y sont aussi, en petit. Celles de
 	// l'agenda lui-même sont déjà ses événements.
 	for _, e := range a.Echeances(ctx, c.Famille, debut, fin) {
-		if e.Module == "agenda" || (e.Parents && !c.EstParent()) {
+		if e.Module == "agenda" || !e.PourMembre(c.Membre.ID, c.EstParent()) {
 			continue
 		}
 		out = append(out, ElementJour{Jour: e.Jour.Format("2006-01-02"), Emoji: e.Emoji, Titre: e.Titre, URL: e.URL, Module: e.Module})

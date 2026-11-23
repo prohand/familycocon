@@ -5,10 +5,15 @@
   <a class="retour" href="/">‹ Accueil</a>
   <h1>💶 Budget</h1>
 </section>
+{{/* Deux budgets : le compte commun (tous les parents) et le budget perso (privé). */}}
+<nav class="pilules onglets" aria-label="Budget">
+  <a class="pilule{{if not .Perso}} active{{end}}" href="/budget?compte=commun&amp;mois={{.Mois}}">👨‍👩‍👧 Compte commun</a>
+  <a class="pilule{{if .Perso}} active{{end}}" href="/budget?compte=perso&amp;mois={{.Mois}}">🔒 Mon budget</a>
+</nav>
 <div class="navigation-periode">
-  <a class="fleche" href="/budget?mois={{.Precedent}}" aria-label="Mois précédent">‹</a>
+  <a class="fleche" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Precedent}}" aria-label="Mois précédent">‹</a>
   <h2>{{.Titre}}</h2>
-  <a class="fleche" href="/budget?mois={{.Suivant}}" aria-label="Mois suivant">›</a>
+  <a class="fleche" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Suivant}}" aria-label="Mois suivant">›</a>
 </div>
 <div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-budget from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*">
 
@@ -22,14 +27,32 @@
 </section>
 
 <div class="boutons">
-  <a class="bouton" href="/budget/nouvelle">＋ Dépense</a>
-  <a class="bouton secondaire" href="/budget/nouvelle?sens=revenu">＋ Revenu</a>
+  <a class="bouton" href="/budget/nouvelle?compte={{$.Donnees.Compte}}">＋ Dépense</a>
+  <a class="bouton secondaire" href="/budget/nouvelle?compte={{$.Donnees.Compte}}&amp;sens=revenu">＋ Revenu</a>
 </div>
-<a class="lien-recurrences bloc" href="/budget/recurrences">🔁 Opérations qui reviennent{{if .NbRecur}} ({{.NbRecur}}){{end}} <span class="fleche-droite">›</span></a>
+{{if .Perso}}
+<p class="aide">🔒 Votre budget perso : vous seul le voyez.</p>
+<details class="carte bloc virement">
+  <summary class="lien-ajout">🔁 Virer vers le compte commun</summary>
+  <form method="post" action="/budget/virement">
+    {{template "jeton" $c.CSRF}}
+    <div class="rangee">
+      <label class="champ"><span>Montant</span><input name="montant" inputmode="decimal" placeholder="0,00" required></label>
+      <label class="champ"><span>Le</span><input type="date" name="jour" value="{{.Aujourdhui}}" required></label>
+    </div>
+    <label class="champ"><span>Libellé (facultatif)</span><input name="libelle" maxlength="80" placeholder="Virement vers le commun"></label>
+    <label class="champ"><span>Revient</span>
+      <select name="frequence"><option value="">Une seule fois</option>{{range .Frequences}}<option value="{{.Cle}}">{{.Nom}}</option>{{end}}</select></label>
+    <p class="aide">Une dépense ici, et un revenu « Virement de {{$c.Membre.Nom}} » au compte commun.</p>
+    <button class="bouton petit">Virer</button>
+  </form>
+</details>
+{{end}}
+<a class="lien-recurrences bloc" href="/budget/recurrences?compte={{$.Donnees.Compte}}">🔁 Opérations qui reviennent{{if .NbRecur}} ({{.NbRecur}}){{end}} <span class="fleche-droite">›</span></a>
 <nav class="pilules bloc" aria-label="Outils du budget">
-  <a class="pilule" href="/budget/annee?an={{slice .Mois 0 4}}">📊 L'année</a>
-  <a class="pilule" href="/budget/chercher">🔎 Chercher</a>
-  <a class="pilule" href="/budget/plafonds">🎯 Plafonds</a>
+  <a class="pilule" href="/budget/annee?compte={{$.Donnees.Compte}}&amp;an={{slice .Mois 0 4}}">📊 L'année</a>
+  <a class="pilule" href="/budget/chercher?compte={{$.Donnees.Compte}}">🔎 Chercher</a>
+  <a class="pilule" href="/budget/plafonds?compte={{$.Donnees.Compte}}">🎯 Plafonds</a>
 </nav>
 
 {{if .Prevues}}
@@ -55,9 +78,9 @@
 
 {{if .ParCat}}
 <section class="carte bloc">
-  <div class="section-titre premier"><h2>Par catégorie</h2>{{if .Plafonds}}<a href="/budget/plafonds">Plafonds ›</a>{{end}}</div>
+  <div class="section-titre premier"><h2>Par catégorie</h2>{{if .Plafonds}}<a href="/budget/plafonds?compte={{$.Donnees.Compte}}">Plafonds ›</a>{{end}}</div>
   {{- range .ParCat}}
-  <a class="barre-cat{{if .Alerte}} alerte{{end}}" href="/budget?mois={{$.Donnees.Mois}}&amp;cat={{.Cat.Cle}}">
+  <a class="barre-cat{{if .Alerte}} alerte{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{$.Donnees.Mois}}&amp;cat={{.Cat.Cle}}">
     <span class="nom-cat">{{.Cat.Emoji}} {{.Cat.Nom}}{{if .Plafond}} <small>{{.Pour100}} % de {{montant .Plafond $.Donnees.Devise}}</small>{{end}}</span>
     <b>{{montant .Montant $.Donnees.Devise}}</b>
     <progress class="jauge{{if .Alerte}} alerte{{end}}" max="{{if .Max}}{{.Max}}{{else}}1{{end}}" value="{{.Montant}}"></progress>
@@ -78,9 +101,9 @@
 
 <section class="bloc">
   <nav class="pilules" aria-label="Filtrer par catégorie">
-    <a class="pilule{{if not .Filtre}} active{{end}}" href="/budget?mois={{.Mois}}">Tout</a>
+    <a class="pilule{{if not .Filtre}} active{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Mois}}">Tout</a>
     {{- range .Pilules}}
-    <a class="pilule{{if eq .Cle $.Donnees.Filtre}} active{{end}}" href="/budget?mois={{$.Donnees.Mois}}&amp;cat={{.Cle}}">{{.Emoji}} {{.Nom}}</a>
+    <a class="pilule{{if eq .Cle $.Donnees.Filtre}} active{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{$.Donnees.Mois}}&amp;cat={{.Cle}}">{{.Emoji}} {{.Nom}}</a>
     {{- end}}
   </nav>
   {{- range .Jours}}

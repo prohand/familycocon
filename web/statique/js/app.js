@@ -270,6 +270,31 @@ document.addEventListener("change", function (e) {
   p.value = "";
 });
 
+// Notes : dans le texte (textarea[data-liste]), Entrée au bout d'une ligne
+// « [ ] … », « [x] … » ou « - … » commence la ligne suivante pareil (une
+// nouvelle case, une nouvelle puce). Entrée sur une case vide l'enlève et
+// termine la liste.
+document.addEventListener("keydown", function (e) {
+  var t = e.target;
+  if (e.key !== "Enter" || e.shiftKey || e.isComposing || !t.matches || !t.matches("textarea[data-liste]")) return;
+  if (t.selectionStart !== t.selectionEnd) return;
+  var v = t.value, pos = t.selectionStart;
+  var debut = v.lastIndexOf("\n", pos - 1) + 1;
+  var ligne = v.slice(debut, pos);
+  var m = /^(\s*(?:[-*] )?)(\[[ xX]\] ?)?(.*)$/.exec(ligne);
+  if (!m || (!m[2] && !/[-*] $/.test(m[1]))) return;
+  e.preventDefault();
+  var marque = m[1] + (m[2] ? "[ ] " : "");
+  if (m[3].trim() === "") {
+    // Ligne vide : fin de la liste.
+    t.value = v.slice(0, debut) + v.slice(pos);
+    t.selectionStart = t.selectionEnd = debut;
+    return;
+  }
+  t.value = v.slice(0, pos) + "\n" + marque + v.slice(pos);
+  t.selectionStart = t.selectionEnd = pos + 1 + marque.length;
+});
+
 // Véhicule : reprise d'une sauvegarde Fuelio (input[data-fuelio] = adresse
 // d'envoi). Le fichier part tel quel (il peut peser des centaines de Mo,
 // photos comprises) ; l'avancement s'affiche, puis la fiche est rechargée
@@ -303,6 +328,130 @@ document.addEventListener("change", function (e) {
   x.send(p.files[0]);
   p.value = "";
 });
+
+// Pleins : « Scanner le ticket ». Le texte de la photo est lu dans le
+// téléphone par Tesseract.js (chargé au premier scan seulement, depuis
+// /ocr/v7, puis gardé par le navigateur), puis envoyé au serveur qui y
+// trouve la date, les litres et les prix (/suivi/ticket). Les champs se
+// remplissent et sont surlignés ; la photo réduite part avec le plein.
+(function () {
+  "use strict";
+  var OCR = "/ocr/v7/";
+  var script = null;
+  function jeton() {
+    try { return JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) { return ""; }
+  }
+  function chargerTesseract() {
+    if (!script) script = new Promise(function (ok, ko) {
+      var s = document.createElement("script");
+      s.src = OCR + "tesseract.min.js";
+      s.onload = ok;
+      s.onerror = function () { script = null; ko(new Error("Lecteur indisponible")); };
+      document.head.appendChild(s);
+    });
+    return script;
+  }
+  // L'image tournée (degrés) et mise à la taille voulue (plus grand côté).
+  function dessiner(img, rot, cote) {
+    var r = cote / Math.max(img.width, img.height);
+    var w = Math.round(img.width * r), h = Math.round(img.height * r);
+    var c = document.createElement("canvas");
+    var quart = rot % 180 !== 0;
+    c.width = quart ? h : w;
+    c.height = quart ? w : h;
+    var x = c.getContext("2d");
+    x.translate(c.width / 2, c.height / 2);
+    x.rotate(rot * Math.PI / 180);
+    x.drawImage(img, -w / 2, -h / 2, w, h);
+    return c;
+  }
+  function analyser(texte) {
+    return fetch("/suivi/ticket", { method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-Jeton": jeton() }, body: JSON.stringify({ texte: texte }) })
+      .then(function (rep) { if (!rep.ok) throw new Error("refusé"); return rep.json(); });
+  }
+  function trouves(t) { return [t.litres, t.montant, t.prixLitre].filter(Boolean).length; }
+  async function lireTicket(fichier) {
+    await chargerTesseract();
+    var img = await createImageBitmap(fichier);
+    var worker = await Tesseract.createWorker("fra", 1, { workerPath: OCR + "worker.min.js",
+      corePath: OCR + "tesseract-core-simd-lstm.js", langPath: OCR, workerBlobURL: false });
+    try {
+      // Photo en largeur : le ticket est sans doute couché (un quart de tour).
+      var sens = img.width > img.height ? [90, 270, 0] : [0, 180];
+      var texte = "", res = null, rot = sens[0];
+      for (var i = 0; i < sens.length; i++) {
+        var t = (await worker.recognize(dessiner(img, sens[i], 1600))).data.text;
+        var r = await analyser(t);
+        if (!res || trouves(r) > trouves(res)) { res = r; texte = t; rot = sens[i]; }
+        if (trouves(r) >= 2) break;
+      }
+      // Date ou nombres manquants : une seconde lecture, plus grande.
+      if (trouves(res) >= 1 && (!res.complet || !res.jour)) {
+        var t2 = (await worker.recognize(dessiner(img, rot, 2400))).data.text;
+        res = await analyser(texte + "\n" + t2);
+      }
+      return res;
+    } finally {
+      worker.terminate();
+    }
+  }
+  function remplir(f, res) {
+    var n = 0;
+    [["jour", res.jour], ["litres", res.litres], ["montant", res.montant], ["carburant", res.carburant], ["note", res.note]].forEach(function (x) {
+      var champ = f.querySelector("[name=" + x[0] + "]");
+      if (!champ || !x[1] || (x[0] === "note" && champ.value)) return;
+      champ.value = x[1];
+      champ.classList.add("lu");
+      n++;
+    });
+    return n;
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-scanner-ticket]");
+    if (!b) return;
+    var photo = b.parentNode.querySelector("[data-photo-ticket]");
+    if (photo) photo.click();
+  });
+  ["input", "change"].forEach(function (type) {
+    document.addEventListener(type, function (e) {
+      if (e.target.classList && e.target.classList.contains("lu")) e.target.classList.remove("lu");
+    });
+  });
+  document.addEventListener("change", function (e) {
+    var p = e.target;
+    if (!p.matches || !p.matches("[data-photo-ticket]") || !p.files || !p.files[0]) return;
+    var f = p.closest("form"), fichier = p.files[0];
+    var etat = f.querySelector("[data-etat-ticket]"), bouton = f.querySelector("[data-scanner-ticket]");
+    p.value = "";
+    if (!window.createImageBitmap || !window.WebAssembly) { window.fcToast("Lecture impossible sur ce navigateur : remplissez à la main", true); return; }
+    bouton.disabled = true;
+    etat.textContent = "Lecture du ticket… (quelques secondes ; la première fois, le lecteur se télécharge : 2 Mo)";
+    // La photo réduite, jointe au plein à l'enregistrement.
+    window.fcReduirePhoto(fichier, 1200).then(function (blob) {
+      var lecteur = new FileReader();
+      lecteur.onload = function () {
+        var url = String(lecteur.result);
+        f.querySelector("[name=ticket]").value = url.slice(url.indexOf(",") + 1);
+        var ap = f.querySelector("[data-apercu-ticket]");
+        ap.src = url;
+        ap.hidden = false;
+      };
+      lecteur.readAsDataURL(blob);
+    });
+    lireTicket(fichier).then(function (res) {
+      var n = remplir(f, res);
+      etat.textContent = n ? "Lu sur le ticket : vérifiez les champs surlignés, puis tapez le kilométrage. La photo sera jointe au plein."
+        : "Ticket illisible : remplissez à la main (la photo sera jointe au plein).";
+      window.fcToast(n ? "Ticket lu ✓" : "Ticket illisible", !n);
+      var km = f.querySelector("[name=km]");
+      if (km && n) km.focus();
+    }).catch(function () {
+      etat.textContent = "Lecture impossible sur ce téléphone : remplissez à la main (la photo sera jointe au plein).";
+      window.fcToast("Lecture impossible", true);
+    }).finally(function () { bouton.disabled = false; });
+  });
+})();
 
 // Carte de fidélité : « Scanner la carte ». Sur Android (Chrome), le
 // navigateur lit le code en direct avec la caméra (BarcodeDetector). Sinon

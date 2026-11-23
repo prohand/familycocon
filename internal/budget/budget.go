@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-// Package budget : revenus et dépenses de la famille, par catégorie.
+// Package budget : revenus et dépenses de la famille, par catégorie : le
+// compte commun, et le budget perso (privé) de chaque parent (comptes.go).
 // En haut, le « reste à vivre » du mois (revenus − dépenses) ; une courbe
 // des dépenses cumulées, comparée au mois précédent ; des filtres par
 // catégorie. Réservé aux parents.
@@ -62,7 +63,7 @@ var Categories = []Categorie{
 
 // CategorieParCle : la catégorie (ok = faux si inconnue).
 func CategorieParCle(cle string) (Categorie, bool) {
-	for _, c := range Categories {
+	for _, c := range append(Categories, CategoriesVirement...) {
 		if c.Cle == cle {
 			return c, true
 		}
@@ -76,6 +77,7 @@ func Brancher(a *appli.App) {
 	a.Route("GET /budget", mod, appli.Parent, m.page)
 	a.Route("GET /budget/nouvelle", mod, appli.Parent, m.formulaire)
 	a.Route("POST /budget", mod, appli.Parent, m.creer)
+	a.Route("POST /budget/virement", mod, appli.Parent, m.virer)
 	a.Route("GET /budget/recurrences", mod, appli.Parent, m.pageRecurrences)
 	a.Route("GET /budget/chercher", mod, appli.Parent, m.chercher)
 	a.Route("GET /budget/annee", mod, appli.Parent, m.annee)
@@ -127,27 +129,31 @@ type payePar struct {
 }
 
 type vueBudget struct {
-	Mois      string // 2026-11
-	Titre     string // Novembre 2026
-	Precedent string
-	Suivant   string
-	Filtre    string
-	Revenus   int64
-	Depenses  int64
-	Reste     int64
-	Courbe    template.HTML
-	ParCat    []parCategorie
-	MaxCat    int64
-	PayePar   []payePar // au moins deux parents ont payé ce mois-ci
-	Ecart     int64     // différence entre le premier et le second
-	Plafonds  bool      // la famille a fixé au moins un plafond
-	Jours     []jourOps
-	Pilules   []Categorie
-	Prevues   []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
-	PrevuNet  int64     // revenus − dépenses prévus
-	ResteFin  int64     // reste à vivre prévu en fin de mois
-	NbRecur   int       // opérations qui reviennent (lien vers leur page)
-	Devise    string
+	Compte     string // « commun » ou « perso »
+	Perso      bool   // budget perso (privé) du membre
+	Aujourdhui string
+	Frequences []Frequence
+	Mois       string // 2026-11
+	Titre      string // Novembre 2026
+	Precedent  string
+	Suivant    string
+	Filtre     string
+	Revenus    int64
+	Depenses   int64
+	Reste      int64
+	Courbe     template.HTML
+	ParCat     []parCategorie
+	MaxCat     int64
+	PayePar    []payePar // au moins deux parents ont payé ce mois-ci
+	Ecart      int64     // différence entre le premier et le second
+	Plafonds   bool      // la famille a fixé au moins un plafond
+	Jours      []jourOps
+	Pilules    []Categorie
+	Prevues    []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
+	PrevuNet   int64     // revenus − dépenses prévus
+	ResteFin   int64     // reste à vivre prévu en fin de mois
+	NbRecur    int       // opérations qui reviennent (lien vers leur page)
+	Devise     string
 }
 
 func lireMois(r *http.Request, c *appli.Contexte) time.Time {
@@ -157,8 +163,8 @@ func lireMois(r *http.Request, c *appli.Contexte) time.Time {
 	return c.Maintenant()
 }
 
-func (m *Module) operations(ctx context.Context, c *appli.Contexte, du, au time.Time) ([]donnees.Operation, error) {
-	return m.a.Q.OperationsPeriode(ctx, donnees.OperationsPeriodeParams{FamilleID: c.Famille.ID, Du: repetition.CleJour(du), Au: repetition.CleJour(au)})
+func (m *Module) operations(ctx context.Context, c *appli.Contexte, compte int64, du, au time.Time) ([]donnees.Operation, error) {
+	return m.a.Q.OperationsPeriode(ctx, donnees.OperationsPeriodeParams{FamilleID: c.Famille.ID, Compte: compte, Du: repetition.CleJour(du), Au: repetition.CleJour(au)})
 }
 
 // cumuls : dépenses cumulées par jour du mois (jusqu'au jour « jusqua » inclus).
@@ -183,14 +189,15 @@ func cumuls(ops []donnees.Operation, premier time.Time, jours, jusqua int, filtr
 	return out
 }
 
-func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filtre string) (*vueBudget, error) {
+func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref time.Time, filtre string) (*vueBudget, error) {
 	premier, dernier := mois(ref)
 	ppremier, pdernier := mois(premier.AddDate(0, -1, 0))
 	nom := appli.MoisFR(premier.Month())
 	v := &vueBudget{
 		Mois: premier.Format("2006-01"), Titre: strings.ToUpper(nom[:1]) + nom[1:] + " " + strconv.Itoa(premier.Year()),
 		Precedent: ppremier.Format("2006-01"), Suivant: premier.AddDate(0, 1, 0).Format("2006-01"),
-		Devise: c.Famille.Devise,
+		Devise: c.Famille.Devise, Compte: nomCompte(compte), Perso: compte > 0,
+		Aujourdhui: repetition.CleJour(c.Maintenant()), Frequences: Frequences,
 	}
 	if _, ok := CategorieParCle(filtre); ok {
 		v.Filtre = filtre
@@ -199,11 +206,11 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 	if err := GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		return nil, err
 	}
-	ops, err := m.operations(ctx, c, premier, dernier)
+	ops, err := m.operations(ctx, c, compte, premier, dernier)
 	if err != nil {
 		return nil, err
 	}
-	prec, err := m.operations(ctx, c, ppremier, pdernier)
+	prec, err := m.operations(ctx, c, compte, ppremier, pdernier)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +255,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 		v.Jours[len(v.Jours)-1].Ops = append(v.Jours[len(v.Jours)-1].Ops, l)
 	}
 	v.Reste = v.Revenus - v.Depenses
-	plafonds, err := m.plafonds(ctx, c)
+	plafonds, err := m.plafonds(ctx, c, compte)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +281,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 			v.PayePar = append(v.PayePar, payePar{Membre: parID[mb.ID], Montant: n})
 		}
 	}
-	if len(v.PayePar) < 2 {
+	if len(v.PayePar) < 2 || compte > 0 {
 		v.PayePar = nil
 	} else {
 		sort.SliceStable(v.PayePar, func(i, j int) bool { return v.PayePar[i].Montant > v.PayePar[j].Montant })
@@ -297,11 +304,28 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 	}.SVG()
 
 	// Ce qui reviendra d'ici la fin du mois (après aujourd'hui).
-	recs, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+	recs, err := m.recurrencesCompte(ctx, c, compte)
 	if err != nil {
 		return nil, err
 	}
 	v.NbRecur = len(recs)
+	// Côté commun, les virements qui reviennent des budgets perso sont des
+	// revenus à venir.
+	if compte == 0 {
+		tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range tous {
+			if r.Virement == 1 {
+				r.Sens, r.Categorie = "revenu", "virement-recu"
+				if mb, ok := parID[r.PersoDe]; ok {
+					r.Libelle = libelleVirement(mb.Nom)
+				}
+				recs = append(recs, r)
+			}
+		}
+	}
 	for _, p := range Prevues(recs, premier, dernier, maintenant) {
 		cat, ok := CategorieParCle(p.Categorie)
 		if !ok {
@@ -322,8 +346,20 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 	return v, nil
 }
 
+// recurrencesCompte : les opérations qui reviennent de ce budget.
+func (m *Module) recurrencesCompte(ctx context.Context, c *appli.Contexte, compte int64) ([]donnees.Recurrence, error) {
+	tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+	var out []donnees.Recurrence
+	for _, r := range tous {
+		if r.PersoDe == compte {
+			out = append(out, r)
+		}
+	}
+	return out, err
+}
+
 func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	v, err := m.vue(r.Context(), c, lireMois(r, c), r.URL.Query().Get("cat"))
+	v, err := m.vue(r.Context(), c, m.compteDe(w, r, c), lireMois(r, c), r.URL.Query().Get("cat"))
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -332,6 +368,8 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 }
 
 type formOp struct {
+	Compte     string   // « commun » ou « perso »
+	Virement   bool     // moitié d'un virement : montant et date seulement
 	Libelles   []string // déjà tapés (suggestions)
 	Nouvelle   bool
 	Op         donnees.Operation
@@ -343,12 +381,18 @@ type formOp struct {
 	Devise     string
 }
 
+// operation : l'opération {id}, si elle est dans un budget de ce membre
+// (le commun, ou son perso).
 func (m *Module) operation(r *http.Request, c *appli.Contexte) (donnees.Operation, error) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		return donnees.Operation{}, sql.ErrNoRows
 	}
-	return m.a.Q.OperationParID(r.Context(), donnees.OperationParIDParams{ID: id, FamilleID: c.Famille.ID})
+	o, err := m.a.Q.OperationParID(r.Context(), donnees.OperationParIDParams{ID: id, FamilleID: c.Famille.ID})
+	if err == nil && !visible(c, o.PersoDe) {
+		return donnees.Operation{}, sql.ErrNoRows
+	}
+	return o, err
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -358,12 +402,10 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	if f.Libelles, err = m.a.Q.LibellesRecents(r.Context(), c.Famille.ID); err != nil {
-		m.a.Journal.Warn("budget : libellés illisibles", "erreur", err) // le formulaire marche sans
-	}
+	compte := m.compteDe(w, r, c)
 	if f.Nouvelle {
 		f.Op = donnees.Operation{Sens: "depense", Categorie: "courses", Jour: repetition.CleJour(c.Maintenant()),
-			MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}}
+			MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, PersoDe: compte}
 		if r.URL.Query().Get("sens") == "revenu" {
 			f.Op.Sens, f.Op.Categorie = "revenu", "salaire"
 		}
@@ -382,11 +424,17 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Montant = MontantSaisie(f.Op.Montant)
+		compte = f.Op.PersoDe
+		f.Virement = estVirement(f.Op.Categorie)
 		if f.Op.RecurrenceID.Valid {
 			if rec, err := m.a.Q.RecurrenceParID(r.Context(), donnees.RecurrenceParIDParams{ID: f.Op.RecurrenceID.Int64, FamilleID: c.Famille.ID}); err == nil {
 				f.Recurrence = NomFrequence(rec.Frequence)
 			}
 		}
+	}
+	f.Compte = nomCompte(compte)
+	if f.Libelles, err = m.a.Q.LibellesRecents(r.Context(), donnees.LibellesRecentsParams{FamilleID: c.Famille.ID, PersoDe: compte}); err != nil {
+		m.a.Journal.Warn("budget : libellés illisibles", "erreur", err) // le formulaire marche sans
 	}
 	titre := "Nouvelle opération"
 	if !f.Nouvelle {
@@ -444,6 +492,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	ctx := r.Context()
 	auteur := sql.NullInt64{Int64: c.Membre.ID, Valid: true}
+	compte := m.compteDe(w, r, c)
 	if s.frequence != "" {
 		if msg := ValiderProchaine(s.jour, nil, c.Maintenant()); msg != "" {
 			m.a.Echec(w, r, http.StatusBadRequest, msg)
@@ -459,7 +508,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		// Opération qui revient : la récurrence écrit elle-même les occurrences
 		// passées ou du jour ; les suivantes viendront à leur date.
 		if _, err := m.a.Q.CreerRecurrence(ctx, donnees.CreerRecurrenceParams{
-			FamilleID: c.Famille.ID, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
+			FamilleID: c.Famille.ID, PersoDe: compte, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
 			MembreID: s.membre, Frequence: s.frequence, Debut: s.jour, Fin: s.fin, CreePar: auteur, CreeLe: time.Now().Unix(),
 		}); err != nil {
 			m.a.ErreurInterne(w, r, err)
@@ -473,12 +522,12 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		// Double envoi (double clic, réseau lent) : la même opération, écrite
 		// par la même personne dans les 10 dernières secondes, n'est pas répétée.
 		deja, err := m.a.Q.OperationIdentiqueRecente(ctx, donnees.OperationIdentiqueRecenteParams{
-			FamilleID: c.Famille.ID, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
+			FamilleID: c.Famille.ID, PersoDe: compte, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
 			Jour: s.jour, CreePar: auteur, CreeLe: time.Now().Unix() - 10,
 		})
 		if err == nil && deja == 0 {
 			_, err = m.a.Q.CreerOperation(ctx, donnees.CreerOperationParams{
-				FamilleID: c.Famille.ID, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
+				FamilleID: c.Famille.ID, PersoDe: compte, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
 				Jour: s.jour, MembreID: s.membre, CreePar: auteur, CreeLe: time.Now().Unix(),
 			})
 		}
@@ -489,7 +538,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Enregistré ✓")
-	m.a.Rediriger(w, r, "/budget?mois="+s.jour[:7])
+	m.a.Rediriger(w, r, "/budget?compte="+nomCompte(compte)+"&mois="+s.jour[:7])
 }
 
 func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -498,21 +547,38 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.Echec(w, r, http.StatusNotFound, "Opération introuvable.")
 		return
 	}
+	// Un virement garde sa catégorie (le formulaire ne la propose pas).
+	if estVirement(o.Categorie) {
+		_ = r.ParseForm()
+		r.PostForm.Set("categorie", o.Categorie)
+	}
 	s, msg := m.lire(r, c)
 	if msg != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
-	if err := m.a.Q.ModifierOperation(r.Context(), donnees.ModifierOperationParams{
-		Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle, Jour: s.jour,
-		MembreID: s.membre, ID: o.ID, FamilleID: c.Famille.ID,
-	}); err != nil {
+	ctx := r.Context()
+	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		if err := q.ModifierOperation(ctx, donnees.ModifierOperationParams{
+			Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle, Jour: s.jour,
+			MembreID: s.membre, ID: o.ID, FamilleID: c.Famille.ID,
+		}); err != nil {
+			return err
+		}
+		// L'autre moitié d'un virement suit (montant et date).
+		if o.VirementID.Valid {
+			return q.ModifierMoitieVirement(ctx, donnees.ModifierMoitieVirementParams{Montant: s.montant, Jour: s.jour,
+				ID: o.VirementID.Int64, FamilleID: c.Famille.ID})
+		}
+		return nil
+	})
+	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
 	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Enregistré ✓")
-	m.a.Rediriger(w, r, "/budget?mois="+s.jour[:7])
+	m.a.Rediriger(w, r, "/budget?compte="+nomCompte(o.PersoDe)+"&mois="+s.jour[:7])
 }
 
 func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -521,13 +587,20 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 		m.a.Echec(w, r, http.StatusNotFound, "Opération introuvable.")
 		return
 	}
-	if err := m.a.Q.SupprimerOperation(r.Context(), donnees.SupprimerOperationParams{ID: o.ID, FamilleID: c.Famille.ID}); err != nil {
+	// Un virement part en entier (ses deux moitiés).
+	if err := m.a.Transaction(r.Context(), func(q *donnees.Queries) error {
+		return supprimerAvecMoitie(r.Context(), q, c.Famille.ID, o)
+	}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
 	m.a.Publier(c, mod, "")
-	m.a.Flash(w, "Opération supprimée")
-	m.a.Rediriger(w, r, "/budget?mois="+o.Jour[:7])
+	if o.VirementID.Valid {
+		m.a.Flash(w, "Virement supprimé (des deux côtés)")
+	} else {
+		m.a.Flash(w, "Opération supprimée")
+	}
+	m.a.Rediriger(w, r, "/budget?compte="+nomCompte(o.PersoDe)+"&mois="+o.Jour[:7])
 }
 
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
@@ -535,13 +608,24 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 		m.a.Journal.Error("budget : opérations qui reviennent", "erreur", err)
 	}
 	premier, dernier := mois(c.Maintenant())
-	t, err := m.a.Q.TotauxPeriode(ctx, donnees.TotauxPeriodeParams{FamilleID: c.Famille.ID, Du: repetition.CleJour(premier), Au: repetition.CleJour(dernier)})
-	if err != nil || t.Revenus+t.Depenses == 0 {
+	totaux := func(compte int64) (donnees.TotauxPeriodeRow, error) {
+		return m.a.Q.TotauxPeriode(ctx, donnees.TotauxPeriodeParams{FamilleID: c.Famille.ID, Compte: compte,
+			Du: repetition.CleJour(premier), Au: repetition.CleJour(dernier)})
+	}
+	t, err := totaux(0)
+	p, errP := totaux(c.Membre.ID)
+	if err != nil || errP != nil || t.Revenus+t.Depenses+p.Revenus+p.Depenses == 0 {
 		return appli.Resume{Info: "Rien ce mois-ci"}
 	}
 	// Un plafond presque atteint passe avant le reste à vivre.
-	if alerte := m.alertePlafond(ctx, c, premier, dernier); alerte != "" {
-		return appli.Resume{Info: alerte, Badge: 1}
+	for _, compte := range []int64{0, c.Membre.ID} {
+		if alerte := m.alertePlafond(ctx, c, compte, premier, dernier); alerte != "" {
+			return appli.Resume{Info: alerte, Badge: 1}
+		}
 	}
-	return appli.Resume{Info: "Reste " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise)}
+	info := "Reste " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise)
+	if p.Revenus+p.Depenses > 0 {
+		info = "Commun : " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise) + " · Moi : " + appli.Montant(p.Revenus-p.Depenses, c.Famille.Devise)
+	}
+	return appli.Resume{Info: info}
 }

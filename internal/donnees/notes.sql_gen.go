@@ -10,6 +10,43 @@ import (
 	"database/sql"
 )
 
+const ajouterPhotoNote = `-- name: AjouterPhotoNote :one
+
+INSERT INTO photos_notes (famille_id, note_id, fichier, taille, cree_par, cree_le) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, famille_id, note_id, fichier, taille, cree_par, cree_le
+`
+
+type AjouterPhotoNoteParams struct {
+	FamilleID int64
+	NoteID    int64
+	Fichier   string
+	Taille    int64
+	CreePar   sql.NullInt64
+	CreeLe    int64
+}
+
+// Photos des notes.
+func (q *Queries) AjouterPhotoNote(ctx context.Context, arg AjouterPhotoNoteParams) (PhotoNote, error) {
+	row := q.db.QueryRowContext(ctx, ajouterPhotoNote,
+		arg.FamilleID,
+		arg.NoteID,
+		arg.Fichier,
+		arg.Taille,
+		arg.CreePar,
+		arg.CreeLe,
+	)
+	var i PhotoNote
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.NoteID,
+		&i.Fichier,
+		&i.Taille,
+		&i.CreePar,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
 const cocherNote = `-- name: CocherNote :execrows
 UPDATE notes SET texte = ?1, modifie_le = ?2
 WHERE id = ?3 AND famille_id = ?4 AND texte = ?5
@@ -60,6 +97,28 @@ SELECT count(*) FROM notes WHERE famille_id = ?
 
 func (q *Queries) CompterNotesFamille(ctx context.Context, familleID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, compterNotesFamille, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterPhotosNote = `-- name: CompterPhotosNote :one
+SELECT count(*) FROM photos_notes WHERE note_id = ?
+`
+
+func (q *Queries) CompterPhotosNote(ctx context.Context, noteID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterPhotosNote, noteID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterPhotosNotesFamille = `-- name: CompterPhotosNotesFamille :one
+SELECT count(*) FROM photos_notes WHERE famille_id = ?
+`
+
+func (q *Queries) CompterPhotosNotesFamille(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterPhotosNotesFamille, familleID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -192,12 +251,13 @@ func (q *Queries) NoteParID(ctx context.Context, arg NoteParIDParams) (Note, err
 
 const notesVisibles = `-- name: NotesVisibles :many
 
-SELECT id, auteur_id, titre, CAST(substr(texte, 1, 300) AS TEXT) AS debut, couleur, epinglee, privee, modifie_le
-FROM notes
-WHERE famille_id = ?1 AND (privee = 0 OR auteur_id = ?2)
-  AND (?3 = '' OR (?3 = 'privees' AND privee = 1) OR (?3 = 'partagees' AND privee = 0))
-  AND (?4 = '' OR instr(plier(titre), plier(?4)) > 0 OR instr(plier(texte), plier(?4)) > 0)
-ORDER BY epinglee DESC, modifie_le DESC LIMIT ?5
+SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debut, n.couleur, n.epinglee, n.privee, n.modifie_le,
+  (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
+FROM notes n
+WHERE n.famille_id = ?1 AND (n.privee = 0 OR n.auteur_id = ?2)
+  AND (?3 = '' OR (?3 = 'privees' AND n.privee = 1) OR (?3 = 'partagees' AND n.privee = 0))
+  AND (?4 = '' OR instr(plier(n.titre), plier(?4)) > 0 OR instr(plier(n.texte), plier(?4)) > 0)
+ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT ?5
 `
 
 type NotesVisiblesParams struct {
@@ -217,6 +277,7 @@ type NotesVisiblesRow struct {
 	Epinglee  int64
 	Privee    int64
 	ModifieLe int64
+	Photos    int64
 }
 
 // Notes : une note privee n'est visible que par son auteur.
@@ -246,6 +307,113 @@ func (q *Queries) NotesVisibles(ctx context.Context, arg NotesVisiblesParams) ([
 			&i.Epinglee,
 			&i.Privee,
 			&i.ModifieLe,
+			&i.Photos,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const photoNoteParID = `-- name: PhotoNoteParID :one
+SELECT id, famille_id, note_id, fichier, taille, cree_par, cree_le FROM photos_notes WHERE id = ? AND famille_id = ?
+`
+
+type PhotoNoteParIDParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) PhotoNoteParID(ctx context.Context, arg PhotoNoteParIDParams) (PhotoNote, error) {
+	row := q.db.QueryRowContext(ctx, photoNoteParID, arg.ID, arg.FamilleID)
+	var i PhotoNote
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.NoteID,
+		&i.Fichier,
+		&i.Taille,
+		&i.CreePar,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
+const photosNote = `-- name: PhotosNote :many
+SELECT id, famille_id, note_id, fichier, taille, cree_par, cree_le FROM photos_notes WHERE note_id = ? AND famille_id = ? ORDER BY id
+`
+
+type PhotosNoteParams struct {
+	NoteID    int64
+	FamilleID int64
+}
+
+func (q *Queries) PhotosNote(ctx context.Context, arg PhotosNoteParams) ([]PhotoNote, error) {
+	rows, err := q.db.QueryContext(ctx, photosNote, arg.NoteID, arg.FamilleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PhotoNote{}
+	for rows.Next() {
+		var i PhotoNote
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.NoteID,
+			&i.Fichier,
+			&i.Taille,
+			&i.CreePar,
+			&i.CreeLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const photosNotesPriveesMembre = `-- name: PhotosNotesPriveesMembre :many
+SELECT p.id, p.famille_id, p.note_id, p.fichier, p.taille, p.cree_par, p.cree_le FROM photos_notes p JOIN notes n ON n.id = p.note_id
+WHERE n.famille_id = ? AND n.auteur_id = ? AND n.privee = 1
+`
+
+type PhotosNotesPriveesMembreParams struct {
+	FamilleID int64
+	AuteurID  sql.NullInt64
+}
+
+// Photos des notes privees d'un membre retire (effacees avec elles).
+func (q *Queries) PhotosNotesPriveesMembre(ctx context.Context, arg PhotosNotesPriveesMembreParams) ([]PhotoNote, error) {
+	rows, err := q.db.QueryContext(ctx, photosNotesPriveesMembre, arg.FamilleID, arg.AuteurID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PhotoNote{}
+	for rows.Next() {
+		var i PhotoNote
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.NoteID,
+			&i.Fichier,
+			&i.Taille,
+			&i.CreePar,
+			&i.CreeLe,
 		); err != nil {
 			return nil, err
 		}
@@ -286,5 +454,19 @@ type SupprimerNotesPriveesMembreParams struct {
 // Membre retire : ses notes privees, que personne d'autre ne peut voir ni supprimer.
 func (q *Queries) SupprimerNotesPriveesMembre(ctx context.Context, arg SupprimerNotesPriveesMembreParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerNotesPriveesMembre, arg.FamilleID, arg.AuteurID)
+	return err
+}
+
+const supprimerPhotoNote = `-- name: SupprimerPhotoNote :exec
+DELETE FROM photos_notes WHERE id = ? AND famille_id = ?
+`
+
+type SupprimerPhotoNoteParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) SupprimerPhotoNote(ctx context.Context, arg SupprimerPhotoNoteParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerPhotoNote, arg.ID, arg.FamilleID)
 	return err
 }

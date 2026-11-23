@@ -6,7 +6,9 @@
 // dépenses vont dans le carnet commun (paquet suivi).
 //
 // Droits : tout le monde consulte, ajoute et coche ; seuls les parents
-// suppriment.
+// suppriment. Un projet peut être privé : seul celui qui l'a créé le voit
+// (étapes, carnet, rappels compris) ; ses dépenses vont alors plutôt dans
+// son budget perso.
 package projets
 
 import (
@@ -66,6 +68,26 @@ func Brancher(a *appli.App, s *suivi.Suivi) {
 			return p.Nom, err == nil
 		},
 		URL: func(id int64) string { return fmt.Sprintf("/projets/%d", id) },
+		Voit: func(ctx context.Context, c *appli.Contexte, id int64) bool {
+			p, err := a.Q.ProjetParID(ctx, donnees.ProjetParIDParams{ID: id, FamilleID: c.Famille.ID})
+			return err == nil && visible(c, p)
+		},
+	})
+	// Un membre qui part : ses projets privés (et leur carnet) aussi.
+	a.AjouterDepart(func(ctx context.Context, q *donnees.Queries, famille, membre int64) error {
+		ids, err := q.ProjetsPrivesMembre(ctx, donnees.ProjetsPrivesMembreParams{FamilleID: famille, PersoDe: membre})
+		if err != nil {
+			return err
+		}
+		for _, id := range ids {
+			if err := q.SupprimerProjet(ctx, donnees.SupprimerProjetParams{ID: id, FamilleID: famille}); err != nil {
+				return err
+			}
+			if err := s.SupprimerObjet(ctx, q, famille, mod, id); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	// Rappels : les étapes datées et la date d'objectif.
 	a.AjouterEcheances(mod, m.echeances)
@@ -78,9 +100,14 @@ func idDe(r *http.Request) int64 {
 	return id
 }
 
+// visible : projet partagé, ou projet privé de ce membre.
+func visible(c *appli.Contexte, p donnees.Projet) bool {
+	return p.PersoDe == 0 || p.PersoDe == c.Membre.ID
+}
+
 func (m *Module) projet(r *http.Request, c *appli.Contexte, id int64) (donnees.Projet, bool) {
 	p, err := m.a.Q.ProjetParID(r.Context(), donnees.ProjetParIDParams{ID: id, FamilleID: c.Famille.ID})
-	return p, err == nil
+	return p, err == nil && visible(c, p)
 }
 
 // ---------- Liste ----------
@@ -97,7 +124,7 @@ type vueListe struct {
 }
 
 func (m *Module) liste(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	l, err := m.a.Q.ProjetsFamille(r.Context(), c.Famille.ID)
+	l, err := m.a.Q.ProjetsFamille(r.Context(), donnees.ProjetsFamilleParams{FamilleID: c.Famille.ID, Membre: c.Membre.ID})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -192,6 +219,7 @@ func (m *Module) fiche(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	v.Suivi.BudgetPerso = p.PersoDe > 0 // projet privé : son budget perso d'abord
 	v.Depense = v.Suivi.Total
 	v.Restant = p.Budget - v.Depense
 	v.Depasse = p.Budget > 0 && v.Restant < 0
@@ -264,6 +292,13 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 	}
 	emoji := emojiValide(r.PostFormValue("emoji"))
 	id := idDe(r)
+	// Privé : celui qui le crée le voit seul. On peut le rendre partagé
+	// ensuite (pas l'inverse : un projet partagé ne disparaît pas pour les
+	// autres).
+	var perso int64
+	if r.PostFormValue("prive") == "1" {
+		perso = c.Membre.ID
+	}
 	if r.PathValue("id") == "" {
 		if n, err := m.a.Q.CompterProjets(ctx, c.Famille.ID); err != nil {
 			m.a.ErreurInterne(w, r, err)
@@ -272,18 +307,26 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Trop de projets (%d au plus) : supprimez-en d'abord.", ProjetsMax))
 			return
 		}
-		p, err := m.a.Q.CreerProjet(ctx, donnees.CreerProjetParams{FamilleID: c.Famille.ID, Nom: nom, Emoji: emoji, Couleur: couleur,
+		p, err := m.a.Q.CreerProjet(ctx, donnees.CreerProjetParams{FamilleID: c.Famille.ID, PersoDe: perso, Nom: nom, Emoji: emoji, Couleur: couleur,
 			Description: desc, Objectif: objectif, Budget: montant, CreeLe: time.Now().Unix()})
 		if err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		}
 		id = p.ID
-		m.a.Publier(c, mod, "Nouveau projet : "+nom)
+		if perso == 0 {
+			m.a.Publier(c, mod, "Nouveau projet : "+nom)
+		} else {
+			m.a.Publier(c, mod, "") // privé : rien n'est annoncé
+		}
 	} else {
-		if _, ok := m.projet(r, c, id); !ok {
+		avant, ok := m.projet(r, c, id)
+		if !ok {
 			m.a.Echec(w, r, http.StatusNotFound, "Projet introuvable.")
 			return
+		}
+		if avant.PersoDe == 0 {
+			perso = 0 // partagé : il le reste
 		}
 		// Le budget n'est montré qu'aux parents : un enfant qui modifie le
 		// projet ne l'efface pas.
@@ -293,7 +336,7 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			}
 		}
 		if err := m.a.Q.ModifierProjet(ctx, donnees.ModifierProjetParams{Nom: nom, Emoji: emoji, Couleur: couleur, Description: desc,
-			Objectif: objectif, Budget: montant, ID: id, FamilleID: c.Famille.ID}); err != nil {
+			Objectif: objectif, Budget: montant, PersoDe: perso, ID: id, FamilleID: c.Famille.ID}); err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		}
@@ -394,9 +437,14 @@ func (m *Module) ajouterEtape(w http.ResponseWriter, r *http.Request, c *appli.C
 	m.a.Rediriger(w, r, fmt.Sprintf("/projets/%d", p.ID))
 }
 
+// etape : l'étape {id}, si ce membre voit son projet.
 func (m *Module) etape(r *http.Request, c *appli.Contexte) (donnees.ProjetEtape, bool) {
 	e, err := m.a.Q.EtapeParID(r.Context(), donnees.EtapeParIDParams{ID: idDe(r), FamilleID: c.Famille.ID})
-	return e, err == nil
+	if err != nil {
+		return e, false
+	}
+	_, ok := m.projet(r, c, e.ProjetID)
+	return e, ok
 }
 
 // cocher : faite ↔ à faire.
@@ -443,7 +491,7 @@ func (m *Module) supprimerEtape(w http.ResponseWriter, r *http.Request, c *appli
 // ---------- Accueil et rappels ----------
 
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
-	n, err := m.a.Q.CompterProjetsEnCours(ctx, c.Famille.ID)
+	n, err := m.a.Q.CompterProjetsEnCours(ctx, donnees.CompterProjetsEnCoursParams{FamilleID: c.Famille.ID, Membre: c.Membre.ID})
 	if err != nil {
 		return appli.Resume{}
 	}
@@ -463,7 +511,7 @@ func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin ti
 	for _, e := range etapes {
 		if j, err := time.ParseInLocation("2006-01-02", e.Jour, debut.Location()); err == nil {
 			out = append(out, appli.Echeance{Jour: j, Titre: e.Texte + " · " + e.Projet, Emoji: e.Emoji,
-				URL: fmt.Sprintf("/projets/%d", e.ProjetID), Module: mod})
+				URL: fmt.Sprintf("/projets/%d", e.ProjetID), Module: mod, Pour: e.PersoDe})
 		}
 	}
 	objectifs, err := m.a.Q.ObjectifsPeriode(ctx, donnees.ObjectifsPeriodeParams{FamilleID: f.ID, Du: du, Au: au})
@@ -473,7 +521,7 @@ func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin ti
 	for _, p := range objectifs {
 		if j, err := time.ParseInLocation("2006-01-02", p.Objectif, debut.Location()); err == nil {
 			out = append(out, appli.Echeance{Jour: j, Titre: "Objectif : " + p.Nom, Emoji: p.Emoji,
-				URL: fmt.Sprintf("/projets/%d", p.ID), Module: mod})
+				URL: fmt.Sprintf("/projets/%d", p.ID), Module: mod, Pour: p.PersoDe})
 		}
 	}
 	return out, nil

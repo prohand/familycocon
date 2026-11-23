@@ -22,17 +22,20 @@ SELECT * FROM repas WHERE famille_id = ?;
 -- name: ExportRecettes :many
 SELECT * FROM recettes WHERE famille_id = ?;
 
+-- Budget, abonnements, projets : le commun et ce qui est a ce membre
+-- (le budget perso des autres n'y est pas).
 -- name: ExportOperations :many
-SELECT * FROM operations WHERE famille_id = ?;
+SELECT * FROM operations WHERE famille_id = ? AND perso_de IN (0, sqlc.arg(membre));
 
 -- name: ExportRecurrences :many
-SELECT * FROM recurrences WHERE famille_id = ?;
+SELECT * FROM recurrences WHERE famille_id = ? AND perso_de IN (0, sqlc.arg(membre));
 
 -- name: ExportAbonnements :many
-SELECT * FROM abonnements WHERE famille_id = ?;
+SELECT a.* FROM abonnements a JOIN recurrences r ON r.id = a.recurrence_id
+WHERE a.famille_id = ? AND r.perso_de IN (0, sqlc.arg(membre));
 
 -- name: ExportBudgetPlafonds :many
-SELECT * FROM budget_plafonds WHERE famille_id = ?;
+SELECT * FROM budget_plafonds WHERE famille_id = ? AND perso_de IN (0, sqlc.arg(membre));
 
 -- name: ExportMissions :many
 SELECT * FROM missions WHERE famille_id = ?;
@@ -53,7 +56,8 @@ SELECT * FROM cartes WHERE famille_id = ?;
 SELECT * FROM echeances WHERE famille_id = ?;
 
 -- name: ExportCarnet :many
-SELECT * FROM carnet WHERE famille_id = ?;
+SELECT * FROM carnet c WHERE c.famille_id = sqlc.arg(famille_id) AND NOT (c.module = 'projets' AND c.objet_id IN
+  (SELECT p.id FROM projets p WHERE p.famille_id = sqlc.arg(famille_id) AND p.perso_de NOT IN (0, sqlc.arg(membre))));
 
 -- name: ExportVehicules :many
 SELECT * FROM vehicules WHERE famille_id = ?;
@@ -62,10 +66,11 @@ SELECT * FROM vehicules WHERE famille_id = ?;
 SELECT * FROM animaux WHERE famille_id = ?;
 
 -- name: ExportProjets :many
-SELECT * FROM projets WHERE famille_id = ?;
+SELECT * FROM projets WHERE famille_id = ? AND perso_de IN (0, sqlc.arg(membre));
 
 -- name: ExportProjetEtapes :many
-SELECT * FROM projet_etapes WHERE famille_id = ?;
+SELECT e.* FROM projet_etapes e JOIN projets p ON p.id = e.projet_id
+WHERE e.famille_id = ? AND p.perso_de IN (0, sqlc.arg(membre));
 
 -- name: ExportProduits :many
 SELECT produits.* FROM produits JOIN listes ON listes.id = produits.liste_id WHERE listes.famille_id = ?;

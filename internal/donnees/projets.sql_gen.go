@@ -97,23 +97,29 @@ func (q *Queries) CompterProjets(ctx context.Context, familleID int64) (int64, e
 }
 
 const compterProjetsEnCours = `-- name: CompterProjetsEnCours :one
-SELECT count(*) FROM projets WHERE famille_id = ? AND termine_le = 0
+SELECT count(*) FROM projets WHERE famille_id = ? AND termine_le = 0 AND perso_de IN (0, ?2)
 `
 
-func (q *Queries) CompterProjetsEnCours(ctx context.Context, familleID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, compterProjetsEnCours, familleID)
+type CompterProjetsEnCoursParams struct {
+	FamilleID int64
+	Membre    int64
+}
+
+func (q *Queries) CompterProjetsEnCours(ctx context.Context, arg CompterProjetsEnCoursParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterProjetsEnCours, arg.FamilleID, arg.Membre)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const creerProjet = `-- name: CreerProjet :one
-INSERT INTO projets (famille_id, nom, emoji, couleur, description, objectif, budget, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, emoji, couleur, description, objectif, budget, termine_le, cree_le
+INSERT INTO projets (famille_id, perso_de, nom, emoji, couleur, description, objectif, budget, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, emoji, couleur, description, objectif, budget, termine_le, cree_le, perso_de
 `
 
 type CreerProjetParams struct {
 	FamilleID   int64
+	PersoDe     int64
 	Nom         string
 	Emoji       string
 	Couleur     int64
@@ -126,6 +132,7 @@ type CreerProjetParams struct {
 func (q *Queries) CreerProjet(ctx context.Context, arg CreerProjetParams) (Projet, error) {
 	row := q.db.QueryRowContext(ctx, creerProjet,
 		arg.FamilleID,
+		arg.PersoDe,
 		arg.Nom,
 		arg.Emoji,
 		arg.Couleur,
@@ -146,6 +153,7 @@ func (q *Queries) CreerProjet(ctx context.Context, arg CreerProjetParams) (Proje
 		&i.Budget,
 		&i.TermineLe,
 		&i.CreeLe,
+		&i.PersoDe,
 	)
 	return i, err
 }
@@ -177,7 +185,7 @@ func (q *Queries) EtapeParID(ctx context.Context, arg EtapeParIDParams) (ProjetE
 }
 
 const etapesPeriode = `-- name: EtapesPeriode :many
-SELECT e.id, e.texte, e.jour, e.projet_id, p.nom AS projet, p.emoji
+SELECT e.id, e.texte, e.jour, e.projet_id, p.nom AS projet, p.emoji, p.perso_de
 FROM projet_etapes e JOIN projets p ON p.id = e.projet_id
 WHERE e.famille_id = ?1 AND e.faite_le = 0 AND p.termine_le = 0
   AND e.jour >= ?2 AND e.jour < ?3
@@ -197,6 +205,7 @@ type EtapesPeriodeRow struct {
 	ProjetID int64
 	Projet   string
 	Emoji    string
+	PersoDe  int64
 }
 
 func (q *Queries) EtapesPeriode(ctx context.Context, arg EtapesPeriodeParams) ([]EtapesPeriodeRow, error) {
@@ -215,6 +224,7 @@ func (q *Queries) EtapesPeriode(ctx context.Context, arg EtapesPeriodeParams) ([
 			&i.ProjetID,
 			&i.Projet,
 			&i.Emoji,
+			&i.PersoDe,
 		); err != nil {
 			return nil, err
 		}
@@ -273,7 +283,7 @@ func (q *Queries) EtapesProjet(ctx context.Context, arg EtapesProjetParams) ([]P
 }
 
 const modifierProjet = `-- name: ModifierProjet :exec
-UPDATE projets SET nom = ?, emoji = ?, couleur = ?, description = ?, objectif = ?, budget = ? WHERE id = ? AND famille_id = ?
+UPDATE projets SET nom = ?, emoji = ?, couleur = ?, description = ?, objectif = ?, budget = ?, perso_de = ? WHERE id = ? AND famille_id = ?
 `
 
 type ModifierProjetParams struct {
@@ -283,6 +293,7 @@ type ModifierProjetParams struct {
 	Description string
 	Objectif    string
 	Budget      int64
+	PersoDe     int64
 	ID          int64
 	FamilleID   int64
 }
@@ -295,6 +306,7 @@ func (q *Queries) ModifierProjet(ctx context.Context, arg ModifierProjetParams) 
 		arg.Description,
 		arg.Objectif,
 		arg.Budget,
+		arg.PersoDe,
 		arg.ID,
 		arg.FamilleID,
 	)
@@ -302,7 +314,7 @@ func (q *Queries) ModifierProjet(ctx context.Context, arg ModifierProjetParams) 
 }
 
 const objectifsPeriode = `-- name: ObjectifsPeriode :many
-SELECT id, nom, emoji, objectif FROM projets
+SELECT id, nom, emoji, objectif, perso_de FROM projets
 WHERE famille_id = ?1 AND termine_le = 0
   AND objectif >= ?2 AND objectif < ?3
 `
@@ -318,6 +330,7 @@ type ObjectifsPeriodeRow struct {
 	Nom      string
 	Emoji    string
 	Objectif string
+	PersoDe  int64
 }
 
 func (q *Queries) ObjectifsPeriode(ctx context.Context, arg ObjectifsPeriodeParams) ([]ObjectifsPeriodeRow, error) {
@@ -334,6 +347,7 @@ func (q *Queries) ObjectifsPeriode(ctx context.Context, arg ObjectifsPeriodePara
 			&i.Nom,
 			&i.Emoji,
 			&i.Objectif,
+			&i.PersoDe,
 		); err != nil {
 			return nil, err
 		}
@@ -349,7 +363,7 @@ func (q *Queries) ObjectifsPeriode(ctx context.Context, arg ObjectifsPeriodePara
 }
 
 const projetParID = `-- name: ProjetParID :one
-SELECT id, famille_id, nom, emoji, couleur, description, objectif, budget, termine_le, cree_le FROM projets WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, nom, emoji, couleur, description, objectif, budget, termine_le, cree_le, perso_de FROM projets WHERE id = ? AND famille_id = ?
 `
 
 type ProjetParIDParams struct {
@@ -371,19 +385,25 @@ func (q *Queries) ProjetParID(ctx context.Context, arg ProjetParIDParams) (Proje
 		&i.Budget,
 		&i.TermineLe,
 		&i.CreeLe,
+		&i.PersoDe,
 	)
 	return i, err
 }
 
 const projetsFamille = `-- name: ProjetsFamille :many
 
-SELECT p.id, p.nom, p.emoji, p.couleur, p.objectif, p.budget, p.termine_le,
+SELECT p.id, p.nom, p.emoji, p.couleur, p.objectif, p.budget, p.termine_le, p.perso_de,
   (SELECT COUNT(*) FROM projet_etapes e WHERE e.projet_id = p.id) AS nb_etapes,
   (SELECT COUNT(*) FROM projet_etapes e WHERE e.projet_id = p.id AND e.faite_le > 0) AS nb_faites,
   CAST((SELECT coalesce(sum(k.montant), 0) FROM carnet k WHERE k.famille_id = p.famille_id AND k.module = 'projets' AND k.objet_id = p.id) AS INTEGER) AS depense
-FROM projets p WHERE p.famille_id = ?
+FROM projets p WHERE p.famille_id = ? AND p.perso_de IN (0, ?2)
 ORDER BY p.termine_le > 0, p.termine_le DESC, p.objectif = '', p.objectif, p.nom COLLATE NOCASE
 `
+
+type ProjetsFamilleParams struct {
+	FamilleID int64
+	Membre    int64
+}
 
 type ProjetsFamilleRow struct {
 	ID        int64
@@ -393,14 +413,16 @@ type ProjetsFamilleRow struct {
 	Objectif  string
 	Budget    int64
 	TermineLe int64
+	PersoDe   int64
 	NbEtapes  int64
 	NbFaites  int64
 	Depense   int64
 }
 
 // Projets et leurs etapes.
-func (q *Queries) ProjetsFamille(ctx context.Context, familleID int64) ([]ProjetsFamilleRow, error) {
-	rows, err := q.db.QueryContext(ctx, projetsFamille, familleID)
+// Projets vus par un membre : les partages, et ses projets prives.
+func (q *Queries) ProjetsFamille(ctx context.Context, arg ProjetsFamilleParams) ([]ProjetsFamilleRow, error) {
+	rows, err := q.db.QueryContext(ctx, projetsFamille, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -416,6 +438,7 @@ func (q *Queries) ProjetsFamille(ctx context.Context, familleID int64) ([]Projet
 			&i.Objectif,
 			&i.Budget,
 			&i.TermineLe,
+			&i.PersoDe,
 			&i.NbEtapes,
 			&i.NbFaites,
 			&i.Depense,
@@ -423,6 +446,40 @@ func (q *Queries) ProjetsFamille(ctx context.Context, familleID int64) ([]Projet
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const projetsPrivesMembre = `-- name: ProjetsPrivesMembre :many
+SELECT id FROM projets WHERE famille_id = ? AND perso_de = ?
+`
+
+type ProjetsPrivesMembreParams struct {
+	FamilleID int64
+	PersoDe   int64
+}
+
+// Membre retire : ses projets prives, que personne d'autre ne voit (le
+// carnet et les photos d'abord).
+func (q *Queries) ProjetsPrivesMembre(ctx context.Context, arg ProjetsPrivesMembreParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, projetsPrivesMembre, arg.FamilleID, arg.PersoDe)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

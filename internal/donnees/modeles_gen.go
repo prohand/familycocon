@@ -59,6 +59,7 @@ type Appareil struct {
 
 type BudgetPlafond struct {
 	FamilleID int64
+	PersoDe   int64
 	Categorie string
 	Montant   int64
 }
@@ -77,6 +78,7 @@ type Carnet struct {
 	CreeLe      int64
 	OperationID sql.NullInt64
 	Litres      int64
+	Carburant   string
 }
 
 type Carte struct {
@@ -295,6 +297,8 @@ type Operation struct {
 	CreePar      sql.NullInt64
 	CreeLe       int64
 	RecurrenceID sql.NullInt64
+	PersoDe      int64
+	VirementID   sql.NullInt64
 }
 
 type Passkey struct {
@@ -308,6 +312,16 @@ type Passkey struct {
 	Nom         string
 	CreeLe      int64
 	UtiliseLe   int64
+}
+
+type PhotoNote struct {
+	ID        int64
+	FamilleID int64
+	NoteID    int64
+	Fichier   string
+	Taille    int64
+	CreePar   sql.NullInt64
+	CreeLe    int64
 }
 
 type Piece struct {
@@ -355,6 +369,7 @@ type Projet struct {
 	Budget      int64
 	TermineLe   int64
 	CreeLe      int64
+	PersoDe     int64
 }
 
 type ProjetEtape struct {
@@ -402,6 +417,8 @@ type Recurrence struct {
 	Faites    int64
 	CreePar   sql.NullInt64
 	CreeLe    int64
+	PersoDe   int64
+	Virement  int64
 }
 
 type Repas struct {

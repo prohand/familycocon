@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"familycocon/internal/donnees"
+	"familycocon/internal/photo"
 )
 
 // Réglages de la famille (parents) : nom, fuseau, monnaie, modules activés,
@@ -278,6 +279,14 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 		a.Echec(w, r, http.StatusBadRequest, "Vous ne pouvez pas vous retirer vous-même.")
 		return
 	}
+	// Les photos de ses notes privées, effacées avec elles (lues avant la
+	// transaction : une seule connexion à la base).
+	photosPrivees, err := a.Q.PhotosNotesPriveesMembre(ctx, donnees.PhotosNotesPriveesMembreParams{FamilleID: c.Famille.ID,
+		AuteurID: sql.NullInt64{Int64: m.ID, Valid: true}})
+	if err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
 	err = a.Transaction(ctx, func(q *donnees.Queries) error {
 		if m.Role == RoleParent {
 			if n, err := q.CompterParents(ctx, c.Famille.ID); err != nil || n <= 1 {
@@ -299,6 +308,24 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 		}
 		if err := q.SupprimerNotesPriveesMembre(ctx, donnees.SupprimerNotesPriveesMembreParams{FamilleID: c.Famille.ID, AuteurID: moi}); err != nil {
 			return err
+		}
+		// Son budget perso (opérations, celles qui reviennent, plafonds) :
+		// personne d'autre ne le voit. Les virements déjà reçus au compte
+		// commun y restent.
+		if err := q.SupprimerBudgetPerso(ctx, donnees.SupprimerBudgetPersoParams{FamilleID: c.Famille.ID, PersoDe: m.ID}); err != nil {
+			return err
+		}
+		if err := q.SupprimerRecurrencesPerso(ctx, donnees.SupprimerRecurrencesPersoParams{FamilleID: c.Famille.ID, PersoDe: m.ID}); err != nil {
+			return err
+		}
+		if err := q.SupprimerPlafondsPerso(ctx, donnees.SupprimerPlafondsPersoParams{FamilleID: c.Famille.ID, PersoDe: m.ID}); err != nil {
+			return err
+		}
+		// Ce que les modules gardaient privé pour lui (projets privés…).
+		for _, f := range a.departs {
+			if err := f(ctx, q, c.Famille.ID, m.ID); err != nil {
+				return err
+			}
 		}
 		// Plus rien pour se connecter : ni passkey ni code de secours.
 		if err := q.SupprimerPasskeysMembre(ctx, m.ID); err != nil {
@@ -328,6 +355,11 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 	if err != nil {
 		a.ErreurInterne(w, r, err)
 		return
+	}
+	for _, p := range photosPrivees {
+		if err := photo.Effacer(a.DossierPieces(), c.Famille.ID, p.Fichier); err != nil {
+			a.Journal.Warn("photo de note non effacée", "fichier", p.Fichier, "erreur", err)
+		}
 	}
 	a.Journal.Info("membre retiré", "famille", c.Famille.ID, "membre", m.ID, "par", c.Membre.ID)
 	a.Direct.FermerMembre(c.Famille.ID, m.ID)

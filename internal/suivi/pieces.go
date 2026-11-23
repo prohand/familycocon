@@ -4,15 +4,12 @@ package suivi
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -37,12 +34,11 @@ const (
 )
 
 // Pieces : le dossier des pièces jointes (dans le dossier des données).
-func Pieces(a *appli.App) string { return filepath.Join(a.Config.Donnees, "pieces") }
+func Pieces(a *appli.App) string { return a.DossierPieces() }
 
-// cheminPiece : le fichier d'une pièce. Le nom vient de la base (créé
-// ici, aléatoire) : aucun chemin fourni par un navigateur.
+// cheminPiece : le fichier d'une pièce.
 func cheminPiece(a *appli.App, p donnees.Piece) string {
-	return filepath.Join(Pieces(a), strconv.FormatInt(p.FamilleID, 10), filepath.Base(p.Fichier))
+	return photo.Chemin(Pieces(a), p.FamilleID, p.Fichier)
 }
 
 var errTropDePieces = errors.New("trop de pièces jointes")
@@ -60,25 +56,14 @@ func AjouterPiece(ctx context.Context, a *appli.App, q *donnees.Queries, famille
 	} else if n >= PiecesParFamille {
 		return errTropDePieces
 	}
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	nom := hex.EncodeToString(b) + ".jpg"
-	dossier := filepath.Join(Pieces(a), strconv.FormatInt(famille, 10))
-	if err := os.MkdirAll(dossier, 0o750); err != nil {
+	nom, err := photo.Ranger(Pieces(a), famille, jpeg)
+	if err != nil {
 		return err
 	}
-	// Écrite sous un nom provisoire puis renommée : jamais de fichier coupé.
-	chemin := filepath.Join(dossier, nom)
-	if err := os.WriteFile(chemin+".tmp", jpeg, 0o640); err != nil {
-		return err
-	}
-	if err := os.Rename(chemin+".tmp", chemin); err != nil {
-		return err
-	}
-	_, err := q.AjouterPiece(ctx, donnees.AjouterPieceParams{FamilleID: famille, CarnetID: ligne, Fichier: nom, Taille: int64(len(jpeg)),
+	_, err = q.AjouterPiece(ctx, donnees.AjouterPieceParams{FamilleID: famille, CarnetID: ligne, Fichier: nom, Taille: int64(len(jpeg)),
 		CreePar: sql.NullInt64{Int64: auteur, Valid: auteur > 0}, CreeLe: time.Now().Unix()})
 	if err != nil {
-		_ = os.Remove(chemin)
+		_ = photo.Effacer(Pieces(a), famille, nom)
 	}
 	return err
 }
@@ -86,7 +71,7 @@ func AjouterPiece(ctx context.Context, a *appli.App, q *donnees.Queries, famille
 // effacerFichiers : les fichiers des pièces (après leur suppression en base).
 func (s *Suivi) effacerFichiers(l []donnees.Piece) {
 	for _, p := range l {
-		if err := os.Remove(cheminPiece(s.a, p)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := photo.Effacer(Pieces(s.a), p.FamilleID, p.Fichier); err != nil {
 			s.a.Journal.Warn("pièce jointe non effacée", "fichier", p.Fichier, "erreur", err)
 		}
 	}
@@ -98,7 +83,7 @@ func (s *Suivi) ajouterPiece(w http.ResponseWriter, r *http.Request, c *appli.Co
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := s.a.Q.LigneCarnetParID(ctx, donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok || !c.Actif(l.Module) {
+	if err != nil || !ok || !s.permis(ctx, c, o, l.ObjetID) {
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}
@@ -123,7 +108,7 @@ func (s *Suivi) ajouterPiece(w http.ResponseWriter, r *http.Request, c *appli.Co
 	}
 	s.publier(c, o)
 	s.a.Flash(w, "Photo ajoutée 📎")
-	s.a.Rediriger(w, r, o.URL(l.ObjetID))
+	s.a.Rediriger(w, r, urlLigne(o, l.ObjetID, l.Litres))
 }
 
 // piece : la photo (parents seulement), jamais gardée par le navigateur.
@@ -131,6 +116,12 @@ func (s *Suivi) piece(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	p, err := s.a.Q.PieceParID(r.Context(), donnees.PieceParIDParams{ID: id, FamilleID: c.Famille.ID})
 	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	// La photo d'un objet que ce membre ne voit pas (projet privé d'un autre) : non.
+	l, err := s.a.Q.LigneCarnetParID(r.Context(), donnees.LigneCarnetParIDParams{ID: p.CarnetID, FamilleID: c.Famille.ID})
+	if o, ok := s.objets[l.Module]; err != nil || !ok || !s.permis(r.Context(), c, o, l.ObjetID) {
 		http.NotFound(w, r)
 		return
 	}
@@ -156,7 +147,7 @@ func (s *Suivi) supprimerPiece(w http.ResponseWriter, r *http.Request, c *appli.
 	}
 	l, err := s.a.Q.LigneCarnetParID(ctx, donnees.LigneCarnetParIDParams{ID: p.CarnetID, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok {
+	if err != nil || !ok || !s.permis(ctx, c, o, l.ObjetID) {
 		s.a.Echec(w, r, http.StatusNotFound, "Photo introuvable.")
 		return
 	}
@@ -167,5 +158,5 @@ func (s *Suivi) supprimerPiece(w http.ResponseWriter, r *http.Request, c *appli.
 	s.effacerFichiers([]donnees.Piece{p})
 	s.publier(c, o)
 	s.a.Flash(w, "Photo retirée")
-	s.a.Rediriger(w, r, o.URL(l.ObjetID))
+	s.a.Rediriger(w, r, urlLigne(o, l.ObjetID, l.Litres))
 }

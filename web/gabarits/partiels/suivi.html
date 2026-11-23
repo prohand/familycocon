@@ -20,7 +20,7 @@
         {{if $p}}<label class="champ"><span>Coût (facultatif)</span><input name="montant" inputmode="decimal" placeholder="0,00"></label>{{end}}
         {{if $s.AvecKm}}<label class="champ"><span>Kilométrage</span><input name="km" inputmode="numeric"></label>{{end}}
         <label class="champ"><span>Note</span><input name="note" maxlength="500"></label>
-        {{if $s.PeutBudget}}<label class="case-a-cocher"><input type="checkbox" name="budget" value="1"> 💶 Ajouter aussi au budget</label>{{end}}
+        {{if $s.PeutBudget}}{{template "choix-budget" $s}}{{end}}
         <button class="bouton petit">Enregistrer</button>
       </form>
     </details>
@@ -66,43 +66,15 @@
 <section class="carte bloc">
   <h2>📒 {{.TitreCarnet}}</h2>
   {{/* Montants : parents seulement (le budget est fermé aux enfants). */}}
+  {{if $s.Onglets}}
+  {{if $p}}<p class="aide">{{if $s.EntretienAnnee}}Entretien cette année : <b>{{montant $s.EntretienAnnee $s.Devise}}</b>{{end}}{{if and $s.EntretienAnnee $s.CoutKm}} · {{end}}{{with $s.CoutKm}}🛣️ Coût tout compris : <b>{{.}}</b>{{end}}</p>{{end}}
+  {{else}}
   {{if $p}}{{if $s.SansEcheances}}{{if $s.Total}}<p class="aide">Dépensé en tout : <b>{{montant $s.Total $s.Devise}}</b></p>{{end}}
   {{else if $s.TotalAnnee}}<p class="aide">Dépensé cette année : <b>{{montant $s.TotalAnnee $s.Devise}}</b></p>{{end}}{{end}}
   {{if or (and $p $s.CoutKm) $s.Conso}}<p class="aide">{{if $p}}{{with $s.CoutKm}}🛣️ Coût : <b>{{.}}</b>{{end}}{{if and $s.CoutKm $s.Conso}} · {{end}}{{end}}{{with $s.Conso}}⛽ Consommation : <b>{{.}}</b>{{end}}</p>{{end}}
-  {{- range $s.Carnet}}
-  <div class="ligne">
-    <span class="heure">{{slice .Jour 8 10}}/{{slice .Jour 5 7}}<small>{{slice .Jour 0 4}}</small></span>
-    <span class="quoi">{{.Libelle}}<small>{{if .Km}}{{milliers .Km}} km{{end}}{{if .Litres}} · {{litres .Litres}} L{{end}}{{if and .Km .Note}} · {{end}}{{.Note}}</small></span>
-    {{if and $p .Montant}}<b>{{montant .Montant $s.Devise}}{{if .OperationID.Valid}} <span title="Aussi dans le budget">💶</span>{{end}}</b>{{end}}
-    {{if $p}}<form method="post" action="/suivi/carnet/{{.ID}}/supprimer" hx-confirm="Supprimer cette ligne{{if .OperationID.Valid}} (et sa dépense du budget){{end}} ?">{{template "jeton" $j}}<button class="crayon" aria-label="Supprimer {{.Libelle}}">🗑️</button></form>{{end}}
-  </div>
-  {{if $p}}
-  {{- $id := .ID}}
-  <div class="pieces">
-    {{- range index $s.Pieces .ID}}
-    <span class="piece"><a href="/suivi/pieces/{{.ID}}" target="_blank" rel="noopener"><img src="/suivi/pieces/{{.ID}}" alt="Photo jointe" loading="lazy"></a>
-      <form method="post" action="/suivi/pieces/{{.ID}}/supprimer" hx-confirm="Retirer cette photo ?">{{template "jeton" $j}}<button class="crayon" aria-label="Retirer la photo">✕</button></form></span>
-    {{- end}}
-    <label class="ajout-piece"><input type="file" accept="image/*" data-piece="/suivi/carnet/{{$id}}/pieces" hidden><span>📎 Ticket, facture</span></label>
-  </div>
   {{end}}
-  <details class="corriger">
-    <summary class="lien-ajout" aria-label="Corriger {{.Libelle}}">✏️ Corriger</summary>
-    <form method="post" action="/suivi/carnet/{{.ID}}">
-      {{template "jeton" $j}}
-      <div class="rangee">
-        <label class="champ"><span>Quoi ?</span><input name="libelle" value="{{.Libelle}}" maxlength="80" required></label>
-        <label class="champ"><span>Le</span><input type="date" name="jour" value="{{.Jour}}" required></label>
-      </div>
-      <div class="rangee">
-        {{if $p}}<label class="champ"><span>Coût</span><input name="montant" value="{{if .Montant}}{{montantSaisie .Montant}}{{end}}" inputmode="decimal"></label>{{end}}
-        {{if $s.AvecKm}}<label class="champ"><span>Kilométrage</span><input name="km" value="{{if .Km}}{{.Km}}{{end}}" inputmode="numeric"></label>
-        <label class="champ"><span>Litres (plein)</span><input name="litres" value="{{if .Litres}}{{litres .Litres}}{{end}}" inputmode="decimal"></label>{{end}}
-      </div>
-      <label class="champ"><span>Note</span><input name="note" value="{{.Note}}" maxlength="500"></label>
-      <button class="bouton petit">Enregistrer</button>
-    </form>
-  </details>
+  {{- range $s.Carnet}}
+  {{template "ligne-carnet" dict "L" . "S" $s "J" $j "P" $p "Plein" false}}
   {{- else}}
   <p class="aide">Rien pour l'instant.</p>
   {{- end}}
@@ -117,12 +89,167 @@
       <div class="rangee">
         {{if $p}}<label class="champ"><span>Coût</span><input name="montant" inputmode="decimal" placeholder="0,00"></label>{{end}}
         {{if $s.AvecKm}}<label class="champ"><span>Kilométrage</span><input name="km" inputmode="numeric"></label>
-        <label class="champ"><span>Litres (plein)</span><input name="litres" inputmode="decimal" placeholder="0,0"></label>{{end}}
+        {{if not $s.Onglets}}<label class="champ"><span>Litres (plein)</span><input name="litres" inputmode="decimal" placeholder="0,0"></label>{{end}}{{end}}
       </div>
       <label class="champ"><span>Note</span><input name="note" maxlength="500"></label>
-      {{if $s.PeutBudget}}<label class="case-a-cocher"><input type="checkbox" name="budget" value="1"> 💶 Ajouter aussi au budget</label>{{end}}
+      {{if $s.PeutBudget}}{{template "choix-budget" $s}}{{end}}
       <button class="bouton petit">Ajouter</button>
     </form>
   </details>
 </section>
+{{end}}
+
+{{/* Une ligne du carnet (entretien ou plein) : dict "L" (ligne) "S" (*suivi.Bloc) "J" (jeton) "P" (parent ?) "Plein" (bool). */}}
+{{define "ligne-carnet"}}
+{{- $l := .L}}{{$s := .S}}{{$j := .J}}{{$p := .P}}
+{{- with $l}}
+  <div class="ligne">
+    <span class="heure">{{slice .Jour 8 10}}/{{slice .Jour 5 7}}<small>{{slice .Jour 0 4}}</small></span>
+    <span class="quoi">{{.Libelle}}<small>{{if .Km}}{{milliers .Km}} km{{end}}{{if .Litres}} · {{litres .Litres}} L{{end}}{{if .Carburant}} · {{.Carburant}}{{end}}{{if and .Km .Note}} · {{end}}{{.Note}}</small></span>
+    {{if and $p .Montant}}<b>{{montant .Montant $s.Devise}}{{if .OperationID.Valid}} <span title="Aussi dans le budget">💶</span>{{end}}</b>{{end}}
+    {{if $p}}<form method="post" action="/suivi/carnet/{{.ID}}/supprimer" hx-confirm="Supprimer cette ligne{{if .OperationID.Valid}} (et sa dépense du budget){{end}} ?">{{template "jeton" $j}}<button class="crayon" aria-label="Supprimer {{.Libelle}}">🗑️</button></form>{{end}}
+  </div>
+  {{- $id := $l.ID}}
+  {{- $photos := index $s.Pieces .ID}}
+  {{/* Pleins : la liste reste compacte, le bouton « Ticket » est dans « Corriger ». */}}
+  {{if and $p (or $photos (not $.Plein))}}
+  <div class="pieces">
+    {{- range $photos}}
+    <span class="piece"><a href="/suivi/pieces/{{.ID}}" target="_blank" rel="noopener"><img src="/suivi/pieces/{{.ID}}" alt="Photo jointe" loading="lazy"></a>
+      <form method="post" action="/suivi/pieces/{{.ID}}/supprimer" hx-confirm="Retirer cette photo ?">{{template "jeton" $j}}<button class="crayon" aria-label="Retirer la photo">✕</button></form></span>
+    {{- end}}
+    {{if not $.Plein}}<label class="ajout-piece"><input type="file" accept="image/*" data-piece="/suivi/carnet/{{$id}}/pieces" hidden><span>📎 Ticket, facture</span></label>{{end}}
+  </div>
+  {{end}}
+  <details class="corriger">
+    <summary class="lien-ajout" aria-label="Corriger {{.Libelle}}">✏️ Corriger</summary>
+    {{if and $p $.Plein}}<label class="ajout-piece"><input type="file" accept="image/*" data-piece="/suivi/carnet/{{$id}}/pieces" hidden><span>📎 Ajouter le ticket</span></label>{{end}}
+    <form method="post" action="/suivi/carnet/{{.ID}}">
+      {{template "jeton" $j}}
+      <div class="rangee">
+        <label class="champ"><span>Quoi ?</span><input name="libelle" value="{{.Libelle}}" maxlength="80" required></label>
+        <label class="champ"><span>Le</span><input type="date" name="jour" value="{{.Jour}}" required></label>
+      </div>
+      <div class="rangee">
+        {{if $p}}<label class="champ"><span>Coût</span><input name="montant" value="{{if .Montant}}{{montantSaisie .Montant}}{{end}}" inputmode="decimal"></label>{{end}}
+        {{if $s.AvecKm}}<label class="champ"><span>Kilométrage</span><input name="km" value="{{if .Km}}{{.Km}}{{end}}" inputmode="numeric"></label>
+        {{if or $.Plein (not $s.Onglets)}}<label class="champ"><span>Litres (plein)</span><input name="litres" value="{{if .Litres}}{{litres .Litres}}{{end}}" inputmode="decimal"{{if $.Plein}} required{{end}}></label>{{end}}{{end}}
+      </div>
+      {{if $.Plein}}<label class="champ"><span>Carburant</span>
+        <select name="carburant">{{$cb := .Carburant}}
+          <option value="">Non précisé</option>
+          {{- range $s.Pleins.Carburants}}<option{{if eq . $cb}} selected{{end}}>{{.}}</option>{{end}}
+        </select></label>{{end}}
+      <label class="champ"><span>Note</span><input name="note" value="{{.Note}}" maxlength="500"></label>
+      <button class="bouton petit">Enregistrer</button>
+    </form>
+  </details>
+{{- end}}
+{{end}}
+
+{{/* Onglets d'un véhicule : dict "S" (*suivi.Bloc) "Chemin" (adresse de la fiche). */}}
+{{define "onglets-vehicule"}}
+<nav class="pilules onglets" aria-label="Carnet">
+  <a class="pilule{{if not .S.Pleins}} active{{end}}" href="{{.Chemin}}"{{if not .S.Pleins}} aria-current="page"{{end}}>🔧 Entretien{{if .S.NbEntretiens}} <small>{{.S.NbEntretiens}}</small>{{end}}</a>
+  <a class="pilule{{if .S.Pleins}} active{{end}}" href="{{.Chemin}}?onglet=pleins"{{if .S.Pleins}} aria-current="page"{{end}}>⛽ Pleins{{if .S.NbPleins}} <small>{{.S.NbPleins}}</small>{{end}}</a>
+</nav>
+{{end}}
+
+{{/* Onglet « Pleins » d'un véhicule : dict "S" (*suivi.Bloc) "J" (jeton) "P" (parent ?) "Chemin". */}}
+{{define "onglet-pleins"}}
+{{$s := .S}}{{$v := .S.Pleins}}{{$j := .J}}{{$p := .P}}
+<section class="carte bloc">
+  <div class="tete-pleins">
+    <h2>⛽ Pleins</h2>
+    <nav class="pilules petites" aria-label="Période">
+      <a class="pilule{{if not $v.Periode}} active{{end}}" href="{{.Chemin}}?onglet=pleins">12 mois</a>
+      <a class="pilule{{if $v.Periode}} active{{end}}" href="{{.Chemin}}?onglet=pleins&amp;periode=tout">Tout</a>
+    </nav>
+  </div>
+  <div class="chiffres">
+    {{with $v.Conso}}<div><small>Consommation</small><b>{{.}}</b></div>{{end}}
+    {{if $p}}{{with $v.PrixLitre}}<div><small>Prix moyen du litre</small><b>{{.}}</b></div>{{end}}{{end}}
+    {{with $v.Litres}}<div><small>Carburant acheté</small><b>{{.}}</b></div>{{end}}
+    {{if $p}}{{if $v.Carburant}}<div><small>Dépensé en carburant</small><b>{{montant $v.Carburant $s.Devise}}</b></div>{{end}}
+    {{with $s.CoutKm}}<div><small>Coût tout compris</small><b>{{.}}</b></div>{{end}}{{end}}
+  </div>
+  {{if not (or $v.Conso $v.Litres)}}<p class="aide">Aucun plein sur la période.</p>{{end}}
+</section>
+{{with $v.GConso}}<section class="carte bloc graphe"><h3>Consommation à chaque plein <small>L / 100 km · pointillé : moyenne</small></h3>{{.}}</section>{{end}}
+{{if $p}}{{with $v.GPrix}}<section class="carte bloc graphe"><h3>Prix du litre <small>pointillé : moyenne</small></h3>{{.}}</section>{{end}}
+{{with $v.GDepenses}}<section class="carte bloc graphe"><h3>Dépenses par {{if $v.ParAn}}année{{else}}mois{{end}}</h3>{{.}}
+  <p class="legende"><span class="pastille g-s0"></span> Carburant <span class="pastille g-s1"></span> Entretien</p></section>{{end}}{{end}}
+{{with $v.GKm}}<section class="carte bloc graphe"><h3>Kilomètres parcourus par {{if $v.ParAn}}année{{else}}mois{{end}}</h3>{{.}}</section>{{end}}
+<section class="carte bloc">
+  <h2>📒 Les pleins</h2>
+  <details class="ajout-echeance"{{if not $v.Pleins}} open{{end}}>
+    <summary class="lien-ajout">＋ Ajouter un plein</summary>
+    <form method="post" action="/suivi/{{$s.Module}}/{{$s.ObjetID}}/carnet"{{if $p}} data-ticket{{end}}>
+      {{template "jeton" $j}}
+      {{if $p}}
+      {{/* Scan du ticket : lu dans le téléphone (Tesseract.js), les champs se remplissent ; la photo est jointe au plein. */}}
+      <div class="scan-ticket">
+        <button type="button" class="bouton secondaire petit" data-scanner-ticket>📷 Scanner le ticket</button>
+        <input type="file" accept="image/*" capture="environment" hidden data-photo-ticket>
+        <input type="hidden" name="ticket">
+        <img class="apercu-ticket" alt="Ticket scanné" hidden data-apercu-ticket>
+        <p class="aide" data-etat-ticket>Les champs se remplissent tout seuls ; le kilométrage reste à taper.</p>
+      </div>
+      {{end}}
+      <div class="choix-plein">
+        <label class="case-a-cocher"><input type="radio" name="libelle" value="Plein" checked> Plein complet</label>
+        <label class="case-a-cocher"><input type="radio" name="libelle" value="Plein partiel"> Plein partiel</label>
+      </div>
+      <div class="rangee">
+        <label class="champ"><span>Le</span><input type="date" name="jour" value="{{$s.Aujourdhui}}" required></label>
+        <label class="champ"><span>Kilométrage</span><input name="km" inputmode="numeric" required></label>
+      </div>
+      <div class="rangee">
+        <label class="champ"><span>Litres</span><input name="litres" inputmode="decimal" placeholder="0,0" required></label>
+        {{if $p}}<label class="champ"><span>Prix payé</span><input name="montant" inputmode="decimal" placeholder="0,00"></label>{{end}}
+      </div>
+      <label class="champ"><span>Carburant</span>
+        <select name="carburant">{{$d := $v.DernierCarburant}}
+          <option value="">Non précisé</option>
+          {{- range $v.Carburants}}<option{{if eq . $d}} selected{{end}}>{{.}}</option>{{end}}
+        </select></label>
+      <label class="champ"><span>Note (station…)</span><input name="note" maxlength="500"></label>
+      {{if $s.PeutBudget}}{{template "choix-budget" $s}}{{end}}
+      <button class="bouton petit">Ajouter</button>
+    </form>
+  </details>
+  {{- range $v.Pleins}}
+  {{template "ligne-carnet" dict "L" . "S" $s "J" $j "P" $p "Plein" true}}
+  {{- else}}
+  <p class="aide">Aucun plein noté. Ajoutez-en un, ou reprenez vos pleins depuis Fuelio (en bas de la page).</p>
+  {{- end}}
+  {{template "bouton-suite-pleins" dict "S" $s}}
+</section>
+{{end}}
+
+{{/* Bouton « Voir les pleins plus anciens » : remplacé par la page suivante (et son propre bouton). */}}
+{{define "bouton-suite-pleins"}}
+{{- with .S.Pleins.Suite}}
+<button class="bouton secondaire plus-pleins" hx-get="/suivi/{{$.S.Module}}/{{$.S.ObjetID}}/pleins?depuis={{.}}" hx-target="this" hx-swap="outerHTML">⬇️ Voir les pleins plus anciens</button>
+{{- end}}
+{{end}}
+
+{{/* Page suivante de la liste des pleins (fragment htmx) : .Donnees = dict "S" "J" "P". */}}
+{{define "suite-pleins"}}
+{{- with .Donnees}}{{$s := .S}}{{$j := .J}}{{$p := .P}}
+{{- range $s.Pleins.Pleins}}
+{{template "ligne-carnet" dict "L" . "S" $s "J" $j "P" $p "Plein" true}}
+{{- end}}
+{{template "bouton-suite-pleins" dict "S" $s}}
+{{- end}}
+{{end}}
+
+{{/* Ajouter aussi la dépense au budget : non, au compte commun, ou au budget perso (privé). */}}
+{{define "choix-budget"}}
+<label class="champ choix-budget"><span>💶 Ajouter aussi au budget</span>
+  <select name="budget">
+    <option value="">Non</option>
+    <option value="1">Compte commun</option>
+    <option value="perso"{{if .BudgetPerso}} selected{{end}}>🔒 Mon budget perso</option>
+  </select></label>
 {{end}}

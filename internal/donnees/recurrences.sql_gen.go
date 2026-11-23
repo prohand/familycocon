@@ -93,6 +93,38 @@ func (q *Queries) AvancerRecurrence(ctx context.Context, arg AvancerRecurrencePa
 	return result.RowsAffected()
 }
 
+const changerCompteOccurrences = `-- name: ChangerCompteOccurrences :exec
+UPDATE operations SET perso_de = ? WHERE recurrence_id = ? AND famille_id = ?
+`
+
+type ChangerCompteOccurrencesParams struct {
+	PersoDe      int64
+	RecurrenceID sql.NullInt64
+	FamilleID    int64
+}
+
+func (q *Queries) ChangerCompteOccurrences(ctx context.Context, arg ChangerCompteOccurrencesParams) error {
+	_, err := q.db.ExecContext(ctx, changerCompteOccurrences, arg.PersoDe, arg.RecurrenceID, arg.FamilleID)
+	return err
+}
+
+const changerCompteRecurrence = `-- name: ChangerCompteRecurrence :exec
+UPDATE recurrences SET perso_de = ? WHERE id = ? AND famille_id = ?
+`
+
+type ChangerCompteRecurrenceParams struct {
+	PersoDe   int64
+	ID        int64
+	FamilleID int64
+}
+
+// Abonnement passe au budget perso (ou revenu au commun) : la recurrence
+// et ses prelevements deja ecrits changent de budget.
+func (q *Queries) ChangerCompteRecurrence(ctx context.Context, arg ChangerCompteRecurrenceParams) error {
+	_, err := q.db.ExecContext(ctx, changerCompteRecurrence, arg.PersoDe, arg.ID, arg.FamilleID)
+	return err
+}
+
 const compterRecurrences = `-- name: CompterRecurrences :one
 SELECT count(*) FROM recurrences WHERE famille_id = ?
 `
@@ -144,12 +176,13 @@ func (q *Queries) CreerAbonnement(ctx context.Context, arg CreerAbonnementParams
 }
 
 const creerOccurrence = `-- name: CreerOccurrence :one
-INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, membre_id, recurrence_id, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id
+INSERT INTO operations (famille_id, perso_de, sens, montant, categorie, libelle, jour, membre_id, recurrence_id, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id, perso_de, virement_id
 `
 
 type CreerOccurrenceParams struct {
 	FamilleID    int64
+	PersoDe      int64
 	Sens         string
 	Montant      int64
 	Categorie    string
@@ -164,6 +197,7 @@ type CreerOccurrenceParams struct {
 func (q *Queries) CreerOccurrence(ctx context.Context, arg CreerOccurrenceParams) (Operation, error) {
 	row := q.db.QueryRowContext(ctx, creerOccurrence,
 		arg.FamilleID,
+		arg.PersoDe,
 		arg.Sens,
 		arg.Montant,
 		arg.Categorie,
@@ -188,17 +222,21 @@ func (q *Queries) CreerOccurrence(ctx context.Context, arg CreerOccurrenceParams
 		&i.CreePar,
 		&i.CreeLe,
 		&i.RecurrenceID,
+		&i.PersoDe,
+		&i.VirementID,
 	)
 	return i, err
 }
 
 const creerRecurrence = `-- name: CreerRecurrence :one
-INSERT INTO recurrences (famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le
+INSERT INTO recurrences (famille_id, perso_de, virement, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement
 `
 
 type CreerRecurrenceParams struct {
 	FamilleID int64
+	PersoDe   int64
+	Virement  int64
 	Sens      string
 	Montant   int64
 	Categorie string
@@ -214,6 +252,8 @@ type CreerRecurrenceParams struct {
 func (q *Queries) CreerRecurrence(ctx context.Context, arg CreerRecurrenceParams) (Recurrence, error) {
 	row := q.db.QueryRowContext(ctx, creerRecurrence,
 		arg.FamilleID,
+		arg.PersoDe,
+		arg.Virement,
 		arg.Sens,
 		arg.Montant,
 		arg.Categorie,
@@ -240,16 +280,24 @@ func (q *Queries) CreerRecurrence(ctx context.Context, arg CreerRecurrenceParams
 		&i.Faites,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.PersoDe,
+		&i.Virement,
 	)
 	return i, err
 }
 
 const listeAbonnements = `-- name: ListeAbonnements :many
 SELECT a.id, a.emoji, a.engagement_fin, a.site, a.notes, r.id AS recurrence_id, r.montant, r.categorie, r.libelle,
-  r.membre_id, r.frequence, r.debut, r.fin, r.faites
+  r.membre_id, r.frequence, r.debut, r.fin, r.faites, r.perso_de
 FROM abonnements a JOIN recurrences r ON r.id = a.recurrence_id
-WHERE a.famille_id = ? ORDER BY r.libelle COLLATE NOCASE
+WHERE a.famille_id = ?1 AND (?2 = -1 OR r.perso_de IN (0, ?2))
+ORDER BY r.libelle COLLATE NOCASE
 `
+
+type ListeAbonnementsParams struct {
+	FamilleID int64
+	Membre    interface{}
+}
 
 type ListeAbonnementsRow struct {
 	ID            int64
@@ -266,10 +314,13 @@ type ListeAbonnementsRow struct {
 	Debut         string
 	Fin           string
 	Faites        int64
+	PersoDe       int64
 }
 
-func (q *Queries) ListeAbonnements(ctx context.Context, familleID int64) ([]ListeAbonnementsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listeAbonnements, familleID)
+// Abonnements vus par un membre (les prives des autres non) ; membre = -1 :
+// tous (rappels, envoyes a chacun selon ce qu'il voit).
+func (q *Queries) ListeAbonnements(ctx context.Context, arg ListeAbonnementsParams) ([]ListeAbonnementsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listeAbonnements, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -292,6 +343,7 @@ func (q *Queries) ListeAbonnements(ctx context.Context, familleID int64) ([]List
 			&i.Debut,
 			&i.Fin,
 			&i.Faites,
+			&i.PersoDe,
 		); err != nil {
 			return nil, err
 		}
@@ -377,7 +429,7 @@ func (q *Queries) ModifierRecurrence(ctx context.Context, arg ModifierRecurrence
 }
 
 const recurrenceParID = `-- name: RecurrenceParID :one
-SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le FROM recurrences WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement FROM recurrences WHERE id = ? AND famille_id = ?
 `
 
 type RecurrenceParIDParams struct {
@@ -402,6 +454,8 @@ func (q *Queries) RecurrenceParID(ctx context.Context, arg RecurrenceParIDParams
 		&i.Faites,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.PersoDe,
+		&i.Virement,
 	)
 	return i, err
 }
@@ -436,10 +490,11 @@ func (q *Queries) RecurrencesAbonnees(ctx context.Context, familleID int64) ([]i
 
 const recurrencesFamille = `-- name: RecurrencesFamille :many
 
-SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le FROM recurrences WHERE famille_id = ? ORDER BY sens DESC, montant DESC
+SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement FROM recurrences WHERE famille_id = ? ORDER BY sens DESC, montant DESC
 `
 
 // Operations qui reviennent, et abonnements.
+// Toutes (ecriture des occurrences).
 func (q *Queries) RecurrencesFamille(ctx context.Context, familleID int64) ([]Recurrence, error) {
 	rows, err := q.db.QueryContext(ctx, recurrencesFamille, familleID)
 	if err != nil {
@@ -463,6 +518,8 @@ func (q *Queries) RecurrencesFamille(ctx context.Context, familleID int64) ([]Re
 			&i.Faites,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.PersoDe,
+			&i.Virement,
 		); err != nil {
 			return nil, err
 		}
@@ -505,6 +562,20 @@ type SupprimerRecurrenceParams struct {
 
 func (q *Queries) SupprimerRecurrence(ctx context.Context, arg SupprimerRecurrenceParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerRecurrence, arg.ID, arg.FamilleID)
+	return err
+}
+
+const supprimerRecurrencesPerso = `-- name: SupprimerRecurrencesPerso :exec
+DELETE FROM recurrences WHERE famille_id = ? AND perso_de = ?
+`
+
+type SupprimerRecurrencesPersoParams struct {
+	FamilleID int64
+	PersoDe   int64
+}
+
+func (q *Queries) SupprimerRecurrencesPerso(ctx context.Context, arg SupprimerRecurrencesPersoParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerRecurrencesPerso, arg.FamilleID, arg.PersoDe)
 	return err
 }
 

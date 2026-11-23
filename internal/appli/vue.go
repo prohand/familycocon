@@ -36,7 +36,7 @@ var Catalogue = []ModuleDef{
 	{Cle: "anniversaires", Nom: "Anniversaires", Emoji: "🎂", URL: "/anniversaires"},
 	{Cle: "adresses", Nom: "Adresses", Emoji: "📇", URL: "/adresses"},
 	{Cle: "fidelite", Nom: "Cartes de fidélité", Emoji: EmojiFidelite, URL: "/fidelite"},
-	{Cle: "vehicules", Nom: "Véhicules", Emoji: "🚗", URL: "/vehicules"},
+	{Cle: "vehicules", Nom: "Véhicules", Emoji: "🚗", URL: "/vehicules", Parents: true},
 	{Cle: "animaux", Nom: "Animaux", Emoji: "🐾", URL: "/animaux"},
 	{Cle: "prestataires", Nom: "Prestataires", Emoji: "🧰", URL: "/prestataires"},
 	{Cle: "garanties", Nom: "Garanties", Emoji: "🧾", URL: "/garanties"},
@@ -103,7 +103,7 @@ func RaccourcisPossibles(c *Contexte) []Raccourci {
 func ModulesVisibles(c *Contexte) []ModuleDef {
 	var out []ModuleDef
 	for _, m := range Catalogue {
-		if c.Actif(m.Cle) && (!m.Parents || c.EstParent()) {
+		if c.Voit(m.Cle) {
 			out = append(out, m)
 		}
 	}

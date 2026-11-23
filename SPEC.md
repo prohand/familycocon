@@ -381,3 +381,131 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   sorte de ligne, à 4 contre 1 au moins) ; les autres (trajets…) et les
   cas douteux sont laissés de côté et comptés dans le bilan. Sans
   `## Pictures` : nom du fichier (identifiant, sinon date).
+
+## 16. Notes : listes et photos (v0.7.0)
+- **Listes** : bouton « ☑️ Liste » (note qui commence par une case). Dans le
+  texte, Entrée au bout d'une case (ou d'une puce « - ») en commence une
+  autre ; Entrée sur une case vide termine la liste (app.js). Une case vide
+  n'est pas gardée. Sur la note : « Ajouter un élément » (tous ceux qui
+  voient la note, comme pour cocher) et « Retirer les éléments cochés »
+  (ceux qui peuvent la modifier). Le texte reste la seule source (lignes
+  « [ ] » / « [x] ») : rien ne change dans la base. Écriture refusée si la
+  note a changé entre-temps (pas d'écrasement). Les cartes de la liste
+  dessinent les cases (☐ / ☑).
+- **Photos dans une note** : ajoutées et retirées par ceux qui peuvent
+  modifier la note, vues par ceux qui la voient (note privée : son auteur
+  seul). Même traitement que les tickets du carnet (`photo.Preparer`,
+  1 600 px, JPEG sans lieu GPS) et même dossier (`pieces/<famille>/`, copié
+  par les sauvegardes) ; table `photos_notes` (migration 0031). 20 par
+  note, 5 000 par famille. Effacées avec la note, et avec les notes
+  privées d'un membre retiré. Rangement commun : `photo.Ranger`,
+  `photo.Chemin`, `photo.Effacer`.
+
+## 17. Véhicules : pleins à part, chiffres et graphiques (v0.7.0)
+- **Deux onglets** sur la fiche d'un véhicule (`?onglet=pleins`) :
+  « 🔧 Entretien » (échéances, carnet sans les pleins) et « ⛽ Pleins ».
+  Un plein = une ligne du carnet avec des litres (rien ne change dans la
+  base). Ajouter, corriger ou supprimer un plein ramène sur son onglet.
+- **Onglet Pleins** : chiffres (consommation, prix moyen du litre,
+  carburant acheté, dépensé en carburant, coût tout compris au km), 4
+  graphiques, formulaire « Ajouter un plein » (complet ou partiel, litres
+  obligatoires), liste des pleins par pages de 100 (« Voir les pleins plus
+  anciens » ajoute la page suivante par htmx, `GET /suivi/{module}/{objet}/pleins?depuis=N`),
+  ticket dans « Corriger ».
+  Période : 12 mois (mois en cours compris) ou « Tout » (`&periode=tout`).
+- **Graphiques** : SVG écrit par le serveur (`internal/graphique`, ~200
+  lignes, bibliothèque standard), couleurs par classes CSS (thème clair et
+  sombre, CSP inchangée) ; bulle au survol par `<title>`.
+  - consommation à chaque plein complet (litres depuis le plein complet
+    d'avant, partiels compris ; valeurs hors 1-60 L/100 écartées : plein
+    oublié) ; moyenne en pointillé ;
+  - prix du litre ; moyenne en pointillé ;
+  - dépenses par mois, carburant et entretien empilés ;
+  - kilomètres par mois (compteur le plus haut du mois moins le plus haut
+    d'avant).
+  Au-delà de 36 mois (« Tout »), les barres passent par année.
+- **Véhicules réservés aux parents** (`Parents: true` au Catalogue, comme
+  Budget et Abonnements) : ni tuile, ni recherche, ni échéances dans « À
+  venir », ni rappels, ni mention sur la fiche d'un contact pour un enfant.
+  Contrôle central : `Contexte.Voit(module)` (activé et permis à ce
+  membre), appliqué par `App.Route` à toutes les pages d'un module réservé
+  et par les routes communes du suivi (`/suivi/...`).
+
+## 18. Scan du ticket de carburant (v0.7.0)
+- **Bouton « 📷 Scanner le ticket »** dans « Ajouter un plein » (parents) :
+  photo (appareil du téléphone), lecture du texte **dans le téléphone**
+  par Tesseract.js 7 (Apache-2.0, WebAssembly, modèle français
+  « best_int »). Rien ne part chez un tiers ; le serveur ne fait pas
+  l'OCR.
+- **Fichiers** : `web/ocr/v7/` (~1,8 Mo compressés : moteur SIMD seul,
+  modèle 0,7 Mo), gardés en .gz dans le binaire et servis par
+  `GET /ocr/v7/…` (Content-Encoding gzip, cache « immutable ») ; lus à la
+  demande, jamais chargés en mémoire au démarrage. Téléchargés au premier
+  scan seulement. Navigateur sans SIMD WebAssembly (téléphones d'avant
+  2021 environ) : « Lecture impossible », on remplit à la main.
+- **CSP** : `'wasm-unsafe-eval'` ajouté seulement aux réponses de
+  `/ocr/v7/` (le lecteur tourne dans un worker, qui suit la politique de
+  sa propre réponse). Le reste du site garde la politique stricte.
+- **Lecture** : photo en largeur → essai d'un quart de tour d'abord (puis
+  l'autre sens, puis droite) ; image à 1 600 px ; si la date ou un nombre
+  manque, seconde lecture à 2 400 px, et les deux textes sont analysés
+  ensemble. Pas de retouche de contraste (elle abîme les tickets
+  thermiques à points). Essai sur un vrai ticket : ~5 s, tout est lu.
+- **Analyse** en Go (`suivi.LireTicket`, testée sur le texte réellement
+  lu) : POST `/suivi/ticket` (JSON). Les trois nombres qui vont ensemble
+  (litres × prix au litre = prix payé, au centime près) ; les mots de la
+  ligne et de la ligne d'avant départagent (« Quantité », « Prix unit. »,
+  « Montant ») ; lignes de TVA et en francs écartées ; deux sur trois : le
+  troisième se calcule. Date : la première valide, ni future ni de plus
+  d'un an. Carburant (SP95, SP98 même lu « SPsB », E10, E85, gazole…) :
+  champ « Carburant » ; station (première ligne faite de mots) : note.
+- Les champs remplis sont **surlignés** ; le kilométrage reste à taper.
+  La **photo** (réduite à 1 200 px par le téléphone) part avec le plein
+  (champ caché, base64, 900 Kio au plus) et lui est jointe ; si elle
+  n'a pas pu l'être, le plein est gardé et on le dit.
+- **Type de carburant** d'un plein (colonne `carnet.carburant`, migration
+  0032) : SP95-E10, SP95, SP98, Gazole, E85, GPL, ou non précisé. Proposé
+  d'après le dernier plein ; affiché dans la liste ; rempli par le scan ;
+  ignoré pour une ligne d'entretien ou une valeur hors liste. La reprise
+  Fuelio ne le remplit pas (codes de carburant de Fuelio non publiés).
+
+## 19. Budget perso, compte commun ; abonnements et projets privés (v0.7.0)
+- **Deux budgets** (choix de l'utilisateur) : le compte commun (tous les
+  parents, comme avant) et un budget perso par parent, **privé** (lui
+  seul le voit, comme une note privée). Seulement dépenses et revenus (pas
+  de solde bancaire). Colonne `perso_de` (0 : commun ; sinon le membre) sur
+  `operations`, `recurrences`, `budget_plafonds` (clé refaite) et
+  `projets` (migration 0033). Les données d'avant restent au commun.
+- **Choix du budget** : onglets « 👨‍👩‍👧 Compte commun | 🔒 Mon budget » ;
+  `?compte=commun|perso` dans les adresses et les formulaires, retenu par
+  un cookie (`fc_compte`). Chaque budget a ses opérations, ses opérations
+  qui reviennent, ses plafonds, son année, sa recherche. Une opération ou
+  une récurrence d'un autre budget perso : 404. La recherche globale et
+  le résumé de l'accueil comptent le commun et le perso du membre.
+- **Virements** perso → commun (`POST /budget/virement`) : deux opérations
+  liées (`virement_id`) : une dépense « Virement vers le commun » (perso),
+  un revenu « Virement de Marie » (commun), catégories `virement` et
+  `virement-recu` jamais proposées dans les formulaires. Une fois ou qui
+  revient (récurrence `virement = 1` : chaque occurrence écrit les deux
+  moitiés). Modifier une moitié : l'autre suit (montant, date) ; supprimer
+  : les deux partent. Côté commun, les virements à venir sont prévus.
+- **Carnet** (véhicules, animaux, prestataires, projets) : « Ajouter aussi
+  au budget » devient un choix : Non (par défaut) / Compte commun / Mon
+  budget perso.
+- **Abonnement privé** (case « Privé ») : sa récurrence est dans le budget
+  perso ; vu par son propriétaire seul (liste, fiche, rappels). Passé en
+  privé ou rendu au commun : ses prélèvements déjà écrits suivent.
+- **Projet privé** (case « Privé », à la création ; peut être partagé
+  ensuite, pas l'inverse : les projets n'ont pas d'auteur noté) : vu par
+  son créateur seul (liste, fiche, étapes, carnet, photos, recherche,
+  rappels) ; son carnet propose d'abord le budget perso. Contrôle commun
+  au carnet : `suivi.Objet.Voit`.
+- **Rappels privés** : `Echeance.Pour` (membre). « À venir », l'agenda et
+  la notification du matin ne les montrent qu'à lui ; il reçoit alors sa
+  propre notification (avec les rappels communs), les autres la commune.
+- **Départ d'un membre** : son budget perso (opérations, récurrences,
+  plafonds), ses abonnements privés et ses projets privés (carnet et
+  photos compris) sont effacés ; les virements reçus au commun restent.
+  Crochet `App.AjouterDepart` pour les modules.
+- **Export** : le budget perso, les abonnements et les projets privés des
+  autres membres n'y sont pas.

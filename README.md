@@ -53,19 +53,20 @@ sur le téléphone de chacun.
 - **Menus de la semaine** : midi et soir ; les ingrédients d'une recette connue reviennent tout seuls ; un clic
   envoie les ingrédients aux courses (sauf ceux déjà à la maison) ; « Reprendre la semaine dernière » ; page Recettes.
 - **Budget** (parents) :
+  - compte commun et budget perso de chaque parent (privé), virements de l'un à l'autre (une fois ou chaque mois) ;
   - « reste à vivre » du mois et courbe des dépenses ;
   - catégories et filtres ;
   - opérations qui reviennent (chaque semaine, mois, 2 mois, trimestre, semestre ou année), ajoutées toutes seules ;
   - « à venir ce mois-ci » et reste prévu en fin de mois ;
   - plafonds par catégorie (alerte à 90 %), « Payé par » (écart entre parents), recherche sur 12 mois, vue de l'année.
-- **Abonnements** (parents) : box, téléphone, musique, assurance… prélevés tout seuls dans le budget ;
+- **Abonnements** (privés au choix) (parents) : box, téléphone, musique, assurance… prélevés tout seuls dans le budget ;
   coût par mois et par an, fin d'engagement, rappel avant un renouvellement annuel.
 - **Espace enfants** :
   - missions à étoiles (1 à 5) ; l'enfant coche, un parent valide ou refuse ;
   - mission pour plusieurs enfants d'un coup, « Valider les N missions », étoiles bonus (ou retirées) avec un motif ;
   - récompenses échangées contre des étoiles ;
   - progrès par semaine.
-- **Notes** : partagées avec la famille ou privées, couleurs, épinglées, recherche, listes à cocher.
+- **Notes** : partagées avec la famille ou privées, couleurs, épinglées, recherche, listes à cocher (ajout rapide d'un élément, retrait des éléments cochés), photos.
 - **Contacts** : le carnet central de la famille :
   - mobile, fixe, travail, e-mail, adresse, société, métier, site ; favoris en haut, groupes libres (« Foot de Léo ») ;
   - recherche par nom, numéro ou métier ; appel direct depuis la liste ;
@@ -74,17 +75,18 @@ sur le téléphone de chacun.
 - **Anniversaires et Adresses** : deux vues du carnet (les dates à venir avec l'âge et les idées de cadeaux ; les adresses avec le plan).
 - **Cartes de fidélité** : le code-barres (EAN-13, UPC-A, EAN-8, Code 128) ou le QR code est redessiné à l'écran, à montrer en caisse ;
   le type de code est détecté tout seul, et la carte se scanne avec le téléphone (caméra sur Android, photo sur iPhone).
-- **Véhicules, Animaux, Prestataires** :
+- **Véhicules (parents), Animaux, Prestataires** :
   - échéances qui reviennent (contrôle technique, assurance, vaccin, vermifuge, ramonage…) ;
   - « C'est fait » : la ligne va dans le carnet (date, coût, kilométrage) et l'échéance est reportée ;
   - prestataires : les contacts « pro » du carnet (plombier, nounou, médecin…), avec leurs interventions ;
   - vétérinaire d'un animal, garage et assurance d'un véhicule choisis dans le carnet (appel direct) ;
   - échéance modifiable ou reportée d'un mois ; dépense du carnet ajoutée aussi au budget ;
-  - véhicule : coût pour 100 km et consommation (pleins notés) ;
+  - véhicule : onglets « Entretien » et « Pleins » ; pour les pleins, consommation, prix du litre, coût pour 100 km et 4 graphiques (consommation, prix du litre, dépenses par mois, kilomètres par mois), sur 12 mois ou depuis le début ;
   - photo du ticket ou de la facture sur une ligne du carnet (parents) ;
-  - véhicule : reprise d'une sauvegarde Fuelio (pleins, dépenses et leurs photos).
+  - véhicule : reprise d'une sauvegarde Fuelio (pleins, dépenses et leurs photos) ;
+  - plein : scan du ticket avec le téléphone (date, litres, prix remplis tout seuls ; lecture dans le téléphone, rien n'est envoyé ailleurs).
 - **Garanties** : appareils achetés, fin de garantie rappelée, où est rangée la facture, réparations.
-- **Projets** : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
+- **Projets** (privés au choix) : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
 - **Rappels** : bloc « À venir » sur l'accueil (30 jours) et notification chaque matin à 9 h
   (anniversaires, échéances, étapes de projet : aujourd'hui et dans 7 jours).
 - **Personnalisation** :

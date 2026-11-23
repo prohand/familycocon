@@ -24,9 +24,10 @@ import (
 // seuilAlerte : part du plafond (en %) à partir de laquelle on prévient.
 const seuilAlerte = 90
 
-// plafonds : les plafonds de la famille, par catégorie (centimes par mois).
-func (m *Module) plafonds(ctx context.Context, c *appli.Contexte) (map[string]int64, error) {
-	l, err := m.a.Q.PlafondsFamille(ctx, c.Famille.ID)
+// plafonds : les plafonds d'un budget (0 : commun ; sinon le perso du
+// membre), par catégorie (centimes par mois).
+func (m *Module) plafonds(ctx context.Context, c *appli.Contexte, compte int64) (map[string]int64, error) {
+	l, err := m.a.Q.PlafondsFamille(ctx, donnees.PlafondsFamilleParams{FamilleID: c.Famille.ID, PersoDe: compte})
 	if err != nil {
 		return nil, err
 	}
@@ -50,12 +51,12 @@ func jauge(cat Categorie, depense, plafond int64) parCategorie {
 
 // alertePlafond : « Courses : 92 % du plafond » pour la catégorie la plus
 // proche de son plafond (au-delà de 90 %), « » sinon.
-func (m *Module) alertePlafond(ctx context.Context, c *appli.Contexte, premier, dernier time.Time) string {
-	plafonds, err := m.plafonds(ctx, c)
+func (m *Module) alertePlafond(ctx context.Context, c *appli.Contexte, compte int64, premier, dernier time.Time) string {
+	plafonds, err := m.plafonds(ctx, c, compte)
 	if err != nil || len(plafonds) == 0 {
 		return ""
 	}
-	totaux, err := m.a.Q.TotauxParMois(ctx, donnees.TotauxParMoisParams{FamilleID: c.Famille.ID,
+	totaux, err := m.a.Q.TotauxParMois(ctx, donnees.TotauxParMoisParams{FamilleID: c.Famille.ID, Compte: compte,
 		Du: repetition.CleJour(premier), Au: repetition.CleJour(dernier)})
 	if err != nil {
 		return ""
@@ -73,7 +74,11 @@ func (m *Module) alertePlafond(ctx context.Context, c *appli.Contexte, premier, 
 	if pire.Pour100 == 0 {
 		return ""
 	}
-	return pire.Cat.Nom + " : " + strconv.FormatInt(pire.Pour100, 10) + " % du plafond"
+	texte := pire.Cat.Nom + " : " + strconv.FormatInt(pire.Pour100, 10) + " % du plafond"
+	if compte > 0 {
+		texte += " (perso)"
+	}
+	return texte
 }
 
 type lignePlafond struct {
@@ -82,7 +87,8 @@ type lignePlafond struct {
 }
 
 func (m *Module) pagePlafonds(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	p, err := m.plafonds(r.Context(), c)
+	compte := m.compteDe(w, r, c)
+	p, err := m.plafonds(r.Context(), c, compte)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -98,7 +104,8 @@ func (m *Module) pagePlafonds(w http.ResponseWriter, r *http.Request, c *appli.C
 		}
 		lignes = append(lignes, l)
 	}
-	m.a.Afficher(w, r, c, "budget/plafonds", "Plafonds", mod, map[string]any{"Lignes": lignes, "Devise": c.Famille.Devise})
+	m.a.Afficher(w, r, c, "budget/plafonds", "Plafonds", mod, map[string]any{"Lignes": lignes, "Devise": c.Famille.Devise,
+		"Compte": nomCompte(compte), "Perso": compte > 0})
 }
 
 func (m *Module) enregistrerPlafonds(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -107,6 +114,7 @@ func (m *Module) enregistrerPlafonds(w http.ResponseWriter, r *http.Request, c *
 		m.a.Echec(w, r, http.StatusBadRequest, "Formulaire invalide.")
 		return
 	}
+	compte := m.compteDe(w, r, c)
 	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
 		for _, cat := range Categories {
 			if cat.Sens != "depense" {
@@ -120,9 +128,9 @@ func (m *Module) enregistrerPlafonds(w http.ResponseWriter, r *http.Request, c *
 				}
 			}
 			if n == 0 {
-				err = q.RetirerPlafond(ctx, donnees.RetirerPlafondParams{FamilleID: c.Famille.ID, Categorie: cat.Cle})
+				err = q.RetirerPlafond(ctx, donnees.RetirerPlafondParams{FamilleID: c.Famille.ID, PersoDe: compte, Categorie: cat.Cle})
 			} else {
-				err = q.PoserPlafond(ctx, donnees.PoserPlafondParams{FamilleID: c.Famille.ID, Categorie: cat.Cle, Montant: n})
+				err = q.PoserPlafond(ctx, donnees.PoserPlafondParams{FamilleID: c.Famille.ID, PersoDe: compte, Categorie: cat.Cle, Montant: n})
 			}
 			if err != nil {
 				return err
@@ -157,19 +165,21 @@ type vueRecherche struct {
 	Nombre   int
 	Tronquee bool
 	Devise   string
+	Perso    bool // budget perso
 }
 
 // chercher : les opérations des 12 derniers mois dont le libellé contient
 // le texte (« dentiste »), avec le total.
 func (m *Module) chercher(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
-	v := vueRecherche{Q: strings.TrimSpace(r.URL.Query().Get("q")), Devise: c.Famille.Devise}
+	compte := m.compteDe(w, r, c)
+	v := vueRecherche{Q: strings.TrimSpace(r.URL.Query().Get("q")), Devise: c.Famille.Devise, Perso: compte > 0}
 	if utf8.RuneCountInString(v.Q) > 60 {
 		v.Q = string([]rune(v.Q)[:60])
 	}
 	if v.Q != "" {
 		depuis := repetition.CleJour(c.Maintenant().AddDate(-1, 0, 0))
-		ops, err := m.a.Q.ChercherOperations(ctx, donnees.ChercherOperationsParams{FamilleID: c.Famille.ID, Depuis: depuis, Motif: v.Q})
+		ops, err := m.a.Q.ChercherOperations(ctx, donnees.ChercherOperationsParams{FamilleID: c.Famille.ID, Compte: compte, Depuis: depuis, Motif: v.Q})
 		if err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
@@ -220,6 +230,7 @@ type vueAnnee struct {
 	Reste                  int64
 	Categories             []catAnnee
 	Devise                 string
+	Perso                  bool // budget perso
 }
 
 // annee : les 12 mois (revenus, dépenses) et les dépenses par catégorie,
@@ -230,9 +241,10 @@ func (m *Module) annee(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	if n, err := strconv.Atoi(r.URL.Query().Get("an")); err == nil && n >= 1900 && n <= 2200 {
 		an = n
 	}
-	v := vueAnnee{An: an, Precedent: an - 1, Suivant: an + 1, Devise: c.Famille.Devise}
+	compte := m.compteDe(w, r, c)
+	v := vueAnnee{An: an, Precedent: an - 1, Suivant: an + 1, Devise: c.Famille.Devise, Perso: compte > 0}
 	lire := func(a int) ([]donnees.TotauxParMoisRow, error) {
-		return m.a.Q.TotauxParMois(ctx, donnees.TotauxParMoisParams{FamilleID: c.Famille.ID,
+		return m.a.Q.TotauxParMois(ctx, donnees.TotauxParMoisParams{FamilleID: c.Famille.ID, Compte: compte,
 			Du: strconv.Itoa(a) + "-01-01", Au: strconv.Itoa(a) + "-12-31"})
 	}
 	cette, err := lire(an)
@@ -314,12 +326,17 @@ func twoDigits(n int) string {
 	return strconv.Itoa(n)
 }
 
-// chercherGlobal : recherche globale (libellés des 12 derniers mois).
+// chercherGlobal : recherche globale (libellés des 12 derniers mois), dans
+// le compte commun puis dans le budget perso du membre.
 func (m *Module) chercherGlobal(ctx context.Context, c *appli.Contexte, q string) ([]appli.Resultat, error) {
-	ops, err := m.a.Q.ChercherOperations(ctx, donnees.ChercherOperationsParams{FamilleID: c.Famille.ID,
-		Depuis: repetition.CleJour(c.Maintenant().AddDate(-1, 0, 0)), Motif: q})
-	if err != nil {
-		return nil, err
+	var ops []donnees.Operation
+	for _, compte := range []int64{0, c.Membre.ID} {
+		l, err := m.a.Q.ChercherOperations(ctx, donnees.ChercherOperationsParams{FamilleID: c.Famille.ID, Compte: compte,
+			Depuis: repetition.CleJour(c.Maintenant().AddDate(-1, 0, 0)), Motif: q})
+		if err != nil {
+			return nil, err
+		}
+		ops = append(ops, l...)
 	}
 	var out []appli.Resultat
 	for i, o := range ops {

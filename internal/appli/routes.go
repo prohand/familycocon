@@ -60,6 +60,13 @@ func (a *App) Route(motif, module string, acces Acces, h Gestionnaire) {
 			a.PageErreur(w, r, c, http.StatusNotFound, "Module désactivé", "Ce module n'est pas activé pour votre famille.")
 			return
 		}
+		// Module réservé aux parents : toutes ses pages, quelle que soit la route.
+		if acces == Parent || (module != "" && !c.Voit(module)) {
+			if !c.EstParent() {
+				a.PageErreur(w, r, c, http.StatusForbidden, "Réservé aux parents", "Demande à un parent 🙂")
+				return
+			}
+		}
 		if acces == Parent && !c.EstParent() {
 			a.PageErreur(w, r, c, http.StatusForbidden, "Réservé aux parents", "Demande à un parent 🙂")
 			return
