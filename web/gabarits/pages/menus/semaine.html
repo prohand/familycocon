@@ -17,6 +17,10 @@
     <h2>{{.Titre}}</h2>
     <a class="fleche" href="/menus?date={{.Suivant}}" aria-label="Semaine suivante">›</a>
   </div>
+  <p class="centre">
+    <button class="bouton discret" hx-post="/menus/semaine/reprendre" hx-vals='{"date": "{{.Ref}}"}' hx-target="#menus" hx-swap="outerHTML">🔁 Reprendre la semaine dernière</button>
+    <a class="bouton discret" href="/menus/recettes">📖 Recettes</a>
+  </p>
   {{if and .Courses .AjoutPossible}}
   <p class="centre">
     <button class="bouton" hx-post="/menus/semaine/courses" hx-vals='{"date": "{{.Ref}}"}' hx-target="#menus" hx-swap="outerHTML">

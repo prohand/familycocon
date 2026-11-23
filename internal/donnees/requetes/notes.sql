@@ -17,9 +17,17 @@ SELECT * FROM notes WHERE id = ? AND famille_id = ?;
 INSERT INTO notes (famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
--- name: ModifierNote :exec
-UPDATE notes SET titre = ?, texte = ?, couleur = ?, epinglee = ?, privee = ?, modifie_le = ?
-WHERE id = ? AND famille_id = ?;
+-- Rien n'est ecrit si la note a change depuis son ouverture (avant : 0 =
+-- pas de controle) : deux membres ne s'effacent pas l'un l'autre.
+-- name: ModifierNote :execrows
+UPDATE notes SET titre = sqlc.arg(titre), texte = sqlc.arg(texte), couleur = sqlc.arg(couleur), epinglee = sqlc.arg(epinglee),
+  privee = sqlc.arg(privee), modifie_le = sqlc.arg(modifie_le)
+WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND (sqlc.arg(avant) = 0 OR modifie_le = sqlc.arg(avant));
+
+-- Case d'une liste cochee : seulement le texte change.
+-- name: CocherNote :execrows
+UPDATE notes SET texte = sqlc.arg(texte), modifie_le = sqlc.arg(modifie_le)
+WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND texte = sqlc.arg(ancien);
 
 -- name: EpinglerNote :exec
 UPDATE notes SET epinglee = ? WHERE id = ? AND famille_id = ?;

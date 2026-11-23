@@ -1470,3 +1470,7 @@ form:has(option[value="tour"]:checked) .tour-membres { display: block; }
 .actions-echeance details[open] { flex-basis: 100%; }
 .case-a-cocher input { width: 22px; height: 22px; accent-color: var(--corail); }
 details.corriger > summary { font-size: .85rem; padding-left: 64px; }
+
+/* Notes : liste à cocher. */
+.cases-note .case-a-cocher { font-size: 1rem; color: var(--texte); min-height: 40px; margin: 0; }
+.cases-note .case-a-cocher.cochee { text-decoration: line-through; color: var(--texte-doux); }

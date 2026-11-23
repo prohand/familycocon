@@ -377,7 +377,15 @@ func lirePour(r *http.Request) int64 {
 }
 
 func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	v, err := m.vue(r.Context(), c, lirePour(r))
+	// Le filtre « pour qui » est gardé par l'appareil (comme celui de
+	// l'agenda) : on retrouve la vue choisie en revenant.
+	pour := lirePour(r)
+	if r.URL.Query().Has("pour") {
+		m.a.PoserPreference(w, "taches_pour", strconv.FormatInt(pour, 10))
+	} else if n, err := strconv.ParseInt(m.a.LirePreference(r, "taches_pour"), 10, 64); err == nil {
+		pour = n
+	}
+	v, err := m.vue(r.Context(), c, pour)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return

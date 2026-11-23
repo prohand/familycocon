@@ -65,6 +65,10 @@ func TestProjet(t *testing.T) {
 	if !strings.Contains(page, "Acompte du gîte") || !strings.Contains(page, "Reste 900,00") {
 		t.Fatalf("dépense :\n%s", page)
 	}
+	// La liste montre le dépensé et le budget.
+	if _, liste := marie.Get("/projets"); !strings.Contains(liste, "300,00") || !strings.Contains(liste, "1 200,00") && !strings.Contains(liste, "1\u202f200,00") {
+		t.Fatalf("budget absent de la liste :\n%s", liste)
+	}
 	// Pas d'échéances pour les projets.
 	if strings.Contains(page, "Ajouter une échéance") {
 		t.Fatal("bloc échéances affiché")

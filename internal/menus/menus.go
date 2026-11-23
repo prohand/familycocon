@@ -34,6 +34,7 @@ func Brancher(a *appli.App) {
 	a.Route("GET /menus", mod, appli.Membre, m.page)
 	a.AjouterRecherche(mod, m.chercher)
 	a.Route("GET /menus/contenu", mod, appli.Membre, m.contenu)
+	m.brancherRecettes()
 	a.Route("POST /menus/semaine/courses", mod, appli.Membre, m.semaineAuxCourses)
 	a.Route("GET /menus/{jour}/{moment}", mod, appli.Membre, m.formulaire)
 	a.Route("POST /menus/{jour}/{moment}", mod, appli.Membre, m.enregistrer)
@@ -176,10 +177,12 @@ func creneau(r *http.Request, c *appli.Contexte) (time.Time, string, bool) {
 }
 
 type formRepas struct {
-	Creneau  Creneau
-	Titre    string
-	Recettes []string
-	Courses  bool
+	Creneau     Creneau
+	Titre       string
+	Recettes    []string
+	Courses     bool
+	Lignes      []string // ingrédients, à cocher avant l'envoi aux courses
+	Ingredients string
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -192,6 +195,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	f := formRepas{Creneau: Creneau{Jour: repetition.CleJour(j), Moment: moment}, Courses: c.Actif("courses")}
 	if rp, err := m.a.Q.RepasDuCreneau(ctx, donnees.RepasDuCreneauParams{FamilleID: c.Famille.ID, Jour: f.Creneau.Jour, Moment: moment}); err == nil {
 		f.Creneau.Repas = &rp
+		f.Lignes, f.Ingredients = lignes(rp.Ingredients), rp.Ingredients
 	}
 	f.Titre = appli.TitreJour(j) + ", " + moment
 	var err error
@@ -275,12 +279,13 @@ func (m *Module) vider(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 // courses, une seule fois. Le repas est d'abord marqué « aux courses » : si
 // aucune ligne ne change (double clic, deux membres en même temps), rien
 // n'est ajouté. q : les requêtes d'une transaction (tout ou rien).
-func ajouterAuxCourses(ctx context.Context, q *donnees.Queries, c *appli.Contexte, rp donnees.Repas) (int, error) {
+// choisis : les ingrédients à ajouter (nil : tous).
+func ajouterAuxCourses(ctx context.Context, q *donnees.Queries, c *appli.Contexte, rp donnees.Repas, choisis []string) (int, error) {
 	marques, err := q.MarquerDansCourses(ctx, donnees.MarquerDansCoursesParams{ID: rp.ID, FamilleID: c.Famille.ID})
 	if err != nil || marques == 0 {
 		return 0, err
 	}
-	return courses.AjouterProduits(ctx, q, c, lignes(rp.Ingredients))
+	return courses.AjouterProduits(ctx, q, c, lignesChoisies(rp.Ingredients, choisis))
 }
 
 func (m *Module) auxCourses(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -299,9 +304,15 @@ func (m *Module) auxCourses(w http.ResponseWriter, r *http.Request, c *appli.Con
 		m.a.Echec(w, r, http.StatusNotFound, "Pas de repas à ce créneau.")
 		return
 	}
+	// Depuis la page du repas : seulement les ingrédients cochés (ceux qui
+	// ne sont pas déjà à la maison).
+	var choisis []string
+	if r.PostFormValue("choix") == "1" {
+		choisis = append([]string{}, r.PostForm["ingr"]...)
+	}
 	var n int
 	err = m.a.Transaction(ctx, func(q *donnees.Queries) (err error) {
-		n, err = ajouterAuxCourses(ctx, q, c, rp)
+		n, err = ajouterAuxCourses(ctx, q, c, rp, choisis)
 		return err
 	})
 	if err != nil {
@@ -336,7 +347,7 @@ func (m *Module) semaineAuxCourses(w http.ResponseWriter, r *http.Request, c *ap
 			if rp.DansCourses == 1 || rp.Ingredients == "" {
 				continue
 			}
-			n, err := ajouterAuxCourses(ctx, q, c, rp)
+			n, err := ajouterAuxCourses(ctx, q, c, rp, nil)
 			if err != nil {
 				return err
 			}

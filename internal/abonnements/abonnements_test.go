@@ -104,6 +104,10 @@ func TestAbonnementsRevue(t *testing.T) {
 	if len(ops) != 2 {
 		t.Fatalf("%d prélèvements, attendu 2", len(ops))
 	}
+	// Payé depuis le début : les 2 prélèvements.
+	if _, fiche := marie.Get("/abonnements/" + id); !strings.Contains(fiche, "Payé depuis le début") || !strings.Contains(fiche, "2 prélèvements") {
+		t.Fatalf("payé depuis le début :\n%s", fiche)
+	}
 	// Repris (réabonné) : de nouveau actif, à partir de la date donnée.
 	if code, _ := marie.Post("/abonnements/"+id+"/reprendre", map[string]string{"prochain": jour(5)}); code != 200 {
 		t.Fatalf("reprise : %d", code)

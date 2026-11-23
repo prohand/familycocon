@@ -39,6 +39,7 @@ func Brancher(a *appli.App) {
 	a.Route("GET /notes/{id}", mod, appli.Membre, m.formulaire)
 	a.Route("POST /notes/{id}", mod, appli.Membre, m.modifier)
 	a.Route("POST /notes/{id}/epingler", mod, appli.Membre, m.epingler)
+	a.Route("POST /notes/{id}/cocher", mod, appli.Membre, m.cocher)
 	a.Route("POST /notes/{id}/supprimer", mod, appli.Membre, m.supprimer)
 
 	a.AjouterResume(mod, m.resume)
@@ -204,6 +205,7 @@ type formNote struct {
 	Note        donnees.Note
 	Modifiable  bool
 	Supprimable bool
+	Cases       []CaseNote // liste à cocher dans le texte
 	// PeutPriver : la case « Privée » est proposée (toujours à la création
 	// et pour une note déjà privée ; pour une note partagée, seulement à un
 	// parent qui en est l'auteur).
@@ -235,6 +237,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.Note, f.Modifiable, f.PeutPriver = n, modifiable(c, n), peutPriver(c, n)
 		f.Supprimable = supprimable(c, n)
+		f.Cases = Cases(n.Texte)
 	}
 	titre := "Nouvelle note"
 	if !f.Nouvelle {
@@ -339,11 +342,20 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	if !(n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID) || (s.privee == 1 && !peutPriver(c, n)) {
 		s.privee = n.Privee
 	}
-	if err := m.a.Q.ModifierNote(r.Context(), donnees.ModifierNoteParams{
+	// version : la note telle qu'elle était à l'ouverture du formulaire. Si
+	// quelqu'un l'a changée entre-temps, rien n'est écrasé : on prévient
+	// (la saisie reste à l'écran).
+	avant, _ := strconv.ParseInt(r.PostFormValue("version"), 10, 64)
+	k, err := m.a.Q.ModifierNote(r.Context(), donnees.ModifierNoteParams{
 		Titre: s.titre, Texte: s.texte, Couleur: s.couleur, Epinglee: s.epinglee, Privee: s.privee,
-		ModifieLe: time.Now().Unix(), ID: n.ID, FamilleID: c.Famille.ID,
-	}); err != nil {
+		ModifieLe: max(time.Now().Unix(), n.ModifieLe+1), ID: n.ID, FamilleID: c.Famille.ID, Avant: avant,
+	})
+	if err != nil {
 		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if k == 0 {
+		m.a.Echec(w, r, http.StatusConflict, "Quelqu'un vient de modifier cette note : copiez votre texte, puis rechargez la page.")
 		return
 	}
 	m.a.Publier(c, mod, "")

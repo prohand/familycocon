@@ -159,6 +159,8 @@ type form struct {
 	Categories []budget.Categorie
 	Membres    []donnees.Membre
 	Devise     string
+	Paye       int64 // payé depuis le début (prélèvements écrits au budget)
+	NbPaye     int64
 }
 
 func (m *Module) abonnement(r *http.Request, c *appli.Contexte) (donnees.Abonnement, donnees.Recurrence, bool) {
@@ -186,6 +188,9 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.A, f.R, f.Lien = ab, rec, contacts.SiteSur(ab.Site)
+		if t, err := m.a.Q.TotalRecurrence(r.Context(), donnees.TotalRecurrenceParams{FamilleID: c.Famille.ID, RecurrenceID: sql.NullInt64{Int64: rec.ID, Valid: true}}); err == nil {
+			f.Paye, f.NbPaye = t.Total, t.Nombre
+		}
 		f.Montant = budget.MontantSaisie(rec.Montant)
 		if j, ok := budget.Prochaine(rec); ok {
 			f.Prochain = repetition.CleJour(j)

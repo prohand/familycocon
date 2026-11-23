@@ -162,3 +162,39 @@ func TestRevueNotes(t *testing.T) {
 		t.Fatal("liste coupée sans le dire")
 	}
 }
+
+// Liste à cocher dans une note ; deux modifications croisées : la seconde
+// est refusée au lieu d'effacer la première.
+func TestCasesEtConflit(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	marie.Get("/notes/nouvelle")
+	marie.Post("/notes", map[string]string{"titre": "Valise", "texte": "[ ] Pyjama\n- [x] Brosse à dents\nBon voyage"})
+	var id string
+	if err := a.DB.QueryRow(`SELECT id FROM notes WHERE titre = 'Valise'`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	_, page := lea.Get("/notes/" + id)
+	if !strings.Contains(page, `id="cases-note"`) || strings.Count(page, `hx-post="/notes/`+id+`/cocher"`) != 2 {
+		t.Fatalf("cases absentes :\n%s", page)
+	}
+	// Léa (qui ne peut pas modifier la note) coche le pyjama.
+	lea.Htmx = true
+	if code, frag := lea.Post("/notes/"+id+"/cocher", map[string]string{"ligne": "0", "cochee": "1"}); code != 200 || strings.Count(frag, "checked") != 2 {
+		t.Fatalf("cocher : %d\n%s", code, frag)
+	}
+	var texte, version string
+	_ = a.DB.QueryRow(`SELECT texte, modifie_le FROM notes WHERE id = ?`, id).Scan(&texte, &version)
+	if texte != "[x] Pyjama\n- [x] Brosse à dents\nBon voyage" {
+		t.Fatalf("texte : %q", texte)
+	}
+	// Marie enregistre une version ouverte avant la coche : refusée.
+	marie.Htmx = true
+	if code, _ := marie.Post("/notes/"+id, map[string]string{"titre": "Valise", "texte": "écrasé", "version": "1"}); code != 409 {
+		t.Fatalf("modification croisée acceptée : %d", code)
+	}
+	if code, _ := marie.Post("/notes/"+id, map[string]string{"titre": "Valise", "texte": "à jour", "version": version}); code != 204 {
+		t.Fatalf("modification à jour : %d", code)
+	}
+}

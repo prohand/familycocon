@@ -21,6 +21,39 @@ func (q *Queries) CompterRecettes(ctx context.Context, familleID int64) (int64, 
 	return count, err
 }
 
+const copierRepas = `-- name: CopierRepas :execrows
+INSERT INTO repas (famille_id, jour, moment, nom, ingredients, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (famille_id, jour, moment) DO NOTHING
+`
+
+type CopierRepasParams struct {
+	FamilleID   int64
+	Jour        string
+	Moment      string
+	Nom         string
+	Ingredients string
+	CreePar     sql.NullInt64
+	CreeLe      int64
+}
+
+// Reprendre la semaine derniere : seulement les creneaux encore vides.
+func (q *Queries) CopierRepas(ctx context.Context, arg CopierRepasParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, copierRepas,
+		arg.FamilleID,
+		arg.Jour,
+		arg.Moment,
+		arg.Nom,
+		arg.Ingredients,
+		arg.CreePar,
+		arg.CreeLe,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const enregistrerRepas = `-- name: EnregistrerRepas :one
 INSERT INTO repas (famille_id, jour, moment, nom, ingredients, cree_par, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -81,6 +114,41 @@ func (q *Queries) MarquerDansCourses(ctx context.Context, arg MarquerDansCourses
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const modifierRecette = `-- name: ModifierRecette :exec
+UPDATE recettes SET nom = ?, ingredients = ? WHERE famille_id = ? AND cle = ?
+`
+
+type ModifierRecetteParams struct {
+	Nom         string
+	Ingredients string
+	FamilleID   int64
+	Cle         string
+}
+
+func (q *Queries) ModifierRecette(ctx context.Context, arg ModifierRecetteParams) error {
+	_, err := q.db.ExecContext(ctx, modifierRecette,
+		arg.Nom,
+		arg.Ingredients,
+		arg.FamilleID,
+		arg.Cle,
+	)
+	return err
+}
+
+const oublierRecette = `-- name: OublierRecette :exec
+DELETE FROM recettes WHERE famille_id = ? AND cle = ?
+`
+
+type OublierRecetteParams struct {
+	FamilleID int64
+	Cle       string
+}
+
+func (q *Queries) OublierRecette(ctx context.Context, arg OublierRecetteParams) error {
+	_, err := q.db.ExecContext(ctx, oublierRecette, arg.FamilleID, arg.Cle)
+	return err
 }
 
 const recetteParCle = `-- name: RecetteParCle :one
@@ -230,6 +298,41 @@ func (q *Queries) RetenirRecette(ctx context.Context, arg RetenirRecetteParams) 
 		arg.VuLe,
 	)
 	return err
+}
+
+const toutesRecettes = `-- name: ToutesRecettes :many
+SELECT famille_id, cle, nom, ingredients, compte, vu_le FROM recettes WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
+`
+
+// Page Recettes : toutes les recettes retenues.
+func (q *Queries) ToutesRecettes(ctx context.Context, familleID int64) ([]Recette, error) {
+	rows, err := q.db.QueryContext(ctx, toutesRecettes, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Recette{}
+	for rows.Next() {
+		var i Recette
+		if err := rows.Scan(
+			&i.FamilleID,
+			&i.Cle,
+			&i.Nom,
+			&i.Ingredients,
+			&i.Compte,
+			&i.VuLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const viderRepas = `-- name: ViderRepas :exec

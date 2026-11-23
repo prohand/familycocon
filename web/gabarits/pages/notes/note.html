@@ -6,11 +6,13 @@
   <h1>{{if .Nouvelle}}📝 Nouvelle note{{else}}📝 {{if .Note.Titre}}{{.Note.Titre}}{{else}}Note{{end}}{{end}}</h1>
   {{if not .Modifiable}}<p>Seul son auteur (ou un parent) peut la modifier.</p>{{end}}
 </section>
+{{if .Cases}}{{template "cases-note" (dict "Donnees" (dict "ID" .Note.ID "Cases" .Cases))}}{{end}}
 <form class="carte note-edition n{{.Note.Couleur}}" method="post" action="{{if .Nouvelle}}/notes{{else}}/notes/{{.Note.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
+  {{if not .Nouvelle}}<input type="hidden" name="version" value="{{.Note.ModifieLe}}">{{end}}
   <fieldset class="sans-bord"{{if not .Modifiable}} disabled{{end}}>
   <label class="champ"><span>Titre (facultatif)</span><input name="titre" value="{{.Note.Titre}}" maxlength="80"></label>
-  <label class="champ"><span>Note</span><textarea name="texte" rows="10" maxlength="10000"{{if .Nouvelle}} autofocus{{end}}>{{.Note.Texte}}</textarea></label>
+  <label class="champ"><span>Note <small class="aide">(une ligne « [ ] … » devient une case à cocher)</small></span><textarea name="texte" rows="10" maxlength="10000"{{if .Nouvelle}} autofocus{{end}}>{{.Note.Texte}}</textarea></label>
   <fieldset class="couleurs-notes">
     <legend class="sr">Couleur</legend>
     {{- range $i := couleurs}}{{if le $i 6}}
@@ -37,4 +39,16 @@
 </form>
 {{end}}
 {{end}}
+{{end}}
+
+{{/* Liste à cocher de la note (rechargée seule quand on coche). */}}
+{{define "cases-note"}}
+<section class="carte bloc cases-note" id="cases-note">
+  {{- $id := .Donnees.ID}}
+  {{- range .Donnees.Cases}}
+  <label class="case-a-cocher{{if .Cochee}} cochee{{end}}">
+    <input type="checkbox"{{if .Cochee}} checked{{end}} hx-post="/notes/{{$id}}/cocher" hx-vals='{"ligne": "{{.Ligne}}", "cochee": "{{if .Cochee}}0{{else}}1{{end}}"}'
+           hx-trigger="change" hx-target="#cases-note" hx-swap="outerHTML"> {{.Texte}}</label>
+  {{- end}}
+</section>
 {{end}}

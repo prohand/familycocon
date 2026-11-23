@@ -5,6 +5,7 @@
   <a class="retour" href="/abonnements">‹ Abonnements</a>
   <h1>{{if .Nouveau}}📺 Nouvel abonnement{{else}}{{.A.Emoji}} {{.R.Libelle}}{{end}}</h1>
   {{if .Resilie}}<p>Résilié : plus de prélèvement prévu</p>{{end}}
+  {{if .NbPaye}}<p>💶 Payé depuis le début : <b>{{montant .Paye .Devise}}</b> ({{pluriel .NbPaye "prélèvement" "prélèvements"}})</p>{{end}}
 </section>
 {{if .Resilie}}
 <form class="carte bloc" method="post" action="/abonnements/{{.A.ID}}/reprendre">

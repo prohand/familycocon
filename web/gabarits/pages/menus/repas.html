@@ -8,13 +8,24 @@
 <form class="carte" method="post" action="/menus/{{.Creneau.Jour}}/{{.Creneau.Moment}}">
   {{template "jeton" $c.CSRF}}
   <label class="champ"><span>Plat</span>
-    <input name="nom" value="{{with .Creneau.Repas}}{{.Nom}}{{end}}" list="recettes" placeholder="Ex. : Gratin dauphinois" maxlength="80" required autofocus autocomplete="off"></label>
+    <input name="nom" value="{{with .Creneau.Repas}}{{.Nom}}{{end}}" list="recettes" placeholder="Ex. : Gratin dauphinois" maxlength="80" required autofocus autocomplete="off"
+           hx-get="/menus/ingredients" hx-trigger="change" hx-include="[name=ingredients]" hx-target="#champ-ingredients" hx-swap="outerHTML"></label>
   <datalist id="recettes">{{range .Recettes}}<option value="{{.}}">{{end}}</datalist>
-  <label class="champ"><span>Ingrédients (un par ligne)</span>
-    <textarea name="ingredients" rows="7" placeholder="1 kg de pommes de terre&#10;50 cl de crème&#10;Gruyère râpé">{{with .Creneau.Repas}}{{.Ingredients}}{{end}}</textarea></label>
-  <p class="aide">Un plat déjà fait ? Laissez les ingrédients vides : ceux de la dernière fois reviennent.</p>
+  {{template "champ-ingredients" (dict "Donnees" .Ingredients)}}
+  <p class="aide">Un plat déjà fait ? Choisissez-le : ses ingrédients reviennent. <a href="/menus/recettes">📖 Les recettes</a></p>
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>
+{{if and .Courses .Lignes .Creneau.Repas (eq .Creneau.Repas.DansCourses 0)}}
+<form class="carte bloc" method="post" action="/menus/{{.Creneau.Jour}}/{{.Creneau.Moment}}/courses">
+  {{template "jeton" $c.CSRF}}<input type="hidden" name="choix" value="1">
+  <h2>🛒 Aux courses</h2>
+  <p class="aide">Décochez ce qui est déjà à la maison.</p>
+  {{- range .Lignes}}
+  <label class="case-a-cocher"><input type="checkbox" name="ingr" value="{{.}}" checked> {{.}}</label>
+  {{- end}}
+  <div class="boutons"><button class="bouton">Ajouter aux courses</button></div>
+</form>
+{{end}}
 {{if and .Creneau.Repas $c.EstParent}}
 <form class="bloc" method="post" action="/menus/{{.Creneau.Jour}}/{{.Creneau.Moment}}/vider" hx-confirm="Vider ce repas ?">
   {{template "jeton" $c.CSRF}}
@@ -22,4 +33,10 @@
 </form>
 {{end}}
 {{end}}
+{{end}}
+
+{{/* Champ des ingrédients (rempli par htmx quand on choisit une recette connue). */}}
+{{define "champ-ingredients"}}
+<label class="champ" id="champ-ingredients"><span>Ingrédients (un par ligne)</span>
+  <textarea name="ingredients" rows="7" placeholder="1 kg de pommes de terre&#10;50 cl de crème&#10;Gruyère râpé">{{.Donnees}}</textarea></label>
 {{end}}

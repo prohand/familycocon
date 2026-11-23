@@ -507,3 +507,26 @@ func (q *Queries) SupprimerRecurrence(ctx context.Context, arg SupprimerRecurren
 	_, err := q.db.ExecContext(ctx, supprimerRecurrence, arg.ID, arg.FamilleID)
 	return err
 }
+
+const totalRecurrence = `-- name: TotalRecurrence :one
+SELECT count(*) AS nombre, CAST(coalesce(sum(montant), 0) AS INTEGER) AS total
+FROM operations WHERE famille_id = ? AND recurrence_id = ?
+`
+
+type TotalRecurrenceParams struct {
+	FamilleID    int64
+	RecurrenceID sql.NullInt64
+}
+
+type TotalRecurrenceRow struct {
+	Nombre int64
+	Total  int64
+}
+
+// Abonnement : paye depuis le debut (operations ecrites par la recurrence).
+func (q *Queries) TotalRecurrence(ctx context.Context, arg TotalRecurrenceParams) (TotalRecurrenceRow, error) {
+	row := q.db.QueryRowContext(ctx, totalRecurrence, arg.FamilleID, arg.RecurrenceID)
+	var i TotalRecurrenceRow
+	err := row.Scan(&i.Nombre, &i.Total)
+	return i, err
+}

@@ -7,7 +7,7 @@
 </section>
 <div class="barre-actions">
   <nav class="pilules" aria-label="Filtrer">
-    <a class="pilule{{if eq .Pour 0}} active{{end}}" href="/taches">Toutes</a>
+    <a class="pilule{{if eq .Pour 0}} active{{end}}" href="/taches?pour=0">Toutes</a>
     {{- range .Membres}}
     <a class="pilule{{if eq .ID $.Donnees.Pour}} active{{end}}" href="/taches?pour={{.ID}}">{{.Nom}}</a>
     {{- end}}
