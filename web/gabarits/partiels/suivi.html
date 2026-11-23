@@ -9,8 +9,9 @@
   <div class="echeance{{if .Retard}} retard{{else if .Proche}} proche{{end}}">
     <div class="ligne">
       <span class="quoi">{{.Libelle}}<small>{{.Quand}}{{if .RepetitionMois}} · tous les {{.RepetitionMois}} mois{{end}}</small></span>
-      {{if $p}}<form method="post" action="/suivi/echeances/{{.ID}}/supprimer" hx-confirm="Supprimer cette échéance ?">{{template "jeton" $j}}<button class="crayon" aria-label="Supprimer">🗑️</button></form>{{end}}
+      {{if $p}}<form method="post" action="/suivi/echeances/{{.ID}}/supprimer" hx-confirm="Supprimer cette échéance ?">{{template "jeton" $j}}<button class="crayon" aria-label="Supprimer {{.Libelle}}">🗑️</button></form>{{end}}
     </div>
+    <div class="actions-echeance">
     <details class="fait">
       <summary class="bouton petit">✓ C'est fait</summary>
       <form method="post" action="/suivi/echeances/{{.ID}}/faite" class="rangee">
@@ -19,9 +20,25 @@
         <label class="champ"><span>Coût (facultatif)</span><input name="montant" inputmode="decimal" placeholder="0,00"></label>
         {{if $s.AvecKm}}<label class="champ"><span>Kilométrage</span><input name="km" inputmode="numeric"></label>{{end}}
         <label class="champ"><span>Note</span><input name="note" maxlength="500"></label>
+        {{if $s.PeutBudget}}<label class="case-a-cocher"><input type="checkbox" name="budget" value="1"> 💶 Ajouter aussi au budget</label>{{end}}
         <button class="bouton petit">Enregistrer</button>
       </form>
     </details>
+    <form method="post" action="/suivi/echeances/{{.ID}}/reporter">{{template "jeton" $j}}<button class="bouton petit secondaire" aria-label="Reporter {{.Libelle}} d'un mois">⏭️ Dans 1 mois</button></form>
+    <details class="fait">
+      <summary class="bouton petit secondaire" aria-label="Modifier {{.Libelle}}">✏️</summary>
+      <form method="post" action="/suivi/echeances/{{.ID}}" class="rangee">
+        {{template "jeton" $j}}
+        <label class="champ"><span>Quoi ?</span><input name="libelle" value="{{.Libelle}}" maxlength="80" required></label>
+        <label class="champ"><span>Quand ?</span><input type="date" name="jour" value="{{.Jour}}" required></label>
+        <label class="champ"><span>Revient</span>
+          <select name="repetition_mois">{{$m := .RepetitionMois}}
+            {{- range $v := moisRepetition}}<option value="{{$v}}"{{if eq $v $m}} selected{{end}}>{{texteMois $v}}</option>{{end}}
+          </select></label>
+        <button class="bouton petit">Enregistrer</button>
+      </form>
+    </details>
+    </div>
   </div>
   {{- else}}
   <p class="aide">Aucune échéance.</p>
@@ -37,8 +54,7 @@
         <label class="champ"><span>Quand ?</span><input type="date" name="jour" required></label>
         <label class="champ"><span>Revient</span>
           <select name="repetition_mois">
-            <option value="0">Une fois</option><option value="1">Chaque mois</option><option value="3">Tous les 3 mois</option>
-            <option value="6">Tous les 6 mois</option><option value="12">Chaque année</option><option value="24">Tous les 2 ans</option>
+            {{- range $v := moisRepetition}}<option value="{{$v}}">{{texteMois $v}}</option>{{end}}
           </select></label>
       </div>
       <button class="bouton petit">Ajouter</button>
@@ -51,13 +67,31 @@
   <h2>📒 {{.TitreCarnet}}</h2>
   {{if $s.SansEcheances}}{{if $s.Total}}<p class="aide">Dépensé en tout : <b>{{montant $s.Total $s.Devise}}</b></p>{{end}}
   {{else if $s.TotalAnnee}}<p class="aide">Dépensé cette année : <b>{{montant $s.TotalAnnee $s.Devise}}</b></p>{{end}}
+  {{if or $s.CoutKm $s.Conso}}<p class="aide">{{with $s.CoutKm}}🛣️ Coût : <b>{{.}}</b>{{end}}{{if and $s.CoutKm $s.Conso}} · {{end}}{{with $s.Conso}}⛽ Consommation : <b>{{.}}</b>{{end}}</p>{{end}}
   {{- range $s.Carnet}}
   <div class="ligne">
     <span class="heure">{{slice .Jour 8 10}}/{{slice .Jour 5 7}}<small>{{slice .Jour 0 4}}</small></span>
-    <span class="quoi">{{.Libelle}}<small>{{if .Km}}{{milliers .Km}} km{{end}}{{if and .Km .Note}} · {{end}}{{.Note}}</small></span>
-    {{if .Montant}}<b>{{montant .Montant $s.Devise}}</b>{{end}}
-    {{if $p}}<form method="post" action="/suivi/carnet/{{.ID}}/supprimer" hx-confirm="Supprimer cette ligne ?">{{template "jeton" $j}}<button class="crayon" aria-label="Supprimer">🗑️</button></form>{{end}}
+    <span class="quoi">{{.Libelle}}<small>{{if .Km}}{{milliers .Km}} km{{end}}{{if .Litres}} · {{litres .Litres}} L{{end}}{{if and .Km .Note}} · {{end}}{{.Note}}</small></span>
+    {{if .Montant}}<b>{{montant .Montant $s.Devise}}{{if .OperationID.Valid}} <span title="Aussi dans le budget">💶</span>{{end}}</b>{{end}}
+    {{if $p}}<form method="post" action="/suivi/carnet/{{.ID}}/supprimer" hx-confirm="Supprimer cette ligne{{if .OperationID.Valid}} (et sa dépense du budget){{end}} ?">{{template "jeton" $j}}<button class="crayon" aria-label="Supprimer {{.Libelle}}">🗑️</button></form>{{end}}
   </div>
+  <details class="corriger">
+    <summary class="lien-ajout" aria-label="Corriger {{.Libelle}}">✏️ Corriger</summary>
+    <form method="post" action="/suivi/carnet/{{.ID}}">
+      {{template "jeton" $j}}
+      <div class="rangee">
+        <label class="champ"><span>Quoi ?</span><input name="libelle" value="{{.Libelle}}" maxlength="80" required></label>
+        <label class="champ"><span>Le</span><input type="date" name="jour" value="{{.Jour}}" required></label>
+      </div>
+      <div class="rangee">
+        <label class="champ"><span>Coût</span><input name="montant" value="{{if .Montant}}{{montantSaisie .Montant}}{{end}}" inputmode="decimal"></label>
+        {{if $s.AvecKm}}<label class="champ"><span>Kilométrage</span><input name="km" value="{{if .Km}}{{.Km}}{{end}}" inputmode="numeric"></label>
+        <label class="champ"><span>Litres (plein)</span><input name="litres" value="{{if .Litres}}{{litres .Litres}}{{end}}" inputmode="decimal"></label>{{end}}
+      </div>
+      <label class="champ"><span>Note</span><input name="note" value="{{.Note}}" maxlength="500"></label>
+      <button class="bouton petit">Enregistrer</button>
+    </form>
+  </details>
   {{- else}}
   <p class="aide">Rien pour l'instant.</p>
   {{- end}}
@@ -71,9 +105,11 @@
       </div>
       <div class="rangee">
         <label class="champ"><span>Coût</span><input name="montant" inputmode="decimal" placeholder="0,00"></label>
-        {{if $s.AvecKm}}<label class="champ"><span>Kilométrage</span><input name="km" inputmode="numeric"></label>{{end}}
+        {{if $s.AvecKm}}<label class="champ"><span>Kilométrage</span><input name="km" inputmode="numeric"></label>
+        <label class="champ"><span>Litres (plein)</span><input name="litres" inputmode="decimal" placeholder="0,0"></label>{{end}}
       </div>
       <label class="champ"><span>Note</span><input name="note" maxlength="500"></label>
+      {{if $s.PeutBudget}}<label class="case-a-cocher"><input type="checkbox" name="budget" value="1"> 💶 Ajouter aussi au budget</label>{{end}}
       <button class="bouton petit">Ajouter</button>
     </form>
   </details>

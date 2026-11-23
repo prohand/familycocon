@@ -75,6 +75,7 @@ func Brancher(a *appli.App) {
 	a.Route("POST /contacts/{id}", "", appli.Membre, m.modifier)
 	a.Route("POST /contacts/{id}/favori", "", appli.Membre, m.favori)
 	a.Route("POST /contacts/{id}/supprimer", "", appli.Parent, m.supprimer)
+	a.Route("POST /contacts/{id}/fusionner", "", appli.Parent, m.fusionner)
 
 	a.AjouterResume(modContacts, m.resumeContacts)
 	a.AjouterResume(modAdresses, m.resumeAdresses)

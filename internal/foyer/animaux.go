@@ -43,7 +43,7 @@ func (m *Module) brancherAnimaux() {
 	a.Route("POST /animaux/{id}/supprimer", modAnimaux, appli.Parent, m.supprimerAnimal)
 
 	m.s.Enregistrer(suivi.Objet{
-		Module: modAnimaux, Emoji: "🐾",
+		Module: modAnimaux, Emoji: "🐾", Categorie: "animaux",
 		Modeles: []suivi.Modele{{Libelle: "Vaccin", Mois: 12}, {Libelle: "Vermifuge", Mois: 3}, {Libelle: "Antiparasitaire", Mois: 1}, {Libelle: "Visite chez le vétérinaire", Mois: 12},
 			{Libelle: "Toilettage", Mois: 0}, {Libelle: "Croquettes", Mois: 1}, {Libelle: "Assurance", Mois: 12}},
 		Nom: func(ctx context.Context, famille, id int64) (string, bool) {

@@ -257,6 +257,8 @@ type vueFiche struct {
 	Retour      string // page d'où l'on vient
 	TitreRetour string
 	Prestataire bool // lien vers les interventions
+	Cites       []Citation        // ce qui cite ce contact (vétérinaire de Rex…)
+	Doublons    []donnees.Contact // même nom ou même numéro : à fusionner ?
 }
 
 // retour : la page par laquelle on revient (le premier module activé).
@@ -310,6 +312,15 @@ func (m *Module) fiche(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 			}
 			v.Naissance += fmt.Sprintf(" %d (%d ans)", n.Annee, age)
 		}
+	}
+	var err error
+	if v.Cites, err = m.citations(r.Context(), c, ct.ID); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if v.Doublons, err = m.doublons(r.Context(), c, ct); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
 	}
 	module := modContacts
 	if !c.Actif(modContacts) {
@@ -489,6 +500,13 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	m.a.Publier(c, modContacts, "")
 	m.a.Flash(w, "Contact enregistré ✓")
+	// Même nom ou même numéro qu'une autre fiche : on le dit (la fiche
+	// propose de fusionner).
+	if d, err := m.doublons(r.Context(), c, ct); err == nil && len(d) > 0 {
+		m.a.Flash(w, "Contact enregistré. ⚠️ « "+d[0].Nom+" » existe déjà : voir « Doublon possible »")
+		m.a.Rediriger(w, r, fmt.Sprintf("/contacts/%d", ct.ID))
+		return
+	}
 	if s.naissance != "" && r.PostFormValue("anniv") == "1" {
 		m.a.Rediriger(w, r, "/anniversaires")
 		return

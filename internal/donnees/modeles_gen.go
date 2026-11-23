@@ -64,17 +64,19 @@ type BudgetPlafond struct {
 }
 
 type Carnet struct {
-	ID        int64
-	FamilleID int64
-	Module    string
-	ObjetID   int64
-	Jour      string
-	Libelle   string
-	Montant   int64
-	Km        int64
-	Note      string
-	CreePar   sql.NullInt64
-	CreeLe    int64
+	ID          int64
+	FamilleID   int64
+	Module      string
+	ObjetID     int64
+	Jour        string
+	Libelle     string
+	Montant     int64
+	Km          int64
+	Note        string
+	CreePar     sql.NullInt64
+	CreeLe      int64
+	OperationID sql.NullInt64
+	Litres      int64
 }
 
 type Carte struct {
@@ -142,7 +144,7 @@ type Echeance struct {
 	CreeLe         int64
 }
 
-type EtoilesBonu struct {
+type EtoilesBonus struct {
 	ID        int64
 	FamilleID int64
 	EnfantID  int64
@@ -190,6 +192,21 @@ type Famille struct {
 	Devise  string
 	Modules string
 	CreeLe  int64
+}
+
+type Garantie struct {
+	ID           int64
+	FamilleID    int64
+	Nom          string
+	Marque       string
+	Achat        string
+	Prix         int64
+	GarantieMois int64
+	Magasin      string
+	MagasinID    sql.NullInt64
+	Facture      string
+	Notes        string
+	CreeLe       int64
 }
 
 type Invitation struct {

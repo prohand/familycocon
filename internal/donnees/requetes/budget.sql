@@ -57,3 +57,7 @@ ON CONFLICT (famille_id, categorie) DO UPDATE SET montant = excluded.montant;
 
 -- name: RetirerPlafond :exec
 DELETE FROM budget_plafonds WHERE famille_id = ? AND categorie = ?;
+
+-- Depense du carnet modifiee : la ligne du budget suit.
+-- name: ModifierOperationCarnet :exec
+UPDATE operations SET montant = ?, libelle = ?, jour = ? WHERE id = ? AND famille_id = ?;

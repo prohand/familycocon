@@ -54,9 +54,22 @@ func fonctionsDeBase(a *App) template.FuncMap {
 			}
 			return false
 		},
-		"ajouter":  func(a, b int) int { return a + b },
-		"milliers": Milliers,
-		"couleurs": func() []int { return []int{1, 2, 3, 4, 5, 6, 7, 8} },
+		"ajouter": func(a, b int) int { return a + b },
+		// Échéances : fréquences proposées (en mois) et leur nom.
+		"moisRepetition": func() []int64 { return []int64{0, 1, 3, 6, 12, 24} },
+		"texteMois":      TexteMois,
+		// {{litres 4250}} → 42,5 (centilitres)
+		"litres": func(cl int64) string {
+			s := strconv.FormatInt(cl/100, 10)
+			if d := cl % 100 / 10; d != 0 {
+				s += "," + strconv.FormatInt(d, 10)
+			}
+			return s
+		},
+		// {{montantSaisie 1250}} → 12,50 (pour un champ de formulaire)
+		"montantSaisie": func(c int64) string { return fmt.Sprintf("%d,%02d", c/100, c%100) },
+		"milliers":      Milliers,
+		"couleurs":      func() []int { return []int{1, 2, 3, 4, 5, 6, 7, 8} },
 		// {{etoiles 3}} → ⭐⭐⭐
 		"etoiles": func(n int) string { return strings.Repeat("⭐", n) },
 		// Initiales des jours, index 1 (lundi) à 7 (dimanche).
@@ -123,4 +136,20 @@ func Milliers(n int64) string {
 		b.WriteRune(c)
 	}
 	return b.String()
+}
+
+// TexteMois : « Une fois », « Chaque mois », « Tous les 3 mois », « Chaque
+// année », « Tous les 2 ans ».
+func TexteMois(n int64) string {
+	switch {
+	case n == 0:
+		return "Une fois"
+	case n == 1:
+		return "Chaque mois"
+	case n == 12:
+		return "Chaque année"
+	case n%12 == 0:
+		return "Tous les " + strconv.FormatInt(n/12, 10) + " ans"
+	}
+	return "Tous les " + strconv.FormatInt(n, 10) + " mois"
 }

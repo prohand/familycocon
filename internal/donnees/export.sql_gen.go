@@ -113,7 +113,7 @@ func (q *Queries) ExportBudgetPlafonds(ctx context.Context, familleID int64) ([]
 }
 
 const exportCarnet = `-- name: ExportCarnet :many
-SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le FROM carnet WHERE famille_id = ?
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres FROM carnet WHERE famille_id = ?
 `
 
 func (q *Queries) ExportCarnet(ctx context.Context, familleID int64) ([]Carnet, error) {
@@ -137,6 +137,8 @@ func (q *Queries) ExportCarnet(ctx context.Context, familleID int64) ([]Carnet, 
 			&i.Note,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.OperationID,
+			&i.Litres,
 		); err != nil {
 			return nil, err
 		}
@@ -313,15 +315,15 @@ const exportEtoilesBonus = `-- name: ExportEtoilesBonus :many
 SELECT id, famille_id, enfant_id, etoiles, motif, par, le FROM etoiles_bonus WHERE famille_id = ?
 `
 
-func (q *Queries) ExportEtoilesBonus(ctx context.Context, familleID int64) ([]EtoilesBonu, error) {
+func (q *Queries) ExportEtoilesBonus(ctx context.Context, familleID int64) ([]EtoilesBonus, error) {
 	rows, err := q.db.QueryContext(ctx, exportEtoilesBonus, familleID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []EtoilesBonu{}
+	items := []EtoilesBonus{}
 	for rows.Next() {
-		var i EtoilesBonu
+		var i EtoilesBonus
 		if err := rows.Scan(
 			&i.ID,
 			&i.FamilleID,

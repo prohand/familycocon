@@ -36,6 +36,7 @@
   --fidelite: #E3F5D0;      --fidelite-t: #4E7D1E;
   --vehicules: #E2E6EE;     --vehicules-t: #4A5A78;
   --animaux: #FBE7C9;       --animaux-t: #9A5B12;
+  --garanties: #E3ECF2;     --garanties-t: #3B6680;
   --prestataires: #EDE3D6;  --prestataires-t: #7A5A3A;
   --projets: #F6E3FF;       --projets-t: #8A3FA8;
   --abonnements: #FFE4EC;   --abonnements-t: #B23A62;
@@ -91,6 +92,7 @@
     --fidelite: #24361A;      --fidelite-t: #B4E08A;
     --vehicules: #262B36;     --vehicules-t: #B5C2DA;
     --animaux: #3D2C16;       --animaux-t: #F0BF7A;
+    --garanties: #1E2E38;     --garanties-t: #9CC6E0;
     --prestataires: #33291F;  --prestataires-t: #D8BB98;
     --projets: #36203F;       --projets-t: #DDA7F2;
     --abonnements: #3B1F29;   --abonnements-t: #F4A6C0;
@@ -123,6 +125,7 @@
     --fidelite: #24361A;      --fidelite-t: #B4E08A;
     --vehicules: #262B36;     --vehicules-t: #B5C2DA;
     --animaux: #3D2C16;       --animaux-t: #F0BF7A;
+    --garanties: #1E2E38;     --garanties-t: #9CC6E0;
     --prestataires: #33291F;  --prestataires-t: #D8BB98;
     --projets: #36203F;       --projets-t: #DDA7F2;
     --abonnements: #3B1F29;   --abonnements-t: #F4A6C0;
@@ -306,6 +309,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tuile.fidelite { --bg: var(--fidelite); --t: var(--fidelite-t); }
 .tuile.vehicules { --bg: var(--vehicules); --t: var(--vehicules-t); }
 .tuile.animaux { --bg: var(--animaux); --t: var(--animaux-t); }
+.tuile.garanties { --bg: var(--garanties); --t: var(--garanties-t); }
 .tuile.prestataires { --bg: var(--prestataires); --t: var(--prestataires-t); }
 .tuile.projets { --bg: var(--projets); --t: var(--projets-t); }
 .tuile.abonnements { --bg: var(--abonnements); --t: var(--abonnements-t); }
@@ -1460,3 +1464,9 @@ details.plus-champs > summary { cursor: pointer; margin-bottom: 10px; }
 /* Tâches : les membres du tour de rôle, seulement si « À tour de rôle » est choisi. */
 .tour-membres { display: none; }
 form:has(option[value="tour"]:checked) .tour-membres { display: block; }
+
+/* Suivi : boutons d'une échéance (fait, reporter, modifier), case budget. */
+.actions-echeance { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.actions-echeance details[open] { flex-basis: 100%; }
+.case-a-cocher input { width: 22px; height: 22px; accent-color: var(--corail); }
+details.corriger > summary { font-size: .85rem; padding-left: 64px; }

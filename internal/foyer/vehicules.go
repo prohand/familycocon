@@ -44,7 +44,7 @@ func (m *Module) brancherVehicules() {
 	a.Route("POST /vehicules/{id}/supprimer", modVehicules, appli.Parent, m.supprimerVehicule)
 
 	m.s.Enregistrer(suivi.Objet{
-		Module: modVehicules, Emoji: "🚗", AvecKm: true,
+		Module: modVehicules, Emoji: "🚗", AvecKm: true, Categorie: "transport",
 		Modeles: []suivi.Modele{{Libelle: "Contrôle technique", Mois: 24}, {Libelle: "Assurance", Mois: 12}, {Libelle: "Vidange", Mois: 12}, {Libelle: "Révision", Mois: 12},
 			{Libelle: "Pneus", Mois: 0}, {Libelle: "Courroie de distribution", Mois: 0}, {Libelle: "Carte grise", Mois: 0}, {Libelle: "Vignette Crit'Air", Mois: 0}},
 		Nom: func(ctx context.Context, famille, id int64) (string, bool) {

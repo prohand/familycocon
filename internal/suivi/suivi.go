@@ -51,6 +51,9 @@ type Objet struct {
 	Noms func(ctx context.Context, famille int64) (map[int64]string, error)
 	// NoterKm (facultatif) : un kilométrage saisi au carnet met la fiche à jour.
 	NoterKm func(ctx context.Context, famille, id, km int64) error
+	// Categorie : catégorie du budget des dépenses du carnet (« transport »…) ;
+	// vide : pas de case « Ajouter aussi au budget ».
+	Categorie string
 }
 
 // Plafonds par objet (garde-fous : la base ne grossit pas sans fin).
@@ -73,6 +76,9 @@ func Brancher(a *appli.App) *Suivi {
 	a.Route("POST /suivi/echeances/{id}/faite", "", appli.Membre, s.faite)
 	a.Route("POST /suivi/echeances/{id}/supprimer", "", appli.Parent, s.supprimerEcheance)
 	a.Route("POST /suivi/carnet/{id}/supprimer", "", appli.Parent, s.supprimerCarnet)
+	a.Route("POST /suivi/carnet/{id}", "", appli.Membre, s.modifierCarnet)
+	a.Route("POST /suivi/echeances/{id}", "", appli.Membre, s.modifierEcheance)
+	a.Route("POST /suivi/echeances/{id}/reporter", "", appli.Membre, s.reporter)
 	return s
 }
 
@@ -137,6 +143,9 @@ type Bloc struct {
 	AvecKm        bool
 	Devise        string
 	Aujourdhui    string
+	PeutBudget    bool   // case « Ajouter aussi au budget » (parent, budget activé)
+	CoutKm        string // « 0,18 € / km » (véhicules)
+	Conso         string // « 6,4 L / 100 km » (véhicules, avec des pleins notés)
 }
 
 // Bloc : les échéances et le carnet de l'objet.
@@ -163,7 +172,42 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 		return nil, err
 	}
 	b.Total, b.TotalAnnee = t.Total, t.Annee
+	b.PeutBudget = o.Categorie != "" && c.EstParent() && c.Actif("budget")
+	if o.AvecKm {
+		if err := s.statsKm(ctx, c, b); err != nil {
+			return nil, err
+		}
+	}
 	return b, nil
+}
+
+// statsKm : coût au kilomètre (tout le carnet, sur les kilomètres notés) et
+// consommation (pleins notés avec litres et kilométrage : les litres de
+// tous les pleins sauf le premier, sur la distance parcourue entre eux).
+func (s *Suivi) statsKm(ctx context.Context, c *appli.Contexte, b *Bloc) error {
+	km, err := s.a.Q.KmCarnetObjet(ctx, donnees.KmCarnetObjetParams{FamilleID: c.Famille.ID, Module: b.Module, ObjetID: b.ObjetID})
+	if err != nil {
+		return err
+	}
+	if d := km.Maxi - km.Mini; d >= 100 && b.Total > 0 {
+		b.CoutKm = appli.Montant(b.Total*100/d, c.Famille.Devise) + " pour 100 km"
+	}
+	pleins, err := s.a.Q.PleinsObjet(ctx, donnees.PleinsObjetParams{FamilleID: c.Famille.ID, Module: b.Module, ObjetID: b.ObjetID})
+	if err != nil {
+		return err
+	}
+	if len(pleins) >= 2 {
+		var litres int64
+		for _, p := range pleins[1:] {
+			litres += p.Litres
+		}
+		if d := pleins[len(pleins)-1].Km - pleins[0].Km; d > 0 {
+			// centilitres / km × 100 km → dixièmes de litre aux 100 km
+			dixiemes := litres * 100 / d / 10
+			b.Conso = strconv.FormatInt(dixiemes/10, 10) + "," + strconv.FormatInt(dixiemes%10, 10) + " L / 100 km"
+		}
+	}
+	return nil
 }
 
 // quand : « Dans 12 jours », « En retard (…) » pour une échéance ; proche =
@@ -257,6 +301,33 @@ func (s *Suivi) ajouterEcheance(w http.ResponseWriter, r *http.Request, c *appli
 	s.a.Rediriger(w, r, o.URL(objet))
 }
 
+// saisieCarnet : une ligne du carnet lue dans le formulaire.
+type saisieCarnet struct {
+	jour, libelle, note string
+	montant, km, litres int64
+	budget              bool   // ajouter aussi au budget
+	nom                 string // nom de l'objet (libellé de la dépense au budget)
+}
+
+// lireCarnetComplet : lireCarnet, plus les litres (plein) et la case budget.
+func lireCarnetComplet(r *http.Request, c *appli.Contexte) (saisieCarnet, string) {
+	var x saisieCarnet
+	var msg string
+	x.jour, x.libelle, x.note, x.montant, x.km, msg = lireCarnet(r, c)
+	if msg != "" {
+		return x, msg
+	}
+	if l := strings.TrimSpace(r.PostFormValue("litres")); l != "" {
+		v, err := budget.LireMontantOuZero(l) // même écriture : « 42,5 » → 4250 centilitres
+		if err != nil || v > 100000 {
+			return x, "Litres invalides."
+		}
+		x.litres = v
+	}
+	x.budget = r.PostFormValue("budget") == "1"
+	return x, ""
+}
+
 // ligneCarnet : date, libellé, coût, kilométrage et note lus dans le formulaire.
 func lireCarnet(r *http.Request, c *appli.Contexte) (jour, libelle, note string, montant, km int64, msg string) {
 	jour, ok := budget.LireJour(r.PostFormValue("jour"), c.Maintenant())
@@ -286,10 +357,28 @@ func lireCarnet(r *http.Request, c *appli.Contexte) (jour, libelle, note string,
 	return jour, libelle, note, montant, km, ""
 }
 
-func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.Contexte, o Objet, objet int64, jour, libelle, note string, montant, km int64) error {
+// ecrireCarnet : la ligne du carnet et, si demandé (parent, budget activé,
+// montant non nul), la dépense au budget, liée à la ligne.
+func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.Contexte, o Objet, objet int64, x saisieCarnet) error {
+	var op sql.NullInt64
+	if x.budget && x.montant > 0 && o.Categorie != "" && c.EstParent() && c.Actif("budget") {
+		libelle := x.libelle
+		if x.nom != "" {
+			libelle += " · " + x.nom
+		}
+		if utf8.RuneCountInString(libelle) > 80 {
+			libelle = string([]rune(libelle)[:80])
+		}
+		ope, err := q.CreerOperation(ctx, donnees.CreerOperationParams{FamilleID: c.Famille.ID, Sens: "depense", Montant: x.montant,
+			Categorie: o.Categorie, Libelle: libelle, Jour: x.jour, MembreID: memberID(c), CreePar: memberID(c), CreeLe: time.Now().Unix()})
+		if err != nil {
+			return err
+		}
+		op = sql.NullInt64{Int64: ope.ID, Valid: true}
+	}
 	_, err := q.AjouterCarnet(ctx, donnees.AjouterCarnetParams{
-		FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet, Jour: jour, Libelle: libelle, Montant: montant, Km: km,
-		Note: note, CreePar: memberID(c), CreeLe: time.Now().Unix(),
+		FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet, Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km,
+		Litres: x.litres, Note: x.note, OperationID: op, CreePar: memberID(c), CreeLe: time.Now().Unix(),
 	})
 	return err
 }
@@ -321,8 +410,8 @@ func (s *Suivi) ajouterCarnet(w http.ResponseWriter, r *http.Request, c *appli.C
 		s.a.Echec(w, r, http.StatusNotFound, "Introuvable.")
 		return
 	}
-	jour, libelle, note, montant, km, msg := lireCarnet(r, c)
-	if msg == "" && libelle == "" {
+	x, msg := lireCarnetComplet(r, c)
+	if msg == "" && x.libelle == "" {
 		msg = "Indiquez ce qui a été fait."
 	}
 	if msg != "" {
@@ -330,6 +419,8 @@ func (s *Suivi) ajouterCarnet(w http.ResponseWriter, r *http.Request, c *appli.C
 		return
 	}
 	ctx := r.Context()
+	// Lu avant la transaction : une seule connexion à la base.
+	x.nom, _ = o.Nom(ctx, c.Famille.ID, objet)
 	if n, err := s.a.Q.CompterCarnetObjet(ctx, donnees.CompterCarnetObjetParams{FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet}); err != nil {
 		s.a.ErreurInterne(w, r, err)
 		return
@@ -340,16 +431,19 @@ func (s *Suivi) ajouterCarnet(w http.ResponseWriter, r *http.Request, c *appli.C
 	// Double envoi (double clic, réseau lent) : la même ligne, écrite par la
 	// même personne dans les 10 dernières secondes, n'est pas répétée.
 	deja, err := s.a.Q.CarnetIdentiqueRecent(ctx, donnees.CarnetIdentiqueRecentParams{FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet,
-		Jour: jour, Libelle: libelle, Montant: montant, Km: km, Note: note, CreePar: memberID(c), CreeLe: time.Now().Unix() - 10})
+		Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km, Note: x.note, CreePar: memberID(c), CreeLe: time.Now().Unix() - 10})
 	if err == nil && deja == 0 {
-		err = s.ecrireCarnet(ctx, s.a.Q, c, o, objet, jour, libelle, note, montant, km)
+		err = s.a.Transaction(ctx, func(q *donnees.Queries) error { return s.ecrireCarnet(ctx, q, c, o, objet, x) })
 	}
 	if err != nil {
 		s.a.ErreurInterne(w, r, err)
 		return
 	}
-	s.noterKm(ctx, c, o, objet, km)
+	s.noterKm(ctx, c, o, objet, x.km)
 	s.publier(c, o)
+	if x.budget {
+		s.a.Publier(c, "budget", "")
+	}
 	s.a.Flash(w, "Ajouté au carnet ✓")
 	s.a.Rediriger(w, r, o.URL(objet))
 }
@@ -368,11 +462,14 @@ func (s *Suivi) faite(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		s.a.Echec(w, r, http.StatusNotFound, "Introuvable.")
 		return
 	}
-	jour, _, note, montant, km, msg := lireCarnet(r, c)
+	x, msg := lireCarnetComplet(r, c)
 	if msg != "" {
 		s.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
+	x.libelle = e.Libelle
+	x.nom, _ = o.Nom(ctx, c.Famille.ID, e.ObjetID) // avant la transaction
+	jour, km := x.jour, x.km
 	// Une seule fois, même si le bouton est envoyé deux fois : l'échéance
 	// n'est reportée (ou retirée) que si elle est encore à sa date.
 	var suivante time.Time
@@ -391,7 +488,7 @@ func (s *Suivi) faite(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		if err != nil || n != 1 {
 			return errors.Join(err, errDejaFaite)
 		}
-		return s.ecrireCarnet(ctx, q, c, o, e.ObjetID, jour, e.Libelle, note, montant, km)
+		return s.ecrireCarnet(ctx, q, c, o, e.ObjetID, x)
 	})
 	switch {
 	case errors.Is(err, errDejaFaite):
@@ -436,13 +533,133 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}
-	if err := s.a.Q.SupprimerLigneCarnet(r.Context(), donnees.SupprimerLigneCarnetParams{ID: l.ID, FamilleID: c.Famille.ID}); err != nil {
+	// La dépense ajoutée au budget en même temps part avec elle.
+	err = s.a.Transaction(r.Context(), func(q *donnees.Queries) error {
+		if l.OperationID.Valid {
+			if err := q.SupprimerOperation(r.Context(), donnees.SupprimerOperationParams{ID: l.OperationID.Int64, FamilleID: c.Famille.ID}); err != nil {
+				return err
+			}
+		}
+		return q.SupprimerLigneCarnet(r.Context(), donnees.SupprimerLigneCarnetParams{ID: l.ID, FamilleID: c.Famille.ID})
+	})
+	if err != nil {
 		s.a.ErreurInterne(w, r, err)
 		return
 	}
 	s.publier(c, o)
+	if l.OperationID.Valid {
+		s.a.Publier(c, "budget", "")
+	}
 	s.a.Flash(w, "Ligne supprimée")
 	s.a.Rediriger(w, r, o.URL(l.ObjetID))
 }
 
 func memberID(c *appli.Contexte) sql.NullInt64 { return sql.NullInt64{Int64: c.Membre.ID, Valid: true} }
+
+// modifierCarnet : corriger une ligne du carnet (tout le monde : une erreur
+// de date ou de montant se corrige sans parent). La dépense liée au budget
+// suit.
+func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	l, err := s.a.Q.LigneCarnetParID(ctx, donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
+	o, ok := s.objets[l.Module]
+	if err != nil || !ok || !c.Actif(l.Module) {
+		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
+		return
+	}
+	x, msg := lireCarnetComplet(r, c)
+	if msg == "" && x.libelle == "" {
+		msg = "Indiquez ce qui a été fait."
+	}
+	if msg != "" {
+		s.a.Echec(w, r, http.StatusBadRequest, msg)
+		return
+	}
+	x.nom, _ = o.Nom(ctx, c.Famille.ID, l.ObjetID) // avant la transaction
+	err = s.a.Transaction(ctx, func(q *donnees.Queries) error {
+		if err := q.ModifierCarnet(ctx, donnees.ModifierCarnetParams{Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km,
+			Litres: x.litres, Note: x.note, ID: l.ID, FamilleID: c.Famille.ID}); err != nil {
+			return err
+		}
+		if l.OperationID.Valid && x.montant > 0 {
+			libelle := x.libelle
+			if x.nom != "" {
+				libelle += " · " + x.nom
+			}
+			if utf8.RuneCountInString(libelle) > 80 {
+				libelle = string([]rune(libelle)[:80])
+			}
+			return q.ModifierOperationCarnet(ctx, donnees.ModifierOperationCarnetParams{Montant: x.montant, Libelle: libelle, Jour: x.jour,
+				ID: l.OperationID.Int64, FamilleID: c.Famille.ID})
+		}
+		return nil
+	})
+	if err != nil {
+		s.a.ErreurInterne(w, r, err)
+		return
+	}
+	s.noterKm(ctx, c, o, l.ObjetID, x.km)
+	s.publier(c, o)
+	if l.OperationID.Valid {
+		s.a.Publier(c, "budget", "")
+	}
+	s.a.Flash(w, "Ligne corrigée ✓")
+	s.a.Rediriger(w, r, o.URL(l.ObjetID))
+}
+
+// echeance : l'échéance {id} de la famille et son objet.
+func (s *Suivi) echeance(r *http.Request, c *appli.Contexte) (donnees.Echeance, Objet, bool) {
+	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	e, err := s.a.Q.EcheanceParID(r.Context(), donnees.EcheanceParIDParams{ID: id, FamilleID: c.Famille.ID})
+	o, ok := s.objets[e.Module]
+	return e, o, err == nil && ok && c.Actif(e.Module)
+}
+
+// modifierEcheance : quoi, quand, fréquence (tout le monde).
+func (s *Suivi) modifierEcheance(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	e, o, ok := s.echeance(r, c)
+	if !ok {
+		s.a.Echec(w, r, http.StatusNotFound, "Échéance introuvable.")
+		return
+	}
+	libelle := strings.TrimSpace(r.PostFormValue("libelle"))
+	jour, okJour := budget.LireJour(r.PostFormValue("jour"), c.Maintenant())
+	mois, _ := strconv.ParseInt(r.PostFormValue("repetition_mois"), 10, 64)
+	if n := utf8.RuneCountInString(libelle); n < 1 || n > 80 || !okJour || mois < 0 || mois > 120 {
+		s.a.Echec(w, r, http.StatusBadRequest, "Indiquez quoi (80 caractères au plus) et une date.")
+		return
+	}
+	if err := s.a.Q.ModifierEcheance(r.Context(), donnees.ModifierEcheanceParams{Libelle: libelle, Jour: jour, RepetitionMois: mois,
+		ID: e.ID, FamilleID: c.Famille.ID}); err != nil {
+		s.a.ErreurInterne(w, r, err)
+		return
+	}
+	s.publier(c, o)
+	s.a.Flash(w, "Échéance enregistrée ✓")
+	s.a.Rediriger(w, r, o.URL(e.ObjetID))
+}
+
+// reporter : l'échéance est repoussée d'un mois (pas fait cette fois-ci).
+func (s *Suivi) reporter(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	e, o, ok := s.echeance(r, c)
+	if !ok {
+		s.a.Echec(w, r, http.StatusNotFound, "Échéance introuvable.")
+		return
+	}
+	j, err := time.Parse("2006-01-02", e.Jour)
+	if err != nil {
+		s.a.Echec(w, r, http.StatusBadRequest, "Date invalide.")
+		return
+	}
+	suivante := AjouterMois(j, 1)
+	// Une seule fois même en double envoi : seulement si elle est encore à sa date.
+	if _, err := s.a.Q.ReporterEcheanceSiJour(r.Context(), donnees.ReporterEcheanceSiJourParams{Nouveau: suivante.Format("2006-01-02"),
+		ID: e.ID, FamilleID: c.Famille.ID, Ancien: e.Jour}); err != nil {
+		s.a.ErreurInterne(w, r, err)
+		return
+	}
+	s.publier(c, o)
+	s.a.Flash(w, "Reportée au "+appli.DateLongue(suivante))
+	s.a.Rediriger(w, r, o.URL(e.ObjetID))
+}

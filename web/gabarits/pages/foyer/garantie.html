@@ -1,0 +1,36 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="{{if .Nouveau}}/garanties{{else}}/garanties/{{.G.ID}}{{end}}">‹ Retour</a>
+  <h1>{{if .Nouveau}}🧾 Nouvel achat{{else}}✏️ {{.G.Nom}}{{end}}</h1>
+</section>
+<form class="carte" method="post" action="{{if .Nouveau}}/garanties{{else}}/garanties/{{.G.ID}}{{end}}">
+  {{template "jeton" $c.CSRF}}
+  <div class="rangee">
+    <label class="champ"><span>Quoi ?</span><input name="nom" value="{{.G.Nom}}" maxlength="60" placeholder="Ex. : Lave-linge" required autofocus></label>
+    <label class="champ"><span>Marque, modèle</span><input name="marque" value="{{.G.Marque}}" maxlength="60"></label>
+  </div>
+  <div class="rangee">
+    <label class="champ"><span>Acheté le</span><input type="date" name="achat" value="{{.G.Achat}}"></label>
+    <label class="champ"><span>Prix (facultatif)</span><input name="prix" value="{{.Prix}}" inputmode="decimal" placeholder="0,00"></label>
+  </div>
+  <label class="champ"><span>Garantie</span>
+    <select name="garantie_mois">{{$g := .G.GarantieMois}}
+      <option value="0"{{if eq $g 0}} selected{{end}}>Pas de garantie</option>
+      <option value="6"{{if eq $g 6}} selected{{end}}>6 mois</option>
+      <option value="12"{{if eq $g 12}} selected{{end}}>1 an</option>
+      <option value="24"{{if eq $g 24}} selected{{end}}>2 ans (légale en France)</option>
+      <option value="36"{{if eq $g 36}} selected{{end}}>3 ans</option>
+      <option value="60"{{if eq $g 60}} selected{{end}}>5 ans</option>
+      <option value="120"{{if eq $g 120}} selected{{end}}>10 ans</option>
+    </select></label>
+  {{template "choix-contact" dict "Nom" "magasin_id" "Titre" "🏬 Magasin (dans vos contacts)" "Choisi" .G.MagasinID "Contacts" .Contacts}}
+  <label class="champ"><span>… ou noté ici</span><input name="magasin" value="{{.G.Magasin}}" maxlength="200"></label>
+  <label class="champ"><span>📁 Où est la facture ?</span><input name="facture" value="{{.G.Facture}}" maxlength="200" placeholder="Ex. : classeur bleu, boîte mail de Marie"></label>
+  <label class="champ"><span>Notes (n° de série…)</span><textarea name="notes" rows="2" maxlength="1000">{{.G.Notes}}</textarea></label>
+  <p class="aide">La fin de garantie sera rappelée 7 jours avant.</p>
+  <div class="boutons"><button class="bouton">Enregistrer</button></div>
+</form>
+{{end}}
+{{end}}

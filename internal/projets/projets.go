@@ -60,7 +60,7 @@ func Brancher(a *appli.App, s *suivi.Suivi) {
 
 	// Dépenses : le carnet commun, sans échéances (les étapes en tiennent lieu).
 	s.Enregistrer(suivi.Objet{
-		Module: mod, Emoji: "🎯", SansEcheances: true,
+		Module: mod, Emoji: "🎯", SansEcheances: true, Categorie: "autre",
 		Nom: func(ctx context.Context, famille, id int64) (string, bool) {
 			p, err := a.Q.ProjetParID(ctx, donnees.ProjetParIDParams{ID: id, FamilleID: famille})
 			return p.Nom, err == nil

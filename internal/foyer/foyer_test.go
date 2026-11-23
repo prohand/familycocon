@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"familycocon/internal/appli"
+	"familycocon/internal/budget"
 	"familycocon/internal/contacts"
 	"familycocon/internal/essai"
 	"familycocon/internal/suivi"
@@ -145,5 +146,80 @@ func TestAnimalEtPrestataire(t *testing.T) {
 	// Contact d'une autre famille ou inconnu : ignoré.
 	if _, page := marie.Post("/animaux/"+id, map[string]string{"nom": "Filou", "espece": "chat", "veterinaire_id": "9999"}); strings.Contains(page, "Dr Duval") {
 		t.Fatal("contact inconnu accepté")
+	}
+}
+
+// Carnet du véhicule : dépense ajoutée aussi au budget (et supprimée avec
+// la ligne), pleins et consommation, coût au km, ligne corrigée,
+// échéance modifiée et reportée d'un mois.
+func TestCarnetAmeliore(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+		budget.Brancher(a)
+	})
+	marie := essai.Famille(t, srv)
+	_, page := marie.Post("/vehicules", map[string]string{"nom": "La Clio", "genre": "voiture", "kilometrage": "10000"})
+	id := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	if !strings.Contains(page, "Ajouter aussi au budget") {
+		t.Fatal("case budget absente pour un parent")
+	}
+	carnet := "/suivi/vehicules/" + id + "/carnet"
+	marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2026-11-01", "montant": "60", "km": "10000", "litres": "40"})
+	marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2026-11-10", "montant": "45", "km": "10500", "litres": "30", "budget": "1"})
+	_, page = marie.Get("/vehicules/" + id)
+	if !strings.Contains(page, "6,0 L / 100 km") || !strings.Contains(page, "21,00") || !strings.Contains(page, "pour 100 km") {
+		t.Fatalf("consommation ou coût au km :\n%s", page)
+	}
+	if _, b := marie.Get("/budget?mois=2026-11"); !strings.Contains(b, "Plein · La Clio") || !strings.Contains(b, "45,00") {
+		t.Fatalf("dépense absente du budget :\n%s", b)
+	}
+	// Corriger la ligne : le budget suit.
+	ligne := essai.Trouver(t, page, `action="/suivi/carnet/(\d+)"`)
+	marie.Post("/suivi/carnet/"+ligne, map[string]string{"libelle": "Plein", "jour": "2026-11-10", "montant": "47", "km": "10500", "litres": "30"})
+	if _, b := marie.Get("/budget?mois=2026-11"); !strings.Contains(b, "47,00") {
+		t.Fatal("budget non corrigé avec la ligne")
+	}
+	// Supprimer la ligne : la dépense part aussi.
+	marie.Post("/suivi/carnet/"+ligne+"/supprimer", nil)
+	if _, b := marie.Get("/budget?mois=2026-11"); strings.Contains(b, "Plein · La Clio") {
+		t.Fatal("dépense restée au budget")
+	}
+	// Échéance : modifiée puis reportée d'un mois.
+	marie.Post("/suivi/vehicules/"+id+"/echeances", map[string]string{"libelle": "Vidange", "jour": "2027-01-31", "repetition_mois": "12"})
+	_, page = marie.Get("/vehicules/" + id)
+	ech := essai.Trouver(t, page, `action="/suivi/echeances/(\d+)/reporter"`)
+	marie.Post("/suivi/echeances/"+ech, map[string]string{"libelle": "Vidange moteur", "jour": "2027-01-31", "repetition_mois": "24"})
+	marie.Post("/suivi/echeances/"+ech+"/reporter", nil)
+	if _, page = marie.Get("/vehicules/" + id); !strings.Contains(page, "Vidange moteur") || !strings.Contains(page, `value="2027-02-28"`) || !strings.Contains(page, "tous les 24 mois") {
+		t.Fatalf("échéance modifiée et reportée :\n%s", page)
+	}
+}
+
+// Garanties : la fin de garantie devient une échéance (À venir), suit la
+// date d'achat quand on la change, et part avec l'achat.
+func TestGaranties(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+	})
+	marie := essai.Famille(t, srv)
+	paris, _ := time.LoadLocation("Europe/Paris")
+	achat := time.Now().In(paris).AddDate(-2, 0, 5).Format("2006-01-02") // fin dans 5 jours
+	code, page := marie.Post("/garanties", map[string]string{"nom": "Lave-linge", "marque": "Bosch", "achat": achat, "garantie_mois": "24", "facture": "classeur bleu"})
+	if code != 200 || !strings.Contains(page, "Garanti jusqu") || !strings.Contains(page, "classeur bleu") || !strings.Contains(page, "Fin de garantie") {
+		t.Fatalf("fiche :\n%s", page)
+	}
+	if _, page = marie.Get("/"); !strings.Contains(page, "Fin de garantie · Lave-linge") {
+		t.Fatal("fin de garantie absente de « À venir »")
+	}
+	id := essai.Trouver(t, page, `href="/garanties/(\d+)"`)
+	// Plus de garantie : l'échéance disparaît.
+	marie.Post("/garanties/"+id, map[string]string{"nom": "Lave-linge", "achat": achat, "garantie_mois": "0"})
+	if _, page = marie.Get("/garanties/" + id); strings.Contains(page, "Fin de garantie") {
+		t.Fatal("échéance gardée sans garantie")
+	}
+	if _, page = marie.Get("/chercher?q=bosch"); strings.Contains(page, "Lave-linge") {
+		t.Fatal("marque effacée ne devrait plus être trouvée")
 	}
 }

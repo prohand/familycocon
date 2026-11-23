@@ -166,6 +166,30 @@ func (q *Queries) ModifierOperation(ctx context.Context, arg ModifierOperationPa
 	return err
 }
 
+const modifierOperationCarnet = `-- name: ModifierOperationCarnet :exec
+UPDATE operations SET montant = ?, libelle = ?, jour = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierOperationCarnetParams struct {
+	Montant   int64
+	Libelle   string
+	Jour      string
+	ID        int64
+	FamilleID int64
+}
+
+// Depense du carnet modifiee : la ligne du budget suit.
+func (q *Queries) ModifierOperationCarnet(ctx context.Context, arg ModifierOperationCarnetParams) error {
+	_, err := q.db.ExecContext(ctx, modifierOperationCarnet,
+		arg.Montant,
+		arg.Libelle,
+		arg.Jour,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
+}
+
 const operationIdentiqueRecente = `-- name: OperationIdentiqueRecente :one
 SELECT count(*) FROM operations
 WHERE famille_id = ? AND sens = ? AND montant = ? AND categorie = ? AND libelle = ? AND jour = ?

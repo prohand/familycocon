@@ -47,8 +47,8 @@ WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = 
   AND cree_par = ? AND cree_le >= ?;
 
 -- name: AjouterCarnet :one
-INSERT INTO carnet (famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO carnet (famille_id, module, objet_id, jour, libelle, montant, km, litres, note, operation_id, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: LigneCarnetParID :one
 SELECT * FROM carnet WHERE id = ? AND famille_id = ?;
@@ -64,3 +64,23 @@ UPDATE echeances SET jour = sqlc.arg(nouveau) WHERE id = sqlc.arg(id) AND famill
 
 -- name: SupprimerEcheanceSiJour :execrows
 DELETE FROM echeances WHERE id = ? AND famille_id = ? AND jour = ?;
+
+-- name: ModifierCarnet :exec
+UPDATE carnet SET jour = ?, libelle = ?, montant = ?, km = ?, litres = ?, note = ? WHERE id = ? AND famille_id = ?;
+
+-- name: ModifierEcheance :exec
+UPDATE echeances SET libelle = ?, jour = ?, repetition_mois = ? WHERE id = ? AND famille_id = ?;
+
+-- Pleins notes (litres et kilometrage) : consommation du vehicule.
+-- name: PleinsObjet :many
+SELECT km, litres FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? AND litres > 0 AND km > 0
+ORDER BY km;
+
+-- Kilometrages notes au carnet (cout au kilometre).
+-- name: KmCarnetObjet :one
+SELECT CAST(coalesce(min(km), 0) AS INTEGER) AS mini, CAST(coalesce(max(km), 0) AS INTEGER) AS maxi
+FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? AND km > 0;
+
+-- Echeance tenue a jour par un module (fin de garantie) : remplacee.
+-- name: SupprimerEcheanceLibelle :exec
+DELETE FROM echeances WHERE famille_id = ? AND module = ? AND objet_id = ? AND libelle = ?;

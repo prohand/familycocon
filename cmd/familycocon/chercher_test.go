@@ -88,3 +88,20 @@ func TestExportFamille(t *testing.T) {
 		t.Error("note partagée absente")
 	}
 }
+
+// Fiche contact : « Cité par » (vétérinaire d'un animal).
+func TestContactCitePar(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		if err := brancherModules(a); err != nil {
+			t.Fatal(err)
+		}
+	})
+	marie := essai.Famille(t, srv)
+	marie.Get("/contacts/nouveau")
+	_, page := marie.Post("/contacts", map[string]string{"nom": "Dr Martin", "metier": "Vétérinaire"})
+	id := essai.Trouver(t, page, `action="/contacts/(\d+)/favori"`)
+	marie.Post("/animaux", map[string]string{"nom": "Rex", "espece": "chien", "veterinaire_id": id})
+	if _, page = marie.Get("/contacts/" + id); !strings.Contains(page, "Cité par") || !strings.Contains(page, "Rex · vétérinaire") {
+		t.Fatalf("« Cité par » absent :\n%s", page)
+	}
+}
