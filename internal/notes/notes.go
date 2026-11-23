@@ -60,6 +60,7 @@ const (
 	toutes    = ""
 	partagees = "partagees"
 	privees   = "privees"
+	listes    = "listes" // notes avec des cases à cocher
 )
 
 type carteNote struct {
@@ -89,7 +90,7 @@ const (
 
 func lireFiltre(r *http.Request) (filtre, recherche string) {
 	filtre = r.URL.Query().Get("voir")
-	if filtre != partagees && filtre != privees {
+	if filtre != partagees && filtre != privees && filtre != listes {
 		filtre = toutes
 	}
 	recherche = strings.TrimSpace(r.URL.Query().Get("q"))

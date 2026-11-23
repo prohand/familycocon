@@ -204,3 +204,20 @@ func TestPhotoDansLeTexte(t *testing.T) {
 		t.Error("photo retirée du texte : pas revenue en bas")
 	}
 }
+
+// Onglet « Listes » : seulement les notes avec des cases à cocher.
+func TestFiltreListes(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	marie.Get("/notes/nouvelle")
+	marie.Post("/notes", map[string]string{"titre": "Valise", "texte": "Pour la mer\n[ ] maillot\n[x] crème"})
+	marie.Post("/notes", map[string]string{"titre": "Courses", "texte": "- [ ] pain"})
+	marie.Post("/notes", map[string]string{"titre": "Code wifi", "texte": "abc [ ] pas une case"})
+	_, p := marie.Get("/notes?voir=listes")
+	if !strings.Contains(p, "Valise") || !strings.Contains(p, "Courses") || strings.Contains(p, "Code wifi") {
+		t.Fatalf("onglet Listes :\n%s", p)
+	}
+	if !strings.Contains(p, `class="pilule active" href="/notes?voir=listes"`) || !strings.Contains(p, "＋ Liste") {
+		t.Error("onglet ou bouton absent")
+	}
+}

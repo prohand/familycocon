@@ -2,12 +2,16 @@
 
 -- Liste : debut du texte seulement, nombre borne. motif '' : pas de
 -- recherche ; sinon le texte cherche, tel quel (% et _ compris) ; filtre : '', 'partagees' ou 'privees'.
+-- Filtre : '' toutes, 'privees', 'partagees', 'listes' (une ligne qui commence par une case).
 -- name: NotesVisibles :many
 SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debut, n.couleur, n.epinglee, n.privee, n.modifie_le,
   (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
 FROM notes n
 WHERE n.famille_id = sqlc.arg(famille_id) AND (n.privee = 0 OR n.auteur_id = sqlc.arg(membre_id))
-  AND (sqlc.arg(filtre) = '' OR (sqlc.arg(filtre) = 'privees' AND n.privee = 1) OR (sqlc.arg(filtre) = 'partagees' AND n.privee = 0))
+  AND (sqlc.arg(filtre) = '' OR (sqlc.arg(filtre) = 'privees' AND n.privee = 1) OR (sqlc.arg(filtre) = 'partagees' AND n.privee = 0)
+    OR (sqlc.arg(filtre) = 'listes' AND (n.texte LIKE '[ ]%' OR n.texte LIKE '[x]%' OR n.texte LIKE '- [ ]%' OR n.texte LIKE '- [x]%'
+      OR instr(n.texte, char(10) || '[ ]') > 0 OR instr(n.texte, char(10) || '[x]') > 0 OR instr(n.texte, char(10) || '[X]') > 0
+      OR instr(n.texte, char(10) || '- [ ]') > 0 OR instr(n.texte, char(10) || '- [x]') > 0)))
   AND (sqlc.arg(motif) = '' OR instr(plier(n.titre), plier(sqlc.arg(motif))) > 0 OR instr(plier(n.texte), plier(sqlc.arg(motif))) > 0)
 ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT sqlc.arg(nombre);
 

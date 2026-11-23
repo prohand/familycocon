@@ -255,7 +255,10 @@ SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debu
   (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
 FROM notes n
 WHERE n.famille_id = ?1 AND (n.privee = 0 OR n.auteur_id = ?2)
-  AND (?3 = '' OR (?3 = 'privees' AND n.privee = 1) OR (?3 = 'partagees' AND n.privee = 0))
+  AND (?3 = '' OR (?3 = 'privees' AND n.privee = 1) OR (?3 = 'partagees' AND n.privee = 0)
+    OR (?3 = 'listes' AND (n.texte LIKE '[ ]%' OR n.texte LIKE '[x]%' OR n.texte LIKE '- [ ]%' OR n.texte LIKE '- [x]%'
+      OR instr(n.texte, char(10) || '[ ]') > 0 OR instr(n.texte, char(10) || '[x]') > 0 OR instr(n.texte, char(10) || '[X]') > 0
+      OR instr(n.texte, char(10) || '- [ ]') > 0 OR instr(n.texte, char(10) || '- [x]') > 0)))
   AND (?4 = '' OR instr(plier(n.titre), plier(?4)) > 0 OR instr(plier(n.texte), plier(?4)) > 0)
 ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT ?5
 `
@@ -283,6 +286,7 @@ type NotesVisiblesRow struct {
 // Notes : une note privee n'est visible que par son auteur.
 // Liste : debut du texte seulement, nombre borne. motif ” : pas de
 // recherche ; sinon le texte cherche, tel quel (% et _ compris) ; filtre : ”, 'partagees' ou 'privees'.
+// Filtre : ” toutes, 'privees', 'partagees', 'listes' (une ligne qui commence par une case).
 func (q *Queries) NotesVisibles(ctx context.Context, arg NotesVisiblesParams) ([]NotesVisiblesRow, error) {
 	rows, err := q.db.QueryContext(ctx, notesVisibles,
 		arg.FamilleID,
