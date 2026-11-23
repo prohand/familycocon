@@ -400,3 +400,26 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   note, 5 000 par famille. Effacées avec la note, et avec les notes
   privées d'un membre retiré. Rangement commun : `photo.Ranger`,
   `photo.Chemin`, `photo.Effacer`.
+
+## 17. Véhicules : pleins à part, chiffres et graphiques (v0.7.0)
+- **Deux onglets** sur la fiche d'un véhicule (`?onglet=pleins`) :
+  « 🔧 Entretien » (échéances, carnet sans les pleins) et « ⛽ Pleins ».
+  Un plein = une ligne du carnet avec des litres (rien ne change dans la
+  base). Ajouter, corriger ou supprimer un plein ramène sur son onglet.
+- **Onglet Pleins** : chiffres (consommation, prix moyen du litre,
+  carburant acheté, dépensé en carburant, coût tout compris au km), 4
+  graphiques, formulaire « Ajouter un plein » (complet ou partiel, litres
+  obligatoires), liste des 100 derniers pleins (ticket dans « Corriger »).
+  Période : 12 mois (mois en cours compris) ou « Tout » (`&periode=tout`).
+- **Graphiques** : SVG écrit par le serveur (`internal/graphique`, ~200
+  lignes, bibliothèque standard), couleurs par classes CSS (thème clair et
+  sombre, CSP inchangée) ; bulle au survol par `<title>`.
+  - consommation à chaque plein complet (litres depuis le plein complet
+    d'avant, partiels compris ; valeurs hors 1-60 L/100 écartées : plein
+    oublié) ; moyenne en pointillé ;
+  - prix du litre ; moyenne en pointillé ;
+  - dépenses par mois, carburant et entretien empilés ;
+  - kilomètres par mois (compteur le plus haut du mois moins le plus haut
+    d'avant).
+  Au-delà de 36 mois (« Tout »), les barres passent par année.
+- **Enfants** : consommation et kilomètres seulement (ni prix ni dépenses).

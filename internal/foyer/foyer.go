@@ -142,6 +142,13 @@ func (m *Module) afficherFiche(w http.ResponseWriter, r *http.Request, c *appli.
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	// Véhicules : onglet « Pleins » (graphiques sur 12 mois ou depuis le début).
+	if b.Onglets && r.URL.Query().Get("onglet") == suivi.OngletPleins {
+		if err := m.s.ChargerPleins(r.Context(), c, b, r.URL.Query().Get("periode")); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+	}
 	v.Suivi = b
 	m.a.Afficher(w, r, c, "foyer/fiche", v.Nom, module, v)
 }

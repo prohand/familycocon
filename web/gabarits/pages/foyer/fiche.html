@@ -34,7 +34,13 @@
   <button class="bouton petit">Noter</button>
 </form>
 {{end}}
+{{if .Suivi.Onglets}}
+{{template "onglets-vehicule" dict "S" .Suivi "Chemin" $.Chemin}}
+{{if .Suivi.Pleins}}{{template "onglet-pleins" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Chemin" $.Chemin}}
+{{else}}{{template "bloc-suivi" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Titre" .TitreSuivi "TitreCarnet" .TitreCarnet}}{{end}}
+{{else}}
 {{template "bloc-suivi" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Titre" .TitreSuivi "TitreCarnet" .TitreCarnet}}
+{{end}}
 </div>
 {{if .FuelioURL}}
 <details class="bloc carte fuelio">

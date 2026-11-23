@@ -158,3 +158,11 @@ func TexteMois(n int64) string {
 	}
 	return "Tous les " + strconv.FormatInt(n, 10) + " mois"
 }
+
+// Symbole : « € » pour EUR (le code lui-même si la devise est inconnue).
+func Symbole(devise string) string {
+	if s, ok := symboles[devise]; ok {
+		return s
+	}
+	return devise
+}

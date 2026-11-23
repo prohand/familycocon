@@ -1520,3 +1520,32 @@ button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer
 /* Notes : les filtres sur une ligne, les boutons « Liste » et « Note » dessous à droite. */
 .barre-notes { flex-wrap: wrap; justify-content: flex-end; }
 .barre-notes .pilules { flex-basis: 100%; }
+
+/* Véhicules : onglets « Entretien | Pleins », chiffres et graphiques (SVG
+   dessinés par le serveur, internal/graphique ; couleurs du thème). */
+.onglets { margin: 4px 0 12px; }
+.onglets .pilule small { opacity: .7; font-weight: 600; margin-left: 2px; }
+.tete-pleins { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.tete-pleins h2 { margin: 0; }
+.pilules.petites .pilule { padding: 4px 12px; min-height: 32px; font-size: .85rem; }
+.chiffres { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.chiffres div { background: var(--fond); border-radius: 12px; padding: 8px 10px; }
+.chiffres small { display: block; color: var(--texte-doux); font-size: .75rem; }
+.chiffres b { font-size: 1.05rem; }
+.graphe h3 { margin: 0 0 6px; font-size: 1rem; }
+.graphe h3 small { display: block; font-weight: 600; color: var(--texte-doux); font-size: .75rem; }
+.graphique { display: block; width: 100%; height: auto; overflow: visible; }
+.graphique .g-grille { stroke: var(--bordure); stroke-width: 1; }
+.graphique .g-valeur { fill: var(--texte-doux); font-size: 9px; text-anchor: end; }
+.graphique .g-date { fill: var(--texte-doux); font-size: 9px; }
+.graphique .g-date.fin { text-anchor: end; }
+.graphique .g-date.milieu { text-anchor: middle; }
+.graphique .g-ligne { fill: none; stroke: var(--corail); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.graphique .g-point { fill: var(--carte); stroke: var(--corail); stroke-width: 1.5; }
+.graphique .g-moyenne { stroke: var(--texte-doux); stroke-width: 1; stroke-dasharray: 4 3; }
+.graphique .g-s0, .legende .g-s0 { fill: var(--corail); background: var(--corail); }
+.graphique .g-s1, .legende .g-s1 { fill: var(--agenda-t); background: var(--agenda-t); }
+.legende { font-size: .8rem; color: var(--texte-doux); margin: 6px 0 0; display: flex; align-items: center; gap: 6px; }
+.legende .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+.legende .pastille + * { margin-right: 10px; }
+.choix-plein { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }

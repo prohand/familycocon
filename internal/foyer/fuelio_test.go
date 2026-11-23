@@ -89,10 +89,17 @@ func TestRepriseFuelio(t *testing.T) {
 		t.Fatalf("reprise : %d %s", code, msg)
 	}
 	_, page = marie.Get("/vehicules/" + id)
-	for _, attendu := range []string{"2 pleins et 1 dépense repris", "1 photo jointe", "1 photo laissée de côté", "Vidange", "Lyon", "45\u202f890 km"} {
+	for _, attendu := range []string{"2 pleins et 1 dépense repris", "1 photo jointe", "1 photo laissée de côté", "Vidange", "45\u202f890 km"} {
 		if !strings.Contains(page, attendu) {
 			t.Errorf("fiche sans « %s »", attendu)
 		}
+	}
+	// Les pleins sont dans leur onglet, pas dans l'entretien.
+	if strings.Contains(page, "Lyon") {
+		t.Error("plein affiché dans l'onglet entretien")
+	}
+	if _, p := marie.Get("/vehicules/" + id + "?onglet=pleins&periode=tout"); !strings.Contains(p, "Lyon") || strings.Contains(p, "Vidange</span>") {
+		t.Error("onglet pleins")
 	}
 	fichiers, _ := filepath.Glob(filepath.Join(a.Config.Donnees, "pieces", "*", "*.jpg"))
 	if len(fichiers) != 1 {

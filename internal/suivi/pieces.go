@@ -108,7 +108,7 @@ func (s *Suivi) ajouterPiece(w http.ResponseWriter, r *http.Request, c *appli.Co
 	}
 	s.publier(c, o)
 	s.a.Flash(w, "Photo ajoutée 📎")
-	s.a.Rediriger(w, r, o.URL(l.ObjetID))
+	s.a.Rediriger(w, r, urlLigne(o, l.ObjetID, l.Litres))
 }
 
 // piece : la photo (parents seulement), jamais gardée par le navigateur.
@@ -152,5 +152,5 @@ func (s *Suivi) supprimerPiece(w http.ResponseWriter, r *http.Request, c *appli.
 	s.effacerFichiers([]donnees.Piece{p})
 	s.publier(c, o)
 	s.a.Flash(w, "Photo retirée")
-	s.a.Rediriger(w, r, o.URL(l.ObjetID))
+	s.a.Rediriger(w, r, urlLigne(o, l.ObjetID, l.Litres))
 }

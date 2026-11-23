@@ -175,7 +175,11 @@ func TestCarnetAmeliore(t *testing.T) {
 	carnet := "/suivi/vehicules/" + id + "/carnet"
 	marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2026-11-01", "montant": "60", "km": "10000", "litres": "40"})
 	marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2026-11-10", "montant": "45", "km": "10500", "litres": "30", "budget": "1"})
-	_, page = marie.Get("/vehicules/" + id)
+	// Les pleins ont leur onglet (consommation) ; l'entretien garde le coût au km.
+	if _, e := marie.Get("/vehicules/" + id); !strings.Contains(e, "21,00") || strings.Contains(e, "45,00") {
+		t.Fatalf("onglet entretien :\n%s", e)
+	}
+	_, page = marie.Get("/vehicules/" + id + "?onglet=pleins")
 	if !strings.Contains(page, "6,0 L / 100 km") || !strings.Contains(page, "21,00") || !strings.Contains(page, "pour 100 km") {
 		t.Fatalf("consommation ou coût au km :\n%s", page)
 	}
@@ -285,5 +289,52 @@ func TestPiecesJointes(t *testing.T) {
 	marie.Post("/suivi/carnet/"+ligne+"/supprimer", nil)
 	if fichiers, _ = filepath.Glob(filepath.Join(a.Config.Donnees, "pieces", "*", "*.jpg")); len(fichiers) != 0 {
 		t.Fatal("fichier gardé après la suppression de la ligne")
+	}
+}
+
+// Onglets du véhicule : les pleins à part, chiffres et graphiques ; les
+// prix ne sont montrés qu'aux parents.
+func TestOngletPleins(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+	})
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	_, page := marie.Post("/vehicules", map[string]string{"nom": "Kangoo", "genre": "voiture"})
+	id := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	carnet := "/suivi/vehicules/" + id + "/carnet"
+	auj := time.Now()
+	jour := func(n int) string { return auj.AddDate(0, 0, -n).Format("2006-01-02") }
+	marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": jour(60), "km": "20000", "litres": "40", "montant": "70"})
+	marie.Post(carnet, map[string]string{"libelle": "Plein partiel", "jour": jour(45), "km": "20300", "litres": "10", "montant": "18"})
+	marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": jour(30), "km": "20800", "litres": "30", "montant": "54"})
+	code, _ := marie.Post(carnet, map[string]string{"libelle": "Vidange", "jour": jour(20), "km": "21000", "montant": "120"})
+	if code != 200 {
+		t.Fatalf("ajout : %d", code)
+	}
+	// Ajouter un plein ramène sur l'onglet des pleins.
+	_, page = marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": jour(10), "km": "21300", "litres": "20", "montant": "37"})
+	if !strings.Contains(page, "Prix moyen du litre") {
+		t.Fatal("après un plein : pas sur l'onglet des pleins")
+	}
+	// (10 + 30) L sur 800 km = 5,0 ; puis 20 L sur 500 km = 4,0 : 60 L / 1 300 km = 4,6.
+	for _, attendu := range []string{"4,6 L / 100 km", "Consommation à chaque plein", "Prix du litre", "Dépenses par mois", "Kilomètres parcourus", "<svg class=\"graphique\"", "Plein partiel"} {
+		if !strings.Contains(page, attendu) {
+			t.Errorf("onglet pleins sans « %s »", attendu)
+		}
+	}
+	if strings.Contains(page, "Vidange</span>") {
+		t.Error("entretien dans l'onglet des pleins")
+	}
+	_, page = marie.Get("/vehicules/" + id)
+	if !strings.Contains(page, "Vidange") || strings.Contains(page, "Plein partiel") {
+		t.Error("onglet entretien")
+	}
+	// Léa voit la consommation et les kilomètres, pas les prix.
+	_, page = lea.Get("/vehicules/" + id + "?onglet=pleins&periode=tout")
+	if !strings.Contains(page, "Consommation à chaque plein") || !strings.Contains(page, "Kilomètres parcourus") ||
+		strings.Contains(page, "Prix du litre") || strings.Contains(page, "Dépenses par") || strings.Contains(page, "37,00") {
+		t.Error("montants montrés à un enfant")
 	}
 }

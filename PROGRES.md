@@ -31,6 +31,7 @@
 | Cartes de fidélité : type détecté, scan au téléphone ; avatars des membres (v0.6.0, SPEC § 15) | **fait** |
 | Photos des tickets et factures dans le carnet ; reprise depuis Fuelio (v0.6.0, SPEC § 15) | **fait** (essayée par l'utilisateur sur sa vraie sauvegarde) |
 | Notes : listes faciles à créer et à remplir, photos (v0.7.0, SPEC § 16) | **fait** |
+| Véhicules : onglets Entretien / Pleins, chiffres et 4 graphiques SVG (v0.7.0, SPEC § 17) | **fait** |
 
 ## Mesures
 

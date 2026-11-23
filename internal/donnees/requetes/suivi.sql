@@ -113,3 +113,41 @@ DELETE FROM pieces WHERE id = ? AND famille_id = ?;
 -- name: CarnetExiste :one
 SELECT count(*) FROM carnet
 WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = ? AND montant = ? AND km = ?;
+
+-- Vehicules : les pleins (lignes avec des litres) a part de l'entretien.
+
+-- name: EntretienObjet :many
+SELECT * FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
+  AND litres = 0 ORDER BY jour DESC, id DESC LIMIT 100;
+
+-- name: PleinsListeObjet :many
+SELECT * FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
+  AND litres > 0 ORDER BY jour DESC, km DESC, id DESC LIMIT 100;
+
+-- Pleins d'une periode (du : AAAA-MM-JJ ; '0000' : tout), dans l'ordre.
+-- name: PleinsPeriodeObjet :many
+SELECT id, jour, libelle, km, litres, montant FROM carnet
+WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
+  AND litres > 0 AND jour >= sqlc.arg(du) ORDER BY jour, km, id;
+
+-- Depenses par mois : carburant (pleins) et entretien (le reste).
+-- name: DepensesMoisObjet :many
+SELECT CAST(substr(jour, 1, 7) AS TEXT) AS mois,
+  CAST(coalesce(sum(CASE WHEN litres > 0 THEN montant ELSE 0 END), 0) AS INTEGER) AS carburant,
+  CAST(coalesce(sum(CASE WHEN litres = 0 THEN montant ELSE 0 END), 0) AS INTEGER) AS entretien
+FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
+  AND jour >= sqlc.arg(du) GROUP BY mois ORDER BY mois;
+
+-- Kilometrage le plus haut note chaque mois (tout le carnet).
+-- name: KmMoisObjet :many
+SELECT CAST(substr(jour, 1, 7) AS TEXT) AS mois, CAST(max(km) AS INTEGER) AS km
+FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
+  AND km > 0 GROUP BY mois ORDER BY mois;
+
+-- Nombre de lignes et depenses de l'annee, pleins et entretien a part.
+-- name: TotauxPleinsEntretien :one
+SELECT CAST(count(CASE WHEN litres > 0 THEN 1 END) AS INTEGER) AS pleins,
+  CAST(count(CASE WHEN litres = 0 THEN 1 END) AS INTEGER) AS entretiens,
+  CAST(coalesce(sum(CASE WHEN litres > 0 AND jour >= sqlc.arg(debut_annee) AND jour < sqlc.arg(fin_annee) THEN montant ELSE 0 END), 0) AS INTEGER) AS carburant_annee,
+  CAST(coalesce(sum(CASE WHEN litres = 0 AND jour >= sqlc.arg(debut_annee) AND jour < sqlc.arg(fin_annee) THEN montant ELSE 0 END), 0) AS INTEGER) AS entretien_annee
+FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id);

@@ -150,6 +150,14 @@ type Bloc struct {
 	Pieces        map[int64][]donnees.Piece // photos (tickets) par ligne, parents seulement
 	CoutKm        string                    // « 0,18 € / km » (véhicules)
 	Conso         string                    // « 6,4 L / 100 km » (véhicules, avec des pleins notés)
+	// Véhicules : onglets « Entretien » et « Pleins » (voir pleins.go).
+	Onglets        bool
+	Onglet         string     // OngletEntretien ou OngletPleins
+	Pleins         *VuePleins // onglet « Pleins » (rempli par ChargerPleins)
+	NbPleins       int64
+	NbEntretiens   int64
+	CarburantAnnee int64
+	EntretienAnnee int64
 }
 
 // Bloc : les échéances et le carnet de l'objet.
@@ -167,7 +175,19 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 		b.Echeances = append(b.Echeances, l)
 	}
 	// La liste montre les 100 dernières lignes ; les totaux comptent tout.
-	if b.Carnet, err = s.a.Q.CarnetObjet(ctx, donnees.CarnetObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet}); err != nil {
+	// Véhicules : le carnet d'entretien sans les pleins (onglet à part).
+	if o.AvecKm {
+		b.Onglets = true
+		if b.Carnet, err = s.a.Q.EntretienObjet(ctx, donnees.EntretienObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet}); err != nil {
+			return nil, err
+		}
+		t, err := s.a.Q.TotauxPleinsEntretien(ctx, donnees.TotauxPleinsEntretienParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet,
+			DebutAnnee: fmt.Sprintf("%04d-01-01", auj.Year()), FinAnnee: fmt.Sprintf("%04d-01-01", auj.Year()+1)})
+		if err != nil {
+			return nil, err
+		}
+		b.NbPleins, b.NbEntretiens, b.CarburantAnnee, b.EntretienAnnee = t.Pleins, t.Entretiens, t.CarburantAnnee, t.EntretienAnnee
+	} else if b.Carnet, err = s.a.Q.CarnetObjet(ctx, donnees.CarnetObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet}); err != nil {
 		return nil, err
 	}
 	t, err := s.a.Q.TotauxCarnetObjet(ctx, donnees.TotauxCarnetObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet,
@@ -287,6 +307,14 @@ func (s *Suivi) cible(r *http.Request, c *appli.Contexte, module string, objet i
 	}
 	_, existe := o.Nom(r.Context(), c.Famille.ID, objet)
 	return o, existe
+}
+
+// urlLigne : la fiche de l'objet, sur l'onglet « Pleins » pour un plein.
+func urlLigne(o Objet, objet, litres int64) string {
+	if o.AvecKm && litres > 0 {
+		return o.URL(objet) + "?onglet=" + OngletPleins
+	}
+	return o.URL(objet)
 }
 
 // publier : les écrans ouverts sur ce module se rafraîchissent.
@@ -473,7 +501,7 @@ func (s *Suivi) ajouterCarnet(w http.ResponseWriter, r *http.Request, c *appli.C
 		s.a.Publier(c, "budget", "")
 	}
 	s.a.Flash(w, "Ajouté au carnet ✓")
-	s.a.Rediriger(w, r, o.URL(objet))
+	s.a.Rediriger(w, r, urlLigne(o, objet, x.litres))
 }
 
 // faite : l'échéance est faite → carnet, puis reportée ou enlevée.
@@ -585,7 +613,7 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 		s.a.Publier(c, "budget", "")
 	}
 	s.a.Flash(w, "Ligne supprimée")
-	s.a.Rediriger(w, r, o.URL(l.ObjetID))
+	s.a.Rediriger(w, r, urlLigne(o, l.ObjetID, l.Litres))
 }
 
 func memberID(c *appli.Contexte) sql.NullInt64 { return sql.NullInt64{Int64: c.Membre.ID, Valid: true} }
@@ -642,7 +670,7 @@ func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.
 		s.a.Publier(c, "budget", "")
 	}
 	s.a.Flash(w, "Ligne corrigée ✓")
-	s.a.Rediriger(w, r, o.URL(l.ObjetID))
+	s.a.Rediriger(w, r, urlLigne(o, l.ObjetID, x.litres))
 }
 
 // echeance : l'échéance {id} de la famille et son objet.
