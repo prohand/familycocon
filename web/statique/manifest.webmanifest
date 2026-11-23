@@ -3,6 +3,7 @@
   "short_name": "FamilyCocon",
   "description": "L'organisation de la famille : courses, agenda, tâches, menus, budget, espace enfants, notes, contacts, véhicules, animaux, projets…",
   "lang": "fr",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
