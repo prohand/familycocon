@@ -196,8 +196,12 @@ func HTML(texte string, o Options) template.HTML {
 		case "photo":
 			src := fmt.Sprintf("/notes/photos/%d", x.photo)
 			if mode == Edition {
-				b.WriteString(fmt.Sprintf(`<figure class="photo-texte" contenteditable="false" data-photo="%d"><a href="%s" target="_blank" rel="noopener"><img src="%s" alt="Photo de la note"></a>`+
-					`<button type="button" class="retirer-photo" aria-label="Retirer la photo du texte">✕</button></figure>`, x.photo, src, src))
+				// Dans l'éditeur : l'image ne se glisse pas (le navigateur la
+				// sortirait de son cadre) ; elle se déplace avec ↑ ↓ (app.js).
+				b.WriteString(fmt.Sprintf(`<figure class="photo-texte" contenteditable="false" draggable="false" data-photo="%d"><img src="%s" alt="Photo de la note" draggable="false">`+
+					`<span class="outils-photo"><button type="button" class="monter-photo" aria-label="Monter la photo">↑</button>`+
+					`<button type="button" class="descendre-photo" aria-label="Descendre la photo">↓</button>`+
+					`<button type="button" class="retirer-photo" aria-label="Retirer la photo du texte">✕</button></span></figure>`, x.photo, src))
 			} else {
 				b.WriteString(fmt.Sprintf(`<figure class="photo-texte"><a href="%s" target="_blank" rel="noopener"><img src="%s" alt="Photo de la note" loading="lazy"></a></figure>`, src, src))
 			}
