@@ -2,7 +2,7 @@
 {{$c := .C}}
 <section class="titre-page">
   <a class="retour" href="/">‹ Accueil</a>
-  <h1><span class="avatar c{{$c.Membre.Couleur}}">{{initiale $c.Membre.Nom}}</span> {{$c.Membre.Nom}}</h1>
+  <h1><span class="avatar c{{$c.Membre.Couleur}}">{{visage $c.Membre}}</span> {{$c.Membre.Nom}}</h1>
   <p>{{if $c.EstParent}}Parent{{else}}Enfant{{end}} · {{$c.Famille.Nom}}</p>
 </section>
 
@@ -27,6 +27,7 @@
     {{template "jeton" $c.CSRF}}
     <label class="champ"><span>Prénom</span><input name="prenom" value="{{$c.Membre.Nom}}" maxlength="40" required></label>
     <label class="champ"><span>Date de naissance (pour les anniversaires)</span><input type="date" name="naissance" value="{{$c.Membre.Naissance}}"></label>
+    {{template "choix-avatar" dict "Choisi" $c.Membre.Avatar "Initiale" (initiale $c.Membre.Nom)}}
     <span class="aide">Ma couleur (agenda, listes…)</span>
     {{template "choix-couleur" dict "Nom" "couleur" "Choisie" $c.Membre.Couleur}}
     <button class="bouton">Enregistrer</button>

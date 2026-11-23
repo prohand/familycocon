@@ -45,7 +45,7 @@
     <div class="section-titre"><h2>🏆 Cette semaine</h2></div>
     <div class="carte scores">
       {{- range .Scores}}
-      <div class="score"><span class="avatar c{{.Membre.Couleur}}">{{initiale .Membre.Nom}}</span><b>{{.Nombre}}</b><span>{{.Membre.Nom}}</span></div>
+      <div class="score"><span class="avatar c{{.Membre.Couleur}}">{{visage .Membre}}</span><b>{{.Nombre}}</b><span>{{.Membre.Nom}}</span></div>
       {{- end}}
     </div>
   </section>

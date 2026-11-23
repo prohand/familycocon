@@ -331,3 +331,22 @@ que son bloc `#maj`, ou rien. Visible dès le premier clic sur une tuile de
 l'accueil (v0.5.0), et sur certaines listes depuis la v0.4.4. Ces blocs ont
 maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 `hx-select` sans lui.
+
+## 15. Scan des cartes de fidélité, avatars (v0.6.0)
+- **Type de code détecté** (`FormatAuto`) : EAN-13, UPC-A ou EAN-8 si les
+  chiffres ont une clé juste, sinon Code 128, sinon QR code. Le choix manuel
+  reste possible (replié). EAN-8 et UPC-A sont dessinés (UPC-A = EAN-13
+  précédé d'un 0, lu pareil en caisse).
+- **Scanner la carte** : sur Android, le navigateur lit le code en direct
+  (`BarcodeDetector`) ; la caméra n'est permise que sur le formulaire des
+  cartes (`Permissions-Policy: camera=(self)`, `camera=()` partout ailleurs).
+  Sinon (iPhone), une photo réduite à 1 280 px (JPEG, sous la limite de
+  1 Mio) est lue par le serveur (`fidelite.Lire`, sans bibliothèque :
+  lignes horizontales et verticales, deux seuils, motifs EAN et Code 128,
+  clé de contrôle, marges blanches, vote). Les QR codes ne sont lus que par
+  le navigateur. La photo n'est jamais gardée ; image de plus de 16 Mpx
+  refusée.
+- **Avatars** : un emoji choisi dans une liste fermée (`appli.Avatars`)
+  remplace l'initiale dans le rond de couleur du membre (colonne
+  `membres.avatar`, migration 0029). Choisi dans Moi, ou par un parent dans
+  Ma famille. Pas de photo (base légère).

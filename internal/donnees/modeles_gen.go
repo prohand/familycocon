@@ -241,6 +241,7 @@ type Membre struct {
 	Totp        string
 	TotpDernier int64
 	Naissance   string
+	Avatar      string
 }
 
 type Mission struct {

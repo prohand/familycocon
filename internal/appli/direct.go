@@ -184,7 +184,7 @@ func (a *App) Publier(c *Contexte, module, texte string) { a.PublierPour(c, modu
 func (a *App) PublierPour(c *Contexte, module, texte string, pour []int64) {
 	a.Direct.PublierPour(c.Famille.ID, Message{
 		Module: module, Texte: texte, Auteur: c.Membre.ID,
-		Couleur: c.Membre.Couleur, Initiale: Initiale(c.Membre.Nom),
+		Couleur: c.Membre.Couleur, Initiale: Visage(c.Membre),
 	}, pour)
 	if texte != "" && a.Push != nil {
 		if m, ok := ModuleParCle(module); ok && !m.Notifie {

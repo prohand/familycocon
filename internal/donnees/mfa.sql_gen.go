@@ -111,7 +111,7 @@ func (q *Queries) EffacerCodesSecours(ctx context.Context, membreID int64) error
 
 const membreParIDSeul = `-- name: MembreParIDSeul :one
 
-SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance FROM membres WHERE id = ? AND actif = 1
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar FROM membres WHERE id = ? AND actif = 1
 `
 
 // Double authentification (TOTP, codes de secours) et passkeys.
@@ -134,6 +134,7 @@ func (q *Queries) MembreParIDSeul(ctx context.Context, id int64) (Membre, error)
 		&i.Totp,
 		&i.TotpDernier,
 		&i.Naissance,
+		&i.Avatar,
 	)
 	return i, err
 }

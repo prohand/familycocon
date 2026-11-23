@@ -70,7 +70,7 @@
 <section class="carte bloc">
   <div class="section-titre premier"><h2>Payé par</h2></div>
   {{- range .PayePar}}
-  <div class="ligne">{{with .Membre}}<span class="avatar petit c{{.Couleur}}">{{initiale .Nom}}</span><span class="quoi">{{.Nom}}</span>{{end}}<b>{{montant .Montant $.Donnees.Devise}}</b></div>
+  <div class="ligne">{{with .Membre}}<span class="avatar petit c{{.Couleur}}">{{visage .}}</span><span class="quoi">{{.Nom}}</span>{{end}}<b>{{montant .Montant $.Donnees.Devise}}</b></div>
   {{- end}}
   <p class="aide">Écart : <b>{{montant .Ecart .Devise}}</b> (dépenses où « Qui ? » est rempli).</p>
 </section>
@@ -90,7 +90,7 @@
     <a class="ligne op" href="/budget/{{.ID}}">
       <span class="p-emoji">{{.Cat.Emoji}}</span>
       <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>{{.Cat.Nom}}{{if .RecurrenceID.Valid}} · 🔁{{end}}</small></span>
-      {{with .Membre}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}
+      {{with .Membre}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{visage .}}</span>{{end}}
       <b class="montant {{.Sens}}">{{if eq .Sens "depense"}}−{{else}}+{{end}}{{montant .Montant $.Donnees.Devise}}</b>
     </a>
     {{- end}}

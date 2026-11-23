@@ -25,3 +25,25 @@ func TestThemeChoisi(t *testing.T) {
 		t.Fatal("retour à l'automatique sans effet")
 	}
 }
+
+// Avatar : choisi dans Moi (liste fermée), affiché à la place de l'initiale.
+func TestAvatar(t *testing.T) {
+	_, _, marie := familleTest(t)
+	if _, page := marie.get("/moi"); !strings.Contains(page, `name="avatar" value="🦊"`) {
+		t.Fatal("choix de l'avatar absent")
+	}
+	marie.post("/moi/profil", map[string]string{"prenom": "Marie", "couleur": "2", "avatar": "🦊"})
+	if _, page := marie.get("/"); !strings.Contains(page, `title="Marie">🦊</span>`) {
+		t.Fatal("avatar absent de l'en-tête")
+	}
+	// Un emoji hors de la liste n'est pas accepté (l'ancien reste).
+	marie.post("/moi/profil", map[string]string{"prenom": "Marie", "couleur": "2", "avatar": "<b>x</b>"})
+	if _, page := marie.get("/"); !strings.Contains(page, `title="Marie">🦊</span>`) {
+		t.Fatal("avatar hors liste accepté")
+	}
+	// Retour à l'initiale.
+	marie.post("/moi/profil", map[string]string{"prenom": "Marie", "couleur": "2", "avatar": ""})
+	if _, page := marie.get("/"); !strings.Contains(page, `title="Marie">M</span>`) {
+		t.Fatal("retour à l'initiale impossible")
+	}
+}

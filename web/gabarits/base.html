@@ -29,7 +29,7 @@
     <div class="famille">{{.C.Famille.Nom}}<small>FamilyCocon</small></div>
     <a class="loupe" href="/chercher" aria-label="Chercher">🔎</a>
     <a class="membres" href="/moi" aria-label="Mon profil">
-      {{- range .Membres}}<span class="avatar c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end -}}
+      {{- range .Membres}}<span class="avatar c{{.Couleur}}" title="{{.Nom}}">{{visage .}}</span>{{end -}}
     </a>
   </div>
 </header>

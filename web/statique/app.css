@@ -1490,3 +1490,13 @@ details.type-code > summary { cursor: pointer; margin: 4px 0 10px; }
 dialog.scanner { border: 0; border-radius: var(--rayon); padding: 14px; background: var(--carte); color: var(--texte); width: min(92vw, 480px); text-align: center; }
 dialog.scanner::backdrop { background: rgba(0, 0, 0, .7); }
 dialog.scanner video { width: 100%; border-radius: 12px; background: #000; margin: 8px 0 12px; }
+
+/* Choix de l'avatar (Moi, Ma famille) : une grille d'emojis à toucher. */
+.choix-avatar { border: 0; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+.choix-avatar legend { margin-bottom: 6px; }
+.choix-avatar label { position: relative; cursor: pointer; }
+.choix-avatar input { position: absolute; opacity: 0; }
+.choix-avatar span:not(.sr) { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; font-size: 1.35rem; font-weight: 800; background: var(--fond); border: 2px solid transparent; }
+.choix-avatar input:checked + span { border-color: var(--corail); background: var(--corail-doux); }
+.choix-avatar input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
+details.replie-avatar > summary { cursor: pointer; margin: 4px 0 10px; }

@@ -28,6 +28,7 @@
 | Revue sécurité, bugs, design, performance (v0.4.3, SPEC § 12) | **fait** |
 | Suite de la revue : pages à jour toutes seules, `latest` après la Release, garde sur les modules (v0.4.4, SPEC § 13) | **fait** |
 | Revue des fonctions : lot 1 (bugs), lot 2 (petites fonctions), lot 3 (socle et interface), lot 4 (grosses fonctions, module Garanties) (v0.5.0, SPEC § 14) | **fait** |
+| Cartes de fidélité : type détecté, scan au téléphone ; avatars des membres (v0.6.0, SPEC § 15) | **fait** |
 
 ## Mesures
 

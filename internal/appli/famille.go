@@ -226,7 +226,12 @@ func (a *App) modifierMembre(w http.ResponseWriter, r *http.Request, c *Contexte
 		a.Echec(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	if err := a.Q.ModifierProfil(r.Context(), donnees.ModifierProfilParams{Nom: prenom, Couleur: couleur, ID: m.ID, FamilleID: c.Famille.ID}); err != nil {
+	// Champ absent (ancienne page) ou hors de la liste : l'avatar ne change pas.
+	avatar := r.PostFormValue("avatar")
+	if !r.PostForm.Has("avatar") || !AvatarValide(avatar) {
+		avatar = m.Avatar
+	}
+	if err := a.Q.ModifierProfil(r.Context(), donnees.ModifierProfilParams{Nom: prenom, Couleur: couleur, Avatar: avatar, ID: m.ID, FamilleID: c.Famille.ID}); err != nil {
 		a.ErreurInterne(w, r, err)
 		return
 	}

@@ -83,7 +83,7 @@
           <span class="coche"></span>
           <span class="p-emoji">{{.Emoji}}</span>
           <span class="p-nom">{{.Nom}}{{if .Quantite}}<small>{{.Quantite}}</small>{{end}}</span>
-          {{with .Auteur}}<span class="avatar petit c{{.Couleur}}" title="Ajouté par {{.Nom}}">{{initiale .Nom}}</span>{{end}}
+          {{with .Auteur}}<span class="avatar petit c{{.Couleur}}" title="Ajouté par {{.Nom}}">{{visage .}}</span>{{end}}
         </label>
         <button class="crayon" type="button" aria-label="Modifier {{.Nom}}"
                 hx-get="/courses/produit/{{.ID}}/modifier" hx-target="#liste-courses" hx-swap="outerHTML">✏️</button>

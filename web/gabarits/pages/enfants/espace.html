@@ -13,7 +13,7 @@
 <div id="espace" class="espace-enfant"
      hx-get="{{if .ParParent}}/enfants/enfant/{{.Enfant.ID}}/contenu{{else}}/enfants/contenu{{end}}" hx-trigger="maj-enfants from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   <section class="tete-enfant c{{.Enfant.Couleur}}">
-    <span class="avatar grand c{{.Enfant.Couleur}}">{{initiale .Enfant.Nom}}</span>
+    <span class="avatar grand c{{.Enfant.Couleur}}">{{visage .Enfant}}</span>
     <div>
       <h1>{{if .ParParent}}Espace de {{.Enfant.Nom}}{{else}}Coucou {{.Enfant.Nom}} !{{end}}</h1>
       <p class="tresor"><span class="grosse-etoile">⭐</span><b>{{.Solde.Disponible}}</b> {{if le .Solde.Disponible 1}}étoile{{else}}étoiles{{end}}</p>

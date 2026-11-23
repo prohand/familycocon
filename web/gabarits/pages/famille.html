@@ -23,7 +23,7 @@
   {{- range .Membres}}
   <details class="membre">
     <summary class="membre-ligne">
-      <span class="avatar c{{.Couleur}}">{{initiale .Nom}}</span>
+      <span class="avatar c{{.Couleur}}">{{visage .}}</span>
       <span class="quoi">{{.Nom}}{{if eq .ID $c.Membre.ID}} (moi){{end}}
         <small>{{if eq .Role "parent"}}Parent{{else}}Enfant{{end}}{{if .Identifiant.Valid}} · {{.Identifiant.String}}{{end}}{{if .Pin.Valid}} · code PIN{{end}}</small></span>
       <span class="etiquette">Modifier</span>
@@ -33,6 +33,7 @@
         {{template "jeton" $c.CSRF}}
         <label class="champ"><span>Prénom</span><input name="prenom" value="{{.Nom}}" maxlength="40" required></label>
         <label class="champ"><span>Date de naissance</span><input type="date" name="naissance" value="{{.Naissance}}"></label>
+        {{template "choix-avatar" dict "Choisi" .Avatar "Initiale" (initiale .Nom)}}
         {{template "choix-couleur" dict "Nom" "couleur" "Choisie" .Couleur}}
         <button class="bouton petit">Enregistrer</button>
       </form>
