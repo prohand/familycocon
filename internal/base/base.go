@@ -20,12 +20,14 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	_ "modernc.org/sqlite" // pilote SQLite pur Go
@@ -129,9 +131,40 @@ func Version(ctx context.Context, db *sql.DB) (int, error) {
 		version INTEGER PRIMARY KEY, nom TEXT NOT NULL, appliquee_le INTEGER NOT NULL)`); err != nil {
 		return 0, err
 	}
+	return VersionLue(ctx, db)
+}
+
+// VersionLue : la version du schéma, en lecture seule (sonde /health : rien
+// n'est écrit, la table existe depuis le démarrage).
+func VersionLue(ctx context.Context, db *sql.DB) (int, error) {
 	var v sql.NullInt64
 	err := db.QueryRowContext(ctx, `SELECT max(version) FROM schema_version`).Scan(&v)
 	return int(v.Int64), err
+}
+
+// copiesMigrationMax : copies « avant-migration » gardées. Une migration qui
+// échoue fait redémarrer le conteneur en boucle : sans limite, chaque essai
+// ajouterait une copie complète de la base, jusqu'à remplir le disque.
+const copiesMigrationMax = 3
+
+// garderDernieres supprime les fichiers du dossier qui commencent par
+// prefixe, sauf les garder plus récents (la date est dans le nom).
+func garderDernieres(dossier, prefixe string, garder int) {
+	entrees, err := os.ReadDir(dossier)
+	if err != nil {
+		return
+	}
+	var noms []string
+	for _, e := range entrees {
+		if !e.IsDir() && strings.HasPrefix(e.Name(), prefixe) {
+			noms = append(noms, e.Name())
+		}
+	}
+	sort.Strings(noms)
+	for len(noms) > garder {
+		_ = os.Remove(filepath.Join(dossier, noms[0]))
+		noms = noms[1:]
+	}
 }
 
 // Migrer applique les migrations manquantes. Si la base contient déjà des
@@ -154,6 +187,8 @@ func Migrer(ctx context.Context, db *sql.DB, dossierSauvegardes string) (string,
 	}
 	copie := ""
 	if actuelle > 0 {
+		// Place faite d'abord : avec la nouvelle, copiesMigrationMax au plus.
+		garderDernieres(dossierSauvegardes, "avant-migration-", copiesMigrationMax-1)
 		if copie, err = Copier(ctx, db, dossierSauvegardes,
 			fmt.Sprintf("avant-migration-v%d-%s.db", actuelle, time.Now().UTC().Format("20060102-150405"))); err != nil {
 			return "", fmt.Errorf("copie avant migration impossible, migration annulée : %w", err)
@@ -210,6 +245,7 @@ func CopierVers(ctx context.Context, db *sql.DB, chemin string) (string, error) 
 	// VACUUM INTO n'accepte pas de paramètre lié : le chemin vient de la
 	// configuration ou de la ligne de commande, et ne contient pas d'apostrophe.
 	if _, err := db.ExecContext(ctx, `VACUUM INTO '`+chemin+`'`); err != nil { // #nosec G202 -- chemin contrôlé
+		_ = os.Remove(chemin) // copie interrompue : pas de fichier à moitié écrit
 		return "", err
 	}
 	return chemin, os.Chmod(chemin, 0o600)
@@ -248,15 +284,22 @@ func Restaurer(ctx context.Context, source, dossier string) (string, error) {
 	if int(v.Int64) > VersionAttendue() {
 		return "", fmt.Errorf("sauvegarde en version %d, plus récente que ce binaire (%d) : mettez FamilyCocon à jour d'abord", v.Int64, VersionAttendue())
 	}
-	contenu, err := os.ReadFile(source)
+	// Le serveur tient ce verrou tant qu'il tourne : restaurer sous lui ne
+	// servirait à rien (il continuerait sur l'ancien fichier).
+	liberer, err := Verrouiller(dossier)
 	if err != nil {
 		return "", err
 	}
+	defer liberer()
 	cible := filepath.Join(dossier, NomFichier)
 	temp := cible + ".restauration"
-	if err := os.WriteFile(temp, contenu, 0o600); err != nil {
+	if err := copierFichier(source, temp); err != nil {
+		_ = os.Remove(temp)
 		return "", err
 	}
+	// Anciennes bases « avant-restauration » : seules les plus récentes sont
+	// gardées (6 fichiers au plus, journaux -wal et -shm compris).
+	garderDernieres(dossier, NomFichier+".avant-restauration-", 6)
 	ancienne := ""
 	if _, err := os.Stat(cible); err == nil {
 		ancienne = cible + ".avant-restauration-" + time.Now().UTC().Format("20060102-150405")
@@ -278,24 +321,77 @@ func Restaurer(ctx context.Context, source, dossier string) (string, error) {
 	return ancienne, os.Rename(temp, cible)
 }
 
+// copierFichier copie source vers cible (droits 600) sans tout charger en
+// mémoire, et attend que le disque ait tout écrit.
+func copierFichier(source, cible string) error {
+	src, err := os.Open(source) // #nosec G304 -- chemin donné par l'administrateur
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := os.OpenFile(cible, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) // #nosec G304 -- dossier des données
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		return errors.Join(err, dst.Close())
+	}
+	if err := dst.Sync(); err != nil {
+		return errors.Join(err, dst.Close())
+	}
+	return dst.Close()
+}
+
+// ErrServeurEnMarche : le dossier des données est utilisé par un serveur.
+var ErrServeurEnMarche = errors.New("FamilyCocon tourne sur ce dossier de données : arrêtez-le d'abord")
+
+// Verrouiller prend le verrou du dossier des données (fichier
+// « familycocon.verrou », flock). Le serveur le garde tant qu'il tourne ;
+// la restauration le prend le temps de remplacer la base. Un second
+// preneur reçoit ErrServeurEnMarche. liberer rend le verrou.
+func Verrouiller(dossier string) (liberer func(), err error) {
+	if err := os.MkdirAll(dossier, 0o750); err != nil {
+		return nil, err
+	}
+	f, err := os.OpenFile(filepath.Join(dossier, "familycocon.verrou"), os.O_RDWR|os.O_CREATE, 0o600) // #nosec G304 -- dossier des données
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil { // #nosec G115 -- descripteur de fichier
+		_ = f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, ErrServeurEnMarche
+		}
+		return nil, err
+	}
+	return func() { _ = f.Close() }, nil // fermer rend le verrou
+}
+
 // Sauvegardes automatiques : « auto-AAAAMMJJ-HHMMSS.db » dans le dossier.
 
 // SauvegardeAuto fait une sauvegarde vérifiée et ne garde que les garder
 // plus récentes sauvegardes automatiques.
 func SauvegardeAuto(ctx context.Context, db *sql.DB, dossier string, garder int) (string, error) {
+	// Écrite sous un nom provisoire, renommée une fois vérifiée : une copie
+	// interrompue ou abîmée ne prend jamais la place d'une bonne sauvegarde.
 	nom := "auto-" + time.Now().Format("20060102-150405") + ".db"
-	chemin, err := Copier(ctx, db, dossier, nom)
+	provisoire, err := Copier(ctx, db, dossier, nom+".partiel")
 	if err != nil {
 		return "", err
 	}
-	copie, err := OuvrirLecture(chemin)
-	if err != nil {
-		return chemin, err
+	copie, err := OuvrirLecture(provisoire)
+	if err == nil {
+		err = Verifier(ctx, copie)
+		_ = copie.Close()
 	}
-	err = Verifier(ctx, copie)
-	copie.Close()
 	if err != nil {
-		return chemin, err
+		_ = os.Remove(provisoire)
+		return "", err
+	}
+	chemin := filepath.Join(dossier, nom)
+	if err := os.Rename(provisoire, chemin); err != nil {
+		_ = os.Remove(provisoire)
+		return "", err
 	}
 	entrees, err := os.ReadDir(dossier)
 	if err != nil {

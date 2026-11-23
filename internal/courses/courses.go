@@ -46,19 +46,45 @@ func Brancher(a *appli.App) {
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "🛒", Texte: "Un produit à acheter", URL: "/courses?ajout=1"})
 }
 
+// Plafonds par famille : assez pour toute une vie de courses, et la base
+// ne peut pas être remplie par jeu.
+const (
+	listesMax         = 50
+	produitsMax       = 2000 // par liste
+	produitsConnusMax = 5000 // noms retenus pour les suggestions
+)
+
+// SaisieValide : la ligne peut-elle devenir un produit (nom de 80
+// caractères au plus, quantité de 20 au plus) ? Les menus s'en servent pour
+// refuser un ingrédient trop long dès l'enregistrement du repas.
+func SaisieValide(saisie string) bool {
+	nom, quantite := Analyser(saisie)
+	return nom != "" && utf8.RuneCountInString(nom) <= longueurMax && utf8.RuneCountInString(quantite) <= quantiteMax
+}
+
 // AjouterProduits : ajoute des produits à la première liste de la famille
 // (utilisé par les menus : « ajouter les ingrédients aux courses »).
-func AjouterProduits(ctx context.Context, a *appli.App, c *appli.Contexte, saisies []string) (int, error) {
-	liste, err := listeParDefaut(ctx, a, c)
+// q : les requêtes de la transaction de l'appelant (tout ou rien). Une
+// ligne qui ne peut pas devenir un produit (trop longue) est ignorée, et
+// l'ajout s'arrête sans erreur quand la liste est pleine.
+func AjouterProduits(ctx context.Context, q *donnees.Queries, c *appli.Contexte, saisies []string) (int, error) {
+	liste, err := listeParDefaut(ctx, q, c)
+	if err != nil {
+		return 0, err
+	}
+	deja, err := q.CompterProduitsListe(ctx, liste.ID)
 	if err != nil {
 		return 0, err
 	}
 	n := 0
 	for _, s := range saisies {
-		if strings.TrimSpace(s) == "" {
+		if !SaisieValide(s) {
 			continue
 		}
-		if _, err := ajouterProduit(ctx, a, c, liste.ID, s, ""); err != nil {
+		if deja+int64(n) >= produitsMax {
+			break
+		}
+		if _, err := ajouterProduit(ctx, q, c, liste.ID, s, ""); err != nil {
 			return n, err
 		}
 		n++
@@ -67,19 +93,25 @@ func AjouterProduits(ctx context.Context, a *appli.App, c *appli.Contexte, saisi
 }
 
 // listeParDefaut : la première liste de la famille (créée au besoin).
-func listeParDefaut(ctx context.Context, a *appli.App, c *appli.Contexte) (donnees.Liste, error) {
-	listes, err := a.Q.ListesDeFamille(ctx, c.Famille.ID)
+// À appeler dans une transaction : deux ouvertures en même temps ne créent
+// pas deux listes « Courses ».
+func listeParDefaut(ctx context.Context, q *donnees.Queries, c *appli.Contexte) (donnees.Liste, error) {
+	listes, err := q.ListesDeFamille(ctx, c.Famille.ID)
 	if err != nil {
 		return donnees.Liste{}, err
 	}
 	if len(listes) > 0 {
 		return listes[0], nil
 	}
-	return a.Q.CreerListe(ctx, donnees.CreerListeParams{FamilleID: c.Famille.ID, Nom: "Courses", CreeLe: time.Now().Unix()})
+	return q.CreerListe(ctx, donnees.CreerListeParams{FamilleID: c.Famille.ID, Nom: "Courses", CreeLe: time.Now().Unix()})
 }
 
 func (m *Module) accueil(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	liste, err := listeParDefaut(r.Context(), m.a, c)
+	var liste donnees.Liste
+	err := m.a.Transaction(r.Context(), func(q *donnees.Queries) (err error) {
+		liste, err = listeParDefaut(r.Context(), q, c)
+		return err
+	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -143,10 +175,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, liste donnees.Liste
 	if err != nil {
 		return nil, err
 	}
-	parID := map[int64]*donnees.Membre{}
-	for i := range membres {
-		parID[membres[i].ID] = &membres[i]
-	}
+	parID := appli.MembresParID(membres)
 	groupes := map[string]*groupeRayon{}
 	for _, p := range produits {
 		g, ok := groupes[p.Rayon]
@@ -198,7 +227,9 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	v.Suggestions, _ = m.a.Q.SuggestionsProduits(ctx, c.Famille.ID)
+	if v.Suggestions, err = m.a.Q.SuggestionsProduits(ctx, c.Famille.ID); err != nil {
+		m.a.Journal.Warn("courses : suggestions illisibles", "erreur", err) // la page marche sans
+	}
 	v.Ajout = r.URL.Query().Get("ajout") == "1"
 	m.a.Afficher(w, r, c, "courses/liste", "Courses", "courses", v)
 }
@@ -224,40 +255,63 @@ func (m *Module) contenu(w http.ResponseWriter, r *http.Request, c *appli.Contex
 	m.renvoyerContenu(w, r, c, liste, 0)
 }
 
-// Saisie limitée : un nom de produit tient en 80 caractères.
-const longueurMax = 80
+// Saisie limitée : un nom de produit tient en 80 caractères, une quantité en 20.
+const (
+	longueurMax = 80
+	quantiteMax = 20
+)
+
+// peutRetenir : le produit est-il déjà connu de la famille, ou reste-t-il
+// de la place pour le retenir (suggestions, rayon appris) ?
+func peutRetenir(ctx context.Context, q *donnees.Queries, famille int64, connu bool) bool {
+	if connu {
+		return true
+	}
+	n, err := q.CompterProduitsConnus(ctx, famille)
+	return err == nil && n < produitsConnusMax
+}
 
 // ajouterProduit : analyse la saisie, choisit le rayon (choisi, retenu par
-// la famille, ou deviné), enregistre.
-func ajouterProduit(ctx context.Context, a *appli.App, c *appli.Contexte, liste int64, saisie, rayonChoisi string) (donnees.Produit, error) {
-	nom, quantite := Analyser(saisie)
-	if nom == "" || utf8.RuneCountInString(nom) > longueurMax || utf8.RuneCountInString(quantite) > 20 {
+// la famille, ou deviné), enregistre. q : a.Q, ou les requêtes d'une transaction.
+func ajouterProduit(ctx context.Context, q *donnees.Queries, c *appli.Contexte, liste int64, saisie, rayonChoisi string) (donnees.Produit, error) {
+	if !SaisieValide(saisie) {
 		return donnees.Produit{}, errSaisie
 	}
+	nom, quantite := Analyser(saisie)
 	cle := Cle(nom)
 	rayon, emoji := Deviner(nom)
-	if connu, err := a.Q.ProduitConnu(ctx, donnees.ProduitConnuParams{FamilleID: c.Famille.ID, Cle: cle}); err == nil {
+	connu, err := q.ProduitConnu(ctx, donnees.ProduitConnuParams{FamilleID: c.Famille.ID, Cle: cle})
+	dejaConnu := err == nil
+	if dejaConnu {
 		rayon, emoji = connu.Rayon, connu.Emoji
 	}
+	retenir := peutRetenir(ctx, q, c.Famille.ID, dejaConnu)
 	if r, ok := RayonParCle(rayonChoisi); ok && rayonChoisi != rayon {
 		rayon = r.Cle
 		if emoji == "🛍️" || emoji == "" {
 			emoji = r.Emoji
 		}
-		_ = a.Q.CorrigerRayon(ctx, donnees.CorrigerRayonParams{FamilleID: c.Famille.ID, Cle: cle, Nom: nom, Rayon: rayon, Emoji: emoji, VuLe: time.Now().Unix()})
+		if retenir {
+			if err := q.CorrigerRayon(ctx, donnees.CorrigerRayonParams{FamilleID: c.Famille.ID, Cle: cle, Nom: nom, Rayon: rayon, Emoji: emoji, VuLe: time.Now().Unix()}); err != nil {
+				return donnees.Produit{}, err
+			}
+		}
 	}
-	p, err := a.Q.AjouterProduit(ctx, donnees.AjouterProduitParams{
+	p, err := q.AjouterProduit(ctx, donnees.AjouterProduitParams{
 		ListeID: liste, Nom: nom, Quantite: quantite, Rayon: rayon, Emoji: emoji,
 		AjoutePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 	})
-	if err != nil {
+	if err != nil || !retenir {
 		return p, err
 	}
-	err = a.Q.RetenirProduit(ctx, donnees.RetenirProduitParams{FamilleID: c.Famille.ID, Cle: cle, Nom: nom, Rayon: rayon, Emoji: emoji, VuLe: time.Now().Unix()})
+	err = q.RetenirProduit(ctx, donnees.RetenirProduitParams{FamilleID: c.Famille.ID, Cle: cle, Nom: nom, Rayon: rayon, Emoji: emoji, VuLe: time.Now().Unix()})
 	return p, err
 }
 
-var errSaisie = errors.New("saisie invalide")
+var (
+	errSaisie      = errors.New("saisie invalide")
+	errListePleine = errors.New("liste pleine")
+)
 
 func (m *Module) ajouter(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	liste, err := m.liste(r, c)
@@ -270,9 +324,24 @@ func (m *Module) ajouter(w http.ResponseWriter, r *http.Request, c *appli.Contex
 		m.a.Echec(w, r, http.StatusBadRequest, "Écrivez un produit.")
 		return
 	}
-	p, err := ajouterProduit(r.Context(), m.a, c, liste.ID, saisie, r.PostFormValue("rayon"))
+	var p donnees.Produit
+	err = m.a.Transaction(r.Context(), func(q *donnees.Queries) error {
+		n, err := q.CompterProduitsListe(r.Context(), liste.ID)
+		if err != nil {
+			return err
+		}
+		if n >= produitsMax {
+			return errListePleine
+		}
+		p, err = ajouterProduit(r.Context(), q, c, liste.ID, saisie, r.PostFormValue("rayon"))
+		return err
+	})
 	if errors.Is(err, errSaisie) {
-		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Nom de produit trop long (%d caractères au plus).", longueurMax))
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Nom du produit (%d caractères au plus) ou quantité (%d) trop long.", longueurMax, quantiteMax))
+		return
+	}
+	if errors.Is(err, errListePleine) {
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Cette liste est pleine (%d produits) : rangez les produits pris.", produitsMax))
 		return
 	}
 	if err != nil {
@@ -342,7 +411,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	}
 	nom := strings.TrimSpace(r.PostFormValue("nom"))
 	quantite := strings.TrimSpace(r.PostFormValue("quantite"))
-	if nom == "" || utf8.RuneCountInString(nom) > longueurMax || utf8.RuneCountInString(quantite) > 20 {
+	if nom == "" || utf8.RuneCountInString(nom) > longueurMax || utf8.RuneCountInString(quantite) > quantiteMax {
 		m.a.Echec(w, r, http.StatusBadRequest, "Nom (80 caractères) ou quantité (20) invalide.")
 		return
 	}
@@ -363,8 +432,13 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	// Le rayon choisi est retenu pour la prochaine fois.
-	_ = m.a.Q.CorrigerRayon(ctx, donnees.CorrigerRayonParams{FamilleID: c.Famille.ID, Cle: Cle(nom), Nom: nom, Rayon: ray.Cle, Emoji: emoji, VuLe: time.Now().Unix()})
+	// Le rayon choisi est retenu pour la prochaine fois (s'il reste de la place).
+	_, errConnu := m.a.Q.ProduitConnu(ctx, donnees.ProduitConnuParams{FamilleID: c.Famille.ID, Cle: Cle(nom)})
+	if peutRetenir(ctx, m.a.Q, c.Famille.ID, errConnu == nil) {
+		if err := m.a.Q.CorrigerRayon(ctx, donnees.CorrigerRayonParams{FamilleID: c.Famille.ID, Cle: Cle(nom), Nom: nom, Rayon: ray.Cle, Emoji: emoji, VuLe: time.Now().Unix()}); err != nil {
+			m.a.Journal.Warn("courses : rayon non retenu", "erreur", err) // le produit, lui, est bien modifié
+		}
+	}
 	m.a.Publier(c, "courses", "")
 	m.renvoyerListeDuProduit(w, r, c, p, 0)
 }
@@ -397,6 +471,10 @@ func (m *Module) vider(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	if n > 0 {
 		m.a.Publier(c, "courses", fmt.Sprintf("%s a rangé les courses 🧺", c.Membre.Nom))
 	}
+	if !appli.EstHtmx(r) { // comme les autres actions : jamais un bloc nu sans htmx
+		http.Redirect(w, r, fmt.Sprintf("/courses/liste/%d", liste.ID), http.StatusSeeOther)
+		return
+	}
 	appli.Notifier(w, appli.Pluriel(n, "produit retiré", "produits retirés"), false)
 	m.renvoyerContenu(w, r, c, liste, 0)
 }
@@ -413,7 +491,22 @@ func (m *Module) creerListe(w http.ResponseWriter, r *http.Request, c *appli.Con
 		m.a.Echec(w, r, http.StatusBadRequest, "Nom de liste : 1 à 40 caractères.")
 		return
 	}
-	l, err := m.a.Q.CreerListe(r.Context(), donnees.CreerListeParams{FamilleID: c.Famille.ID, Nom: nom, CreeLe: time.Now().Unix()})
+	var l donnees.Liste
+	err := m.a.Transaction(r.Context(), func(q *donnees.Queries) error {
+		n, err := q.CompterListes(r.Context(), c.Famille.ID)
+		if err != nil {
+			return err
+		}
+		if n >= listesMax {
+			return errListePleine
+		}
+		l, err = q.CreerListe(r.Context(), donnees.CreerListeParams{FamilleID: c.Famille.ID, Nom: nom, CreeLe: time.Now().Unix()})
+		return err
+	})
+	if errors.Is(err, errListePleine) {
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("%d listes au plus : demandez à un parent d'en supprimer une.", listesMax))
+		return
+	}
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return

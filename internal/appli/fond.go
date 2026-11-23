@@ -5,6 +5,7 @@ package appli
 import (
 	"context"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 
 	"familycocon/internal/base"
@@ -34,8 +35,18 @@ func (a *App) Demarrer(ctx context.Context) {
 	}()
 }
 
+// rattraper : à appeler avec defer dans une tâche de fond. Une panique y est
+// écrite au journal au lieu d'arrêter tout le serveur (les requêtes HTTP ont
+// la même protection dans Envelopper).
+func (a *App) rattraper(tache string) {
+	if v := recover(); v != nil {
+		a.Journal.Error("panique dans une tâche de fond", "tache", tache, "erreur", v, "pile", string(debug.Stack()))
+	}
+}
+
 // Menage supprime ce qui a expiré.
 func (a *App) Menage(ctx context.Context) {
+	defer a.rattraper("ménage")
 	t := time.Now()
 	s, err1 := a.Q.PurgerSessions(ctx, t.Unix())
 	i, err2 := a.Q.PurgerInvitations(ctx, t.Unix())
@@ -79,12 +90,15 @@ func (a *App) sauvegardesAuto(ctx context.Context) {
 			return
 		case <-minuteur.C:
 		}
-		debut := time.Now()
-		chemin, err := base.SauvegardeAuto(ctx, a.DB, dossier, a.Config.SauvegardeNb)
-		if err != nil {
-			a.Journal.Error("sauvegarde automatique ratée", "erreur", err)
-			continue
-		}
-		a.Journal.Info("sauvegarde automatique faite", "fichier", chemin, "duree_ms", time.Since(debut).Milliseconds())
+		func() {
+			defer a.rattraper("sauvegarde automatique")
+			debut := time.Now()
+			chemin, err := base.SauvegardeAuto(ctx, a.DB, dossier, a.Config.SauvegardeNb)
+			if err != nil {
+				a.Journal.Error("sauvegarde automatique ratée", "erreur", err)
+				return
+			}
+			a.Journal.Info("sauvegarde automatique faite", "fichier", chemin, "duree_ms", time.Since(debut).Milliseconds())
+		}()
 	}
 }

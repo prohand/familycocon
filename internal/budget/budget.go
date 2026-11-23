@@ -9,7 +9,6 @@ package budget
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"html/template"
 	"net/http"
 	"sort"
@@ -175,7 +174,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 		v.Filtre = filtre
 	}
 	// Les opérations qui reviennent sont d'abord écrites jusqu'à aujourd'hui.
-	if err := Generer(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
+	if err := GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		return nil, err
 	}
 	ops, err := m.operations(ctx, c, premier, dernier)
@@ -321,7 +320,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			m.a.PageErreur(w, r, c, http.StatusNotFound, "Opération introuvable", "Cette opération n'existe plus.")
 			return
 		}
-		f.Montant = montantSaisie(f.Op.Montant)
+		f.Montant = MontantSaisie(f.Op.Montant)
 		if f.Op.RecurrenceID.Valid {
 			if rec, err := m.a.Q.RecurrenceParID(r.Context(), donnees.RecurrenceParIDParams{ID: f.Op.RecurrenceID.Int64, FamilleID: c.Famille.ID}); err == nil {
 				f.Recurrence = NomFrequence(rec.Frequence)
@@ -357,10 +356,10 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisieOp, string) {
 	if utf8.RuneCountInString(s.libelle) > 80 {
 		return s, "Libellé : 80 caractères au plus."
 	}
-	if _, err := time.Parse("2006-01-02", r.PostFormValue("jour")); err != nil {
+	var ok2 bool
+	if s.jour, ok2 = LireJour(r.PostFormValue("jour"), c.Maintenant()); !ok2 {
 		return s, "Date invalide."
 	}
-	s.jour = r.PostFormValue("jour")
 	if id, err := strconv.ParseInt(r.PostFormValue("membre"), 10, 64); err == nil && id > 0 {
 		if _, err := m.a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: id, FamilleID: c.Famille.ID}); err == nil {
 			s.membre = sql.NullInt64{Int64: id, Valid: true}
@@ -369,7 +368,7 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisieOp, string) {
 	if f := r.PostFormValue("frequence"); FrequenceValide(f) {
 		s.frequence = f
 		s.fin = r.PostFormValue("fin")
-		if _, err := time.Parse("2006-01-02", s.fin); s.fin != "" && (err != nil || s.fin < s.jour) {
+		if _, ok := LireJour(s.fin, c.Maintenant()); s.fin != "" && (!ok || s.fin < s.jour) {
 			return s, "La date de fin doit suivre la première date."
 		}
 	}
@@ -389,8 +388,11 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 			m.a.Echec(w, r, http.StatusBadRequest, msg)
 			return
 		}
-		if recs, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID); err != nil || len(recs) >= RecurrencesMax {
-			m.a.Echec(w, r, http.StatusBadRequest, "Trop d'opérations qui reviennent : arrêtez-en d'abord.")
+		if msg, err := PlaceRecurrence(ctx, m.a, c.Famille.ID); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		} else if msg != "" {
+			m.a.Echec(w, r, http.StatusBadRequest, msg)
 			return
 		}
 		// Opération qui revient : la récurrence écrit elle-même les occurrences
@@ -406,12 +408,23 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 			m.a.ErreurInterne(w, r, err)
 			return
 		}
-	} else if _, err := m.a.Q.CreerOperation(ctx, donnees.CreerOperationParams{
-		FamilleID: c.Famille.ID, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
-		Jour: s.jour, MembreID: s.membre, CreePar: auteur, CreeLe: time.Now().Unix(),
-	}); err != nil {
-		m.a.ErreurInterne(w, r, err)
-		return
+	} else {
+		// Double envoi (double clic, réseau lent) : la même opération, écrite
+		// par la même personne dans les 10 dernières secondes, n'est pas répétée.
+		deja, err := m.a.Q.OperationIdentiqueRecente(ctx, donnees.OperationIdentiqueRecenteParams{
+			FamilleID: c.Famille.ID, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
+			Jour: s.jour, CreePar: auteur, CreeLe: time.Now().Unix() - 10,
+		})
+		if err == nil && deja == 0 {
+			_, err = m.a.Q.CreerOperation(ctx, donnees.CreerOperationParams{
+				FamilleID: c.Famille.ID, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
+				Jour: s.jour, MembreID: s.membre, CreePar: auteur, CreeLe: time.Now().Unix(),
+			})
+		}
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
 	}
 	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Enregistré ✓")
@@ -457,16 +470,13 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 }
 
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
-	_ = Generer(ctx, m.a, c.Famille.ID, c.Maintenant())
+	if err := GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
+		m.a.Journal.Error("budget : opérations qui reviennent", "erreur", err)
+	}
 	premier, dernier := mois(c.Maintenant())
 	t, err := m.a.Q.TotauxPeriode(ctx, donnees.TotauxPeriodeParams{FamilleID: c.Famille.ID, Du: repetition.CleJour(premier), Au: repetition.CleJour(dernier)})
 	if err != nil || t.Revenus+t.Depenses == 0 {
 		return appli.Resume{Info: "Rien ce mois-ci"}
 	}
 	return appli.Resume{Info: "Reste " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise)}
-}
-
-// montantSaisie : 1234 centimes → « 12,34 » (pour un champ de formulaire).
-func montantSaisie(n int64) string {
-	return fmt.Sprintf("%d,%02d", n/100, n%100)
 }

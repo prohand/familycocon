@@ -5,6 +5,8 @@
 //     « hors ligne » ;
 //   - notifications push : affichées, et un toucher ouvre la bonne page.
 "use strict";
+// Le serveur remplace ce nom par la version des fichiers : à chaque mise à
+// jour, un nouveau cache est rempli et l'ancien est supprimé (« activate »).
 const CACHE = "familycocon-1";
 
 self.addEventListener("install", function (e) {

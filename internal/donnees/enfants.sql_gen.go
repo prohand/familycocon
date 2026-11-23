@@ -13,41 +13,51 @@ import (
 
 const annulerCoche = `-- name: AnnulerCoche :exec
 DELETE FROM missions_faites WHERE mission_id = ? AND occurrence = ? AND etat = 'attente'
+  AND mission_id IN (SELECT m.id FROM missions m WHERE m.famille_id = ?)
 `
 
 type AnnulerCocheParams struct {
 	MissionID  int64
 	Occurrence string
+	FamilleID  int64
 }
 
 func (q *Queries) AnnulerCoche(ctx context.Context, arg AnnulerCocheParams) error {
-	_, err := q.db.ExecContext(ctx, annulerCoche, arg.MissionID, arg.Occurrence)
+	_, err := q.db.ExecContext(ctx, annulerCoche, arg.MissionID, arg.Occurrence, arg.FamilleID)
 	return err
 }
 
-const cocherMission = `-- name: CocherMission :exec
-INSERT INTO missions_faites (mission_id, occurrence, etat, etoiles, coche_le) VALUES (?, ?, 'attente', ?, ?)
+const cocherMission = `-- name: CocherMission :execrows
+INSERT INTO missions_faites (mission_id, occurrence, etat, etoiles, coche_le)
+SELECT m.id, ?1, 'attente', ?2, ?3
+FROM missions m WHERE m.id = ?4 AND m.famille_id = ?5
 ON CONFLICT (mission_id, occurrence) DO UPDATE SET
   etat = 'attente', etoiles = excluded.etoiles, coche_le = excluded.coche_le, decide_par = NULL, decide_le = NULL
 WHERE missions_faites.etat = 'refusee'
 `
 
 type CocherMissionParams struct {
-	MissionID  int64
 	Occurrence string
 	Etoiles    int64
 	CocheLe    int64
+	MissionID  int64
+	FamilleID  int64
 }
 
 // Une mission refusee peut etre recochee ; une mission validee ne bouge plus.
-func (q *Queries) CocherMission(ctx context.Context, arg CocherMissionParams) error {
-	_, err := q.db.ExecContext(ctx, cocherMission,
-		arg.MissionID,
+// La mission doit etre a la famille ; 0 ligne si elle est deja cochee.
+func (q *Queries) CocherMission(ctx context.Context, arg CocherMissionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cocherMission,
 		arg.Occurrence,
 		arg.Etoiles,
 		arg.CocheLe,
+		arg.MissionID,
+		arg.FamilleID,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const creerEchange = `-- name: CreerEchange :one
@@ -162,7 +172,8 @@ func (q *Queries) CreerRecompense(ctx context.Context, arg CreerRecompenseParams
 }
 
 const deciderEchange = `-- name: DeciderEchange :execrows
-UPDATE echanges SET etat = ?, decide_par = ?, decide_le = ? WHERE id = ? AND etat = 'attente'
+UPDATE echanges SET etat = ?, decide_par = ?, decide_le = ? WHERE echanges.id = ? AND echanges.etat = 'attente'
+  AND recompense_id IN (SELECT r.id FROM recompenses r WHERE r.famille_id = ?)
 `
 
 type DeciderEchangeParams struct {
@@ -170,6 +181,7 @@ type DeciderEchangeParams struct {
 	DecidePar sql.NullInt64
 	DecideLe  sql.NullInt64
 	ID        int64
+	FamilleID int64
 }
 
 func (q *Queries) DeciderEchange(ctx context.Context, arg DeciderEchangeParams) (int64, error) {
@@ -178,6 +190,7 @@ func (q *Queries) DeciderEchange(ctx context.Context, arg DeciderEchangeParams) 
 		arg.DecidePar,
 		arg.DecideLe,
 		arg.ID,
+		arg.FamilleID,
 	)
 	if err != nil {
 		return 0, err
@@ -186,7 +199,8 @@ func (q *Queries) DeciderEchange(ctx context.Context, arg DeciderEchangeParams) 
 }
 
 const deciderMission = `-- name: DeciderMission :execrows
-UPDATE missions_faites SET etat = ?, decide_par = ?, decide_le = ? WHERE id = ? AND etat = 'attente'
+UPDATE missions_faites SET etat = ?, decide_par = ?, decide_le = ? WHERE missions_faites.id = ? AND missions_faites.etat = 'attente'
+  AND mission_id IN (SELECT m.id FROM missions m WHERE m.famille_id = ?)
 `
 
 type DeciderMissionParams struct {
@@ -194,6 +208,7 @@ type DeciderMissionParams struct {
 	DecidePar sql.NullInt64
 	DecideLe  sql.NullInt64
 	ID        int64
+	FamilleID int64
 }
 
 func (q *Queries) DeciderMission(ctx context.Context, arg DeciderMissionParams) (int64, error) {
@@ -202,11 +217,29 @@ func (q *Queries) DeciderMission(ctx context.Context, arg DeciderMissionParams) 
 		arg.DecidePar,
 		arg.DecideLe,
 		arg.ID,
+		arg.FamilleID,
 	)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const echangeEnAttente = `-- name: EchangeEnAttente :one
+SELECT count(*) FROM echanges WHERE recompense_id = ? AND enfant_id = ? AND etat = 'attente'
+`
+
+type EchangeEnAttenteParams struct {
+	RecompenseID int64
+	EnfantID     int64
+}
+
+// Une demande deja en attente pour cette recompense (double envoi).
+func (q *Queries) EchangeEnAttente(ctx context.Context, arg EchangeEnAttenteParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, echangeEnAttente, arg.RecompenseID, arg.EnfantID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const echangeParID = `-- name: EchangeParID :one

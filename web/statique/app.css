@@ -632,6 +632,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-color: var(--corail);
   box-shadow: 0 0 0 4px var(--corail-doux);
 }
+.mdp-court { width: 9.5rem; padding: 8px 10px; border-radius: var(--rayon-petit); border: 1.5px solid var(--bordure); background: var(--fond); font-weight: 700; }
 .rangee { display: flex; gap: 10px; flex-wrap: wrap; align-items: end; }
 .rangee > .champ { flex: 1 1 160px; margin: 6px 0; }
 .boutons { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }

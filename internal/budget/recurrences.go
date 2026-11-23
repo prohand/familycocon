@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -127,6 +128,56 @@ func Prochaine(r donnees.Recurrence) (time.Time, bool) {
 // errDejaFaite : une autre requête a écrit l'occurrence en même temps.
 var errDejaFaite = errors.New("occurrence déjà écrite")
 
+// dejaGenere : le dernier jour où tout a été écrit, par serveur et par
+// famille. L'accueil, le budget et les abonnements demandent tous « écris
+// ce qui est dû » : une fois par jour suffit, puisque toute création ou
+// modification d'une récurrence appelle Generer elle-même.
+var dejaGenere sync.Map // cleGenere → jour (« 2026-11-23 »)
+
+type cleGenere struct {
+	a       *appli.App
+	famille int64
+}
+
+// GenererSiBesoin : comme Generer, mais rien à faire si c'est déjà fait
+// aujourd'hui pour cette famille (pages d'affichage).
+func GenererSiBesoin(ctx context.Context, a *appli.App, famille int64, aujourdhui time.Time) error {
+	if j, ok := dejaGenere.Load(cleGenere{a, famille}); ok && j == repetition.CleJour(aujourdhui) {
+		return nil
+	}
+	return Generer(ctx, a, famille, aujourdhui)
+}
+
+// PlaceRecurrence : « » s'il reste de la place pour une récurrence de plus,
+// sinon le message à afficher. L'erreur SQL est rendue à part (500).
+func PlaceRecurrence(ctx context.Context, a *appli.App, famille int64) (string, error) {
+	n, err := a.Q.CompterRecurrences(ctx, famille)
+	if err != nil {
+		return "", err
+	}
+	if n >= RecurrencesMax {
+		return "Trop d'opérations qui reviennent : arrêtez-en d'abord.", nil
+	}
+	return "", nil
+}
+
+// Replanifier : la date de départ et le compteur à enregistrer quand on
+// modifie une récurrence. Même prochaine date et même fréquence : rien ne
+// bouge. Sinon on repart de la date donnée (compteur à zéro), après contrôle.
+// msg : « » si tout va bien.
+func Replanifier(rec donnees.Recurrence, prochaine, freq string, aujourdhui time.Time) (debut string, faites int64, msg string) {
+	if j, ok := Prochaine(rec); ok && repetition.CleJour(j) == prochaine && freq == rec.Frequence {
+		return rec.Debut, rec.Faites, ""
+	}
+	if msg := ValiderProchaine(prochaine, &rec, aujourdhui); msg != "" {
+		return "", 0, msg
+	}
+	return prochaine, 0, ""
+}
+
+// MessageModifiee : la récurrence a changé entre la lecture et l'écriture.
+const MessageModifiee = "Cette opération vient de changer : rechargez la page et recommencez."
+
 // Generer écrit les occurrences dues jusqu'à aujourd'hui (inclus).
 func Generer(ctx context.Context, a *appli.App, famille int64, aujourdhui time.Time) error {
 	recs, err := a.Q.RecurrencesFamille(ctx, famille)
@@ -143,7 +194,7 @@ func Generer(ctx context.Context, a *appli.App, famille int64, aujourdhui time.T
 			}
 			err := a.Transaction(ctx, func(q *donnees.Queries) error {
 				// Avancer d'abord : si une autre requête l'a déjà fait, rien n'est écrit deux fois.
-				if n, err := q.AvancerRecurrence(ctx, donnees.AvancerRecurrenceParams{ID: r.ID, Faites: r.Faites}); err != nil || n == 0 {
+				if n, err := q.AvancerRecurrence(ctx, donnees.AvancerRecurrenceParams{ID: r.ID, FamilleID: famille, Faites: r.Faites}); err != nil || n == 0 {
 					return errors.Join(err, errDejaFaite)
 				}
 				_, err := q.CreerOccurrence(ctx, donnees.CreerOccurrenceParams{
@@ -162,6 +213,7 @@ func Generer(ctx context.Context, a *appli.App, famille int64, aujourdhui time.T
 			r.Faites++
 		}
 	}
+	dejaGenere.Store(cleGenere{a, famille}, limite)
 	return nil
 }
 
@@ -211,7 +263,17 @@ type vueRecurrences struct {
 	Devise                    string
 }
 
-func (m *Module) ligneRecurrence(ctx context.Context, c *appli.Contexte, r donnees.Recurrence) LigneRecurrence {
+// abonnees : les récurrences de la famille qui sont des abonnements.
+func (m *Module) abonnees(ctx context.Context, c *appli.Contexte) (map[int64]bool, error) {
+	ids, err := m.a.Q.RecurrencesAbonnees(ctx, c.Famille.ID)
+	out := make(map[int64]bool, len(ids))
+	for _, id := range ids {
+		out[id] = true
+	}
+	return out, err
+}
+
+func ligneRecurrence(r donnees.Recurrence, abonnees map[int64]bool) LigneRecurrence {
 	cat, ok := CategorieParCle(r.Categorie)
 	if !ok {
 		cat, _ = CategorieParCle("autre")
@@ -220,15 +282,13 @@ func (m *Module) ligneRecurrence(ctx context.Context, c *appli.Contexte, r donne
 	if j, ok := Prochaine(r); ok {
 		l.Prochaine = appli.DateLongue(j)
 	}
-	if _, err := m.a.Q.AbonnementDeRecurrence(ctx, donnees.AbonnementDeRecurrenceParams{RecurrenceID: r.ID, FamilleID: c.Famille.ID}); err == nil {
-		l.Abonnement = true
-	}
+	l.Abonnement = abonnees[r.ID]
 	return l
 }
 
 func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
-	if err := Generer(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
+	if err := GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
@@ -237,9 +297,14 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	abonnees, err := m.abonnees(ctx, c)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
 	v := vueRecurrences{Devise: c.Famille.Devise}
 	for _, x := range recs {
-		l := m.ligneRecurrence(ctx, c, x)
+		l := ligneRecurrence(x, abonnees)
 		_, active := Prochaine(x)
 		if x.Sens == "revenu" {
 			v.Revenus = append(v.Revenus, l)
@@ -279,12 +344,16 @@ func (m *Module) formRecurrence(w http.ResponseWriter, r *http.Request, c *appli
 		m.a.PageErreur(w, r, c, http.StatusNotFound, "Introuvable", "Cette opération qui revient n'existe plus.")
 		return
 	}
-	f := formRecurrence{R: m.ligneRecurrence(r.Context(), c, x), Montant: montantSaisie(x.Montant), Categories: Categories,
+	abonnees, err := m.abonnees(r.Context(), c)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	f := formRecurrence{R: ligneRecurrence(x, abonnees), Montant: MontantSaisie(x.Montant), Categories: Categories,
 		Frequences: Frequences, Devise: c.Famille.Devise}
 	if j, ok := Prochaine(x); ok {
 		f.ProchaineJ = repetition.CleJour(j)
 	}
-	var err error
 	if f.Membres, err = m.a.Membres(r.Context(), c); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -308,8 +377,8 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	libelle := strings.TrimSpace(r.PostFormValue("libelle"))
 	freq := r.PostFormValue("frequence")
 	prochaine, fin := r.PostFormValue("prochaine"), r.PostFormValue("fin")
-	_, errP := time.Parse("2006-01-02", prochaine)
-	_, errF := time.Parse("2006-01-02", fin)
+	_, okP := LireJour(prochaine, c.Maintenant())
+	_, okF := LireJour(fin, c.Maintenant())
 	switch {
 	case !ok:
 		m.a.Echec(w, r, http.StatusBadRequest, "Catégorie inconnue.")
@@ -317,10 +386,10 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	case utf8.RuneCountInString(libelle) > 80:
 		m.a.Echec(w, r, http.StatusBadRequest, "Libellé : 80 caractères au plus.")
 		return
-	case !FrequenceValide(freq) || errP != nil:
+	case !FrequenceValide(freq) || !okP:
 		m.a.Echec(w, r, http.StatusBadRequest, "Indiquez la fréquence et la prochaine date.")
 		return
-	case fin != "" && (errF != nil || fin < prochaine):
+	case fin != "" && (!okF || fin < prochaine):
 		m.a.Echec(w, r, http.StatusBadRequest, "La date de fin doit suivre la prochaine date.")
 		return
 	}
@@ -330,22 +399,33 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 			membre = sql.NullInt64{Int64: id, Valid: true}
 		}
 	}
-	// Nouvelle date ou nouvelle fréquence : on repart de la date donnée.
-	debut, faites := x.Debut, x.Faites
-	if j, ok := Prochaine(x); !ok || repetition.CleJour(j) != prochaine || freq != x.Frequence {
-		if msg := ValiderProchaine(prochaine, &x, c.Maintenant()); msg != "" {
-			m.a.Echec(w, r, http.StatusBadRequest, msg)
+	// Un abonnement reste une dépense, quelle que soit la catégorie choisie
+	// (sinon il serait un revenu dans le budget et un coût dans Abonnements).
+	if _, err := m.a.Q.AbonnementDeRecurrence(r.Context(), donnees.AbonnementDeRecurrenceParams{RecurrenceID: x.ID, FamilleID: c.Famille.ID}); err == nil {
+		if cat.Sens != "depense" {
+			m.a.Echec(w, r, http.StatusBadRequest, "Un abonnement est une dépense : choisissez une catégorie de dépense.")
 			return
 		}
-	}
-	if j, ok := Prochaine(x); !ok || repetition.CleJour(j) != prochaine || freq != x.Frequence {
-		debut, faites = prochaine, 0
-	}
-	if err := m.a.Q.ModifierRecurrence(r.Context(), donnees.ModifierRecurrenceParams{
-		Sens: cat.Sens, Montant: montant, Categorie: cat.Cle, Libelle: libelle, MembreID: membre, Frequence: freq,
-		Debut: debut, Fin: fin, Faites: faites, ID: x.ID, FamilleID: c.Famille.ID,
-	}); err != nil {
+	} else if !errors.Is(err, sql.ErrNoRows) {
 		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	// Nouvelle date ou nouvelle fréquence : on repart de la date donnée.
+	debut, faites, msg := Replanifier(x, prochaine, freq, c.Maintenant())
+	if msg != "" {
+		m.a.Echec(w, r, http.StatusBadRequest, msg)
+		return
+	}
+	n, err := m.a.Q.ModifierRecurrence(r.Context(), donnees.ModifierRecurrenceParams{
+		Sens: cat.Sens, Montant: montant, Categorie: cat.Cle, Libelle: libelle, MembreID: membre, Frequence: freq,
+		Debut: debut, Fin: fin, Faites: faites, ID: x.ID, FamilleID: c.Famille.ID, FaitesAvant: x.Faites,
+	})
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if n == 0 { // une occurrence a été écrite entre la lecture et l'écriture
+		m.a.Echec(w, r, http.StatusConflict, MessageModifiee)
 		return
 	}
 	if err := Generer(r.Context(), m.a, c.Famille.ID, c.Maintenant()); err != nil {

@@ -697,6 +697,11 @@ func (a *App) ajouterPasskey(w http.ResponseWriter, r *http.Request, c *Contexte
 var errTropDeCles = errors.New("trop de passkeys")
 
 func (a *App) supprimerPasskey(w http.ResponseWriter, r *http.Request, c *Contexte) {
+	// Mot de passe redemandé, comme pour désactiver le TOTP : une session
+	// volée ne suffit pas à retirer le second facteur.
+	if !c.Membre.Mdp.Valid || !a.motDePasseConfirme(w, r, c) {
+		return
+	}
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	n, err := a.Q.SupprimerPasskey(r.Context(), donnees.SupprimerPasskeyParams{ID: id, MembreID: c.Membre.ID})
 	if err != nil {

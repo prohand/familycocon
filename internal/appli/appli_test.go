@@ -46,8 +46,17 @@ func nouvelleAppTest(t *testing.T, env map[string]string) *App {
 
 func TestSante(t *testing.T) {
 	a := nouvelleAppTest(t, nil)
+	// Depuis Internet : l'état seulement, ni version ni schéma.
 	rec := httptest.NewRecorder()
 	a.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/health", nil))
+	if corps := rec.Body.String(); rec.Code != 200 || !strings.Contains(corps, `"etat":"ok"`) || strings.Contains(corps, "version") || strings.Contains(corps, "schema") {
+		t.Fatalf("santé vue d'Internet : %d %s", rec.Code, corps)
+	}
+	// Depuis la machine elle-même (sonde Docker) : le détail.
+	rec = httptest.NewRecorder()
+	locale := httptest.NewRequest("GET", "/health", nil)
+	locale.RemoteAddr = "127.0.0.1:40000"
+	a.Handler().ServeHTTP(rec, locale)
 	if rec.Code != 200 {
 		t.Fatalf("statut %d", rec.Code)
 	}

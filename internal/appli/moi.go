@@ -102,14 +102,10 @@ func (a *App) mdpMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		a.Echec(w, r, http.StatusBadRequest, "Ce compte se connecte avec un code PIN.")
 		return
 	}
-	bon, occupe := ComparerOccupe(c.Membre.Mdp.String, r.PostFormValue("actuel"))
-	if occupe {
-		a.Echec(w, r, http.StatusServiceUnavailable, "Serveur occupé : réessayez dans un instant.")
-		return
-	}
-	if !bon {
-		a.Journal.Warn("changement de mot de passe : mot de passe actuel faux", "membre", c.Membre.ID, "ip", a.IPClient(r).String())
-		a.Echec(w, r, http.StatusBadRequest, "Mot de passe actuel incorrect.")
+	// Mot de passe actuel : essais limités comme pour toute action sensible
+	// (une session volée ne permet pas de le deviner en ligne).
+	if statut, msg := a.verifierMotDePasse(r, c, r.PostFormValue("actuel")); msg != "" {
+		a.Echec(w, r, statut, msg)
 		return
 	}
 	nouveau := r.PostFormValue("nouveau")
@@ -121,9 +117,13 @@ func (a *App) mdpMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		a.Echec(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
-	empreinte, err := Empreinte(nouveau)
-	if err != nil {
+	if err := VerifierRegles(nouveau); err != nil {
 		a.Echec(w, r, http.StatusBadRequest, err.Error())
+		return
+	}
+	empreinte, err := Empreinte(nouveau)
+	if err != nil { // serveur occupé (trop de calculs en même temps)
+		a.Echec(w, r, http.StatusServiceUnavailable, "Serveur occupé : réessayez dans un instant.")
 		return
 	}
 	if err := a.Q.ModifierMdp(r.Context(), donnees.ModifierMdpParams{Mdp: sql.NullString{String: empreinte, Valid: true}, ID: c.Membre.ID}); err != nil {

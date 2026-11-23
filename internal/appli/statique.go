@@ -32,9 +32,28 @@ type Statique struct {
 // compressibles : types texte, qui gagnent à être compressés.
 var compressibles = map[string]bool{".css": true, ".js": true, ".svg": true, ".webmanifest": true, ".json": true, ".txt": true}
 
+// versionSW : texte de sw.js remplacé par la version de l'ensemble des
+// fichiers ; policeCSS : adresse de la police dans app.css, à versionner.
+const (
+	versionSW = "familycocon-1"
+	policeCSS = "fonts/nunito.woff2"
+)
+
+func empreinteCourte(b []byte) string {
+	somme := sha256.Sum256(b)
+	return hex.EncodeToString(somme[:5])
+}
+
 // ChargerStatique lit et compresse les fichiers une seule fois, au démarrage.
+//   - la police citée par app.css reçoit sa version (« ?v=… ») : elle est
+//     gardée un an par le navigateur au lieu d'être revérifiée à chaque page ;
+//   - le nom du cache du service worker suit la version de l'ensemble des
+//     fichiers : à chaque mise à jour, sw.js change, le nouveau service
+//     worker s'installe et supprime l'ancien cache (qui sinon grossit).
 func ChargerStatique(racine fs.FS) (*Statique, error) {
 	s := &Statique{fichiers: map[string]*fichierStatique{}}
+	bruts := map[string][]byte{}
+	var noms []string
 	err := fs.WalkDir(racine, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return err
@@ -43,6 +62,28 @@ func ChargerStatique(racine fs.FS) (*Statique, error) {
 		if err != nil {
 			return err
 		}
+		bruts[p] = contenu
+		noms = append(noms, p) // WalkDir : ordre alphabétique, toujours le même
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if police, ok := bruts[policeCSS]; ok {
+		bruts["app.css"] = bytes.ReplaceAll(bruts["app.css"], []byte(`"`+policeCSS+`"`), []byte(`"`+policeCSS+"?v="+empreinteCourte(police)+`"`))
+	}
+	// Version de l'ensemble : empreinte de toutes les empreintes (sauf sw.js).
+	ensemble := sha256.New()
+	for _, p := range noms {
+		if p != "sw.js" {
+			fmt.Fprintf(ensemble, "%s %s\n", p, empreinteCourte(bruts[p]))
+		}
+	}
+	if sw, ok := bruts["sw.js"]; ok {
+		bruts["sw.js"] = bytes.ReplaceAll(sw, []byte(versionSW), []byte("familycocon-"+hex.EncodeToString(ensemble.Sum(nil)[:5])))
+	}
+	for _, p := range noms {
+		contenu := bruts[p]
 		ext := path.Ext(p)
 		t := mime.TypeByExtension(ext)
 		switch ext {
@@ -56,8 +97,7 @@ func ChargerStatique(racine fs.FS) (*Statique, error) {
 		if t == "" {
 			t = "application/octet-stream"
 		}
-		somme := sha256.Sum256(contenu)
-		f := &fichierStatique{contenu: contenu, type_: t, hash: hex.EncodeToString(somme[:5])}
+		f := &fichierStatique{contenu: contenu, type_: t, hash: empreinteCourte(contenu)}
 		if compressibles[ext] {
 			var b bytes.Buffer
 			zw, _ := gzip.NewWriterLevel(&b, gzip.BestCompression)
@@ -68,9 +108,8 @@ func ChargerStatique(racine fs.FS) (*Statique, error) {
 			}
 		}
 		s.fichiers[p] = f
-		return nil
-	})
-	return s, err
+	}
+	return s, nil
 }
 
 // URL : adresse d'un fichier, avec sa version (« ?v=… ») : le navigateur le

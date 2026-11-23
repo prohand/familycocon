@@ -12,7 +12,7 @@ Application web d'organisation familiale, auto-hébergée, pensée pour le tél�
 | Base | SQLite, `modernc.org/sqlite` (pur Go) | pas de cgo → binaire statique ; une seule connexion, mode WAL |
 | Requêtes | SQL écrit à la main + **sqlc** | chaque requête est vérifiée contre le schéma à la génération ; code Go typé, sans dépendance à l'exécution |
 | Gabarits | `html/template` embarqués (`embed`) | échappement automatique (pas d'injection HTML) |
-| Front | htmx 2.0.11 + `app.js` (~3 Ko) + CSS à la main | ~20 Ko gzip au total ; pas de framework JS |
+| Front | htmx 2.0.11 + `app.js` (~4 Ko gzip) + CSS à la main | ~33 Ko gzip au total (htmx 17, CSS 12, `app.js` 4) ; pas de framework JS |
 | Police | Nunito (variable, latin), embarquée | 39 Ko, licence OFL ; aucun appel à Google Fonts |
 | Temps réel | Server-Sent Events (bibliothèque standard ; `EventSource` du navigateur, sans l'extension htmx) | plus simple que WebSocket, passe par tous les proxys, reconnexion automatique |
 | Mots de passe | Argon2id (`golang.org/x/crypto`) | repris de mirador-stack (paramètres OWASP, 2 calculs simultanés au plus) |
@@ -24,7 +24,8 @@ Dépendances directes : `modernc.org/sqlite`, `golang.org/x/crypto`, `rsc.io/qr`
 de la double authentification et des cartes de fidélité, ~30 Ko, BSD). Rien d'autre.
 
 ## 2. Configuration
-Variables d'environnement (`.env.exemple`) : `FC_URL_PUBLIQUE`, `FC_PROXYS`,
+Variables d'environnement (`.env.exemple`) : `FC_ADRESSE` et `FC_DONNEES` (déjà
+réglées dans l'image), `FC_URL_PUBLIQUE` (adresse du site, sans chemin), `FC_PROXYS`,
 `FC_INSCRIPTIONS`, `FC_NIVEAU_LOGS`, `FC_FORMAT_LOGS`, `FC_SAUVEGARDE_HEURE`,
 `FC_SAUVEGARDE_GARDER`, `FC_DUREE_SESSION_JOURS`, `FC_SESSION_MAX_JOURS`, `FC_CONTACT_PUSH`, `GOMEMLIMIT`.
 Le fuseau horaire et la monnaie se règlent **dans l'interface** (réglages de la famille).
@@ -82,7 +83,8 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
 - Image `ghcr.io/prohand/familycocon` (amd64 + arm64), publiée par la CI sur un tag `vX.Y.Z`.
 - Reverse proxy (Nginx ou Traefik) : transmettre l'en-tête `Host`, ne pas mettre
   en tampon `/direct` (SSE). Exemples dans `deploy/`.
-- `/health` : JSON, 200 si la base répond, 503 sinon. `familycocon -sante` pour Docker.
+- `/health` : JSON, 200 si la base répond, 503 sinon (version et schéma donnés
+  au réseau local seulement). `familycocon -sante` pour Docker.
 - Sauvegarde : `familycocon -sauvegarde FICHIER` ou `-sauvegarde -` (sortie
   standard), à chaud et vérifiée ; sauvegarde automatique quotidienne
   (`FC_SAUVEGARDE_HEURE`, rotation `FC_SAUVEGARDE_GARDER`) ; script hôte

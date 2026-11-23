@@ -11,7 +11,8 @@ export GOTOOLCHAIN := go1.27.4
 # sqlc : surchargeable (make verif SQLC=~/outils/sqlc), comme le fait la CI.
 SQLC ?= go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 VERSION ?= dev
-LDFLAGS := -s -w -buildid= -X familycocon/internal/version.Version=$(VERSION)
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null)
+LDFLAGS := -s -w -buildid= -X familycocon/internal/version.Version=$(VERSION) -X familycocon/internal/version.Commit=$(COMMIT)
 
 .PHONY: lancer test verif sql binaires image
 

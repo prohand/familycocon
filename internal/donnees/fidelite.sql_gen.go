@@ -37,16 +37,17 @@ func (q *Queries) CarteParID(ctx context.Context, arg CarteParIDParams) (Carte, 
 }
 
 const carteUtilisee = `-- name: CarteUtilisee :exec
-UPDATE cartes SET utilisee_le = ? WHERE id = ?
+UPDATE cartes SET utilisee_le = ? WHERE id = ? AND famille_id = ?
 `
 
 type CarteUtiliseeParams struct {
 	UtiliseeLe int64
 	ID         int64
+	FamilleID  int64
 }
 
 func (q *Queries) CarteUtilisee(ctx context.Context, arg CarteUtiliseeParams) error {
-	_, err := q.db.ExecContext(ctx, carteUtilisee, arg.UtiliseeLe, arg.ID)
+	_, err := q.db.ExecContext(ctx, carteUtilisee, arg.UtiliseeLe, arg.ID, arg.FamilleID)
 	return err
 }
 

@@ -145,10 +145,17 @@ func (a *App) blocAVenir(ctx context.Context, c *Contexte) (template.HTML, error
 // heureRappels : l'heure des rappels, dans le fuseau de chaque famille.
 const heureRappels = 9
 
-// rappelsQuotidiens : à chaque heure pile, les familles pour qui il est 9 h
-// (dans leur fuseau) reçoivent une notification pour ce qui tombe aujourd'hui
-// et dans 7 jours.
+// finRattrapage : après cette heure, un rappel manqué n'est plus envoyé
+// (pas de notification tard le soir).
+const finRattrapage = 20
+
+// rappelsQuotidiens : au démarrage puis à chaque heure pile, les familles
+// pour qui il est 9 h passées (dans leur fuseau) et qui n'ont pas encore eu
+// leurs rappels du jour reçoivent une notification pour ce qui tombe
+// aujourd'hui et dans 7 jours. Le jour envoyé est noté en base : un serveur
+// arrêté à 9 h rattrape à son retour, et rien n'est envoyé deux fois.
 func (a *App) rappelsQuotidiens(ctx context.Context) {
+	a.envoyerRappelsA(ctx, time.Now(), true)
 	for {
 		maintenant := time.Now()
 		minuteur := time.NewTimer(maintenant.Truncate(time.Hour).Add(time.Hour).Sub(maintenant))
@@ -162,13 +169,18 @@ func (a *App) rappelsQuotidiens(ctx context.Context) {
 	}
 }
 
+// cleRappels : nom de la ligne « rappels envoyés le » d'une famille (table serveur).
+func cleRappels(famille int64) string { return "rappels:" + strconv.FormatInt(famille, 10) }
+
 // EnvoyerRappels : les notifications de rappel du jour (toutes les familles).
 func (a *App) EnvoyerRappels(ctx context.Context, maintenant time.Time) int {
 	return a.envoyerRappelsA(ctx, maintenant, false)
 }
 
-// envoyerRappelsA : seulement aux familles pour qui il est 9 h si seule9h.
+// envoyerRappelsA : si seule9h, seulement aux familles pour qui il est 9 h
+// passées et qui n'ont pas encore eu leurs rappels du jour.
 func (a *App) envoyerRappelsA(ctx context.Context, maintenant time.Time, seule9h bool) int {
+	defer a.rattraper("rappels")
 	if a.Push == nil {
 		return 0
 	}
@@ -180,10 +192,20 @@ func (a *App) envoyerRappelsA(ctx context.Context, maintenant time.Time, seule9h
 	n := 0
 	for _, f := range familles {
 		local := maintenant.Add(time.Minute).In(lieuFamille(f)) // minuteur un peu en avance : arrondi
-		if seule9h && local.Hour() != heureRappels {
-			continue
-		}
 		auj := minuitDe(local)
+		if seule9h {
+			if local.Hour() < heureRappels || local.Hour() >= finRattrapage {
+				continue
+			}
+			jour := auj.Format("2006-01-02")
+			if dernier, err := a.Q.LireServeur(ctx, cleRappels(f.ID)); err == nil && string(dernier) == jour {
+				continue // déjà envoyés aujourd'hui
+			}
+			if err := a.Q.NoterServeur(ctx, donnees.NoterServeurParams{Nom: cleRappels(f.ID), Valeur: []byte(jour)}); err != nil {
+				a.Journal.Error("rappels : jour non noté", "erreur", err)
+				continue // plutôt aucun rappel que le même à chaque heure
+			}
+		}
 		for _, decalage := range []int{0, 7} {
 			jour := auj.AddDate(0, 0, decalage)
 			for _, e := range a.Echeances(ctx, f, jour, jour.AddDate(0, 0, 1)) {
@@ -192,11 +214,8 @@ func (a *App) envoyerRappelsA(ctx context.Context, maintenant time.Time, seule9h
 					quand = "Dans 7 jours"
 				}
 				texte := fmt.Sprintf("%s %s : %s", e.Emoji, quand, e.Titre)
-				if e.Parents {
-					a.Push.AnnoncerParents(f.ID, moduleRappels, texte)
-				} else {
-					a.Push.Annoncer(f.ID, 0, moduleRappels, texte)
-				}
+				// En attendant une place dans la file : aucun rappel perdu.
+				a.Push.annoncerEnAttendant(ctx, annonce{famille: f.ID, module: moduleRappels, texte: texte, parents: e.Parents})
 				n++
 			}
 		}

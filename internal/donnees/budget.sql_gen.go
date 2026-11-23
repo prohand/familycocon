@@ -87,6 +87,40 @@ func (q *Queries) ModifierOperation(ctx context.Context, arg ModifierOperationPa
 	return err
 }
 
+const operationIdentiqueRecente = `-- name: OperationIdentiqueRecente :one
+SELECT count(*) FROM operations
+WHERE famille_id = ? AND sens = ? AND montant = ? AND categorie = ? AND libelle = ? AND jour = ?
+  AND cree_par = ? AND recurrence_id IS NULL AND cree_le >= ?
+`
+
+type OperationIdentiqueRecenteParams struct {
+	FamilleID int64
+	Sens      string
+	Montant   int64
+	Categorie string
+	Libelle   string
+	Jour      string
+	CreePar   sql.NullInt64
+	CreeLe    int64
+}
+
+// Meme operation ecrite a l'instant par la meme personne (double envoi).
+func (q *Queries) OperationIdentiqueRecente(ctx context.Context, arg OperationIdentiqueRecenteParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, operationIdentiqueRecente,
+		arg.FamilleID,
+		arg.Sens,
+		arg.Montant,
+		arg.Categorie,
+		arg.Libelle,
+		arg.Jour,
+		arg.CreePar,
+		arg.CreeLe,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const operationParID = `-- name: OperationParID :one
 SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id FROM operations WHERE id = ? AND famille_id = ?
 `

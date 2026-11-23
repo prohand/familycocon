@@ -168,6 +168,21 @@ func (q *Queries) ModifierPushModules(ctx context.Context, arg ModifierPushModul
 	return err
 }
 
+const noterServeur = `-- name: NoterServeur :exec
+INSERT INTO serveur (nom, valeur) VALUES (?, ?) ON CONFLICT (nom) DO UPDATE SET valeur = excluded.valeur
+`
+
+type NoterServeurParams struct {
+	Nom    string
+	Valeur []byte
+}
+
+// Petite valeur du serveur, remplacee si elle existe (dernier jour des rappels).
+func (q *Queries) NoterServeur(ctx context.Context, arg NoterServeurParams) error {
+	_, err := q.db.ExecContext(ctx, noterServeur, arg.Nom, arg.Valeur)
+	return err
+}
+
 const supprimerAbonnement = `-- name: SupprimerAbonnement :exec
 DELETE FROM abonnements_push WHERE id = ?
 `

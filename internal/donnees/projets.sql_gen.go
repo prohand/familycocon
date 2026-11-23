@@ -69,6 +69,44 @@ func (q *Queries) CocherEtape(ctx context.Context, arg CocherEtapeParams) error 
 	return err
 }
 
+const compterEtapesProjet = `-- name: CompterEtapesProjet :one
+SELECT count(*) FROM projet_etapes WHERE projet_id = ? AND famille_id = ?
+`
+
+type CompterEtapesProjetParams struct {
+	ProjetID  int64
+	FamilleID int64
+}
+
+func (q *Queries) CompterEtapesProjet(ctx context.Context, arg CompterEtapesProjetParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterEtapesProjet, arg.ProjetID, arg.FamilleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterProjets = `-- name: CompterProjets :one
+SELECT count(*) FROM projets WHERE famille_id = ?
+`
+
+func (q *Queries) CompterProjets(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterProjets, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterProjetsEnCours = `-- name: CompterProjetsEnCours :one
+SELECT count(*) FROM projets WHERE famille_id = ? AND termine_le = 0
+`
+
+func (q *Queries) CompterProjetsEnCours(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterProjetsEnCours, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const creerProjet = `-- name: CreerProjet :one
 INSERT INTO projets (famille_id, nom, emoji, couleur, description, objectif, budget, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, emoji, couleur, description, objectif, budget, termine_le, cree_le

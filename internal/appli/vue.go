@@ -167,7 +167,7 @@ func (a *App) NouvelleVue(w http.ResponseWriter, r *http.Request, c *Contexte, t
 	v.Flash = a.lireFlash(w, r)
 	if c != nil {
 		v.Barre = Raccourcis(c)
-		v.Membres, _ = a.Q.MembresDeFamille(context.WithoutCancel(r.Context()), c.Famille.ID)
+		v.Membres, _ = a.Membres(context.WithoutCancel(r.Context()), c)
 	}
 	return v
 }

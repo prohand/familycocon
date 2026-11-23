@@ -101,14 +101,15 @@ func (m *Module) exporter(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	var b strings.Builder
-	for _, ct := range tous {
-		b.WriteString(VCard(ct))
-	}
 	w.Header().Set("Content-Type", "text/vcard; charset=utf-8")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="contacts-familycocon-%s.vcf"`, c.Maintenant().Format("2006-01-02")))
 	w.Header().Set("Cache-Control", "no-store")
-	_, _ = io.WriteString(w, b.String())
+	// Carte par carte : tout le carnet n'est pas assemblé en mémoire.
+	for _, ct := range tous {
+		if _, err := io.WriteString(w, VCard(ct)); err != nil {
+			return
+		}
+	}
 }
 
 // --- Import ---------------------------------------------------------------------
@@ -131,61 +132,82 @@ func (p propriete) a(param string) bool {
 	return false
 }
 
-// lignes : les lignes dépliées (suite commençant par une espace ou une
-// tabulation ; en quoted-printable, « = » en fin de ligne). Linéaire : une
-// ligne logique est construite morceau par morceau, 256 Kio au plus ; le
-// contenu des photos est sauté ; 500 000 lignes au plus.
-func lignes(ctx context.Context, r io.Reader) ([]string, error) {
+// lignes : rend une à une les lignes dépliées (suite commençant par une
+// espace ou une tabulation ; en quoted-printable, « = » en fin de ligne).
+// Lecture en flux : le fichier n'est jamais gardé en entier. Une ligne
+// logique fait 256 Kio au plus ; le contenu des photos est sauté ; 500 000
+// lignes au plus. Une ligne physique plus longue que le tampon (photo sur
+// une seule ligne) arrive en plusieurs morceaux.
+func lignes(ctx context.Context, r io.Reader, rendre func(l string) error) error {
 	const (
 		ligneMax  = 256 << 10
 		lignesMax = 500000
 	)
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 64<<10), 8<<20)
-	var out []string
-	var cur strings.Builder
-	en, qp, ignorer, finEgal := false, false, false, false
-	ecrire := func(t string) {
+	br := bufio.NewReaderSize(r, 64<<10)
+	var cur []byte
+	en, qp, ignorer, finEgal, milieu := false, false, false, false, false
+	// ecrire ajoute un morceau à la ligne logique ; fin : le morceau termine
+	// la ligne physique (c'est là que se lit le « = » du quoted-printable).
+	ecrire := func(t []byte, fin bool) {
 		if qp {
-			finEgal = strings.HasSuffix(t, "=")
-			t = strings.TrimSuffix(t, "=")
+			finEgal = fin && bytes.HasSuffix(t, []byte("="))
+			if finEgal {
+				t = t[:len(t)-1]
+			}
 		}
-		if !ignorer && cur.Len()+len(t) <= ligneMax {
-			cur.WriteString(t)
+		if !ignorer && len(cur)+len(t) <= ligneMax {
+			cur = append(cur, t...)
 		}
 	}
 	n := 0
-	for sc.Scan() {
-		if n++; n > lignesMax {
-			return nil, errors.New("fichier trop long")
+	for {
+		l, suite, err := br.ReadLine()
+		if err == io.EOF {
+			break
 		}
-		if n%10000 == 0 && ctx.Err() != nil {
-			return nil, ctx.Err()
+		if err != nil {
+			return err
 		}
-		l := strings.TrimRight(sc.Text(), "\r")
+		fin := !suite
+		if fin {
+			l = bytes.TrimRight(l, "\r")
+		}
 		switch {
+		case milieu: // suite d'une ligne physique plus longue que le tampon
+			ecrire(l, fin)
 		case en && qp && finEgal:
-			ecrire(l)
-		case en && (strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t")):
-			ecrire(l[1:])
+			ecrire(l, fin)
+		case en && len(l) > 0 && (l[0] == ' ' || l[0] == '\t'):
+			ecrire(l[1:], fin)
 		default:
 			if en {
-				out = append(out, cur.String())
-				cur.Reset()
+				if err := rendre(string(cur)); err != nil {
+					return err
+				}
+				cur = cur[:0]
 			}
 			en, finEgal = true, false
-			tete := strings.ToUpper(l[:max(0, strings.Index(l, ":"))])
-			qp = strings.Contains(tete, "QUOTED-PRINTABLE")
+			tete := bytes.ToUpper(l[:max(0, bytes.IndexByte(l, ':'))])
+			qp = bytes.Contains(tete, []byte("QUOTED-PRINTABLE"))
 			ignorer = false
-			ecrire(l)
+			ecrire(l, fin)
 			// Photos (souvent des centaines de Kio) : l'en-tête suffit.
-			ignorer = strings.HasPrefix(tete, "PHOTO") || strings.Contains(tete, ".PHOTO")
+			ignorer = bytes.HasPrefix(tete, []byte("PHOTO")) || bytes.Contains(tete, []byte(".PHOTO"))
 		}
+		if !milieu {
+			if n++; n > lignesMax {
+				return errors.New("fichier trop long")
+			}
+			if n%10000 == 0 && ctx.Err() != nil {
+				return ctx.Err()
+			}
+		}
+		milieu = suite
 	}
 	if en {
-		out = append(out, cur.String())
+		return rendre(string(cur))
 	}
-	return out, sc.Err()
+	return nil
 }
 
 func lirePropriete(l string) (propriete, bool) {
@@ -214,13 +236,19 @@ func lirePropriete(l string) (propriete, bool) {
 	return p, true
 }
 
+// decoderQP : « =C3=A9 » → « é ». Écrit à la main (fmt.Sscanf, appelé pour
+// chaque « =XX », coûtait l'essentiel du temps d'un gros import).
 func decoderQP(s string) string {
-	var b []byte
+	if !strings.Contains(s, "=") {
+		return s
+	}
+	b := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {
 		if s[i] == '=' && i+2 < len(s) {
-			var v byte
-			if _, err := fmt.Sscanf(s[i+1:i+3], "%02X", &v); err == nil {
-				b = append(b, v)
+			h, ok1 := hexa(s[i+1])
+			l, ok2 := hexa(s[i+2])
+			if ok1 && ok2 {
+				b = append(b, h<<4|l)
 				i += 2
 				continue
 			}
@@ -228,6 +256,19 @@ func decoderQP(s string) string {
 		b = append(b, s[i])
 	}
 	return string(b)
+}
+
+// hexa : la valeur d'un chiffre hexadécimal.
+func hexa(c byte) (byte, bool) {
+	switch {
+	case c >= '0' && c <= '9':
+		return c - '0', true
+	case c >= 'A' && c <= 'F':
+		return c - 'A' + 10, true
+	case c >= 'a' && c <= 'f':
+		return c - 'a' + 10, true
+	}
+	return 0, false
 }
 
 // composants : « a;b\;c;d » → [a, b;c, d] (séparateur sep, échappements retirés).
@@ -293,20 +334,23 @@ func naissanceVCard(s string) string {
 	return n
 }
 
-// lireVCards : les contacts d'un fichier .vcf.
+// CartesMax : contacts lus dans un seul fichier.
+const CartesMax = 3000
+
+// errTropDeCartes : plus de CartesMax contacts dans le fichier.
+var errTropDeCartes = errors.New("trop de contacts dans le fichier")
+
+// lireVCards : les contacts d'un fichier .vcf, lu en flux (carte par
+// carte) ; la lecture s'arrête dès que CartesMax est dépassé.
 func lireVCards(ctx context.Context, r io.Reader) ([]saisie, error) {
-	ls, err := lignes(ctx, r)
-	if err != nil {
-		return nil, err
-	}
 	var out []saisie
 	var s *saisie
 	var prenomNom string
 	var notes []string
-	for _, l := range ls {
+	err := lignes(ctx, r, func(l string) error {
 		p, ok := lirePropriete(l)
 		if !ok {
-			continue
+			return nil
 		}
 		switch p.nom {
 		case "BEGIN":
@@ -320,13 +364,16 @@ func lireVCards(ctx context.Context, r io.Reader) ([]saisie, error) {
 				}
 				s.notes = strings.Join(notes, "\n")
 				if s.nom != "" {
+					if len(out) == CartesMax {
+						return errTropDeCartes
+					}
 					out = append(out, *s)
 				}
 				s = nil
 			}
 		}
 		if s == nil {
-			continue
+			return nil
 		}
 		switch p.nom {
 		case "FN":
@@ -396,8 +443,9 @@ func lireVCards(ctx context.Context, r io.Reader) ([]saisie, error) {
 			}
 			s.groupes = strings.Join(Groupes(strings.Join(append(Groupes(s.groupes), g...), ",")), ", ")
 		}
-	}
-	return out, nil
+		return nil
+	})
+	return out, err
 }
 
 // borner : un champ importé coupé à n caractères.
@@ -408,29 +456,68 @@ func borner(s string, n int) string {
 	return string([]rune(s)[:n])
 }
 
-func (m *Module) importer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	f, _, err := r.FormFile("fichier")
+// fichierEnvoye : le fichier du formulaire d'import, lu en flux.
+//   - envoi par htmx (jeton CSRF dans l'en-tête) : le corps n'a pas encore
+//     été lu, on avance jusqu'au champ « fichier » sans rien garder en mémoire ;
+//   - formulaire sans JavaScript : le jeton était dans le corps, que la
+//     bibliothèque standard a donc déjà lu en entier (r.MultipartForm).
+func fichierEnvoye(r *http.Request) (io.ReadCloser, error) {
+	if r.MultipartForm != nil {
+		f, _, err := r.FormFile("fichier")
+		return f, err
+	}
+	mr, err := r.MultipartReader()
 	if err != nil {
-		var trop *http.MaxBytesError
-		if errors.As(err, &trop) {
-			m.a.Echec(w, r, http.StatusRequestEntityTooLarge, "Fichier trop gros (8 Mo au plus).")
-			return
+		return nil, err
+	}
+	for {
+		p, err := mr.NextPart()
+		if err != nil {
+			return nil, err // io.EOF : pas de champ « fichier »
 		}
-		m.a.Echec(w, r, http.StatusBadRequest, "Choisissez un fichier .vcf.")
+		if p.FormName() == "fichier" {
+			return p, nil
+		}
+		_ = p.Close()
+	}
+}
+
+// ContactsMax : contacts par famille (garde-fou ; un carnet de téléphone
+// bien rempli en compte quelques centaines).
+const ContactsMax = 5000
+
+func (m *Module) importer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	trop := func(err error) bool {
+		var e *http.MaxBytesError
+		if errors.As(err, &e) {
+			m.a.Echec(w, r, http.StatusRequestEntityTooLarge, "Fichier trop gros (8 Mo au plus).")
+			return true
+		}
+		return false
+	}
+	f, err := fichierEnvoye(r)
+	if err != nil {
+		if !trop(err) {
+			m.a.Echec(w, r, http.StatusBadRequest, "Choisissez un fichier .vcf.")
+		}
 		return
 	}
 	defer f.Close()
+	// Le fichier est d'abord lu en entier (sans transaction : l'envoi peut
+	// être lent et la base n'a qu'une connexion), puis tout est écrit d'un coup.
 	cartes, err := lireVCards(r.Context(), f)
-	if err != nil || len(cartes) == 0 {
+	switch {
+	case errors.Is(err, errTropDeCartes):
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Trop de contacts d'un coup (%d au plus).", CartesMax))
+		return
+	case trop(err):
+		return
+	case err != nil || len(cartes) == 0:
 		m.a.Echec(w, r, http.StatusBadRequest, "Aucun contact trouvé dans ce fichier (format vCard .vcf attendu).")
 		return
 	}
-	if len(cartes) > 3000 {
-		m.a.Echec(w, r, http.StatusBadRequest, "Trop de contacts d'un coup (3000 au plus).")
-		return
-	}
 	ctx := r.Context()
-	existants, err := m.a.Q.ContactsFamille(ctx, c.Famille.ID)
+	existants, err := m.a.Q.ClesContacts(ctx, c.Famille.ID)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -438,19 +525,24 @@ func (m *Module) importer(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	cle := func(nom, tel string) string { return strings.ToLower(strings.TrimSpace(nom)) + "|" + LienTel(tel) }
 	deja := map[string]bool{}
 	for _, ct := range existants {
-		deja[cle(ct.Nom, premierTel(ct))] = true
+		deja[cle(ct.Nom, PremierTel(ct.Telephone, ct.TelFixe, ct.TelTravail))] = true
 	}
-	ajoutes, doublons := 0, 0
+	ajoutes, doublons, refuses := 0, 0, 0
 	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
 		t := time.Now().Unix()
 		for _, s := range cartes {
-			k := cle(s.nom, firstNonEmpty(s.tel, s.fixe, s.travail))
+			k := cle(s.nom, PremierTel(s.tel, s.fixe, s.travail))
 			if deja[k] {
 				doublons++
 				continue
 			}
+			// Carnet plein : le reste du fichier n'est pas ajouté.
+			if len(existants)+ajoutes >= ContactsMax {
+				refuses++
+				continue
+			}
 			deja[k] = true
-			if s.email != "" && (!strings.Contains(s.email, "@") || strings.ContainsAny(s.email, " <>\"")) {
+			if !EmailValide(s.email) {
 				s.email = ""
 			}
 			if _, err := q.CreerContact(ctx, donnees.CreerContactParams{
@@ -470,20 +562,17 @@ func (m *Module) importer(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	m.a.Journal.Info("contacts importés", "famille", c.Famille.ID, "ajoutes", ajoutes, "doublons", doublons)
+	m.a.Journal.Info("contacts importés", "famille", c.Famille.ID, "ajoutes", ajoutes, "doublons", doublons, "refuses", refuses)
 	msg := appli.Pluriel(ajoutes, "contact importé", "contacts importés")
 	if doublons > 0 {
 		msg += fmt.Sprintf(" (%d déjà présent(s))", doublons)
 	}
+	if refuses > 0 {
+		msg += fmt.Sprintf(" ; carnet plein (%d contacts au plus) : %d non ajouté(s)", ContactsMax, refuses)
+	}
+	if ajoutes > 0 {
+		m.a.Publier(c, modContacts, "")
+	}
 	m.a.Flash(w, msg+" ✓")
 	m.a.Rediriger(w, r, "/contacts")
-}
-
-func firstNonEmpty(v ...string) string {
-	for _, x := range v {
-		if x != "" {
-			return x
-		}
-	}
-	return ""
 }

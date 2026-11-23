@@ -58,6 +58,44 @@ func (q *Queries) AjouterCarnet(ctx context.Context, arg AjouterCarnetParams) (C
 	return i, err
 }
 
+const carnetIdentiqueRecent = `-- name: CarnetIdentiqueRecent :one
+SELECT count(*) FROM carnet
+WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = ? AND montant = ? AND km = ? AND note = ?
+  AND cree_par = ? AND cree_le >= ?
+`
+
+type CarnetIdentiqueRecentParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+	Jour      string
+	Libelle   string
+	Montant   int64
+	Km        int64
+	Note      string
+	CreePar   sql.NullInt64
+	CreeLe    int64
+}
+
+// Meme ligne ecrite a l'instant par la meme personne (double envoi).
+func (q *Queries) CarnetIdentiqueRecent(ctx context.Context, arg CarnetIdentiqueRecentParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, carnetIdentiqueRecent,
+		arg.FamilleID,
+		arg.Module,
+		arg.ObjetID,
+		arg.Jour,
+		arg.Libelle,
+		arg.Montant,
+		arg.Km,
+		arg.Note,
+		arg.CreePar,
+		arg.CreeLe,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const carnetObjet = `-- name: CarnetObjet :many
 SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? ORDER BY jour DESC, id DESC LIMIT 100
 `
@@ -101,6 +139,40 @@ func (q *Queries) CarnetObjet(ctx context.Context, arg CarnetObjetParams) ([]Car
 		return nil, err
 	}
 	return items, nil
+}
+
+const compterCarnetObjet = `-- name: CompterCarnetObjet :one
+SELECT count(*) FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ?
+`
+
+type CompterCarnetObjetParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+func (q *Queries) CompterCarnetObjet(ctx context.Context, arg CompterCarnetObjetParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterCarnetObjet, arg.FamilleID, arg.Module, arg.ObjetID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterEcheancesObjet = `-- name: CompterEcheancesObjet :one
+SELECT count(*) FROM echeances WHERE famille_id = ? AND module = ? AND objet_id = ?
+`
+
+type CompterEcheancesObjetParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+func (q *Queries) CompterEcheancesObjet(ctx context.Context, arg CompterEcheancesObjetParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterEcheancesObjet, arg.FamilleID, arg.Module, arg.ObjetID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const creerEcheance = `-- name: CreerEcheance :one
@@ -287,34 +359,34 @@ func (q *Queries) LigneCarnetParID(ctx context.Context, arg LigneCarnetParIDPara
 	return i, err
 }
 
-const prochainesEcheancesModule = `-- name: ProchainesEcheancesModule :many
-SELECT id, famille_id, module, objet_id, libelle, jour, repetition_mois, cree_le FROM echeances WHERE famille_id = ? AND module = ? ORDER BY jour LIMIT 50
+const premieresEcheancesModule = `-- name: PremieresEcheancesModule :many
+SELECT objet_id, libelle, CAST(min(jour) AS TEXT) AS jour FROM echeances
+WHERE famille_id = ? AND module = ? GROUP BY objet_id
 `
 
-type ProchainesEcheancesModuleParams struct {
+type PremieresEcheancesModuleParams struct {
 	FamilleID int64
 	Module    string
 }
 
-func (q *Queries) ProchainesEcheancesModule(ctx context.Context, arg ProchainesEcheancesModuleParams) ([]Echeance, error) {
-	rows, err := q.db.QueryContext(ctx, prochainesEcheancesModule, arg.FamilleID, arg.Module)
+type PremieresEcheancesModuleRow struct {
+	ObjetID int64
+	Libelle string
+	Jour    string
+}
+
+// La premiere echeance de chaque objet d'un module (alertes des listes) :
+// avec min(), SQLite prend le libelle de la meme ligne.
+func (q *Queries) PremieresEcheancesModule(ctx context.Context, arg PremieresEcheancesModuleParams) ([]PremieresEcheancesModuleRow, error) {
+	rows, err := q.db.QueryContext(ctx, premieresEcheancesModule, arg.FamilleID, arg.Module)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Echeance{}
+	items := []PremieresEcheancesModuleRow{}
 	for rows.Next() {
-		var i Echeance
-		if err := rows.Scan(
-			&i.ID,
-			&i.FamilleID,
-			&i.Module,
-			&i.ObjetID,
-			&i.Libelle,
-			&i.Jour,
-			&i.RepetitionMois,
-			&i.CreeLe,
-		); err != nil {
+		var i PremieresEcheancesModuleRow
+		if err := rows.Scan(&i.ObjetID, &i.Libelle, &i.Jour); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -326,21 +398,6 @@ func (q *Queries) ProchainesEcheancesModule(ctx context.Context, arg ProchainesE
 		return nil, err
 	}
 	return items, nil
-}
-
-const reporterEcheance = `-- name: ReporterEcheance :exec
-UPDATE echeances SET jour = ? WHERE id = ? AND famille_id = ?
-`
-
-type ReporterEcheanceParams struct {
-	Jour      string
-	ID        int64
-	FamilleID int64
-}
-
-func (q *Queries) ReporterEcheance(ctx context.Context, arg ReporterEcheanceParams) error {
-	_, err := q.db.ExecContext(ctx, reporterEcheance, arg.Jour, arg.ID, arg.FamilleID)
-	return err
 }
 
 const reporterEcheanceSiJour = `-- name: ReporterEcheanceSiJour :execrows
@@ -441,4 +498,37 @@ type SupprimerSuiviObjetParams struct {
 func (q *Queries) SupprimerSuiviObjet(ctx context.Context, arg SupprimerSuiviObjetParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerSuiviObjet, arg.FamilleID, arg.Module, arg.ObjetID)
 	return err
+}
+
+const totauxCarnetObjet = `-- name: TotauxCarnetObjet :one
+SELECT CAST(coalesce(sum(montant), 0) AS INTEGER) AS total,
+  CAST(coalesce(sum(CASE WHEN jour >= ?1 AND jour < ?2 THEN montant ELSE 0 END), 0) AS INTEGER) AS annee
+FROM carnet WHERE famille_id = ?3 AND module = ?4 AND objet_id = ?5
+`
+
+type TotauxCarnetObjetParams struct {
+	DebutAnnee string
+	FinAnnee   string
+	FamilleID  int64
+	Module     string
+	ObjetID    int64
+}
+
+type TotauxCarnetObjetRow struct {
+	Total int64
+	Annee int64
+}
+
+// Totaux sur tout le carnet (la liste, elle, s'arrete a 100 lignes).
+func (q *Queries) TotauxCarnetObjet(ctx context.Context, arg TotauxCarnetObjetParams) (TotauxCarnetObjetRow, error) {
+	row := q.db.QueryRowContext(ctx, totauxCarnetObjet,
+		arg.DebutAnnee,
+		arg.FinAnnee,
+		arg.FamilleID,
+		arg.Module,
+		arg.ObjetID,
+	)
+	var i TotauxCarnetObjetRow
+	err := row.Scan(&i.Total, &i.Annee)
+	return i, err
 }

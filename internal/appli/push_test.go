@@ -197,11 +197,19 @@ func TestRappelsDuMatin(t *testing.T) {
 	paris, _ := time.LoadLocation("Europe/Paris")
 	maintenant := time.Now().In(paris)
 	a9h := time.Date(maintenant.Year(), maintenant.Month(), maintenant.Day(), 9, 0, 0, 0, paris)
-	if n := a.envoyerRappelsA(ctx, a9h.Add(time.Hour), true); n != 0 {
-		t.Fatalf("%d rappels à 10 h, aucun attendu", n)
+	if n := a.envoyerRappelsA(ctx, a9h.Add(-time.Hour), true); n != 0 {
+		t.Fatalf("%d rappels à 8 h, aucun attendu", n)
 	}
-	if n := a.envoyerRappelsA(ctx, a9h.Add(-time.Second), true); n != 2 {
-		t.Fatalf("%d rappels à 9 h, 2 attendus", n)
+	if n := a.envoyerRappelsA(ctx, a9h.Add(12*time.Hour), true); n != 0 {
+		t.Fatalf("%d rappels à 21 h, aucun attendu (trop tard)", n)
+	}
+	// Serveur arrêté à 9 h, revenu à 10 h : les rappels partent quand même…
+	if n := a.envoyerRappelsA(ctx, a9h.Add(time.Hour), true); n != 2 {
+		t.Fatalf("%d rappels à 10 h (rattrapage), 2 attendus", n)
+	}
+	// … mais une seule fois par jour.
+	if n := a.envoyerRappelsA(ctx, a9h.Add(2*time.Hour), true); n != 0 {
+		t.Fatalf("%d rappels à 11 h, aucun attendu (déjà envoyés)", n)
 	}
 	for i := 0; i < 200; i++ {
 		mu.Lock()

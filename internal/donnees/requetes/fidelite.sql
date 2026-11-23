@@ -14,7 +14,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 UPDATE cartes SET enseigne = ?, numero = ?, format = ?, couleur = ?, titulaire = ?, notes = ? WHERE id = ? AND famille_id = ?;
 
 -- name: CarteUtilisee :exec
-UPDATE cartes SET utilisee_le = ? WHERE id = ?;
+UPDATE cartes SET utilisee_le = ? WHERE id = ? AND famille_id = ?;
 
 -- name: SupprimerCarte :exec
 DELETE FROM cartes WHERE id = ? AND famille_id = ?;

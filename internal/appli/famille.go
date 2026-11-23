@@ -274,6 +274,23 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 		if err := q.SupprimerAbonnementsPushMembre(ctx, m.ID); err != nil {
 			return err
 		}
+		// Le membre reste en base (désactivé) : les « ON DELETE » ne jouent pas.
+		// Ses tâches reviennent à tout le monde ; ses notes privées, que
+		// personne d'autre ne peut voir ni supprimer, sont effacées.
+		moi := sql.NullInt64{Int64: m.ID, Valid: true}
+		if err := q.LibererTachesMembre(ctx, donnees.LibererTachesMembreParams{FamilleID: c.Famille.ID, AssigneA: moi}); err != nil {
+			return err
+		}
+		if err := q.SupprimerNotesPriveesMembre(ctx, donnees.SupprimerNotesPriveesMembreParams{FamilleID: c.Famille.ID, AuteurID: moi}); err != nil {
+			return err
+		}
+		// Plus rien pour se connecter : ni passkey ni code de secours.
+		if err := q.SupprimerPasskeysMembre(ctx, m.ID); err != nil {
+			return err
+		}
+		if err := q.EffacerCodesSecours(ctx, m.ID); err != nil {
+			return err
+		}
 		// Un parent retiré : ses appareils de confiance ne doivent plus
 		// proposer les enfants. On les oublie tous (les autres parents les
 		// retrouvent à leur prochaine connexion).
@@ -326,7 +343,17 @@ func contient(liste []string, v string) bool {
 	return false
 }
 
-// Membres : membres actifs de la famille (pour les modules).
+// Membres : membres actifs de la famille (pour les modules). Lus une seule
+// fois par requête : un Contexte ne vit que le temps d'une requête. La
+// liste est partagée : ne pas la modifier.
 func (a *App) Membres(ctx context.Context, c *Contexte) ([]donnees.Membre, error) {
-	return a.Q.MembresDeFamille(ctx, c.Famille.ID)
+	if c.membresLu {
+		return c.membres, nil
+	}
+	l, err := a.Q.MembresDeFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return nil, err
+	}
+	c.membres, c.membresLu = l, true
+	return l, nil
 }

@@ -22,8 +22,8 @@ UPDATE contacts SET nom = ?, relation = ?, naissance = ?, telephone = ?, tel_fix
   societe = ?, metier = ?, site = ?, favori = ?, pro = ?, groupes = ?, notes = ?, idees = ?, modifie_le = ?
 WHERE id = ? AND famille_id = ?;
 
--- name: BasculerFavori :exec
-UPDATE contacts SET favori = 1 - favori WHERE id = ? AND famille_id = ?;
+-- name: DefinirFavori :exec
+UPDATE contacts SET favori = ? WHERE id = ? AND famille_id = ?;
 
 -- name: SupprimerContact :exec
 DELETE FROM contacts WHERE id = ? AND famille_id = ?;
@@ -33,6 +33,20 @@ SELECT count(*) FROM contacts WHERE famille_id = ?;
 
 -- name: CompterPrestataires :one
 SELECT count(*) FROM contacts WHERE famille_id = ? AND pro = 1;
+
+-- name: CompterAdresses :one
+SELECT count(*) FROM contacts WHERE famille_id = ? AND adresse <> '';
+
+-- Listes de choix (veterinaire, garage...) : le strict necessaire.
+-- name: ContactsChoix :many
+SELECT id, nom, pro, metier FROM contacts WHERE famille_id = ? ORDER BY nom COLLATE NOCASE;
+
+-- name: NomsPrestataires :many
+SELECT id, nom FROM contacts WHERE famille_id = ? AND pro = 1;
+
+-- Doublons a l'import : nom et telephones seulement.
+-- name: ClesContacts :many
+SELECT nom, telephone, tel_fixe, tel_travail FROM contacts WHERE famille_id = ?;
 
 -- Contacts cites par les evenements de l'agenda.
 

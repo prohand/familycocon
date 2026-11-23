@@ -12,6 +12,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"familycocon/internal/donnees"
@@ -116,7 +117,10 @@ func (p *Pousseur) boucle(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case an := <-p.file:
-			p.diffuser(ctx, an)
+			func() {
+				defer p.a.rattraper("notifications")
+				p.diffuser(ctx, an)
+			}()
 		}
 	}
 }
@@ -134,22 +138,49 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		an.parents = an.parents || m.Parents
 	}
 	corps, _ := json.Marshal(map[string]string{"titre": "FamilyCocon", "texte": an.texte, "url": url, "groupe": an.module})
+	// Quelques envois à la fois : un service de push lent (20 s de délai)
+	// ne retarde pas les autres appareils ni les annonces suivantes.
+	var groupe sync.WaitGroup
+	places := make(chan struct{}, envoisSimultanes)
 	for _, ab := range abos {
-		if !contient(strings.Split(ab.PushModules, ","), an.module) || p.a.Direct.EnLigne(an.famille, ab.MembreID) ||
-			(an.parents && ab.Role != RoleParent) {
+		// Un rappel du matin ne s'affiche nulle part ailleurs : il part même si
+		// le membre a une page ouverte (un onglet oublié sur l'ordinateur).
+		enLigne := an.module != moduleRappels && p.a.Direct.EnLigne(an.famille, ab.MembreID)
+		if !contient(strings.Split(ab.PushModules, ","), an.module) || enLigne || (an.parents && ab.Role != RoleParent) {
 			continue
 		}
-		envoi, annuler := context.WithTimeout(ctx, 20*time.Second)
-		err := p.envoyer(envoi, &webpush.Abonnement{Adresse: ab.Adresse, P256dh: ab.P256dh, Auth: ab.Auth}, corps,
-			webpush.Options{Cle: p.cle, Sujet: p.a.Config.ContactPush, Groupe: an.module, Urgent: an.module == "enfants"})
-		annuler()
-		switch {
-		case errors.Is(err, webpush.ErrExpire), errors.Is(err, webpush.ErrAbonnement):
-			_ = p.a.Q.SupprimerAbonnement(ctx, ab.ID)
-			p.a.Journal.Info("abonnement push expiré, supprimé", "membre", ab.MembreID)
-		case err != nil:
-			p.a.Journal.Warn("notification non envoyée", "membre", ab.MembreID, "erreur", err)
-		}
+		places <- struct{}{}
+		groupe.Add(1)
+		go func() {
+			defer groupe.Done()
+			defer func() { <-places }()
+			defer p.a.rattraper("envoi d'une notification")
+			envoi, annuler := context.WithTimeout(ctx, 20*time.Second)
+			defer annuler()
+			err := p.envoyer(envoi, &webpush.Abonnement{Adresse: ab.Adresse, P256dh: ab.P256dh, Auth: ab.Auth}, corps,
+				webpush.Options{Cle: p.cle, Sujet: p.a.Config.ContactPush, Groupe: an.module, Urgent: an.module == "enfants"})
+			switch {
+			case errors.Is(err, webpush.ErrExpire), errors.Is(err, webpush.ErrAbonnement):
+				_ = p.a.Q.SupprimerAbonnement(ctx, ab.ID)
+				p.a.Journal.Info("abonnement push expiré, supprimé", "membre", ab.MembreID)
+			case err != nil:
+				p.a.Journal.Warn("notification non envoyée", "membre", ab.MembreID, "erreur", err)
+			}
+		}()
+	}
+	groupe.Wait()
+}
+
+// envoisSimultanes : envois vers les services de push en même temps.
+const envoisSimultanes = 4
+
+// annoncerEnAttendant : comme Annoncer, mais attend une place dans la file
+// (tâches de fond seulement : les rappels du matin de nombreuses familles
+// ne doivent pas être perdus parce que la file est pleine).
+func (p *Pousseur) annoncerEnAttendant(ctx context.Context, an annonce) {
+	select {
+	case p.file <- an:
+	case <-ctx.Done():
 	}
 }
 

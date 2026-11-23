@@ -53,6 +53,7 @@
     <span class="quoi">{{.Nom}}<small>Ajoutée le {{.Cree}}{{with .Utilise}} · utilisée le {{.}}{{end}}</small></span>
     <form method="post" action="/moi/securite/passkeys/{{.ID}}/supprimer" hx-confirm="Supprimer la passkey « {{.Nom}} » ?">
       {{template "jeton" $c.CSRF}}
+      <input class="mdp-court" type="password" name="mdp" autocomplete="current-password" placeholder="Mot de passe" aria-label="Mot de passe" required>
       <button class="bouton petit danger">Supprimer</button>
     </form>
   </div>

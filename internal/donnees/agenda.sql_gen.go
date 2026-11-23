@@ -8,6 +8,7 @@ package donnees
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const ajouterParticipant = `-- name: AjouterParticipant :exec
@@ -22,6 +23,103 @@ type AjouterParticipantParams struct {
 func (q *Queries) AjouterParticipant(ctx context.Context, arg AjouterParticipantParams) error {
 	_, err := q.db.ExecContext(ctx, ajouterParticipant, arg.EvenementID, arg.MembreID)
 	return err
+}
+
+const compterEvenements = `-- name: CompterEvenements :one
+SELECT count(*) FROM evenements WHERE famille_id = ?
+`
+
+func (q *Queries) CompterEvenements(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterEvenements, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const contactsChoixAgenda = `-- name: ContactsChoixAgenda :many
+SELECT id, nom, metier FROM contacts WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
+`
+
+type ContactsChoixAgendaRow struct {
+	ID     int64
+	Nom    string
+	Metier string
+}
+
+// Liste de choix du formulaire : le strict necessaire.
+func (q *Queries) ContactsChoixAgenda(ctx context.Context, familleID int64) ([]ContactsChoixAgendaRow, error) {
+	rows, err := q.db.QueryContext(ctx, contactsChoixAgenda, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ContactsChoixAgendaRow{}
+	for rows.Next() {
+		var i ContactsChoixAgendaRow
+		if err := rows.Scan(&i.ID, &i.Nom, &i.Metier); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const contactsDesEvenements = `-- name: ContactsDesEvenements :many
+SELECT ec.evenement_id, c.id, c.nom, c.telephone
+FROM evenements_contacts ec JOIN contacts c ON c.id = ec.contact_id
+WHERE ec.evenement_id IN (/*SLICE:evenements*/?) ORDER BY c.nom COLLATE NOCASE
+`
+
+type ContactsDesEvenementsRow struct {
+	EvenementID int64
+	ID          int64
+	Nom         string
+	Telephone   string
+}
+
+// Les contacts cites par les evenements affiches (ids deja filtres par famille).
+func (q *Queries) ContactsDesEvenements(ctx context.Context, evenements []int64) ([]ContactsDesEvenementsRow, error) {
+	query := contactsDesEvenements
+	var queryParams []interface{}
+	if len(evenements) > 0 {
+		for _, v := range evenements {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:evenements*/?", strings.Repeat(",?", len(evenements))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:evenements*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ContactsDesEvenementsRow{}
+	for rows.Next() {
+		var i ContactsDesEvenementsRow
+		if err := rows.Scan(
+			&i.EvenementID,
+			&i.ID,
+			&i.Nom,
+			&i.Telephone,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const creerEvenement = `-- name: CreerEvenement :one
@@ -107,7 +205,9 @@ func (q *Queries) EvenementParID(ctx context.Context, arg EvenementParIDParams) 
 const evenementsPeriode = `-- name: EvenementsPeriode :many
 
 SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin FROM evenements
-WHERE famille_id = ? AND debut < ?2 AND (fin >= ?3 OR repetition <> '')
+WHERE famille_id = ?1 AND debut < ?2
+  AND (fin >= ?3
+       OR (repetition <> '' AND (repetition_fin = '' OR repetition_fin >= ?4)))
 ORDER BY debut
 `
 
@@ -115,11 +215,17 @@ type EvenementsPeriodeParams struct {
 	FamilleID    int64
 	FinPeriode   int64
 	DebutPeriode int64
+	JourMin      string
 }
 
 // Agenda.
 func (q *Queries) EvenementsPeriode(ctx context.Context, arg EvenementsPeriodeParams) ([]Evenement, error) {
-	rows, err := q.db.QueryContext(ctx, evenementsPeriode, arg.FamilleID, arg.FinPeriode, arg.DebutPeriode)
+	rows, err := q.db.QueryContext(ctx, evenementsPeriode,
+		arg.FamilleID,
+		arg.FinPeriode,
+		arg.DebutPeriode,
+		arg.JourMin,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -196,6 +302,44 @@ WHERE evenements.famille_id = ?
 
 func (q *Queries) ParticipantsDeFamille(ctx context.Context, familleID int64) ([]EvenementsMembre, error) {
 	rows, err := q.db.QueryContext(ctx, participantsDeFamille, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EvenementsMembre{}
+	for rows.Next() {
+		var i EvenementsMembre
+		if err := rows.Scan(&i.EvenementID, &i.MembreID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const participantsDesEvenements = `-- name: ParticipantsDesEvenements :many
+SELECT evenement_id, membre_id FROM evenements_membres WHERE evenement_id IN (/*SLICE:evenements*/?)
+`
+
+// Les participants des evenements affiches seulement (ids deja filtres par famille).
+func (q *Queries) ParticipantsDesEvenements(ctx context.Context, evenements []int64) ([]EvenementsMembre, error) {
+	query := participantsDesEvenements
+	var queryParams []interface{}
+	if len(evenements) > 0 {
+		for _, v := range evenements {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:evenements*/?", strings.Repeat(",?", len(evenements))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:evenements*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err
 	}

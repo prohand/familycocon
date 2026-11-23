@@ -86,12 +86,18 @@ func (a *App) Envelopper(h http.Handler) http.Handler {
 		h.Set("Referrer-Policy", "same-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
+		// Pages privées : jamais gardées par le navigateur (« Précédent »
+		// après une déconnexion sur la tablette partagée ne remontre rien).
+		// Les fichiers statiques remplacent cet en-tête (voir Statique.Servir).
+		h.Set("Cache-Control", "no-store")
 		if a.Config.CookieSecurise() {
 			h.Set("Strict-Transport-Security", "max-age=31536000")
 		}
 		taille := int64(TailleMaxCorps)
 		if r.URL.Path == "/contacts/import" {
 			taille = TailleMaxImport // carnet d'un téléphone (photos comprises)
+			// 8 Mio sur une connexion mobile lente : plus que les 30 s du serveur.
+			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(3 * time.Minute))
 		}
 		r.Body = http.MaxBytesReader(e, r.Body, taille)
 		interne.ServeHTTP(e, r)

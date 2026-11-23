@@ -175,10 +175,14 @@ if ("serviceWorker" in navigator) {
     e.preventDefault();
     var finir = function () { f.setAttribute("data-fait", "1"); f.submit(); };
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) { finir(); return; }
-    navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (ab) {
+    // « ready » ne répond jamais si le service worker n'a pas pu s'installer :
+    // après 1,5 s, on déconnecte quand même.
+    var delai = new Promise(function (ok) { setTimeout(ok, 1500); });
+    var desabonner = navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (ab) {
       if (!ab) return;
       return envoyer("/push/desabonnement", ab.toJSON()).finally(function () { return ab.unsubscribe(); });
-    }).catch(function () {}).finally(function () {
+    }).catch(function () {});
+    Promise.race([desabonner, delai]).finally(function () {
       try { sessionStorage.removeItem("fc-push-membre"); } catch (_) {}
       finir();
     });

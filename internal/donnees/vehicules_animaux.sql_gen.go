@@ -77,6 +77,28 @@ func (q *Queries) AnimauxFamille(ctx context.Context, familleID int64) ([]Animal
 	return items, nil
 }
 
+const compterAnimaux = `-- name: CompterAnimaux :one
+SELECT count(*) FROM animaux WHERE famille_id = ?
+`
+
+func (q *Queries) CompterAnimaux(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterAnimaux, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterVehicules = `-- name: CompterVehicules :one
+SELECT count(*) FROM vehicules WHERE famille_id = ?
+`
+
+func (q *Queries) CompterVehicules(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterVehicules, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const creerAnimal = `-- name: CreerAnimal :one
 INSERT INTO animaux (famille_id, nom, espece, race, naissance, puce, veterinaire, veterinaire_id, notes, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, espece, race, naissance, puce, veterinaire, notes, cree_le, veterinaire_id
@@ -239,6 +261,71 @@ func (q *Queries) ModifierVehicule(ctx context.Context, arg ModifierVehiculePara
 		arg.FamilleID,
 	)
 	return err
+}
+
+const nomsAnimaux = `-- name: NomsAnimaux :many
+SELECT id, nom FROM animaux WHERE famille_id = ?
+`
+
+type NomsAnimauxRow struct {
+	ID  int64
+	Nom string
+}
+
+func (q *Queries) NomsAnimaux(ctx context.Context, familleID int64) ([]NomsAnimauxRow, error) {
+	rows, err := q.db.QueryContext(ctx, nomsAnimaux, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NomsAnimauxRow{}
+	for rows.Next() {
+		var i NomsAnimauxRow
+		if err := rows.Scan(&i.ID, &i.Nom); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const nomsVehicules = `-- name: NomsVehicules :many
+SELECT id, nom FROM vehicules WHERE famille_id = ?
+`
+
+type NomsVehiculesRow struct {
+	ID  int64
+	Nom string
+}
+
+// Noms seuls (rappels : pas une requete par echeance).
+func (q *Queries) NomsVehicules(ctx context.Context, familleID int64) ([]NomsVehiculesRow, error) {
+	rows, err := q.db.QueryContext(ctx, nomsVehicules, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NomsVehiculesRow{}
+	for rows.Next() {
+		var i NomsVehiculesRow
+		if err := rows.Scan(&i.ID, &i.Nom); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const noterKilometrage = `-- name: NoterKilometrage :exec

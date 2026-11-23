@@ -58,3 +58,14 @@ ON CONFLICT (famille_id, cle) DO UPDATE SET rayon = excluded.rayon, emoji = excl
 
 -- name: SuggestionsProduits :many
 SELECT nom FROM produits_connus WHERE famille_id = ? ORDER BY compte DESC, vu_le DESC LIMIT 60;
+
+-- Plafonds (une famille ne remplit pas la base).
+
+-- name: CompterListes :one
+SELECT count(*) FROM listes WHERE famille_id = ?;
+
+-- name: CompterProduitsListe :one
+SELECT count(*) FROM produits WHERE liste_id = ?;
+
+-- name: CompterProduitsConnus :one
+SELECT count(*) FROM produits_connus WHERE famille_id = ?;

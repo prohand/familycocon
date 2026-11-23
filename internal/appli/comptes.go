@@ -29,6 +29,9 @@ const (
 	seuilConfirmation = 5
 	// seuilDefis : défis de passkey demandés sans être connecté, par adresse en 15 min.
 	seuilDefis = 30
+	// seuilInscriptions : créations de famille (ou envois du formulaire) par
+	// adresse en 15 min : chaque envoi coûte un calcul Argon2id.
+	seuilInscriptions = 5
 )
 
 func (a *App) routesComptes() {
@@ -42,6 +45,9 @@ func (a *App) routesComptes() {
 	a.Mux.HandleFunc("POST /invitation/{jeton}", a.accepterInvitation)
 	a.Route("POST /deconnexion", "", Membre, func(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		a.FermerSession(w, r)
+		// Le navigateur oublie les pages gardées en cache (versions d'avant
+		// « no-store »). Sans effet en http simple.
+		w.Header().Set("Clear-Site-Data", `"cache"`)
 		a.RedirigerComplet(w, r, "/connexion")
 	})
 }
@@ -142,7 +148,7 @@ func (a *App) connexion(w http.ResponseWriter, r *http.Request) {
 
 	fin, attente, ok := a.Limiteur.Essayer(time.Now(), Limite{CleIP(ip), seuilIP}, Limite{cleCompte, seuilCompte})
 	if !ok {
-		a.Journal.Warn("connexion refusée : trop d'essais", "identifiant", ident, "ip", ip.String())
+		a.Journal.Warn("connexion refusée : trop d'essais", "ip", ip.String())
 		f.Erreur = "Trop d'essais. Réessayez dans " + attenteLisible(attente) + "."
 		a.afficherConnexion(w, r, http.StatusTooManyRequests, f)
 		return
@@ -166,7 +172,13 @@ func (a *App) connexion(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil || !m.Mdp.Valid || !bon {
 		fin(true)
-		a.Journal.Warn("échec de connexion", "identifiant", ident, "ip", ip.String())
+		// L'identifiant tapé n'est pas écrit au journal (un mot de passe saisi
+		// dans le mauvais champ s'y retrouverait) : seulement le compte, s'il existe.
+		if err == nil {
+			a.Journal.Warn("échec de connexion", "membre", m.ID, "ip", ip.String())
+		} else {
+			a.Journal.Warn("échec de connexion", "compte", "inconnu", "ip", ip.String())
+		}
 		f.Erreur = "Identifiant ou mot de passe incorrect."
 		a.afficherConnexion(w, r, http.StatusUnauthorized, f)
 		return
@@ -334,6 +346,16 @@ func (a *App) inscription(w http.ResponseWriter, r *http.Request) {
 		a.afficherAnonyme(w, r, http.StatusBadRequest, "comptes/inscription", "Créer ma famille", f)
 		return
 	}
+	// Chaque envoi valable coûte un calcul Argon2id (2 à la fois au plus) :
+	// sans limite, une rafale d'inscriptions bloquerait les connexions.
+	fin, attente, ok := a.Limiteur.Essayer(time.Now(), Limite{"inscription|" + CleIP(a.IPClient(r)), seuilInscriptions})
+	if !ok {
+		a.Journal.Warn("inscription refusée : trop d'essais", "ip", a.IPClient(r).String())
+		f.Erreur = "Trop d'essais. Réessayez dans " + attenteLisible(attente) + "."
+		a.afficherAnonyme(w, r, http.StatusTooManyRequests, "comptes/inscription", "Créer ma famille", f)
+		return
+	}
+	fin(true) // chaque envoi compte, réussi ou non
 	empreinte, err := Empreinte(mdp)
 	if err != nil {
 		f.Erreur = err.Error()

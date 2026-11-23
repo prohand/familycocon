@@ -26,6 +26,17 @@ func (q *Queries) CompterNotes(ctx context.Context, arg CompterNotesParams) (int
 	return count, err
 }
 
+const compterNotesFamille = `-- name: CompterNotesFamille :one
+SELECT count(*) FROM notes WHERE famille_id = ?
+`
+
+func (q *Queries) CompterNotesFamille(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterNotesFamille, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const creerNote = `-- name: CreerNote :one
 INSERT INTO notes (famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le
@@ -145,38 +156,59 @@ func (q *Queries) NoteParID(ctx context.Context, arg NoteParIDParams) (Note, err
 
 const notesVisibles = `-- name: NotesVisibles :many
 
-SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le FROM notes
+SELECT id, auteur_id, titre, CAST(substr(texte, 1, 300) AS TEXT) AS debut, couleur, epinglee, privee, modifie_le
+FROM notes
 WHERE famille_id = ?1 AND (privee = 0 OR auteur_id = ?2)
-  AND (titre LIKE ?3 OR texte LIKE ?3)
-ORDER BY epinglee DESC, modifie_le DESC
+  AND (?3 = '' OR (?3 = 'privees' AND privee = 1) OR (?3 = 'partagees' AND privee = 0))
+  AND (?4 = '' OR instr(lower(titre), lower(?4)) > 0 OR instr(lower(texte), lower(?4)) > 0)
+ORDER BY epinglee DESC, modifie_le DESC LIMIT ?5
 `
 
 type NotesVisiblesParams struct {
 	FamilleID int64
 	MembreID  sql.NullInt64
-	Motif     string
+	Filtre    interface{}
+	Motif     interface{}
+	Nombre    int64
+}
+
+type NotesVisiblesRow struct {
+	ID        int64
+	AuteurID  sql.NullInt64
+	Titre     string
+	Debut     string
+	Couleur   int64
+	Epinglee  int64
+	Privee    int64
+	ModifieLe int64
 }
 
 // Notes : une note privee n'est visible que par son auteur.
-func (q *Queries) NotesVisibles(ctx context.Context, arg NotesVisiblesParams) ([]Note, error) {
-	rows, err := q.db.QueryContext(ctx, notesVisibles, arg.FamilleID, arg.MembreID, arg.Motif)
+// Liste : debut du texte seulement, nombre borne. motif ” : pas de
+// recherche ; sinon le texte cherche, tel quel (% et _ compris) ; filtre : ”, 'partagees' ou 'privees'.
+func (q *Queries) NotesVisibles(ctx context.Context, arg NotesVisiblesParams) ([]NotesVisiblesRow, error) {
+	rows, err := q.db.QueryContext(ctx, notesVisibles,
+		arg.FamilleID,
+		arg.MembreID,
+		arg.Filtre,
+		arg.Motif,
+		arg.Nombre,
+	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Note{}
+	items := []NotesVisiblesRow{}
 	for rows.Next() {
-		var i Note
+		var i NotesVisiblesRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.FamilleID,
 			&i.AuteurID,
 			&i.Titre,
-			&i.Texte,
+			&i.Debut,
 			&i.Couleur,
 			&i.Epinglee,
 			&i.Privee,
-			&i.CreeLe,
 			&i.ModifieLe,
 		); err != nil {
 			return nil, err
@@ -203,5 +235,20 @@ type SupprimerNoteParams struct {
 
 func (q *Queries) SupprimerNote(ctx context.Context, arg SupprimerNoteParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerNote, arg.ID, arg.FamilleID)
+	return err
+}
+
+const supprimerNotesPriveesMembre = `-- name: SupprimerNotesPriveesMembre :exec
+DELETE FROM notes WHERE famille_id = ? AND auteur_id = ? AND privee = 1
+`
+
+type SupprimerNotesPriveesMembreParams struct {
+	FamilleID int64
+	AuteurID  sql.NullInt64
+}
+
+// Membre retire : ses notes privees, que personne d'autre ne peut voir ni supprimer.
+func (q *Queries) SupprimerNotesPriveesMembre(ctx context.Context, arg SupprimerNotesPriveesMembreParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerNotesPriveesMembre, arg.FamilleID, arg.AuteurID)
 	return err
 }

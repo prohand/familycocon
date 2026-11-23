@@ -44,7 +44,7 @@ func (a *App) Route(motif, module string, acces Acces, h Gestionnaire) {
 		}
 		if c == nil {
 			if r.Method == http.MethodGet {
-				a.Rediriger(w, r, "/connexion?suite="+url.QueryEscape(r.URL.RequestURI()))
+				a.RedirigerComplet(w, r, "/connexion?suite="+url.QueryEscape(suiteDemandee(r)))
 				return
 			}
 			a.Echec(w, r, http.StatusUnauthorized, "Session terminée : reconnectez-vous.")
@@ -65,6 +65,20 @@ func (a *App) Route(motif, module string, acces Acces, h Gestionnaire) {
 		}
 		h(w, r.WithContext(context.WithValue(r.Context(), cleContexte{}, c)), c)
 	})
+}
+
+// suiteDemandee : où revenir après la connexion. Pour un fragment demandé
+// par htmx (un bloc de page, pas un lien), c'est la page affichée par le
+// navigateur (en-tête HX-Current-URL), pas le fragment lui-même : sinon on
+// arriverait sur un morceau de page sans mise en page.
+func suiteDemandee(r *http.Request) string {
+	if !EstHtmx(r) || r.Header.Get("HX-Boosted") == "true" {
+		return r.URL.RequestURI()
+	}
+	if u, err := url.Parse(r.Header.Get("HX-Current-URL")); err == nil && strings.HasPrefix(u.Path, "/") {
+		return u.RequestURI()
+	}
+	return "/"
 }
 
 // EstHtmx : requête envoyée par htmx (et pas un chargement de page complet).
