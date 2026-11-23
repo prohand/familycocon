@@ -65,7 +65,7 @@ sur le téléphone de chacun.
   - mission pour plusieurs enfants d'un coup, « Valider les N missions », étoiles bonus (ou retirées) avec un motif ;
   - récompenses échangées contre des étoiles ;
   - progrès par semaine.
-- **Notes** : partagées avec la famille ou privées, couleurs, épinglées, recherche, listes à cocher.
+- **Notes** : partagées avec la famille ou privées, couleurs, épinglées, recherche, listes à cocher (ajout rapide d'un élément, retrait des éléments cochés), photos.
 - **Contacts** : le carnet central de la famille :
   - mobile, fixe, travail, e-mail, adresse, société, métier, site ; favoris en haut, groupes libres (« Foot de Léo ») ;
   - recherche par nom, numéro ou métier ; appel direct depuis la liste ;

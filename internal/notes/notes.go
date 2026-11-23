@@ -40,6 +40,11 @@ func Brancher(a *appli.App) {
 	a.Route("POST /notes/{id}", mod, appli.Membre, m.modifier)
 	a.Route("POST /notes/{id}/epingler", mod, appli.Membre, m.epingler)
 	a.Route("POST /notes/{id}/cocher", mod, appli.Membre, m.cocher)
+	a.Route("POST /notes/{id}/element", mod, appli.Membre, m.ajouterElement)
+	a.Route("POST /notes/{id}/nettoyer", mod, appli.Membre, m.nettoyer)
+	a.Route("POST /notes/{id}/photos", mod, appli.Membre, m.ajouterPhoto)
+	a.Route("GET /notes/photos/{id}", mod, appli.Membre, m.photo)
+	a.Route("POST /notes/photos/{id}/supprimer", mod, appli.Membre, m.supprimerPhoto)
 	a.Route("POST /notes/{id}/supprimer", mod, appli.Membre, m.supprimer)
 
 	a.AjouterResume(mod, m.resume)
@@ -57,6 +62,7 @@ const (
 
 type carteNote struct {
 	donnees.Note
+	Photos     int64 // nombre de photos
 	Auteur     *donnees.Membre
 	Date       string
 	Modifiable bool
@@ -150,7 +156,8 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre, recherche s
 		if utf8.RuneCountInString(n.Texte) >= debutMax {
 			n.Texte += "…"
 		}
-		cn := carteNote{Note: n, Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n)}
+		n.Texte = apercuCases(n.Texte)
+		cn := carteNote{Note: n, Photos: l.Photos, Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n)}
 		if n.AuteurID.Valid {
 			cn.Auteur = parID[n.AuteurID.Int64]
 		}
@@ -205,7 +212,9 @@ type formNote struct {
 	Note        donnees.Note
 	Modifiable  bool
 	Supprimable bool
-	Cases       []CaseNote // liste à cocher dans le texte
+	Cases       map[string]any // liste à cocher dans le texte (voir vueCases)
+	Liste       bool           // nouvelle liste à cocher
+	Photos      []donnees.PhotoNote
 	// PeutPriver : la case « Privée » est proposée (toujours à la création
 	// et pour une note déjà privée ; pour une note partagée, seulement à un
 	// parent qui en est l'auteur).
@@ -229,6 +238,10 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		if r.URL.Query().Get("voir") == privees {
 			f.Note.Privee = 1
 		}
+		// « ☑️ Liste » : la note commence par une case (Entrée en ajoute une).
+		if r.URL.Query().Get("liste") == "1" && f.Note.Texte == "" {
+			f.Liste, f.Note.Texte = true, "[ ] "
+		}
 	} else {
 		n, ok := m.note(r, c)
 		if !ok {
@@ -237,9 +250,20 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.Note, f.Modifiable, f.PeutPriver = n, modifiable(c, n), peutPriver(c, n)
 		f.Supprimable = supprimable(c, n)
-		f.Cases = Cases(n.Texte)
+		if len(Cases(n.Texte)) > 0 {
+			f.Cases = vueCases(c, n)
+		}
+		photos, err := m.a.Q.PhotosNote(r.Context(), donnees.PhotosNoteParams{NoteID: n.ID, FamilleID: c.Famille.ID})
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		f.Photos = photos
 	}
 	titre := "Nouvelle note"
+	if f.Liste {
+		titre = "Nouvelle liste"
+	}
 	if !f.Nouvelle {
 		titre = f.Note.Titre
 		if titre == "" {
@@ -263,6 +287,8 @@ func lire(r *http.Request) (saisie, string) {
 	if utf8.RuneCountInString(s.texte) > 10000 {
 		return s, "Note trop longue (10 000 caractères au plus)."
 	}
+	// Une case laissée vide (« [ ] » seul, au bout d'une liste) ne compte pas.
+	s.texte = strings.TrimSpace(sansCasesVides(s.texte))
 	if s.titre == "" && s.texte == "" {
 		return s, "La note est vide."
 	}
@@ -318,6 +344,12 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Publier(c, mod, fmt.Sprintf("%s a écrit la note « %s » 📝", c.Membre.Nom, apercu(n.Titre, n.Texte)))
 	}
 	m.a.Flash(w, "Note enregistrée ✓")
+	// Une liste s'ouvre aussitôt (pour cocher, ajouter des éléments ou des
+	// photos) ; une note simple ramène à la liste des notes.
+	if r.PostFormValue("suite") == "ouvrir" || len(Cases(n.Texte)) > 0 {
+		m.a.Rediriger(w, r, "/notes/"+strconv.FormatInt(n.ID, 10))
+		return
+	}
 	m.a.Rediriger(w, r, "/notes")
 }
 
@@ -397,10 +429,16 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 		m.a.Echec(w, r, http.StatusForbidden, "Seul un parent peut supprimer une note partagée.")
 		return
 	}
+	photos, err := m.a.Q.PhotosNote(r.Context(), donnees.PhotosNoteParams{NoteID: n.ID, FamilleID: c.Famille.ID})
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
 	if err := m.a.Q.SupprimerNote(r.Context(), donnees.SupprimerNoteParams{ID: n.ID, FamilleID: c.Famille.ID}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.effacer(c.Famille.ID, photos)
 	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Note supprimée")
 	m.a.Rediriger(w, r, "/notes")

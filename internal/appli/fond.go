@@ -112,7 +112,7 @@ func (a *App) sauvegardesAuto(ctx context.Context) {
 			a.noterSauvegarde(ctx, etat)
 			// Les photos jointes (tickets) sont des fichiers à côté de la base :
 			// les nouvelles sont copiées dans sauvegardes/pieces.
-			if n, err := CopierNouveaux(filepath.Join(a.Config.Donnees, "pieces"), filepath.Join(dossier, "pieces")); err != nil {
+			if n, err := CopierNouveaux(a.DossierPieces(), filepath.Join(dossier, "pieces")); err != nil {
 				a.Journal.Error("sauvegarde des photos ratée", "erreur", err)
 			} else if n > 0 {
 				a.Journal.Info("photos sauvegardées", "nouvelles", n)
@@ -166,3 +166,7 @@ func CopierNouveaux(src, dst string) (int, error) {
 	})
 	return n, err
 }
+
+// DossierPieces : le dossier des photos gardées (tickets du carnet, photos
+// des notes), à côté de la base : pieces/<famille>/<nom>.jpg.
+func (a *App) DossierPieces() string { return filepath.Join(a.Config.Donnees, "pieces") }

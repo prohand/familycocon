@@ -270,6 +270,31 @@ document.addEventListener("change", function (e) {
   p.value = "";
 });
 
+// Notes : dans le texte (textarea[data-liste]), Entrée au bout d'une ligne
+// « [ ] … », « [x] … » ou « - … » commence la ligne suivante pareil (une
+// nouvelle case, une nouvelle puce). Entrée sur une case vide l'enlève et
+// termine la liste.
+document.addEventListener("keydown", function (e) {
+  var t = e.target;
+  if (e.key !== "Enter" || e.shiftKey || e.isComposing || !t.matches || !t.matches("textarea[data-liste]")) return;
+  if (t.selectionStart !== t.selectionEnd) return;
+  var v = t.value, pos = t.selectionStart;
+  var debut = v.lastIndexOf("\n", pos - 1) + 1;
+  var ligne = v.slice(debut, pos);
+  var m = /^(\s*(?:[-*] )?)(\[[ xX]\] ?)?(.*)$/.exec(ligne);
+  if (!m || (!m[2] && !/[-*] $/.test(m[1]))) return;
+  e.preventDefault();
+  var marque = m[1] + (m[2] ? "[ ] " : "");
+  if (m[3].trim() === "") {
+    // Ligne vide : fin de la liste.
+    t.value = v.slice(0, debut) + v.slice(pos);
+    t.selectionStart = t.selectionEnd = debut;
+    return;
+  }
+  t.value = v.slice(0, pos) + "\n" + marque + v.slice(pos);
+  t.selectionStart = t.selectionEnd = pos + 1 + marque.length;
+});
+
 // Véhicule : reprise d'une sauvegarde Fuelio (input[data-fuelio] = adresse
 // d'envoi). Le fichier part tel quel (il peut peser des centaines de Mo,
 // photos comprises) ; l'avancement s'affiche, puis la fiche est rechargée

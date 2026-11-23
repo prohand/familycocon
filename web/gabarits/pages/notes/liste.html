@@ -4,13 +4,16 @@
   <a class="retour" href="/">‹ Accueil</a>
   <h1>📝 Notes</h1>
 </section>
-<div class="barre-actions">
+<div class="barre-actions barre-notes">
   <nav class="pilules" aria-label="Filtrer">
     <a class="pilule{{if eq .Filtre ""}} active{{end}}" href="/notes">Toutes</a>
     <a class="pilule{{if eq .Filtre "partagees"}} active{{end}}" href="/notes?voir=partagees">👨‍👩‍👧 Partagées</a>
     <a class="pilule{{if eq .Filtre "privees"}} active{{end}}" href="/notes?voir=privees">🔒 Privées</a>
   </nav>
-  <a class="bouton" href="/notes/nouvelle{{if eq .Filtre "privees"}}?voir=privees{{end}}">＋ Note</a>
+  <span class="boutons-ajout">
+    <a class="bouton secondaire" href="/notes/nouvelle?liste=1{{if eq .Filtre "privees"}}&amp;voir=privees{{end}}">☑️ Liste</a>
+    <a class="bouton" href="/notes/nouvelle{{if eq .Filtre "privees"}}?voir=privees{{end}}">＋ Note</a>
+  </span>
 </div>
 <form class="ajout recherche" method="get" action="/notes">
   {{if .Filtre}}<input type="hidden" name="voir" value="{{.Filtre}}">{{end}}
@@ -48,7 +51,7 @@
   </a>
   <footer>
     {{with $n.Auteur}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{visage .}}</span>{{end}}
-    <span class="note-date">{{if eq $n.Privee 1}}🔒 {{end}}{{$n.Date}}</span>
+    <span class="note-date">{{if eq $n.Privee 1}}🔒 {{end}}{{if $n.Photos}}📷 {{$n.Photos}} · {{end}}{{$n.Date}}</span>
     {{if $n.Modifiable}}
     <button class="epingle{{if eq $n.Epinglee 1}} actif{{end}}" hx-post="/notes/{{$n.ID}}/epingler?{{.V.Params}}" hx-target="#notes" hx-swap="outerHTML"
             aria-label="{{if eq $n.Epinglee 1}}Désépingler{{else}}Épingler{{end}}">📌</button>

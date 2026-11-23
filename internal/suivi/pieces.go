@@ -4,15 +4,12 @@ package suivi
 
 import (
 	"context"
-	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"time"
 
@@ -37,12 +34,11 @@ const (
 )
 
 // Pieces : le dossier des pièces jointes (dans le dossier des données).
-func Pieces(a *appli.App) string { return filepath.Join(a.Config.Donnees, "pieces") }
+func Pieces(a *appli.App) string { return a.DossierPieces() }
 
-// cheminPiece : le fichier d'une pièce. Le nom vient de la base (créé
-// ici, aléatoire) : aucun chemin fourni par un navigateur.
+// cheminPiece : le fichier d'une pièce.
 func cheminPiece(a *appli.App, p donnees.Piece) string {
-	return filepath.Join(Pieces(a), strconv.FormatInt(p.FamilleID, 10), filepath.Base(p.Fichier))
+	return photo.Chemin(Pieces(a), p.FamilleID, p.Fichier)
 }
 
 var errTropDePieces = errors.New("trop de pièces jointes")
@@ -60,25 +56,14 @@ func AjouterPiece(ctx context.Context, a *appli.App, q *donnees.Queries, famille
 	} else if n >= PiecesParFamille {
 		return errTropDePieces
 	}
-	b := make([]byte, 16)
-	_, _ = rand.Read(b)
-	nom := hex.EncodeToString(b) + ".jpg"
-	dossier := filepath.Join(Pieces(a), strconv.FormatInt(famille, 10))
-	if err := os.MkdirAll(dossier, 0o750); err != nil {
+	nom, err := photo.Ranger(Pieces(a), famille, jpeg)
+	if err != nil {
 		return err
 	}
-	// Écrite sous un nom provisoire puis renommée : jamais de fichier coupé.
-	chemin := filepath.Join(dossier, nom)
-	if err := os.WriteFile(chemin+".tmp", jpeg, 0o640); err != nil {
-		return err
-	}
-	if err := os.Rename(chemin+".tmp", chemin); err != nil {
-		return err
-	}
-	_, err := q.AjouterPiece(ctx, donnees.AjouterPieceParams{FamilleID: famille, CarnetID: ligne, Fichier: nom, Taille: int64(len(jpeg)),
+	_, err = q.AjouterPiece(ctx, donnees.AjouterPieceParams{FamilleID: famille, CarnetID: ligne, Fichier: nom, Taille: int64(len(jpeg)),
 		CreePar: sql.NullInt64{Int64: auteur, Valid: auteur > 0}, CreeLe: time.Now().Unix()})
 	if err != nil {
-		_ = os.Remove(chemin)
+		_ = photo.Effacer(Pieces(a), famille, nom)
 	}
 	return err
 }
@@ -86,7 +71,7 @@ func AjouterPiece(ctx context.Context, a *appli.App, q *donnees.Queries, famille
 // effacerFichiers : les fichiers des pièces (après leur suppression en base).
 func (s *Suivi) effacerFichiers(l []donnees.Piece) {
 	for _, p := range l {
-		if err := os.Remove(cheminPiece(s.a, p)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		if err := photo.Effacer(Pieces(s.a), p.FamilleID, p.Fichier); err != nil {
 			s.a.Journal.Warn("pièce jointe non effacée", "fichier", p.Fichier, "erreur", err)
 		}
 	}

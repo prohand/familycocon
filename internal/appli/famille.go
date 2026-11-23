@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"familycocon/internal/donnees"
+	"familycocon/internal/photo"
 )
 
 // Réglages de la famille (parents) : nom, fuseau, monnaie, modules activés,
@@ -278,6 +279,14 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 		a.Echec(w, r, http.StatusBadRequest, "Vous ne pouvez pas vous retirer vous-même.")
 		return
 	}
+	// Les photos de ses notes privées, effacées avec elles (lues avant la
+	// transaction : une seule connexion à la base).
+	photosPrivees, err := a.Q.PhotosNotesPriveesMembre(ctx, donnees.PhotosNotesPriveesMembreParams{FamilleID: c.Famille.ID,
+		AuteurID: sql.NullInt64{Int64: m.ID, Valid: true}})
+	if err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
 	err = a.Transaction(ctx, func(q *donnees.Queries) error {
 		if m.Role == RoleParent {
 			if n, err := q.CompterParents(ctx, c.Famille.ID); err != nil || n <= 1 {
@@ -328,6 +337,11 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 	if err != nil {
 		a.ErreurInterne(w, r, err)
 		return
+	}
+	for _, p := range photosPrivees {
+		if err := photo.Effacer(a.DossierPieces(), c.Famille.ID, p.Fichier); err != nil {
+			a.Journal.Warn("photo de note non effacée", "fichier", p.Fichier, "erreur", err)
+		}
 	}
 	a.Journal.Info("membre retiré", "famille", c.Famille.ID, "membre", m.ID, "par", c.Membre.ID)
 	a.Direct.FermerMembre(c.Famille.ID, m.ID)

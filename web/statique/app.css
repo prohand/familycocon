@@ -1508,3 +1508,15 @@ details.replie-avatar > summary { cursor: pointer; margin: 4px 0 10px; }
 .piece form { position: absolute; top: -10px; right: -10px; }
 .piece .crayon { width: 28px; height: 28px; font-size: .8rem; background: var(--carte); opacity: .9; }
 .ajout-piece span { display: inline-block; padding: 8px 12px; border-radius: 999px; border: 1.5px dashed var(--bordure); font-size: .85rem; font-weight: 700; color: var(--texte-doux); cursor: pointer; min-height: 40px; }
+
+/* Notes : photos (miniatures plus grandes que dans le carnet), listes. */
+.photos-note .pieces { padding: 0; }
+.photos-note .piece img { width: 96px; height: 96px; }
+.boutons-ajout { display: flex; gap: 8px; flex-shrink: 0; }
+.ajout-element { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+.ajout-element input { flex: 1; min-width: 0; }
+button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer; font: inherit; font-weight: 800; }
+.modifier-liste > summary { margin-bottom: 8px; }
+/* Notes : les filtres sur une ligne, les boutons « Liste » et « Note » dessous à droite. */
+.barre-notes { flex-wrap: wrap; justify-content: flex-end; }
+.barre-notes .pilules { flex-basis: 100%; }

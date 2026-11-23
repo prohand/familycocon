@@ -29,7 +29,8 @@
 | Suite de la revue : pages à jour toutes seules, `latest` après la Release, garde sur les modules (v0.4.4, SPEC § 13) | **fait** |
 | Revue des fonctions : lot 1 (bugs), lot 2 (petites fonctions), lot 3 (socle et interface), lot 4 (grosses fonctions, module Garanties) (v0.5.0, SPEC § 14) | **fait** |
 | Cartes de fidélité : type détecté, scan au téléphone ; avatars des membres (v0.6.0, SPEC § 15) | **fait** |
-| Photos des tickets et factures dans le carnet ; reprise depuis Fuelio (v0.6.0, SPEC § 15) | **fait** (format vu sur une vraie sauvegarde ; reprise complète à essayer par l'utilisateur) |
+| Photos des tickets et factures dans le carnet ; reprise depuis Fuelio (v0.6.0, SPEC § 15) | **fait** (essayée par l'utilisateur sur sa vraie sauvegarde) |
+| Notes : listes faciles à créer et à remplir, photos (v0.7.0, SPEC § 16) | **fait** |
 
 ## Mesures
 

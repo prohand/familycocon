@@ -381,3 +381,22 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   sorte de ligne, à 4 contre 1 au moins) ; les autres (trajets…) et les
   cas douteux sont laissés de côté et comptés dans le bilan. Sans
   `## Pictures` : nom du fichier (identifiant, sinon date).
+
+## 16. Notes : listes et photos (v0.7.0)
+- **Listes** : bouton « ☑️ Liste » (note qui commence par une case). Dans le
+  texte, Entrée au bout d'une case (ou d'une puce « - ») en commence une
+  autre ; Entrée sur une case vide termine la liste (app.js). Une case vide
+  n'est pas gardée. Sur la note : « Ajouter un élément » (tous ceux qui
+  voient la note, comme pour cocher) et « Retirer les éléments cochés »
+  (ceux qui peuvent la modifier). Le texte reste la seule source (lignes
+  « [ ] » / « [x] ») : rien ne change dans la base. Écriture refusée si la
+  note a changé entre-temps (pas d'écrasement). Les cartes de la liste
+  dessinent les cases (☐ / ☑).
+- **Photos dans une note** : ajoutées et retirées par ceux qui peuvent
+  modifier la note, vues par ceux qui la voient (note privée : son auteur
+  seul). Même traitement que les tickets du carnet (`photo.Preparer`,
+  1 600 px, JPEG sans lieu GPS) et même dossier (`pieces/<famille>/`, copié
+  par les sauvegardes) ; table `photos_notes` (migration 0031). 20 par
+  note, 5 000 par famille. Effacées avec la note, et avec les notes
+  privées d'un membre retiré. Rangement commun : `photo.Ranger`,
+  `photo.Chemin`, `photo.Effacer`.
