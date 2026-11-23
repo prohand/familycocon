@@ -46,6 +46,7 @@ type annonce struct {
 	sansParents     bool    // à tous sauf les parents (rappels : les parents ont leur propre texte)
 	url             string  // page ouverte au toucher (sinon celle du module)
 	pour            []int64 // membres visés (vide : toute la famille)
+	sauf            []int64 // membres exclus (ils ont reçu leur propre version)
 }
 
 // tailleFile : au-delà, les annonces sont perdues (elles restent visibles
@@ -159,7 +160,7 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		enLigne := an.module != moduleRappels && p.a.Direct.EnLigne(an.famille, ab.MembreID)
 		if !contient(strings.Split(ab.PushModules, ","), an.module) || enLigne ||
 			(an.parents && ab.Role != RoleParent) || (an.sansParents && ab.Role == RoleParent) ||
-			(len(an.pour) > 0 && !slices.Contains(an.pour, ab.MembreID)) {
+			(len(an.pour) > 0 && !slices.Contains(an.pour, ab.MembreID)) || slices.Contains(an.sauf, ab.MembreID) {
 			continue
 		}
 		places <- struct{}{}

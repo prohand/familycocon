@@ -1,8 +1,8 @@
 {{define "contenu"}}
 {{with .Donnees}}
 <section class="titre-page">
-  <a class="retour" href="/budget">‹ Budget</a>
-  <h1>🔎 Chercher</h1>
+  <a class="retour" href="/budget?compte={{if .Perso}}perso{{else}}commun{{end}}">‹ Budget</a>
+  <h1>🔎 Chercher</h1>{{if .Perso}}<p>🔒 Dans votre budget perso</p>{{end}}
   <p>Dans les libellés des 12 derniers mois</p>
 </section>
 <form class="ajout" method="get" action="/budget/chercher" role="search">

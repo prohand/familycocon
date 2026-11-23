@@ -11,11 +11,17 @@ import (
 )
 
 const exportAbonnements = `-- name: ExportAbonnements :many
-SELECT id, famille_id, recurrence_id, emoji, engagement_fin, site, notes, cree_le FROM abonnements WHERE famille_id = ?
+SELECT a.id, a.famille_id, a.recurrence_id, a.emoji, a.engagement_fin, a.site, a.notes, a.cree_le FROM abonnements a JOIN recurrences r ON r.id = a.recurrence_id
+WHERE a.famille_id = ? AND r.perso_de IN (0, ?2)
 `
 
-func (q *Queries) ExportAbonnements(ctx context.Context, familleID int64) ([]Abonnement, error) {
-	rows, err := q.db.QueryContext(ctx, exportAbonnements, familleID)
+type ExportAbonnementsParams struct {
+	FamilleID int64
+	Membre    int64
+}
+
+func (q *Queries) ExportAbonnements(ctx context.Context, arg ExportAbonnementsParams) ([]Abonnement, error) {
+	rows, err := q.db.QueryContext(ctx, exportAbonnements, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -86,11 +92,16 @@ func (q *Queries) ExportAnimaux(ctx context.Context, familleID int64) ([]Animal,
 }
 
 const exportBudgetPlafonds = `-- name: ExportBudgetPlafonds :many
-SELECT famille_id, categorie, montant FROM budget_plafonds WHERE famille_id = ?
+SELECT famille_id, perso_de, categorie, montant FROM budget_plafonds WHERE famille_id = ? AND perso_de IN (0, ?2)
 `
 
-func (q *Queries) ExportBudgetPlafonds(ctx context.Context, familleID int64) ([]BudgetPlafond, error) {
-	rows, err := q.db.QueryContext(ctx, exportBudgetPlafonds, familleID)
+type ExportBudgetPlafondsParams struct {
+	FamilleID int64
+	Membre    int64
+}
+
+func (q *Queries) ExportBudgetPlafonds(ctx context.Context, arg ExportBudgetPlafondsParams) ([]BudgetPlafond, error) {
+	rows, err := q.db.QueryContext(ctx, exportBudgetPlafonds, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +109,12 @@ func (q *Queries) ExportBudgetPlafonds(ctx context.Context, familleID int64) ([]
 	items := []BudgetPlafond{}
 	for rows.Next() {
 		var i BudgetPlafond
-		if err := rows.Scan(&i.FamilleID, &i.Categorie, &i.Montant); err != nil {
+		if err := rows.Scan(
+			&i.FamilleID,
+			&i.PersoDe,
+			&i.Categorie,
+			&i.Montant,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -113,11 +129,17 @@ func (q *Queries) ExportBudgetPlafonds(ctx context.Context, familleID int64) ([]
 }
 
 const exportCarnet = `-- name: ExportCarnet :many
-SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres, carburant FROM carnet WHERE famille_id = ?
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres, carburant FROM carnet c WHERE c.famille_id = ?1 AND NOT (c.module = 'projets' AND c.objet_id IN
+  (SELECT p.id FROM projets p WHERE p.famille_id = ?1 AND p.perso_de NOT IN (0, ?2)))
 `
 
-func (q *Queries) ExportCarnet(ctx context.Context, familleID int64) ([]Carnet, error) {
-	rows, err := q.db.QueryContext(ctx, exportCarnet, familleID)
+type ExportCarnetParams struct {
+	FamilleID int64
+	Membre    int64
+}
+
+func (q *Queries) ExportCarnet(ctx context.Context, arg ExportCarnetParams) ([]Carnet, error) {
+	rows, err := q.db.QueryContext(ctx, exportCarnet, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -642,11 +664,18 @@ func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]Not
 }
 
 const exportOperations = `-- name: ExportOperations :many
-SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id FROM operations WHERE famille_id = ?
+SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id, perso_de, virement_id FROM operations WHERE famille_id = ? AND perso_de IN (0, ?2)
 `
 
-func (q *Queries) ExportOperations(ctx context.Context, familleID int64) ([]Operation, error) {
-	rows, err := q.db.QueryContext(ctx, exportOperations, familleID)
+type ExportOperationsParams struct {
+	FamilleID int64
+	Membre    int64
+}
+
+// Budget, abonnements, projets : le commun et ce qui est a ce membre
+// (le budget perso des autres n'y est pas).
+func (q *Queries) ExportOperations(ctx context.Context, arg ExportOperationsParams) ([]Operation, error) {
+	rows, err := q.db.QueryContext(ctx, exportOperations, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -667,6 +696,8 @@ func (q *Queries) ExportOperations(ctx context.Context, familleID int64) ([]Oper
 			&i.CreePar,
 			&i.CreeLe,
 			&i.RecurrenceID,
+			&i.PersoDe,
+			&i.VirementID,
 		); err != nil {
 			return nil, err
 		}
@@ -756,11 +787,17 @@ func (q *Queries) ExportProduitsConnus(ctx context.Context, familleID int64) ([]
 }
 
 const exportProjetEtapes = `-- name: ExportProjetEtapes :many
-SELECT id, projet_id, famille_id, texte, jour, membre_id, faite_le, faite_par, cree_le FROM projet_etapes WHERE famille_id = ?
+SELECT e.id, e.projet_id, e.famille_id, e.texte, e.jour, e.membre_id, e.faite_le, e.faite_par, e.cree_le FROM projet_etapes e JOIN projets p ON p.id = e.projet_id
+WHERE e.famille_id = ? AND p.perso_de IN (0, ?2)
 `
 
-func (q *Queries) ExportProjetEtapes(ctx context.Context, familleID int64) ([]ProjetEtape, error) {
-	rows, err := q.db.QueryContext(ctx, exportProjetEtapes, familleID)
+type ExportProjetEtapesParams struct {
+	FamilleID int64
+	Membre    int64
+}
+
+func (q *Queries) ExportProjetEtapes(ctx context.Context, arg ExportProjetEtapesParams) ([]ProjetEtape, error) {
+	rows, err := q.db.QueryContext(ctx, exportProjetEtapes, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -793,11 +830,16 @@ func (q *Queries) ExportProjetEtapes(ctx context.Context, familleID int64) ([]Pr
 }
 
 const exportProjets = `-- name: ExportProjets :many
-SELECT id, famille_id, nom, emoji, couleur, description, objectif, budget, termine_le, cree_le FROM projets WHERE famille_id = ?
+SELECT id, famille_id, nom, emoji, couleur, description, objectif, budget, termine_le, cree_le, perso_de FROM projets WHERE famille_id = ? AND perso_de IN (0, ?2)
 `
 
-func (q *Queries) ExportProjets(ctx context.Context, familleID int64) ([]Projet, error) {
-	rows, err := q.db.QueryContext(ctx, exportProjets, familleID)
+type ExportProjetsParams struct {
+	FamilleID int64
+	Membre    int64
+}
+
+func (q *Queries) ExportProjets(ctx context.Context, arg ExportProjetsParams) ([]Projet, error) {
+	rows, err := q.db.QueryContext(ctx, exportProjets, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -816,6 +858,7 @@ func (q *Queries) ExportProjets(ctx context.Context, familleID int64) ([]Projet,
 			&i.Budget,
 			&i.TermineLe,
 			&i.CreeLe,
+			&i.PersoDe,
 		); err != nil {
 			return nil, err
 		}
@@ -900,11 +943,16 @@ func (q *Queries) ExportRecompenses(ctx context.Context, familleID int64) ([]Rec
 }
 
 const exportRecurrences = `-- name: ExportRecurrences :many
-SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le FROM recurrences WHERE famille_id = ?
+SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement FROM recurrences WHERE famille_id = ? AND perso_de IN (0, ?2)
 `
 
-func (q *Queries) ExportRecurrences(ctx context.Context, familleID int64) ([]Recurrence, error) {
-	rows, err := q.db.QueryContext(ctx, exportRecurrences, familleID)
+type ExportRecurrencesParams struct {
+	FamilleID int64
+	Membre    int64
+}
+
+func (q *Queries) ExportRecurrences(ctx context.Context, arg ExportRecurrencesParams) ([]Recurrence, error) {
+	rows, err := q.db.QueryContext(ctx, exportRecurrences, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -926,6 +974,8 @@ func (q *Queries) ExportRecurrences(ctx context.Context, familleID int64) ([]Rec
 			&i.Faites,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.PersoDe,
+			&i.Virement,
 		); err != nil {
 			return nil, err
 		}

@@ -54,6 +54,15 @@ type Objet struct {
 	// Categorie : catégorie du budget des dépenses du carnet (« transport »…) ;
 	// vide : pas de case « Ajouter aussi au budget ».
 	Categorie string
+	// Voit (facultatif) : ce membre voit-il l'objet {id} ? (projet privé :
+	// son propriétaire seul). Absent : tous ceux qui ouvrent le module.
+	Voit func(ctx context.Context, c *appli.Contexte, id int64) bool
+}
+
+// permis : le membre voit-il cet objet (module ouvert, objet non privé à
+// un autre) ?
+func (s *Suivi) permis(ctx context.Context, c *appli.Contexte, o Objet, objet int64) bool {
+	return c.Voit(o.Module) && (o.Voit == nil || o.Voit(ctx, c, objet))
 }
 
 // Plafonds par objet (garde-fous : la base ne grossit pas sans fin).
@@ -149,6 +158,7 @@ type Bloc struct {
 	Devise        string
 	Aujourdhui    string
 	PeutBudget    bool                      // case « Ajouter aussi au budget » (parent, budget activé)
+	BudgetPerso   bool                      // proposer le budget perso d'abord (projet privé)
 	Pieces        map[int64][]donnees.Piece // photos (tickets) par ligne, parents seulement
 	CoutKm        string                    // « 0,18 € / km » (véhicules)
 	Conso         string                    // « 6,4 L / 100 km » (véhicules, avec des pleins notés)
@@ -312,7 +322,7 @@ func (s *Suivi) SupprimerObjet(ctx context.Context, q *donnees.Queries, famille 
 // cible : l'objet de l'adresse (module activé, objet de la famille).
 func (s *Suivi) cible(r *http.Request, c *appli.Contexte, module string, objet int64) (Objet, bool) {
 	o, ok := s.objets[module]
-	if !ok || !c.Voit(module) {
+	if !ok || !s.permis(r.Context(), c, o, objet) {
 		return o, false
 	}
 	_, existe := o.Nom(r.Context(), c.Famille.ID, objet)
@@ -381,6 +391,7 @@ type saisieCarnet struct {
 	carburant           string // plein seulement
 	montant, km, litres int64
 	budget              bool   // ajouter aussi au budget
+	budgetPerso         bool   // … au budget perso du parent (sinon au compte commun)
 	nom                 string // nom de l'objet (libellé de la dépense au budget)
 }
 
@@ -402,7 +413,9 @@ func lireCarnetComplet(r *http.Request, c *appli.Contexte) (saisieCarnet, string
 	if x.litres > 0 {
 		x.carburant = carburantValide(r.PostFormValue("carburant"))
 	}
-	x.budget = r.PostFormValue("budget") == "1"
+	// « budget » : « 1 » (compte commun) ou « perso » (budget perso, privé).
+	x.budget = r.PostFormValue("budget") == "1" || r.PostFormValue("budget") == "perso"
+	x.budgetPerso = r.PostFormValue("budget") == "perso"
 	// Les montants sont réservés aux parents (le budget est fermé aux
 	// enfants) : un enfant n'en saisit pas.
 	if !c.EstParent() {
@@ -452,7 +465,11 @@ func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.C
 		if utf8.RuneCountInString(libelle) > 80 {
 			libelle = string([]rune(libelle)[:80])
 		}
-		ope, err := q.CreerOperation(ctx, donnees.CreerOperationParams{FamilleID: c.Famille.ID, Sens: "depense", Montant: x.montant,
+		var perso int64
+		if x.budgetPerso {
+			perso = c.Membre.ID
+		}
+		ope, err := q.CreerOperation(ctx, donnees.CreerOperationParams{FamilleID: c.Famille.ID, PersoDe: perso, Sens: "depense", Montant: x.montant,
 			Categorie: o.Categorie, Libelle: libelle, Jour: x.jour, MembreID: memberID(c), CreePar: memberID(c), CreeLe: time.Now().Unix()})
 		if err != nil {
 			return 0, err
@@ -610,7 +627,7 @@ func (s *Suivi) supprimerEcheance(w http.ResponseWriter, r *http.Request, c *app
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	e, err := s.a.Q.EcheanceParID(r.Context(), donnees.EcheanceParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[e.Module]
-	if err != nil || !ok || !c.Voit(e.Module) {
+	if err != nil || !ok || !s.permis(r.Context(), c, o, e.ObjetID) {
 		s.a.Echec(w, r, http.StatusNotFound, "Échéance introuvable.")
 		return
 	}
@@ -627,7 +644,7 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := s.a.Q.LigneCarnetParID(r.Context(), donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok || !c.Voit(l.Module) {
+	if err != nil || !ok || !s.permis(r.Context(), c, o, l.ObjetID) {
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}
@@ -668,7 +685,7 @@ func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := s.a.Q.LigneCarnetParID(ctx, donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok || !c.Voit(l.Module) {
+	if err != nil || !ok || !s.permis(r.Context(), c, o, l.ObjetID) {
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}
@@ -720,7 +737,7 @@ func (s *Suivi) echeance(r *http.Request, c *appli.Contexte) (donnees.Echeance, 
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	e, err := s.a.Q.EcheanceParID(r.Context(), donnees.EcheanceParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[e.Module]
-	return e, o, err == nil && ok && c.Voit(e.Module)
+	return e, o, err == nil && ok && s.permis(r.Context(), c, o, e.ObjetID)
 }
 
 // modifierEcheance : quoi, quand, fréquence (tout le monde).

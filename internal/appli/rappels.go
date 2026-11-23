@@ -26,7 +26,16 @@ type Echeance struct {
 	Emoji   string
 	URL     string
 	Module  string
-	Parents bool // module réservé aux parents (budget, abonnements) : rien pour les enfants
+	Parents bool  // module réservé aux parents (budget, abonnements) : rien pour les enfants
+	Pour    int64 // privée (abonnement ou projet privé) : ce membre seulement ; 0 : selon Parents
+}
+
+// PourMembre : ce membre voit-il cette échéance ?
+func (e Echeance) PourMembre(membre int64, parent bool) bool {
+	if e.Pour != 0 {
+		return e.Pour == membre
+	}
+	return !e.Parents || parent
 }
 
 // EcheancesFunc : échéances d'un module pour une famille, du jour debut
@@ -126,7 +135,7 @@ func (a *App) blocAVenir(ctx context.Context, c *Contexte) (template.HTML, error
 	auj := minuitDe(c.Maintenant())
 	var ech []Echeance
 	for _, e := range a.Echeances(ctx, c.Famille, auj, auj.AddDate(0, 0, 31)) {
-		if !e.Parents || c.EstParent() {
+		if e.PourMembre(c.Membre.ID, c.EstParent()) {
 			ech = append(ech, e)
 		}
 	}
@@ -212,6 +221,11 @@ func (a *App) envoyerRappelsA(ctx context.Context, maintenant time.Time, seule9h
 		// n'ont pas ce qui est réservé aux parents (abonnements…).
 		var tous, parents []Echeance
 		var lignesTous, lignesParents []string
+		// Échéances privées (abonnement, projet privé) : à leur propriétaire
+		// seulement, qui reçoit alors sa propre notification (les autres
+		// lignes comprises).
+		prives := map[int64][]Echeance{}
+		lignesPrives := map[int64][]string{}
 		for _, decalage := range []int{0, 7} {
 			jour := auj.AddDate(0, 0, decalage)
 			for _, e := range a.Echeances(ctx, f, jour, jour.AddDate(0, 0, 1)) {
@@ -220,20 +234,39 @@ func (a *App) envoyerRappelsA(ctx context.Context, maintenant time.Time, seule9h
 					quand = "Dans 7 jours"
 				}
 				ligne := fmt.Sprintf("%s %s : %s", e.Emoji, quand, e.Titre)
+				n++
+				if e.Pour != 0 {
+					prives[e.Pour], lignesPrives[e.Pour] = append(prives[e.Pour], e), append(lignesPrives[e.Pour], ligne)
+					continue
+				}
 				parents, lignesParents = append(parents, e), append(lignesParents, ligne)
 				if !e.Parents {
 					tous, lignesTous = append(tous, e), append(lignesTous, ligne)
 				}
-				n++
 			}
+		}
+		// Les parents qui ont des échéances privées : leur notification à eux.
+		var avecPrives []int64
+		for membre, l := range prives {
+			mb, err := a.Q.MembreParID(ctx, donnees.MembreParIDParams{ID: membre, FamilleID: f.ID})
+			if err != nil || mb.Actif == 0 {
+				continue
+			}
+			ech, lignes := append(append([]Echeance{}, l...), tous...), append(append([]string{}, lignesPrives[membre]...), lignesTous...)
+			if mb.Role == RoleParent {
+				ech, lignes = append(append([]Echeance{}, l...), parents...), append(append([]string{}, lignesPrives[membre]...), lignesParents...)
+			}
+			texte, url := texteRappels(ech, lignes)
+			a.Push.annoncerEnAttendant(ctx, annonce{famille: f.ID, module: moduleRappels, texte: texte, url: url, pour: []int64{membre}})
+			avecPrives = append(avecPrives, membre)
 		}
 		if len(parents) > 0 {
 			texte, url := texteRappels(parents, lignesParents)
-			a.Push.annoncerEnAttendant(ctx, annonce{famille: f.ID, module: moduleRappels, texte: texte, url: url, parents: true})
+			a.Push.annoncerEnAttendant(ctx, annonce{famille: f.ID, module: moduleRappels, texte: texte, url: url, parents: true, sauf: avecPrives})
 		}
 		if len(tous) > 0 {
 			texte, url := texteRappels(tous, lignesTous)
-			a.Push.annoncerEnAttendant(ctx, annonce{famille: f.ID, module: moduleRappels, texte: texte, url: url, sansParents: true})
+			a.Push.annoncerEnAttendant(ctx, annonce{famille: f.ID, module: moduleRappels, texte: texte, url: url, sansParents: true, sauf: avecPrives})
 		}
 	}
 	if n > 0 {

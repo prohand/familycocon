@@ -1,5 +1,6 @@
 -- Operations qui reviennent, et abonnements.
 
+-- Toutes (ecriture des occurrences).
 -- name: RecurrencesFamille :many
 SELECT * FROM recurrences WHERE famille_id = ? ORDER BY sens DESC, montant DESC;
 
@@ -10,8 +11,8 @@ SELECT * FROM recurrences WHERE id = ? AND famille_id = ?;
 SELECT count(*) FROM recurrences WHERE famille_id = ?;
 
 -- name: CreerRecurrence :one
-INSERT INTO recurrences (famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO recurrences (famille_id, perso_de, virement, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- Seulement si " faites " n'a pas bouge depuis la lecture (une occurrence
 -- ecrite entre-temps ne doit pas etre ecrite une seconde fois).
@@ -31,14 +32,17 @@ DELETE FROM recurrences WHERE id = ? AND famille_id = ?;
 UPDATE recurrences SET faites = faites + 1 WHERE id = ? AND famille_id = ? AND faites = ?;
 
 -- name: CreerOccurrence :one
-INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, membre_id, recurrence_id, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO operations (famille_id, perso_de, sens, montant, categorie, libelle, jour, membre_id, recurrence_id, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
+-- Abonnements vus par un membre (les prives des autres non) ; membre = -1 :
+-- tous (rappels, envoyes a chacun selon ce qu'il voit).
 -- name: ListeAbonnements :many
 SELECT a.id, a.emoji, a.engagement_fin, a.site, a.notes, r.id AS recurrence_id, r.montant, r.categorie, r.libelle,
-  r.membre_id, r.frequence, r.debut, r.fin, r.faites
+  r.membre_id, r.frequence, r.debut, r.fin, r.faites, r.perso_de
 FROM abonnements a JOIN recurrences r ON r.id = a.recurrence_id
-WHERE a.famille_id = ? ORDER BY r.libelle COLLATE NOCASE;
+WHERE a.famille_id = sqlc.arg(famille_id) AND (sqlc.arg(membre) = -1 OR r.perso_de IN (0, sqlc.arg(membre)))
+ORDER BY r.libelle COLLATE NOCASE;
 
 -- name: AbonnementParID :one
 SELECT * FROM abonnements WHERE id = ? AND famille_id = ?;
@@ -64,3 +68,14 @@ DELETE FROM operations WHERE recurrence_id = ? AND famille_id = ?;
 -- name: TotalRecurrence :one
 SELECT count(*) AS nombre, CAST(coalesce(sum(montant), 0) AS INTEGER) AS total
 FROM operations WHERE famille_id = ? AND recurrence_id = ?;
+
+-- name: SupprimerRecurrencesPerso :exec
+DELETE FROM recurrences WHERE famille_id = ? AND perso_de = ?;
+
+-- Abonnement passe au budget perso (ou revenu au commun) : la recurrence
+-- et ses prelevements deja ecrits changent de budget.
+-- name: ChangerCompteRecurrence :exec
+UPDATE recurrences SET perso_de = ? WHERE id = ? AND famille_id = ?;
+
+-- name: ChangerCompteOccurrences :exec
+UPDATE operations SET perso_de = ? WHERE recurrence_id = ? AND famille_id = ?;

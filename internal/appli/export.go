@@ -18,7 +18,8 @@ import (
 // un fichier JSON, pour les garder ou les emporter ailleurs (sur un
 // serveur partagé, une famille ne peut pas prendre la sauvegarde de toute
 // la base). Aucun secret : ni mot de passe, ni code PIN, ni clé, ni session.
-// Les notes privées des autres membres n'y sont pas.
+// Les notes privées des autres membres n'y sont pas, ni leur budget perso,
+// leurs abonnements et projets privés.
 
 // sectionExport : une partie du fichier (« courses_listes »…).
 type sectionExport struct {
@@ -30,6 +31,14 @@ type sectionExport struct {
 func s[T any](nom string, f func(*donnees.Queries, context.Context, int64) ([]T, error)) sectionExport {
 	return sectionExport{nom: nom, lire: func(ctx context.Context, q *donnees.Queries, famille, _ int64) (any, error) {
 		return f(q, ctx, famille)
+	}}
+}
+
+// sm : une requête « par famille et membre » (ce qui est privé à un autre
+// membre n'est pas exporté : budget perso, abonnements et projets privés).
+func sm[T, P any](nom string, f func(*donnees.Queries, context.Context, P) ([]T, error), params func(famille, membre int64) P) sectionExport {
+	return sectionExport{nom: nom, lire: func(ctx context.Context, q *donnees.Queries, famille, membre int64) (any, error) {
+		return f(q, ctx, params(famille, membre))
 	}}
 }
 
@@ -45,10 +54,18 @@ var sectionsExport = []sectionExport{
 	s("agenda_contacts", (*donnees.Queries).ExportEvenementsContacts),
 	s("menus_repas", (*donnees.Queries).ExportRepas),
 	s("menus_recettes", (*donnees.Queries).ExportRecettes),
-	s("budget_operations", (*donnees.Queries).ExportOperations),
-	s("budget_recurrences", (*donnees.Queries).ExportRecurrences),
-	s("budget_plafonds", (*donnees.Queries).ExportBudgetPlafonds),
-	s("abonnements", (*donnees.Queries).ExportAbonnements),
+	sm("budget_operations", (*donnees.Queries).ExportOperations, func(f, m int64) donnees.ExportOperationsParams {
+		return donnees.ExportOperationsParams{FamilleID: f, Membre: m}
+	}),
+	sm("budget_recurrences", (*donnees.Queries).ExportRecurrences, func(f, m int64) donnees.ExportRecurrencesParams {
+		return donnees.ExportRecurrencesParams{FamilleID: f, Membre: m}
+	}),
+	sm("budget_plafonds", (*donnees.Queries).ExportBudgetPlafonds, func(f, m int64) donnees.ExportBudgetPlafondsParams {
+		return donnees.ExportBudgetPlafondsParams{FamilleID: f, Membre: m}
+	}),
+	sm("abonnements", (*donnees.Queries).ExportAbonnements, func(f, m int64) donnees.ExportAbonnementsParams {
+		return donnees.ExportAbonnementsParams{FamilleID: f, Membre: m}
+	}),
 	s("enfants_missions", (*donnees.Queries).ExportMissions),
 	s("enfants_missions_faites", (*donnees.Queries).ExportMissionsFaites),
 	s("enfants_recompenses", (*donnees.Queries).ExportRecompenses),
@@ -62,9 +79,15 @@ var sectionsExport = []sectionExport{
 	s("vehicules", (*donnees.Queries).ExportVehicules),
 	s("animaux", (*donnees.Queries).ExportAnimaux),
 	s("echeances", (*donnees.Queries).ExportEcheances),
-	s("carnet", (*donnees.Queries).ExportCarnet),
-	s("projets", (*donnees.Queries).ExportProjets),
-	s("projets_etapes", (*donnees.Queries).ExportProjetEtapes),
+	sm("carnet", (*donnees.Queries).ExportCarnet, func(f, m int64) donnees.ExportCarnetParams {
+		return donnees.ExportCarnetParams{FamilleID: f, Membre: m}
+	}),
+	sm("projets", (*donnees.Queries).ExportProjets, func(f, m int64) donnees.ExportProjetsParams {
+		return donnees.ExportProjetsParams{FamilleID: f, Membre: m}
+	}),
+	sm("projets_etapes", (*donnees.Queries).ExportProjetEtapes, func(f, m int64) donnees.ExportProjetEtapesParams {
+		return donnees.ExportProjetEtapesParams{FamilleID: f, Membre: m}
+	}),
 }
 
 // exporter : le fichier, écrit section par section (pas tout en mémoire).

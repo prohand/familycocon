@@ -53,12 +53,13 @@ sur le téléphone de chacun.
 - **Menus de la semaine** : midi et soir ; les ingrédients d'une recette connue reviennent tout seuls ; un clic
   envoie les ingrédients aux courses (sauf ceux déjà à la maison) ; « Reprendre la semaine dernière » ; page Recettes.
 - **Budget** (parents) :
+  - compte commun et budget perso de chaque parent (privé), virements de l'un à l'autre (une fois ou chaque mois) ;
   - « reste à vivre » du mois et courbe des dépenses ;
   - catégories et filtres ;
   - opérations qui reviennent (chaque semaine, mois, 2 mois, trimestre, semestre ou année), ajoutées toutes seules ;
   - « à venir ce mois-ci » et reste prévu en fin de mois ;
   - plafonds par catégorie (alerte à 90 %), « Payé par » (écart entre parents), recherche sur 12 mois, vue de l'année.
-- **Abonnements** (parents) : box, téléphone, musique, assurance… prélevés tout seuls dans le budget ;
+- **Abonnements** (privés au choix) (parents) : box, téléphone, musique, assurance… prélevés tout seuls dans le budget ;
   coût par mois et par an, fin d'engagement, rappel avant un renouvellement annuel.
 - **Espace enfants** :
   - missions à étoiles (1 à 5) ; l'enfant coche, un parent valide ou refuse ;
@@ -85,7 +86,7 @@ sur le téléphone de chacun.
   - véhicule : reprise d'une sauvegarde Fuelio (pleins, dépenses et leurs photos) ;
   - plein : scan du ticket avec le téléphone (date, litres, prix remplis tout seuls ; lecture dans le téléphone, rien n'est envoyé ailleurs).
 - **Garanties** : appareils achetés, fin de garantie rappelée, où est rangée la facture, réparations.
-- **Projets** : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
+- **Projets** (privés au choix) : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
 - **Rappels** : bloc « À venir » sur l'accueil (30 jours) et notification chaque matin à 9 h
   (anniversaires, échéances, étapes de projet : aujourd'hui et dans 7 jours).
 - **Personnalisation** :

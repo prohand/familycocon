@@ -305,3 +305,76 @@ func TestCarteServeur(t *testing.T) {
 		t.Fatal(Octets(2516582))
 	}
 }
+
+// Échéance privée (abonnement ou projet privé) : seul son propriétaire la
+// voit et la reçoit, dans sa propre notification du matin ; l'autre parent
+// reçoit la notification commune, sans elle.
+func TestRappelsPrives(t *testing.T) {
+	a, srv, marie := familleTest(t)
+	ctx, annuler := context.WithCancel(context.Background())
+	defer annuler()
+	if err := a.DemarrerPush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	recus := map[string][]string{}
+	a.Push.envoyer = func(_ context.Context, ab *webpush.Abonnement, corps []byte, _ webpush.Options) error {
+		mu.Lock()
+		defer mu.Unlock()
+		qui := ab.Adresse[strings.LastIndex(ab.Adresse, "/")+1:]
+		recus[qui] = append(recus[qui], string(corps))
+		return nil
+	}
+	a.AjouterEcheances("courses", func(_ context.Context, f donnees.Famille, debut, fin time.Time) ([]Echeance, error) {
+		auj := minuitDe(time.Now().In(lieuFamille(f)))
+		if auj.Before(debut) || !auj.Before(fin) {
+			return nil, nil
+		}
+		return []Echeance{{Jour: auj, Titre: "Pour tous", Emoji: "⏰", Module: "courses"},
+			{Jour: auj, Titre: "Secret de Marie", Emoji: "🔒", Module: "courses", Pour: 1}}, nil
+	})
+	abonner := func(n *navigateur, nom string) {
+		n.get("/moi")
+		req, _ := http.NewRequest("POST", srv.URL+"/push/abonnement", strings.NewReader(abonnementFactice(t, nom)))
+		req.Header.Set("X-Jeton", n.jeton)
+		if rep, err := n.c.Do(req); err != nil || rep.StatusCode != http.StatusNoContent {
+			t.Fatal("abonnement")
+		}
+	}
+	marie.get("/famille")
+	_, page := marie.post("/famille/invitations", map[string]string{"role": "parent"})
+	lien := page[strings.Index(page, "/invitation/"):][:len("/invitation/")+43]
+	paul := nouveauNavigateur(t, srv)
+	paul.post(lien, map[string]string{"prenom": "Paul", "identifiant": "paul", "mdp": "le papa du nid", "mdp2": "le papa du nid"})
+	abonner(marie, "marie")
+	abonner(paul, "paul")
+	paris, _ := time.LoadLocation("Europe/Paris")
+	maintenant := time.Now().In(paris)
+	a9h := time.Date(maintenant.Year(), maintenant.Month(), maintenant.Day(), 9, 30, 0, 0, paris)
+	a.envoyerRappelsA(ctx, a9h, true)
+	for i := 0; i < 200; i++ {
+		mu.Lock()
+		n := len(recus["marie"]) + len(recus["paul"])
+		mu.Unlock()
+		if n >= 2 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(30 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(recus["marie"]) != 1 || !strings.Contains(recus["marie"][0], "Secret de Marie") || !strings.Contains(recus["marie"][0], "Pour tous") {
+		t.Fatalf("Marie : %v", recus["marie"])
+	}
+	if len(recus["paul"]) != 1 || strings.Contains(recus["paul"][0], "Secret") || !strings.Contains(recus["paul"][0], "Pour tous") {
+		t.Fatalf("Paul : %v", recus["paul"])
+	}
+	// « À venir » sur l'accueil : pareil.
+	if _, p := paul.get("/"); strings.Contains(p, "Secret de Marie") {
+		t.Fatal("échéance privée sur l'accueil de Paul")
+	}
+	if _, p := marie.get("/"); !strings.Contains(p, "Secret de Marie") {
+		t.Fatal("échéance privée absente de l'accueil de Marie")
+	}
+}

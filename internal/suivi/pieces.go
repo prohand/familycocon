@@ -83,7 +83,7 @@ func (s *Suivi) ajouterPiece(w http.ResponseWriter, r *http.Request, c *appli.Co
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := s.a.Q.LigneCarnetParID(ctx, donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok || !c.Voit(l.Module) {
+	if err != nil || !ok || !s.permis(ctx, c, o, l.ObjetID) {
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}
@@ -119,6 +119,12 @@ func (s *Suivi) piece(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		http.NotFound(w, r)
 		return
 	}
+	// La photo d'un objet que ce membre ne voit pas (projet privé d'un autre) : non.
+	l, err := s.a.Q.LigneCarnetParID(r.Context(), donnees.LigneCarnetParIDParams{ID: p.CarnetID, FamilleID: c.Famille.ID})
+	if o, ok := s.objets[l.Module]; err != nil || !ok || !s.permis(r.Context(), c, o, l.ObjetID) {
+		http.NotFound(w, r)
+		return
+	}
 	f, err := os.Open(cheminPiece(s.a, p))
 	if err != nil {
 		http.NotFound(w, r)
@@ -141,7 +147,7 @@ func (s *Suivi) supprimerPiece(w http.ResponseWriter, r *http.Request, c *appli.
 	}
 	l, err := s.a.Q.LigneCarnetParID(ctx, donnees.LigneCarnetParIDParams{ID: p.CarnetID, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok {
+	if err != nil || !ok || !s.permis(ctx, c, o, l.ObjetID) {
 		s.a.Echec(w, r, http.StatusNotFound, "Photo introuvable.")
 		return
 	}

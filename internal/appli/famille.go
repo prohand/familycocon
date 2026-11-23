@@ -309,6 +309,24 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 		if err := q.SupprimerNotesPriveesMembre(ctx, donnees.SupprimerNotesPriveesMembreParams{FamilleID: c.Famille.ID, AuteurID: moi}); err != nil {
 			return err
 		}
+		// Son budget perso (opérations, celles qui reviennent, plafonds) :
+		// personne d'autre ne le voit. Les virements déjà reçus au compte
+		// commun y restent.
+		if err := q.SupprimerBudgetPerso(ctx, donnees.SupprimerBudgetPersoParams{FamilleID: c.Famille.ID, PersoDe: m.ID}); err != nil {
+			return err
+		}
+		if err := q.SupprimerRecurrencesPerso(ctx, donnees.SupprimerRecurrencesPersoParams{FamilleID: c.Famille.ID, PersoDe: m.ID}); err != nil {
+			return err
+		}
+		if err := q.SupprimerPlafondsPerso(ctx, donnees.SupprimerPlafondsPersoParams{FamilleID: c.Famille.ID, PersoDe: m.ID}); err != nil {
+			return err
+		}
+		// Ce que les modules gardaient privé pour lui (projets privés…).
+		for _, f := range a.departs {
+			if err := f(ctx, q, c.Famille.ID, m.ID); err != nil {
+				return err
+			}
+		}
 		// Plus rien pour se connecter : ni passkey ni code de secours.
 		if err := q.SupprimerPasskeysMembre(ctx, m.ID); err != nil {
 			return err

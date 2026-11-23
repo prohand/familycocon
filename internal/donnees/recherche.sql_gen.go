@@ -116,13 +116,14 @@ func (q *Queries) ChercherProduits(ctx context.Context, arg ChercherProduitsPara
 
 const chercherProjets = `-- name: ChercherProjets :many
 SELECT id, nom, emoji, termine_le FROM projets
-WHERE famille_id = ?1
-  AND (instr(plier(nom), plier(?2)) > 0 OR instr(plier(description), plier(?2)) > 0)
+WHERE famille_id = ?1 AND perso_de IN (0, ?2)
+  AND (instr(plier(nom), plier(?3)) > 0 OR instr(plier(description), plier(?3)) > 0)
 ORDER BY termine_le, id DESC LIMIT 8
 `
 
 type ChercherProjetsParams struct {
 	FamilleID int64
+	Membre    int64
 	Motif     interface{}
 }
 
@@ -134,7 +135,7 @@ type ChercherProjetsRow struct {
 }
 
 func (q *Queries) ChercherProjets(ctx context.Context, arg ChercherProjetsParams) ([]ChercherProjetsRow, error) {
-	rows, err := q.db.QueryContext(ctx, chercherProjets, arg.FamilleID, arg.Motif)
+	rows, err := q.db.QueryContext(ctx, chercherProjets, arg.FamilleID, arg.Membre, arg.Motif)
 	if err != nil {
 		return nil, err
 	}

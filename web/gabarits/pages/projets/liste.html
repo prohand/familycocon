@@ -12,7 +12,7 @@
   {{- range .EnCours}}
   <a class="projet c{{.Couleur}}" href="/projets/{{.ID}}">
     <span class="grand-emoji">{{.Emoji}}</span>
-    <span class="quoi">{{.Nom}}
+    <span class="quoi">{{if .PersoDe}}🔒 {{end}}{{.Nom}}
       <small>{{if .NbEtapes}}{{.NbFaites}} / {{.NbEtapes}} étapes{{else}}Pas encore d'étape{{end}}{{if .Objectif}} · {{end}}<span class="{{if .Retard}}alerte{{end}}">{{.Objectif}}</span></small>
       {{if and $.C.EstParent (or .Budget .Depense)}}<small class="{{if and .Budget (gt .Depense .Budget)}}alerte{{end}}">💶 {{montant .Depense $.C.Famille.Devise}}{{if .Budget}} sur {{montant .Budget $.C.Famille.Devise}}{{end}}</small>{{end}}
       {{if .NbEtapes}}<progress class="progres projets" max="{{.NbEtapes}}" value="{{.NbFaites}}"></progress>{{end}}
@@ -28,7 +28,7 @@
   <summary class="sous-titre">🎉 Terminés ({{len .Termines}})</summary>
   <div class="carte">
     {{- range .Termines}}
-    <a class="ligne" href="/projets/{{.ID}}"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Nom}}</span><span class="fleche-droite">›</span></a>
+    <a class="ligne" href="/projets/{{.ID}}"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{if .PersoDe}}🔒 {{end}}{{.Nom}}</span><span class="fleche-droite">›</span></a>
     {{- end}}
   </div>
 </details>

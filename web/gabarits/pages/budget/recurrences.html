@@ -1,8 +1,8 @@
 {{define "contenu"}}
 {{with .Donnees}}
 <section class="titre-page">
-  <a class="retour" href="/budget">‹ Budget</a>
-  <h1>🔁 Opérations qui reviennent</h1>
+  <a class="retour" href="/budget?compte={{if .Perso}}perso{{else}}commun{{end}}">‹ Budget</a>
+  <h1>🔁 Opérations qui reviennent</h1>{{if .Perso}}<p>🔒 Votre budget perso</p>{{end}}
   <p>Ajoutées toutes seules au budget, à chaque date</p>
 </section>
 <section class="carte reste bloc">
@@ -13,7 +13,7 @@
     <span>⬇️ Dépenses <b>{{montant .DepensesMois .Devise}}</b></span>
   </div>
 </section>
-<div class="boutons"><a class="bouton" href="/budget/nouvelle">＋ Dépense</a><a class="bouton secondaire" href="/budget/nouvelle?sens=revenu">＋ Revenu</a></div>
+<div class="boutons"><a class="bouton" href="/budget/nouvelle?compte={{if .Perso}}perso{{else}}commun{{end}}">＋ Dépense</a><a class="bouton secondaire" href="/budget/nouvelle?compte={{if .Perso}}perso{{else}}commun{{end}}&amp;sens=revenu">＋ Revenu</a></div>
 {{template "lignes-recurrences" dict "Titre" "⬆️ Revenus" "L" .Revenus "Devise" .Devise}}
 {{template "lignes-recurrences" dict "Titre" "⬇️ Dépenses" "L" .Depenses "Devise" .Devise}}
 {{if not (or .Revenus .Depenses)}}

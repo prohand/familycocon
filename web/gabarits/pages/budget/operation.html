@@ -2,22 +2,26 @@
 {{$c := .C}}
 {{with .Donnees}}
 <section class="titre-page">
-  <a class="retour" href="/budget">‹ Budget</a>
+  <a class="retour" href="/budget?compte={{.Compte}}">‹ Budget</a>
   <h1>{{if .Nouvelle}}{{if eq .Op.Sens "revenu"}}⬆️ Nouveau revenu{{else}}⬇️ Nouvelle dépense{{end}}{{else}}✏️ Opération{{end}}</h1>
+  {{if eq .Compte "perso"}}<p>🔒 Dans votre budget perso (vous seul le voyez).</p>{{end}}
+  {{if .Virement}}<p>🔁 Virement : l'autre côté (perso ou commun) suit le montant et la date.</p>{{end}}
 </section>
 <form class="carte" method="post" action="{{if .Nouvelle}}/budget{{else}}/budget/{{.Op.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
+  <input type="hidden" name="compte" value="{{.Compte}}">
   <label class="champ"><span>Montant ({{.Devise}})</span>
     <input class="gros-montant" name="montant" value="{{.Montant}}" inputmode="decimal" placeholder="0,00" autocomplete="off" required autofocus></label>
+  {{if .Virement}}<input type="hidden" name="categorie" value="{{.Op.Categorie}}">{{else}}
   <fieldset class="categories">
-    <legend>Catégorie{{if .Nouvelle}} <small>· {{if eq .Op.Sens "revenu"}}<a href="/budget/nouvelle">c'est une dépense ?</a>{{else}}<a href="/budget/nouvelle?sens=revenu">c'est un revenu ?</a>{{end}}</small>{{end}}</legend>
+    <legend>Catégorie{{if .Nouvelle}} <small>· {{if eq .Op.Sens "revenu"}}<a href="/budget/nouvelle?compte={{.Compte}}">c'est une dépense ?</a>{{else}}<a href="/budget/nouvelle?compte={{.Compte}}&amp;sens=revenu">c'est un revenu ?</a>{{end}}</small>{{end}}</legend>
     <div class="grille-cat">
       {{- range .Categories}}
       <label class="{{.Sens}}"><input type="radio" name="categorie" value="{{.Cle}}"{{if eq .Cle $.Donnees.Op.Categorie}} checked{{end}} required>
         <span><b>{{.Emoji}}</b>{{.Nom}}</span></label>
       {{- end}}
     </div>
-  </fieldset>
+  </fieldset>{{end}}
   <div class="rangee">
     <label class="champ"><span>Libellé (facultatif)</span><input name="libelle" value="{{.Op.Libelle}}" maxlength="80" placeholder="Ex. : Supermarché" list="libelles" autocomplete="off"></label>
     <label class="champ"><span>Date</span><input type="date" name="jour" value="{{.Op.Jour}}" required></label>

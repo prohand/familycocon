@@ -181,3 +181,23 @@ func Trouver(t *testing.T, page, expr string) string {
 	}
 	return m[1]
 }
+
+// Parent invite un second parent (lien d'invitation) et renvoie un
+// navigateur connecté en son nom.
+func Parent(t *testing.T, srv *httptest.Server, parent *Navigateur, prenom string) *Navigateur {
+	t.Helper()
+	parent.Get("/famille")
+	_, page := parent.Post("/famille/invitations", map[string]string{"role": "parent"})
+	m := regexp.MustCompile(`/invitation/([A-Za-z0-9_-]{43})`).FindStringSubmatch(page)
+	if m == nil {
+		t.Fatal("lien d'invitation absent")
+	}
+	p := NouveauNavigateur(t, srv)
+	p.Get("/invitation/" + m[1])
+	id := strings.ToLower(prenom)
+	if code, page := p.Post("/invitation/"+m[1], map[string]string{"prenom": prenom, "identifiant": id,
+		"mdp": "un autre grand nid", "mdp2": "un autre grand nid"}); code != 200 || !strings.Contains(page, "Bonjour "+prenom) {
+		t.Fatalf("invitation de %s : %d", prenom, code)
+	}
+	return p
+}

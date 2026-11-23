@@ -468,3 +468,44 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   d'après le dernier plein ; affiché dans la liste ; rempli par le scan ;
   ignoré pour une ligne d'entretien ou une valeur hors liste. La reprise
   Fuelio ne le remplit pas (codes de carburant de Fuelio non publiés).
+
+## 19. Budget perso, compte commun ; abonnements et projets privés (v0.7.0)
+- **Deux budgets** (choix de l'utilisateur) : le compte commun (tous les
+  parents, comme avant) et un budget perso par parent, **privé** (lui
+  seul le voit, comme une note privée). Seulement dépenses et revenus (pas
+  de solde bancaire). Colonne `perso_de` (0 : commun ; sinon le membre) sur
+  `operations`, `recurrences`, `budget_plafonds` (clé refaite) et
+  `projets` (migration 0033). Les données d'avant restent au commun.
+- **Choix du budget** : onglets « 👨‍👩‍👧 Compte commun | 🔒 Mon budget » ;
+  `?compte=commun|perso` dans les adresses et les formulaires, retenu par
+  un cookie (`fc_compte`). Chaque budget a ses opérations, ses opérations
+  qui reviennent, ses plafonds, son année, sa recherche. Une opération ou
+  une récurrence d'un autre budget perso : 404. La recherche globale et
+  le résumé de l'accueil comptent le commun et le perso du membre.
+- **Virements** perso → commun (`POST /budget/virement`) : deux opérations
+  liées (`virement_id`) : une dépense « Virement vers le commun » (perso),
+  un revenu « Virement de Marie » (commun), catégories `virement` et
+  `virement-recu` jamais proposées dans les formulaires. Une fois ou qui
+  revient (récurrence `virement = 1` : chaque occurrence écrit les deux
+  moitiés). Modifier une moitié : l'autre suit (montant, date) ; supprimer
+  : les deux partent. Côté commun, les virements à venir sont prévus.
+- **Carnet** (véhicules, animaux, prestataires, projets) : « Ajouter aussi
+  au budget » devient un choix : Non (par défaut) / Compte commun / Mon
+  budget perso.
+- **Abonnement privé** (case « Privé ») : sa récurrence est dans le budget
+  perso ; vu par son propriétaire seul (liste, fiche, rappels). Passé en
+  privé ou rendu au commun : ses prélèvements déjà écrits suivent.
+- **Projet privé** (case « Privé », à la création ; peut être partagé
+  ensuite, pas l'inverse : les projets n'ont pas d'auteur noté) : vu par
+  son créateur seul (liste, fiche, étapes, carnet, photos, recherche,
+  rappels) ; son carnet propose d'abord le budget perso. Contrôle commun
+  au carnet : `suivi.Objet.Voit`.
+- **Rappels privés** : `Echeance.Pour` (membre). « À venir », l'agenda et
+  la notification du matin ne les montrent qu'à lui ; il reçoit alors sa
+  propre notification (avec les rappels communs), les autres la commune.
+- **Départ d'un membre** : son budget perso (opérations, récurrences,
+  plafonds), ses abonnements privés et ses projets privés (carnet et
+  photos compris) sont effacés ; les virements reçus au commun restent.
+  Crochet `App.AjouterDepart` pour les modules.
+- **Export** : le budget perso, les abonnements et les projets privés des
+  autres membres n'y sont pas.

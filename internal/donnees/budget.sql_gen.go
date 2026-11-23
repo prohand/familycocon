@@ -11,21 +11,27 @@ import (
 )
 
 const chercherOperations = `-- name: ChercherOperations :many
-SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id FROM operations
-WHERE famille_id = ?1 AND jour >= ?2
-  AND instr(plier(libelle), plier(?3)) > 0
+SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id, perso_de, virement_id FROM operations
+WHERE famille_id = ?1 AND perso_de = ?2 AND jour >= ?3
+  AND instr(plier(libelle), plier(?4)) > 0
 ORDER BY jour DESC, id DESC LIMIT 200
 `
 
 type ChercherOperationsParams struct {
 	FamilleID int64
+	Compte    int64
 	Depuis    string
 	Motif     interface{}
 }
 
 // Recherche dans les libelles, sans majuscules ni accents, depuis une date.
 func (q *Queries) ChercherOperations(ctx context.Context, arg ChercherOperationsParams) ([]Operation, error) {
-	rows, err := q.db.QueryContext(ctx, chercherOperations, arg.FamilleID, arg.Depuis, arg.Motif)
+	rows, err := q.db.QueryContext(ctx, chercherOperations,
+		arg.FamilleID,
+		arg.Compte,
+		arg.Depuis,
+		arg.Motif,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +52,8 @@ func (q *Queries) ChercherOperations(ctx context.Context, arg ChercherOperations
 			&i.CreePar,
 			&i.CreeLe,
 			&i.RecurrenceID,
+			&i.PersoDe,
+			&i.VirementID,
 		); err != nil {
 			return nil, err
 		}
@@ -61,31 +69,35 @@ func (q *Queries) ChercherOperations(ctx context.Context, arg ChercherOperations
 }
 
 const creerOperation = `-- name: CreerOperation :one
-INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, membre_id, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id
+INSERT INTO operations (famille_id, perso_de, sens, montant, categorie, libelle, jour, membre_id, virement_id, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id, perso_de, virement_id
 `
 
 type CreerOperationParams struct {
-	FamilleID int64
-	Sens      string
-	Montant   int64
-	Categorie string
-	Libelle   string
-	Jour      string
-	MembreID  sql.NullInt64
-	CreePar   sql.NullInt64
-	CreeLe    int64
+	FamilleID  int64
+	PersoDe    int64
+	Sens       string
+	Montant    int64
+	Categorie  string
+	Libelle    string
+	Jour       string
+	MembreID   sql.NullInt64
+	VirementID sql.NullInt64
+	CreePar    sql.NullInt64
+	CreeLe     int64
 }
 
 func (q *Queries) CreerOperation(ctx context.Context, arg CreerOperationParams) (Operation, error) {
 	row := q.db.QueryRowContext(ctx, creerOperation,
 		arg.FamilleID,
+		arg.PersoDe,
 		arg.Sens,
 		arg.Montant,
 		arg.Categorie,
 		arg.Libelle,
 		arg.Jour,
 		arg.MembreID,
+		arg.VirementID,
 		arg.CreePar,
 		arg.CreeLe,
 	)
@@ -103,18 +115,25 @@ func (q *Queries) CreerOperation(ctx context.Context, arg CreerOperationParams) 
 		&i.CreePar,
 		&i.CreeLe,
 		&i.RecurrenceID,
+		&i.PersoDe,
+		&i.VirementID,
 	)
 	return i, err
 }
 
 const libellesRecents = `-- name: LibellesRecents :many
-SELECT libelle FROM operations WHERE famille_id = ? AND libelle <> ''
+SELECT libelle FROM operations WHERE famille_id = ? AND perso_de = ? AND libelle <> ''
 GROUP BY libelle ORDER BY max(jour) DESC LIMIT 30
 `
 
+type LibellesRecentsParams struct {
+	FamilleID int64
+	PersoDe   int64
+}
+
 // Libelles deja tapes (suggestions du formulaire), les plus recents d'abord.
-func (q *Queries) LibellesRecents(ctx context.Context, familleID int64) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, libellesRecents, familleID)
+func (q *Queries) LibellesRecents(ctx context.Context, arg LibellesRecentsParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, libellesRecents, arg.FamilleID, arg.PersoDe)
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +153,44 @@ func (q *Queries) LibellesRecents(ctx context.Context, familleID int64) ([]strin
 		return nil, err
 	}
 	return items, nil
+}
+
+const lierVirement = `-- name: LierVirement :exec
+UPDATE operations SET virement_id = ? WHERE id = ? AND famille_id = ?
+`
+
+type LierVirementParams struct {
+	VirementID sql.NullInt64
+	ID         int64
+	FamilleID  int64
+}
+
+// Virement : chaque moitie connait l'autre.
+func (q *Queries) LierVirement(ctx context.Context, arg LierVirementParams) error {
+	_, err := q.db.ExecContext(ctx, lierVirement, arg.VirementID, arg.ID, arg.FamilleID)
+	return err
+}
+
+const modifierMoitieVirement = `-- name: ModifierMoitieVirement :exec
+UPDATE operations SET montant = ?, jour = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierMoitieVirementParams struct {
+	Montant   int64
+	Jour      string
+	ID        int64
+	FamilleID int64
+}
+
+// Virement modifie : l'autre moitie suit (montant et date).
+func (q *Queries) ModifierMoitieVirement(ctx context.Context, arg ModifierMoitieVirementParams) error {
+	_, err := q.db.ExecContext(ctx, modifierMoitieVirement,
+		arg.Montant,
+		arg.Jour,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
 }
 
 const modifierOperation = `-- name: ModifierOperation :exec
@@ -192,12 +249,13 @@ func (q *Queries) ModifierOperationCarnet(ctx context.Context, arg ModifierOpera
 
 const operationIdentiqueRecente = `-- name: OperationIdentiqueRecente :one
 SELECT count(*) FROM operations
-WHERE famille_id = ? AND sens = ? AND montant = ? AND categorie = ? AND libelle = ? AND jour = ?
+WHERE famille_id = ? AND perso_de = ? AND sens = ? AND montant = ? AND categorie = ? AND libelle = ? AND jour = ?
   AND cree_par = ? AND recurrence_id IS NULL AND cree_le >= ?
 `
 
 type OperationIdentiqueRecenteParams struct {
 	FamilleID int64
+	PersoDe   int64
 	Sens      string
 	Montant   int64
 	Categorie string
@@ -211,6 +269,7 @@ type OperationIdentiqueRecenteParams struct {
 func (q *Queries) OperationIdentiqueRecente(ctx context.Context, arg OperationIdentiqueRecenteParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, operationIdentiqueRecente,
 		arg.FamilleID,
+		arg.PersoDe,
 		arg.Sens,
 		arg.Montant,
 		arg.Categorie,
@@ -225,7 +284,7 @@ func (q *Queries) OperationIdentiqueRecente(ctx context.Context, arg OperationId
 }
 
 const operationParID = `-- name: OperationParID :one
-SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id FROM operations WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id, perso_de, virement_id FROM operations WHERE id = ? AND famille_id = ?
 `
 
 type OperationParIDParams struct {
@@ -249,25 +308,35 @@ func (q *Queries) OperationParID(ctx context.Context, arg OperationParIDParams) 
 		&i.CreePar,
 		&i.CreeLe,
 		&i.RecurrenceID,
+		&i.PersoDe,
+		&i.VirementID,
 	)
 	return i, err
 }
 
 const operationsPeriode = `-- name: OperationsPeriode :many
 
-SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id FROM operations WHERE famille_id = ? AND jour >= ?2 AND jour <= ?3
+SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id, perso_de, virement_id FROM operations WHERE famille_id = ?1 AND perso_de = ?2
+  AND jour >= ?3 AND jour <= ?4
 ORDER BY jour DESC, id DESC
 `
 
 type OperationsPeriodeParams struct {
 	FamilleID int64
+	Compte    int64
 	Du        string
 	Au        string
 }
 
 // Budget.
+// Budget d'un compte : perso_de = 0 (commun) ou le membre (perso).
 func (q *Queries) OperationsPeriode(ctx context.Context, arg OperationsPeriodeParams) ([]Operation, error) {
-	rows, err := q.db.QueryContext(ctx, operationsPeriode, arg.FamilleID, arg.Du, arg.Au)
+	rows, err := q.db.QueryContext(ctx, operationsPeriode,
+		arg.FamilleID,
+		arg.Compte,
+		arg.Du,
+		arg.Au,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -288,6 +357,8 @@ func (q *Queries) OperationsPeriode(ctx context.Context, arg OperationsPeriodePa
 			&i.CreePar,
 			&i.CreeLe,
 			&i.RecurrenceID,
+			&i.PersoDe,
+			&i.VirementID,
 		); err != nil {
 			return nil, err
 		}
@@ -303,16 +374,21 @@ func (q *Queries) OperationsPeriode(ctx context.Context, arg OperationsPeriodePa
 }
 
 const plafondsFamille = `-- name: PlafondsFamille :many
-SELECT categorie, montant FROM budget_plafonds WHERE famille_id = ?
+SELECT categorie, montant FROM budget_plafonds WHERE famille_id = ? AND perso_de = ?
 `
+
+type PlafondsFamilleParams struct {
+	FamilleID int64
+	PersoDe   int64
+}
 
 type PlafondsFamilleRow struct {
 	Categorie string
 	Montant   int64
 }
 
-func (q *Queries) PlafondsFamille(ctx context.Context, familleID int64) ([]PlafondsFamilleRow, error) {
-	rows, err := q.db.QueryContext(ctx, plafondsFamille, familleID)
+func (q *Queries) PlafondsFamille(ctx context.Context, arg PlafondsFamilleParams) ([]PlafondsFamilleRow, error) {
+	rows, err := q.db.QueryContext(ctx, plafondsFamille, arg.FamilleID, arg.PersoDe)
 	if err != nil {
 		return nil, err
 	}
@@ -335,32 +411,54 @@ func (q *Queries) PlafondsFamille(ctx context.Context, familleID int64) ([]Plafo
 }
 
 const poserPlafond = `-- name: PoserPlafond :exec
-INSERT INTO budget_plafonds (famille_id, categorie, montant) VALUES (?, ?, ?)
-ON CONFLICT (famille_id, categorie) DO UPDATE SET montant = excluded.montant
+INSERT INTO budget_plafonds (famille_id, perso_de, categorie, montant) VALUES (?, ?, ?, ?)
+ON CONFLICT (famille_id, perso_de, categorie) DO UPDATE SET montant = excluded.montant
 `
 
 type PoserPlafondParams struct {
 	FamilleID int64
+	PersoDe   int64
 	Categorie string
 	Montant   int64
 }
 
 func (q *Queries) PoserPlafond(ctx context.Context, arg PoserPlafondParams) error {
-	_, err := q.db.ExecContext(ctx, poserPlafond, arg.FamilleID, arg.Categorie, arg.Montant)
+	_, err := q.db.ExecContext(ctx, poserPlafond,
+		arg.FamilleID,
+		arg.PersoDe,
+		arg.Categorie,
+		arg.Montant,
+	)
 	return err
 }
 
 const retirerPlafond = `-- name: RetirerPlafond :exec
-DELETE FROM budget_plafonds WHERE famille_id = ? AND categorie = ?
+DELETE FROM budget_plafonds WHERE famille_id = ? AND perso_de = ? AND categorie = ?
 `
 
 type RetirerPlafondParams struct {
 	FamilleID int64
+	PersoDe   int64
 	Categorie string
 }
 
 func (q *Queries) RetirerPlafond(ctx context.Context, arg RetirerPlafondParams) error {
-	_, err := q.db.ExecContext(ctx, retirerPlafond, arg.FamilleID, arg.Categorie)
+	_, err := q.db.ExecContext(ctx, retirerPlafond, arg.FamilleID, arg.PersoDe, arg.Categorie)
+	return err
+}
+
+const supprimerBudgetPerso = `-- name: SupprimerBudgetPerso :exec
+DELETE FROM operations WHERE famille_id = ? AND perso_de = ?
+`
+
+type SupprimerBudgetPersoParams struct {
+	FamilleID int64
+	PersoDe   int64
+}
+
+// Membre retire : son budget perso part avec lui (personne d'autre ne le voit).
+func (q *Queries) SupprimerBudgetPerso(ctx context.Context, arg SupprimerBudgetPersoParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerBudgetPerso, arg.FamilleID, arg.PersoDe)
 	return err
 }
 
@@ -378,14 +476,29 @@ func (q *Queries) SupprimerOperation(ctx context.Context, arg SupprimerOperation
 	return err
 }
 
+const supprimerPlafondsPerso = `-- name: SupprimerPlafondsPerso :exec
+DELETE FROM budget_plafonds WHERE famille_id = ? AND perso_de = ?
+`
+
+type SupprimerPlafondsPersoParams struct {
+	FamilleID int64
+	PersoDe   int64
+}
+
+func (q *Queries) SupprimerPlafondsPerso(ctx context.Context, arg SupprimerPlafondsPersoParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerPlafondsPerso, arg.FamilleID, arg.PersoDe)
+	return err
+}
+
 const totauxParMois = `-- name: TotauxParMois :many
 SELECT CAST(substr(jour, 1, 7) AS TEXT) AS mois, sens, categorie, CAST(sum(montant) AS INTEGER) AS total
-FROM operations WHERE famille_id = ? AND jour >= ?2 AND jour <= ?3
+FROM operations WHERE famille_id = ?1 AND perso_de = ?2 AND jour >= ?3 AND jour <= ?4
 GROUP BY 1, 2, 3
 `
 
 type TotauxParMoisParams struct {
 	FamilleID int64
+	Compte    int64
 	Du        string
 	Au        string
 }
@@ -399,7 +512,12 @@ type TotauxParMoisRow struct {
 
 // Totaux par mois, sens et categorie (vue de l'annee).
 func (q *Queries) TotauxParMois(ctx context.Context, arg TotauxParMoisParams) ([]TotauxParMoisRow, error) {
-	rows, err := q.db.QueryContext(ctx, totauxParMois, arg.FamilleID, arg.Du, arg.Au)
+	rows, err := q.db.QueryContext(ctx, totauxParMois,
+		arg.FamilleID,
+		arg.Compte,
+		arg.Du,
+		arg.Au,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -430,11 +548,12 @@ const totauxPeriode = `-- name: TotauxPeriode :one
 SELECT
   CAST(coalesce(sum(CASE WHEN sens = 'revenu' THEN montant ELSE 0 END), 0) AS INTEGER) AS revenus,
   CAST(coalesce(sum(CASE WHEN sens = 'depense' THEN montant ELSE 0 END), 0) AS INTEGER) AS depenses
-FROM operations WHERE famille_id = ? AND jour >= ?2 AND jour <= ?3
+FROM operations WHERE famille_id = ?1 AND perso_de = ?2 AND jour >= ?3 AND jour <= ?4
 `
 
 type TotauxPeriodeParams struct {
 	FamilleID int64
+	Compte    int64
 	Du        string
 	Au        string
 }
@@ -445,7 +564,12 @@ type TotauxPeriodeRow struct {
 }
 
 func (q *Queries) TotauxPeriode(ctx context.Context, arg TotauxPeriodeParams) (TotauxPeriodeRow, error) {
-	row := q.db.QueryRowContext(ctx, totauxPeriode, arg.FamilleID, arg.Du, arg.Au)
+	row := q.db.QueryRowContext(ctx, totauxPeriode,
+		arg.FamilleID,
+		arg.Compte,
+		arg.Du,
+		arg.Au,
+	)
 	var i TotauxPeriodeRow
 	err := row.Scan(&i.Revenus, &i.Depenses)
 	return i, err

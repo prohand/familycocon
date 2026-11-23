@@ -6,7 +6,9 @@
 // On voit le coût par mois et par an, et un rappel arrive avant un
 // renouvellement annuel ou la fin d'un engagement.
 //
-// Réservé aux parents, comme le budget.
+// Réservé aux parents, comme le budget. Un abonnement peut être privé :
+// il est alors dans le budget perso de son propriétaire, qui seul le voit
+// (et reçoit ses rappels).
 package abonnements
 
 import (
@@ -42,10 +44,12 @@ type Module struct {
 	memoListe appli.MemoRequete[[]donnees.ListeAbonnementsRow]
 }
 
-// abonnements : la liste de la famille. c : contexte de la requête, nil
-// pour les rappels de fond (rien n'est alors gardé).
-func (m *Module) abonnements(ctx context.Context, c *appli.Contexte, famille int64) ([]donnees.ListeAbonnementsRow, error) {
-	return m.memoListe.Lire(c, func() ([]donnees.ListeAbonnementsRow, error) { return m.a.Q.ListeAbonnements(ctx, famille) })
+// abonnements : la liste vue par ce membre (les privés des autres non),
+// lue une fois par requête.
+func (m *Module) abonnements(ctx context.Context, c *appli.Contexte) ([]donnees.ListeAbonnementsRow, error) {
+	return m.memoListe.Lire(c, func() ([]donnees.ListeAbonnementsRow, error) {
+		return m.a.Q.ListeAbonnements(ctx, donnees.ListeAbonnementsParams{FamilleID: c.Famille.ID, Membre: c.Membre.ID})
+	})
 }
 
 // Brancher ajoute les routes du module.
@@ -95,7 +99,7 @@ func (m *Module) lignes(ctx context.Context, c *appli.Contexte) ([]Ligne, error)
 	if err := budget.GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		return nil, err
 	}
-	l, err := m.abonnements(ctx, c, c.Famille.ID)
+	l, err := m.abonnements(ctx, c)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +174,8 @@ func (m *Module) abonnement(r *http.Request, c *appli.Contexte) (donnees.Abonnem
 		return ab, donnees.Recurrence{}, false
 	}
 	rec, err := m.a.Q.RecurrenceParID(r.Context(), donnees.RecurrenceParIDParams{ID: ab.RecurrenceID, FamilleID: c.Famille.ID})
-	return ab, rec, err == nil
+	// Privé : son propriétaire seul.
+	return ab, rec, err == nil && (rec.PersoDe == 0 || rec.PersoDe == c.Membre.ID)
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -259,6 +264,11 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 	}
 	emoji := emojiValide(r.PostFormValue("emoji"))
 	auteur := sql.NullInt64{Int64: c.Membre.ID, Valid: true}
+	// Privé : dans le budget perso de ce parent, que lui seul voit.
+	var perso int64
+	if r.PostFormValue("prive") == "1" {
+		perso = c.Membre.ID
+	}
 
 	var err error
 	if r.PathValue("id") == "" {
@@ -274,7 +284,7 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			return
 		}
 		err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
-			rec, err := q.CreerRecurrence(ctx, donnees.CreerRecurrenceParams{FamilleID: c.Famille.ID, Sens: "depense", Montant: montant,
+			rec, err := q.CreerRecurrence(ctx, donnees.CreerRecurrenceParams{FamilleID: c.Famille.ID, PersoDe: perso, Sens: "depense", Montant: montant,
 				Categorie: cat.Cle, Libelle: nom, MembreID: membre, Frequence: freq, Debut: prochain, CreePar: auteur, CreeLe: time.Now().Unix()})
 			if err != nil {
 				return err
@@ -307,6 +317,17 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			}
 			if n == 0 {
 				return errModifiee
+			}
+			// Passé en privé (ou revenu au commun) : la récurrence et ses
+			// prélèvements déjà écrits changent de budget.
+			if perso != rec.PersoDe {
+				if err := q.ChangerCompteRecurrence(ctx, donnees.ChangerCompteRecurrenceParams{PersoDe: perso, ID: rec.ID, FamilleID: c.Famille.ID}); err != nil {
+					return err
+				}
+				if err := q.ChangerCompteOccurrences(ctx, donnees.ChangerCompteOccurrencesParams{PersoDe: perso,
+					RecurrenceID: sql.NullInt64{Int64: rec.ID, Valid: true}, FamilleID: c.Famille.ID}); err != nil {
+					return err
+				}
 			}
 			return q.ModifierAbonnement(ctx, donnees.ModifierAbonnementParams{Emoji: emoji, EngagementFin: engagement, Site: site,
 				Notes: notes, ID: ab.ID, FamilleID: c.Famille.ID})
@@ -433,8 +454,9 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 
 // echeances : renouvellement des abonnements trimestriels, semestriels ou annuels, et fins
 // d'engagement (le bon moment pour résilier ou renégocier).
+// Un abonnement privé ne prévient que son propriétaire (Echeance.Pour).
 func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin time.Time) ([]appli.Echeance, error) {
-	l, err := m.abonnements(ctx, appli.ContexteDe(ctx), f.ID)
+	l, err := m.a.Q.ListeAbonnements(ctx, donnees.ListeAbonnementsParams{FamilleID: f.ID, Membre: int64(-1)})
 	if err != nil {
 		return nil, err
 	}
@@ -457,7 +479,7 @@ func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin ti
 				if cle := repetition.CleJour(j); cle >= du {
 					out = append(out, appli.Echeance{Jour: time.Date(j.Year(), j.Month(), j.Day(), 0, 0, 0, 0, debut.Location()),
 						Titre: "Renouvellement : " + x.Libelle + " (" + appli.Montant(x.Montant, f.Devise) + ")", Emoji: x.Emoji,
-						URL: fmt.Sprintf("/abonnements/%d", x.ID), Module: mod})
+						URL: fmt.Sprintf("/abonnements/%d", x.ID), Module: mod, Pour: x.PersoDe})
 				}
 				rec.Faites++
 				if j, actif = budget.Prochaine(rec); !actif {
@@ -468,7 +490,7 @@ func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin ti
 		if x.EngagementFin >= du && x.EngagementFin < au {
 			if e, err := time.ParseInLocation("2006-01-02", x.EngagementFin, debut.Location()); err == nil {
 				out = append(out, appli.Echeance{Jour: e, Titre: "Fin d'engagement : " + x.Libelle, Emoji: x.Emoji,
-					URL: fmt.Sprintf("/abonnements/%d", x.ID), Module: mod})
+					URL: fmt.Sprintf("/abonnements/%d", x.ID), Module: mod, Pour: x.PersoDe})
 			}
 		}
 	}

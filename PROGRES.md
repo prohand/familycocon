@@ -33,6 +33,7 @@
 | Notes : listes faciles à créer et à remplir, photos (v0.7.0, SPEC § 16) | **fait** |
 | Véhicules : onglets Entretien / Pleins, chiffres et 4 graphiques SVG (v0.7.0, SPEC § 17) | **fait** |
 | Véhicules réservés aux parents ; « Voir les pleins plus anciens » ; scan du ticket de carburant (v0.7.0, SPEC § 17-18) | **fait** |
+| Type de carburant ; budget perso et compte commun, virements ; abonnements et projets privés (v0.7.0, SPEC § 18-19) | **fait** |
 
 ## Mesures
 

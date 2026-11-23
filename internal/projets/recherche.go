@@ -12,7 +12,7 @@ import (
 
 // chercher : recherche globale (nom et description des projets).
 func (m *Module) chercher(ctx context.Context, c *appli.Contexte, q string) ([]appli.Resultat, error) {
-	l, err := m.a.Q.ChercherProjets(ctx, donnees.ChercherProjetsParams{FamilleID: c.Famille.ID, Motif: q})
+	l, err := m.a.Q.ChercherProjets(ctx, donnees.ChercherProjetsParams{FamilleID: c.Famille.ID, Membre: c.Membre.ID, Motif: q})
 	if err != nil {
 		return nil, err
 	}

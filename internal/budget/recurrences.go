@@ -197,8 +197,17 @@ func Generer(ctx context.Context, a *appli.App, famille int64, aujourdhui time.T
 				if n, err := q.AvancerRecurrence(ctx, donnees.AvancerRecurrenceParams{ID: r.ID, FamilleID: famille, Faites: r.Faites}); err != nil || n == 0 {
 					return errors.Join(err, errDejaFaite)
 				}
+				// Virement qui revient : les deux moitiés (perso et commun).
+				if r.Virement == 1 {
+					qui, err := q.MembreParID(ctx, donnees.MembreParIDParams{ID: r.PersoDe, FamilleID: famille})
+					if err != nil {
+						return err
+					}
+					return ecrireVirement(ctx, q, famille, r.PersoDe, qui.Nom, r.Montant, repetition.CleJour(j), r.Libelle,
+						sql.NullInt64{Int64: r.ID, Valid: true}, r.CreePar)
+				}
 				_, err := q.CreerOccurrence(ctx, donnees.CreerOccurrenceParams{
-					FamilleID: r.FamilleID, Sens: r.Sens, Montant: r.Montant, Categorie: r.Categorie, Libelle: r.Libelle,
+					FamilleID: r.FamilleID, PersoDe: r.PersoDe, Sens: r.Sens, Montant: r.Montant, Categorie: r.Categorie, Libelle: r.Libelle,
 					Jour: repetition.CleJour(j), MembreID: r.MembreID, RecurrenceID: sql.NullInt64{Int64: r.ID, Valid: true},
 					CreePar: r.CreePar, CreeLe: time.Now().Unix(),
 				})
@@ -261,6 +270,7 @@ type vueRecurrences struct {
 	RevenusMois, DepensesMois int64 // ramenés à un mois
 	NetMois                   int64
 	Devise                    string
+	Perso                     bool // budget perso
 }
 
 // abonnees : les récurrences de la famille qui sont des abonnements.
@@ -292,7 +302,8 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	recs, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+	compte := m.compteDe(w, r, c)
+	recs, err := m.recurrencesCompte(ctx, c, compte)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -302,7 +313,7 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	v := vueRecurrences{Devise: c.Famille.Devise}
+	v := vueRecurrences{Devise: c.Famille.Devise, Perso: compte > 0}
 	for _, x := range recs {
 		l := ligneRecurrence(x, abonnees)
 		_, active := Prochaine(x)
@@ -322,10 +333,11 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 	m.a.Afficher(w, r, c, "budget/recurrences", "Opérations qui reviennent", mod, v)
 }
 
+// recurrence : la récurrence {id}, si elle est dans un budget de ce membre.
 func (m *Module) recurrence(r *http.Request, c *appli.Contexte) (donnees.Recurrence, bool) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	x, err := m.a.Q.RecurrenceParID(r.Context(), donnees.RecurrenceParIDParams{ID: id, FamilleID: c.Famille.ID})
-	return x, err == nil
+	return x, err == nil && visible(c, x.PersoDe)
 }
 
 type formRecurrence struct {
@@ -374,6 +386,9 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 		return
 	}
 	cat, ok := CategorieParCle(r.PostFormValue("categorie"))
+	if x.Virement == 1 || estVirement(x.Categorie) { // un virement le reste
+		cat, ok = CategorieParCle(x.Categorie)
+	}
 	libelle := strings.TrimSpace(r.PostFormValue("libelle"))
 	freq := r.PostFormValue("frequence")
 	prochaine, fin := r.PostFormValue("prochaine"), r.PostFormValue("fin")

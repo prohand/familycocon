@@ -59,6 +59,7 @@ type Appareil struct {
 
 type BudgetPlafond struct {
 	FamilleID int64
+	PersoDe   int64
 	Categorie string
 	Montant   int64
 }
@@ -296,6 +297,8 @@ type Operation struct {
 	CreePar      sql.NullInt64
 	CreeLe       int64
 	RecurrenceID sql.NullInt64
+	PersoDe      int64
+	VirementID   sql.NullInt64
 }
 
 type Passkey struct {
@@ -366,6 +369,7 @@ type Projet struct {
 	Budget      int64
 	TermineLe   int64
 	CreeLe      int64
+	PersoDe     int64
 }
 
 type ProjetEtape struct {
@@ -413,6 +417,8 @@ type Recurrence struct {
 	Faites    int64
 	CreePar   sql.NullInt64
 	CreeLe    int64
+	PersoDe   int64
+	Virement  int64
 }
 
 type Repas struct {
