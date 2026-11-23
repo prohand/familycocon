@@ -46,9 +46,18 @@ type Objet struct {
 	Nom func(ctx context.Context, famille, id int64) (nom string, ok bool)
 	// URL : la fiche de l'objet.
 	URL func(id int64) string
+	// Noms (facultatif) : les noms de tous les objets de la famille, en une
+	// requête (rappels : pas une requête par échéance).
+	Noms func(ctx context.Context, famille int64) (map[int64]string, error)
 	// NoterKm (facultatif) : un kilométrage saisi au carnet met la fiche à jour.
-	NoterKm func(ctx context.Context, famille, id, km int64)
+	NoterKm func(ctx context.Context, famille, id, km int64) error
 }
+
+// Plafonds par objet (garde-fous : la base ne grossit pas sans fin).
+const (
+	EcheancesMax = 100
+	CarnetMax    = 5000
+)
 
 // Suivi : les objets suivis, par module.
 type Suivi struct {
@@ -79,9 +88,21 @@ func (s *Suivi) Enregistrer(o Objet) {
 		if err != nil {
 			return nil, err
 		}
+		if len(l) == 0 {
+			return nil, nil
+		}
+		// Les noms : tous d'un coup si le module sait le faire.
+		nomDe := func(id int64) (string, bool) { return o.Nom(ctx, f.ID, id) }
+		if o.Noms != nil {
+			noms, err := o.Noms(ctx, f.ID)
+			if err != nil {
+				return nil, err
+			}
+			nomDe = func(id int64) (string, bool) { n, ok := noms[id]; return n, ok }
+		}
 		var out []appli.Echeance
 		for _, e := range l {
-			nom, ok := o.Nom(ctx, f.ID, e.ObjetID)
+			nom, ok := nomDe(e.ObjetID)
 			if !ok {
 				continue
 			}
@@ -110,7 +131,7 @@ type Bloc struct {
 	Echeances     []LigneEcheance
 	Carnet        []donnees.Carnet
 	TotalAnnee    int64
-	Total         int64 // depuis le début (100 dernières lignes)
+	Total         int64 // depuis le début (tout le carnet, pas seulement les lignes affichées)
 	SansEcheances bool
 	Modeles       []Modele
 	AvecKm        bool
@@ -127,30 +148,60 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 	if err != nil {
 		return nil, err
 	}
-	minuit := time.Date(auj.Year(), auj.Month(), auj.Day(), 0, 0, 0, 0, c.Lieu)
 	for _, e := range ech {
 		l := LigneEcheance{Echeance: e}
-		if j, err := time.ParseInLocation("2006-01-02", e.Jour, c.Lieu); err == nil {
-			l.Quand = appli.Quand(j, minuit)
-			l.Retard = j.Before(minuit)
-			l.Proche = !l.Retard && j.Sub(minuit) <= 30*24*time.Hour
-			if l.Retard {
-				l.Quand = "En retard (" + appli.DateLongue(j) + ")"
-			}
-		}
+		l.Quand, l.Retard, l.Proche = quand(e.Jour, c)
 		b.Echeances = append(b.Echeances, l)
 	}
+	// La liste montre les 100 dernières lignes ; les totaux comptent tout.
 	if b.Carnet, err = s.a.Q.CarnetObjet(ctx, donnees.CarnetObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet}); err != nil {
 		return nil, err
 	}
-	annee := strconv.Itoa(auj.Year())
-	for _, l := range b.Carnet {
-		b.Total += l.Montant
-		if strings.HasPrefix(l.Jour, annee) {
-			b.TotalAnnee += l.Montant
+	t, err := s.a.Q.TotauxCarnetObjet(ctx, donnees.TotauxCarnetObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet,
+		DebutAnnee: fmt.Sprintf("%04d-01-01", auj.Year()), FinAnnee: fmt.Sprintf("%04d-01-01", auj.Year()+1)})
+	if err != nil {
+		return nil, err
+	}
+	b.Total, b.TotalAnnee = t.Total, t.Annee
+	return b, nil
+}
+
+// quand : « Dans 12 jours », « En retard (…) » pour une échéance ; proche =
+// dans les 30 jours.
+func quand(jour string, c *appli.Contexte) (texte string, retard, proche bool) {
+	j, err := time.ParseInLocation("2006-01-02", jour, c.Lieu)
+	if err != nil {
+		return "", false, false
+	}
+	auj := c.Maintenant()
+	minuit := time.Date(auj.Year(), auj.Month(), auj.Day(), 0, 0, 0, 0, c.Lieu)
+	if j.Before(minuit) {
+		return "En retard (" + appli.DateLongue(j) + ")", true, false
+	}
+	return appli.Quand(j, minuit), false, j.Sub(minuit) <= 30*24*time.Hour
+}
+
+// minuscule : « Dans 3 jours » → « dans 3 jours » (au milieu d'une phrase).
+func minuscule(s string) string {
+	r, n := utf8.DecodeRuneInString(s)
+	return strings.ToLower(string(r)) + s[n:]
+}
+
+// Alertes : pour chaque objet du module, sa première échéance si elle est en
+// retard ou proche (« ⏰ Vaccin : dans 3 jours »). Une seule requête pour
+// toute une liste.
+func (s *Suivi) Alertes(ctx context.Context, c *appli.Contexte, module string) (map[int64]string, error) {
+	l, err := s.a.Q.PremieresEcheancesModule(ctx, donnees.PremieresEcheancesModuleParams{FamilleID: c.Famille.ID, Module: module})
+	if err != nil {
+		return nil, err
+	}
+	out := map[int64]string{}
+	for _, e := range l {
+		if texte, retard, proche := quand(e.Jour, c); texte != "" && (retard || proche) {
+			out[e.ObjetID] = "⏰ " + e.Libelle + " : " + minuscule(texte)
 		}
 	}
-	return b, nil
+	return out, nil
 }
 
 // SupprimerObjet : efface les échéances et le carnet d'un objet supprimé.
@@ -171,10 +222,8 @@ func (s *Suivi) cible(r *http.Request, c *appli.Contexte, module string, objet i
 	return o, existe
 }
 
-func lireJour(v string) (string, bool) {
-	_, err := time.Parse("2006-01-02", v)
-	return v, err == nil
-}
+// publier : les écrans ouverts sur ce module se rafraîchissent.
+func (s *Suivi) publier(c *appli.Contexte, o Objet) { s.a.Publier(c, o.Module, "") }
 
 func (s *Suivi) ajouterEcheance(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	objet, _ := strconv.ParseInt(r.PathValue("objet"), 10, 64)
@@ -184,10 +233,17 @@ func (s *Suivi) ajouterEcheance(w http.ResponseWriter, r *http.Request, c *appli
 		return
 	}
 	libelle := strings.TrimSpace(r.PostFormValue("libelle"))
-	jour, okJour := lireJour(r.PostFormValue("jour"))
+	jour, okJour := budget.LireJour(r.PostFormValue("jour"), c.Maintenant())
 	mois, _ := strconv.ParseInt(r.PostFormValue("repetition_mois"), 10, 64)
 	if n := utf8.RuneCountInString(libelle); n < 1 || n > 80 || !okJour || mois < 0 || mois > 120 {
 		s.a.Echec(w, r, http.StatusBadRequest, "Indiquez quoi (80 caractères au plus) et une date.")
+		return
+	}
+	if n, err := s.a.Q.CompterEcheancesObjet(r.Context(), donnees.CompterEcheancesObjetParams{FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet}); err != nil {
+		s.a.ErreurInterne(w, r, err)
+		return
+	} else if n >= EcheancesMax {
+		s.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Trop d'échéances ici (%d au plus) : supprimez-en d'abord.", EcheancesMax))
 		return
 	}
 	if _, err := s.a.Q.CreerEcheance(r.Context(), donnees.CreerEcheanceParams{
@@ -196,13 +252,14 @@ func (s *Suivi) ajouterEcheance(w http.ResponseWriter, r *http.Request, c *appli
 		s.a.ErreurInterne(w, r, err)
 		return
 	}
+	s.publier(c, o)
 	s.a.Flash(w, "Échéance ajoutée ⏰")
 	s.a.Rediriger(w, r, o.URL(objet))
 }
 
 // ligneCarnet : date, libellé, coût, kilométrage et note lus dans le formulaire.
-func lireCarnet(r *http.Request) (jour, libelle, note string, montant, km int64, msg string) {
-	jour, ok := lireJour(r.PostFormValue("jour"))
+func lireCarnet(r *http.Request, c *appli.Contexte) (jour, libelle, note string, montant, km int64, msg string) {
+	jour, ok := budget.LireJour(r.PostFormValue("jour"), c.Maintenant())
 	if !ok {
 		return "", "", "", 0, 0, "Date invalide."
 	}
@@ -212,7 +269,8 @@ func lireCarnet(r *http.Request) (jour, libelle, note string, montant, km int64,
 		return "", "", "", 0, 0, "Texte trop long."
 	}
 	if m := strings.TrimSpace(r.PostFormValue("montant")); m != "" {
-		v, err := budget.LireMontant(m)
+		// « 0 » est accepté : une intervention gratuite.
+		v, err := budget.LireMontantOuZero(m)
 		if err != nil {
 			return "", "", "", 0, 0, err.Error()
 		}
@@ -237,9 +295,12 @@ func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.C
 }
 
 // noterKm : un kilométrage saisi met la fiche à jour (hors transaction).
-func noterKm(ctx context.Context, c *appli.Contexte, o Objet, objet, km int64) {
+// La ligne du carnet est déjà écrite : une erreur ici va au journal.
+func (s *Suivi) noterKm(ctx context.Context, c *appli.Contexte, o Objet, objet, km int64) {
 	if km > 0 && o.NoterKm != nil {
-		o.NoterKm(ctx, c.Famille.ID, objet, km)
+		if err := o.NoterKm(ctx, c.Famille.ID, objet, km); err != nil {
+			s.a.Journal.Error("suivi : kilométrage non noté", "module", o.Module, "objet", objet, "erreur", err)
+		}
 	}
 }
 
@@ -260,7 +321,7 @@ func (s *Suivi) ajouterCarnet(w http.ResponseWriter, r *http.Request, c *appli.C
 		s.a.Echec(w, r, http.StatusNotFound, "Introuvable.")
 		return
 	}
-	jour, libelle, note, montant, km, msg := lireCarnet(r)
+	jour, libelle, note, montant, km, msg := lireCarnet(r, c)
 	if msg == "" && libelle == "" {
 		msg = "Indiquez ce qui a été fait."
 	}
@@ -268,11 +329,27 @@ func (s *Suivi) ajouterCarnet(w http.ResponseWriter, r *http.Request, c *appli.C
 		s.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
-	if err := s.ecrireCarnet(r.Context(), s.a.Q, c, o, objet, jour, libelle, note, montant, km); err != nil {
+	ctx := r.Context()
+	if n, err := s.a.Q.CompterCarnetObjet(ctx, donnees.CompterCarnetObjetParams{FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet}); err != nil {
+		s.a.ErreurInterne(w, r, err)
+		return
+	} else if n >= CarnetMax {
+		s.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Ce carnet est plein (%d lignes au plus).", CarnetMax))
+		return
+	}
+	// Double envoi (double clic, réseau lent) : la même ligne, écrite par la
+	// même personne dans les 10 dernières secondes, n'est pas répétée.
+	deja, err := s.a.Q.CarnetIdentiqueRecent(ctx, donnees.CarnetIdentiqueRecentParams{FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet,
+		Jour: jour, Libelle: libelle, Montant: montant, Km: km, Note: note, CreePar: memberID(c), CreeLe: time.Now().Unix() - 10})
+	if err == nil && deja == 0 {
+		err = s.ecrireCarnet(ctx, s.a.Q, c, o, objet, jour, libelle, note, montant, km)
+	}
+	if err != nil {
 		s.a.ErreurInterne(w, r, err)
 		return
 	}
-	noterKm(r.Context(), c, o, objet, km)
+	s.noterKm(ctx, c, o, objet, km)
+	s.publier(c, o)
 	s.a.Flash(w, "Ajouté au carnet ✓")
 	s.a.Rediriger(w, r, o.URL(objet))
 }
@@ -291,7 +368,7 @@ func (s *Suivi) faite(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		s.a.Echec(w, r, http.StatusNotFound, "Introuvable.")
 		return
 	}
-	jour, _, note, montant, km, msg := lireCarnet(r)
+	jour, _, note, montant, km, msg := lireCarnet(r, c)
 	if msg != "" {
 		s.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
@@ -323,10 +400,12 @@ func (s *Suivi) faite(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		s.a.ErreurInterne(w, r, err)
 		return
 	case e.RepetitionMois > 0:
-		noterKm(ctx, c, o, e.ObjetID, km)
+		s.noterKm(ctx, c, o, e.ObjetID, km)
+		s.publier(c, o)
 		s.a.Flash(w, fmt.Sprintf("Fait ✓ Prochaine fois : %s", appli.DateLongue(suivante)))
 	default:
-		noterKm(ctx, c, o, e.ObjetID, km)
+		s.noterKm(ctx, c, o, e.ObjetID, km)
+		s.publier(c, o)
 		s.a.Flash(w, "Fait ✓")
 	}
 	s.a.Rediriger(w, r, o.URL(e.ObjetID))
@@ -344,6 +423,7 @@ func (s *Suivi) supprimerEcheance(w http.ResponseWriter, r *http.Request, c *app
 		s.a.ErreurInterne(w, r, err)
 		return
 	}
+	s.publier(c, o)
 	s.a.Flash(w, "Échéance supprimée")
 	s.a.Rediriger(w, r, o.URL(e.ObjetID))
 }
@@ -360,6 +440,7 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 		s.a.ErreurInterne(w, r, err)
 		return
 	}
+	s.publier(c, o)
 	s.a.Flash(w, "Ligne supprimée")
 	s.a.Rediriger(w, r, o.URL(l.ObjetID))
 }
