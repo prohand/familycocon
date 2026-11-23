@@ -238,6 +238,105 @@ document.addEventListener("input", function (e) {
   document.addEventListener("visibilitychange", mettreAJour);
 })();
 
+// Carte de fidélité : « Scanner la carte ». Sur Android (Chrome), le
+// navigateur lit le code en direct avec la caméra (BarcodeDetector). Sinon
+// (iPhone…), une photo est prise, réduite à 1 280 px et envoyée au serveur
+// qui la lit (EAN-13, UPC-A, EAN-8, Code 128). Le numéro et le type de code
+// sont remplis tout seuls ; rien n'est gardé.
+(function () {
+  "use strict";
+  var types = { ean_13: "ean13", ean_8: "ean8", upc_a: "upca", code_128: "code128", qr_code: "qr" };
+  var noms = { ean13: "EAN-13", ean8: "EAN-8", upca: "UPC-A", code128: "Code 128", qr: "QR code" };
+  function jeton() {
+    try { return JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) { return ""; }
+  }
+  function remplir(f, numero, type) {
+    var champ = f.querySelector("[name=numero]");
+    if (champ) champ.value = numero;
+    var choix = f.querySelector("[name=format]");
+    var t = choix && choix.querySelector("option[value='" + type + "']") ? type : "auto";
+    if (choix) choix.value = t;
+    var info = f.querySelector("[data-format-lu]");
+    if (info) info.textContent = "Code lu : " + (noms[t] || "détecté tout seul");
+    window.fcToast("Carte lue ✓");
+  }
+  // Photo (iPhone, ou caméra refusée) : lue par le serveur.
+  function envoyer(f, fichier) {
+    if (!window.createImageBitmap) { window.fcToast("Photo non prise en charge : tapez le numéro", true); return; }
+    window.fcToast("Lecture de la photo…");
+    createImageBitmap(fichier).then(function (img) {
+      var r = Math.min(1, 1280 / Math.max(img.width, img.height));
+      var c = document.createElement("canvas");
+      c.width = Math.round(img.width * r);
+      c.height = Math.round(img.height * r);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      return new Promise(function (ok) { c.toBlob(ok, "image/jpeg", 0.85); });
+    }).then(function (blob) {
+      return fetch("/fidelite/scanner", { method: "POST", credentials: "same-origin",
+        headers: { "X-Jeton": jeton(), "Content-Type": "image/jpeg" }, body: blob });
+    }).then(function (rep) {
+      return rep.json().then(function (d) { if (!rep.ok) throw new Error(d.erreur || "Code non lu"); return d; });
+    }).then(function (d) { remplir(f, d.numero, d.format); })
+      .catch(function (e) { window.fcToast((e && e.message) || "Code non lu", true); });
+  }
+  // Caméra en direct avec le lecteur du navigateur.
+  function direct(f, photo) {
+    var lecteur;
+    try { lecteur = new BarcodeDetector(); } catch (_) { photo.click(); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function (flux) {
+      var d = document.createElement("dialog");
+      d.className = "scanner";
+      var v = document.createElement("video");
+      v.setAttribute("playsinline", "");
+      v.muted = true;
+      v.srcObject = flux;
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "bouton secondaire";
+      b.textContent = "Annuler";
+      var aide = document.createElement("p");
+      aide.textContent = "Visez le code-barres de la carte";
+      d.appendChild(aide); d.appendChild(v); d.appendChild(b);
+      document.body.appendChild(d);
+      d.showModal();
+      v.play().catch(function () {});
+      var fini = false;
+      function arreter() {
+        if (fini) return;
+        fini = true;
+        flux.getTracks().forEach(function (t) { t.stop(); });
+        d.close();
+        d.remove();
+      }
+      b.addEventListener("click", arreter);
+      d.addEventListener("cancel", arreter);
+      (function chercher() {
+        if (fini) return;
+        lecteur.detect(v).then(function (codes) {
+          if (fini) return;
+          if (codes.length) { arreter(); remplir(f, codes[0].rawValue, types[codes[0].format] || "auto"); return; }
+          setTimeout(chercher, 250);
+        }).catch(function () { setTimeout(chercher, 500); });
+      })();
+    }).catch(function () { photo.click(); }); // caméra refusée : une photo
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-scanner]");
+    if (!b) return;
+    var f = b.closest("form");
+    var photo = f && f.querySelector("[data-photo]");
+    if (!photo) return;
+    if ("BarcodeDetector" in window && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) direct(f, photo);
+    else photo.click();
+  });
+  document.addEventListener("change", function (e) {
+    var p = e.target;
+    if (!p.matches || !p.matches("[data-photo]") || !p.files || !p.files[0]) return;
+    envoyer(p.closest("form"), p.files[0]);
+    p.value = "";
+  });
+})();
+
 // Rayons repliés : gardés en mémoire sur cet appareil (la liste est
 // rechargée à chaque changement, les rayons repliés le restent).
 (function () {

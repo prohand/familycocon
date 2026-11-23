@@ -32,8 +32,8 @@ const mod = "fidelite"
 
 // Formats proposés.
 var Formats = []struct{ Cle, Nom string }{
-	{"auto", "Code-barres (automatique)"}, {"ean13", "EAN-13 (13 chiffres)"}, {"code128", "Code 128"},
-	{"qr", "QR code"}, {"aucun", "Pas de code (numéro seul)"},
+	{"auto", "Détecté tout seul"}, {"ean13", "EAN-13 (13 chiffres)"}, {"upca", "UPC-A (12 chiffres)"},
+	{"ean8", "EAN-8 (8 chiffres)"}, {"code128", "Code 128"}, {"qr", "QR code"}, {"aucun", "Pas de code (numéro seul)"},
 }
 
 func formatValide(f string) bool {
@@ -51,6 +51,7 @@ func Brancher(a *appli.App) {
 	a.Route("GET /fidelite", mod, appli.Membre, m.page)
 	a.AjouterRecherche(mod, m.chercher)
 	a.Route("GET /fidelite/nouvelle", mod, appli.Membre, m.formulaire)
+	a.Route("POST /fidelite/scanner", mod, appli.Membre, m.scanner)
 	a.Route("POST /fidelite", mod, appli.Membre, m.creer)
 	a.Route("GET /fidelite/{id}", mod, appli.Membre, m.carte)
 	a.Route("GET /fidelite/{id}/modifier", mod, appli.Membre, m.formulaire)
@@ -107,6 +108,7 @@ type vueCarte struct {
 	SVG      template.HTML // code-barres
 	QR       template.URL  // QR code (image PNG)
 	Probleme string
+	Type     string // « EAN-13 (détecté) »
 }
 
 // Dessin : le code de la carte (SVG ou QR), ou la raison s'il est impossible.
@@ -115,6 +117,9 @@ func Dessin(ct donnees.Carte) vueCarte {
 	format := ct.Format
 	if format == "auto" {
 		format = FormatAuto(ct.Numero)
+		v.Type = NomFormat(format) + " (détecté)"
+	} else {
+		v.Type = NomFormat(format)
 	}
 	switch format {
 	case "aucun":
@@ -155,6 +160,7 @@ type formCarte struct {
 	Nouvelle bool
 	Carte    donnees.Carte
 	Formats  any
+	Type     string // type de code de la carte (« EAN-13 (détecté) »)
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -166,11 +172,14 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Carte = ct
+		f.Type = Dessin(ct).Type
 	}
 	titre := "Nouvelle carte"
 	if !f.Nouvelle {
 		titre = f.Carte.Enseigne
 	}
+	// Scanner la carte : la caméra est permise sur cette page seulement.
+	w.Header().Set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=()")
 	m.a.Afficher(w, r, c, "fidelite/formulaire", titre, mod, f)
 }
 

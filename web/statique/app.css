@@ -1483,3 +1483,10 @@ svg.icone { width: 1.15em; height: 1.15em; vertical-align: -0.2em; display: inli
 
 /* Menus : liste de courses choisie, au-dessus du bouton. */
 .choix-liste .champ { max-width: 280px; margin: 0 auto 8px; text-align: left; }
+
+/* Cartes de fidélité : scanner (bouton, fenêtre de la caméra). */
+.scanner-carte { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+details.type-code > summary { cursor: pointer; margin: 4px 0 10px; }
+dialog.scanner { border: 0; border-radius: var(--rayon); padding: 14px; background: var(--carte); color: var(--texte); width: min(92vw, 480px); text-align: center; }
+dialog.scanner::backdrop { background: rgba(0, 0, 0, .7); }
+dialog.scanner video { width: 100%; border-radius: 12px; background: #000; margin: 8px 0 12px; }

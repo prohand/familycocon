@@ -11,6 +11,7 @@
     {{if .QR}}<img class="qr-caisse" src="{{.QR}}" alt="QR code de la carte">{{end}}
     {{if .Probleme}}<p class="message-erreur">{{.Probleme}}</p>{{end}}
     <p class="numero-caisse">{{.Carte.Numero}}</p>
+    {{with .Type}}<p class="aide">{{.}}</p>{{end}}
   </div>
 </section>
 <p class="aide centre">💡 L'écran reste allumé sur cette page. Montez la luminosité pour le lecteur de la caisse.</p>

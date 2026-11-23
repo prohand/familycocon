@@ -10,8 +10,17 @@
   <label class="champ"><span>Enseigne</span><input name="enseigne" value="{{.Carte.Enseigne}}" maxlength="60" placeholder="Ex. : Supermarché du coin" required autofocus></label>
   <label class="champ"><span>Numéro (sous le code-barres de la carte)</span>
     <input name="numero" value="{{.Carte.Numero}}" maxlength="100" autocomplete="off" inputmode="text" required></label>
-  <label class="champ"><span>Type de code</span>
-    <select name="format">{{range .Formats}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.Carte.Format}} selected{{end}}>{{.Nom}}</option>{{end}}</select></label>
+  {{/* Scan : lecteur du navigateur (Android) ou photo lue par le serveur (iPhone…), voir app.js. */}}
+  <p class="scanner-carte">
+    <button class="bouton secondaire" type="button" data-scanner>📷 Scanner la carte</button>
+    <input type="file" accept="image/*" capture="environment" data-photo hidden>
+    <small class="aide" data-format-lu>{{with .Type}}Code : {{.}}{{end}}</small>
+  </p>
+  <details class="type-code"{{if and (ne .Carte.Format "auto") (not .Nouvelle)}} open{{end}}>
+    <summary class="aide">Type de code : détecté tout seul · changer</summary>
+    <label class="champ"><span>Type de code</span>
+      <select name="format">{{range .Formats}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.Carte.Format}} selected{{end}}>{{.Nom}}</option>{{end}}</select></label>
+  </details>
   <label class="champ"><span>Titulaire (facultatif)</span><input name="titulaire" value="{{.Carte.Titulaire}}" maxlength="60"></label>
   <span class="aide">Couleur</span>
   {{template "choix-couleur" dict "Nom" "couleur" "Choisie" .Carte.Couleur}}
