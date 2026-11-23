@@ -9,7 +9,7 @@
   {{if .P.PersoDe}}<p>🔒 Projet privé : vous seul le voyez.</p>{{end}}
   {{if .P.TermineLe}}<p>🎉 Terminé</p>{{else if .Objectif}}<p class="{{if .Retard}}alerte{{end}}">🏁 Objectif : {{.Objectif}}</p>{{end}}
 </section>
-{{if .P.Description}}<section class="carte bloc"><p class="texte-long">{{.P.Description}}</p></section>{{end}}
+{{if .P.Description}}<section class="carte bloc"><div class="contenu-note">{{riche .P.Description}}</div></section>{{end}}
 
 <section class="carte bloc">
   <div class="section-titre"><h2>✅ Étapes</h2>{{if .Total}}<span class="aide">{{.NbFaites}} / {{.Total}}</span>{{end}}</div>

@@ -130,7 +130,7 @@ func (m *Module) ficheAnimal(w http.ResponseWriter, r *http.Request, c *appli.Co
 		v.Infos = append(v.Infos, "🩺 "+x.Veterinaire)
 	}
 	if x.Notes != "" {
-		v.Infos = append(v.Infos, "📝 "+x.Notes)
+		v.Notes = x.Notes
 	}
 	m.afficherFiche(w, r, c, modAnimaux, x.ID, v)
 }

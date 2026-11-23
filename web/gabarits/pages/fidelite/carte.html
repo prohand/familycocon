@@ -15,7 +15,7 @@
   </div>
 </section>
 <p class="aide centre">💡 L'écran reste allumé sur cette page. Montez la luminosité pour le lecteur de la caisse.</p>
-{{if .Carte.Notes}}<section class="carte bloc"><p class="texte-long">{{.Carte.Notes}}</p></section>{{end}}
+{{if .Carte.Notes}}<section class="carte bloc"><div class="contenu-note">{{riche .Carte.Notes}}</div></section>{{end}}
 <div class="boutons">
   <a class="bouton secondaire" href="/fidelite/{{.Carte.ID}}/modifier">✏️ Modifier</a>
   {{if $c.EstParent}}

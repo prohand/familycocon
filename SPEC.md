@@ -553,3 +553,38 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   À l'enregistrement, les repères d'une photo d'une autre note sont
   retirés. Une note avec des cases se lit en entier (texte, photos,
   cases à cocher). Carte de la liste : 📷 à la place du repère.
+
+## 21. Éditeur de texte riche, graphiques interactifs (v0.9.0)
+- **Format** (`internal/riche`) : le texte reste du texte, une ligne par
+  ligne, avec des signes proches de Markdown : `# / ## / ###` titres,
+  `> ` citation, `- ` puce, `1. ` numéro, `[ ] / [x]` case, `---`
+  séparation, `[photo N]` photo (notes seulement), `**gras**`,
+  `_italique_`, `++souligné++`, `~~barré~~`, `` `code` ``,
+  `[texte](https://…)` et adresses http(s) cliquables ; `\` garde un
+  signe tel quel. Rendu par le serveur, tout le texte échappé ; liens
+  http(s) et mailto seulement (`target=_blank`, `noopener`). Hors des
+  notes : cases figées, repères de photo laissés en texte.
+- **Éditeur** (app.js, `contenteditable`, sans bibliothèque) : le contenu
+  mis en forme vient du serveur (`<template data-editeur-contenu>`) ; à
+  chaque frappe, le texte simple est réécrit dans le textarea caché (sans
+  JavaScript : le textarea tel quel). Barre d'outils fixe (sous l'en-tête) :
+  annuler, refaire, gras, italique, souligné, barré, code, case, puces,
+  numéros, titres, citation, lien, photo (notes), séparation. Cases
+  dessinées en CSS (rien de figé dans le texte : tout se sélectionne et
+  s'efface), cochées d'un toucher à gauche. Lien touché : « Ouvrir le
+  lien ».
+- **Coller** : une image (capture, « Copier l'image ») est réduite, envoyée
+  et posée au curseur (notes) ; un texte copié d'une page garde gras,
+  italique, titres, listes, citations et liens (le reste est retiré :
+  balises, styles, scripts) ; glisser une image marche aussi.
+- **Partout où il y a un texte long** : notes ; description d'un projet ;
+  note d'un événement ; notes d'une carte de fidélité, d'un contact (et
+  idées de cadeaux), d'un animal, d'une garantie, d'un véhicule, d'un
+  abonnement. Pas pour les ingrédients ni l'adresse (lus ligne à ligne).
+  vCard : notes sans les signes.
+- **Graphiques interactifs** : chaque point et chaque barre porte sa date
+  et sa valeur (`data-info`) ; un toucher (ou la souris, ou le doigt qui
+  glisse) montre un repère, le point choisi et une bulle. La courbe se
+  trace et les barres montent à l'affichage (sauf « réduire les
+  animations »). Période des chiffres changée sans recharger la page
+  (htmx, l'adresse suit).

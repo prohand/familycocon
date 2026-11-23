@@ -20,6 +20,7 @@
   {{- range .Infos}}<div class="ligne"><span class="quoi texte-long">{{.}}</span></div>{{end}}
 </section>
 {{end}}
+{{if .Notes}}<section class="carte bloc"><div class="contenu-note">{{riche .Notes}}</div></section>{{end}}
 {{if .Contacts}}
 <section class="carte bloc fiche">
   {{- range .Contacts}}

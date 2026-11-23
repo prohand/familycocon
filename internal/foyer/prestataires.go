@@ -113,7 +113,7 @@ func (m *Module) fichePrestataire(w http.ResponseWriter, r *http.Request, c *app
 		Modifier: fmt.Sprintf("/contacts/%d/modifier", x.ID), Supprimer: fmt.Sprintf("/contacts/%d/supprimer", x.ID)}
 	v.Liens, v.Infos = liensContact(x)
 	if x.Notes != "" {
-		v.Infos = append(v.Infos, "📝 "+x.Notes)
+		v.Notes = x.Notes
 	}
 	m.afficherFiche(w, r, c, modPrestataires, x.ID, v)
 }

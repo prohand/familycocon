@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"familycocon/internal/riche"
 	"fmt"
 	"io"
 	"net/http"
@@ -83,7 +84,7 @@ func VCard(ct donnees.Contact) string {
 		l("URL:" + ct.Site)
 	}
 	if ct.Notes != "" {
-		l("NOTE:" + echapper(ct.Notes))
+		l("NOTE:" + echapper(riche.Simple(ct.Notes)))
 	}
 	if g := Groupes(ct.Groupes); len(g) > 0 {
 		for i := range g {

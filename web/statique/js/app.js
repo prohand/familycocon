@@ -855,66 +855,161 @@ if ("serviceWorker" in navigator) {
   document.addEventListener("htmx:afterSettle", centrer);
 })();
 
-// Notes : éditeur qui montre les photos dans le texte (textarea[data-editeur]
-// = numéro de la note, vide pour une nouvelle). Le texte reste du texte :
-// une photo y est une ligne « [photo 12] », écrite dans le textarea (caché)
-// à chaque frappe ; sans JavaScript, le textarea s'affiche tel quel.
-//   - « 📷 Photo ici » : la photo est envoyée (réduite) et posée à
-//     l'endroit du curseur ;
-//   - « ☑️ Case » : une case à cocher sur une nouvelle ligne ;
-//   - Entrée au bout d'une case ou d'une puce : la suivante (comme le
-//     textarea) ; sur une case vide : fin de la liste ;
-//   - le ✕ d'une photo la retire du texte (elle retourne en bas de la note).
+// Notes : éditeur de texte (textarea[data-editeur] = numéro de la note,
+// vide pour une nouvelle). Le serveur donne le contenu déjà mis en forme
+// (<template data-editeur-contenu>) ; à chaque frappe, l'éditeur réécrit
+// le texte simple de la note dans le textarea (caché), avec ses signes :
+// « # titre », « **gras** », « - puce », « [ ] case », « [photo 12] »… (voir
+// internal/notes/format.go). Sans JavaScript, le textarea s'affiche tel quel.
+//   - barre d'outils fixe en haut : annuler, gras, italique, souligné,
+//     barré, code, cases, puces, numéros, titres, citation, lien, photo,
+//     séparation ;
+//   - une image collée ou glissée est envoyée (réduite) et posée au
+//     curseur ; un texte copié d'une page garde gras, listes et liens ;
+//   - Entrée au bout d'une case : la suivante ; sur une case vide : fin ;
+//   - un lien touché propose de l'ouvrir.
 (function () {
   "use strict";
-  var MARQUE = /^\[photo (\d+)\]$/;
   function jeton() {
     try { return JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) { return ""; }
   }
-  function figure(id, lecture) {
-    var f = document.createElement("figure");
-    f.className = "photo-texte";
-    f.contentEditable = "false";
-    f.setAttribute("data-photo", id);
-    var a = document.createElement("a");
-    a.href = "/notes/photos/" + id;
-    a.target = "_blank";
-    a.rel = "noopener";
-    var img = document.createElement("img");
-    img.src = "/notes/photos/" + id;
-    img.alt = "Photo de la note";
-    a.appendChild(img);
-    f.appendChild(a);
-    if (!lecture) {
-      var x = document.createElement("button");
-      x.type = "button";
-      x.className = "retirer-photo";
-      x.setAttribute("aria-label", "Retirer la photo du texte");
-      x.textContent = "✕";
-      f.appendChild(x);
+  var BLOCS = /^(DIV|P|H[1-6]|UL|OL|LI|BLOCKQUOTE|HR|FIGURE|PRE|SECTION|ARTICLE|HEADER|FOOTER|TABLE|TR)$/;
+
+  // --- Du contenu de l'éditeur au texte de la note -------------------------
+
+  // Le texte tel quel, ses signes précédés d'un « \ » (sauf dans les adresses).
+  function echap(t) {
+    return t.split(/(https?:\/\/[^\s<>"]+)/).map(function (x, i) {
+      if (i % 2) return x;
+      return x.replace(/\\/g, "\\\\").replace(/([*_`[])/g, "\\$1").replace(/~~/g, "\\~\\~").replace(/\+\+/g, "\\+\\+");
+    }).join("");
+  }
+  // Une ligne de texte qui ressemblerait à un titre, une puce… : « \ » devant.
+  function debut(l) { return /^\s*(#{1,6} |>|[-•] |\d+\. |-{3,}\s*$)/.test(l) ? "\\" + l.replace(/^\s+/, "") : l; }
+  function entoure(signe, dedans) {
+    var m = /^(\s*)([\s\S]*?)(\s*)$/.exec(dedans);
+    return m[2] ? m[1] + signe + m[2] + signe + m[3] : dedans;
+  }
+  function enLigne(n) {
+    var s = "";
+    n.childNodes.forEach(function (c) { s += inl(c); });
+    return s;
+  }
+  function inl(c) {
+    if (c.nodeType === 3) return echap(c.nodeValue.replace(/[\r\n]+/g, " ").replace(/\u00a0/g, " "));
+    if (c.nodeType !== 1) return "";
+    var t = c.tagName;
+    if (t === "BR") return " ";
+    if (t === "INPUT" || c.classList.contains("coche-note") || c.classList.contains("bulle-lien")) return "";
+    if (t === "B" || t === "STRONG") return entoure("**", enLigne(c));
+    if (t === "I" || t === "EM") return entoure("_", enLigne(c));
+    if (t === "U" || t === "INS") return entoure("++", enLigne(c));
+    if (t === "S" || t === "STRIKE" || t === "DEL") return entoure("~~", enLigne(c));
+    if (t === "CODE" || t === "KBD") { var x = c.textContent.replace(/`/g, "'").replace(/\s+/g, " "); return x.trim() ? "`" + x + "`" : x; }
+    if (t === "A") {
+      var h = c.getAttribute("href") || "", txt = enLigne(c);
+      if (!/^(https?:\/\/|mailto:)[^\s"'<>]+$/.test(h)) return txt;
+      return c.textContent.trim() === h ? h : "[" + txt + "](" + h + ")";
     }
-    return f;
+    return enLigne(c);
   }
-  function ligne(texte) {
-    var d = document.createElement("div");
-    if (texte) d.textContent = texte; else d.appendChild(document.createElement("br"));
-    return d;
-  }
-  // Le texte de l'éditeur, ligne par ligne (une photo : son repère).
-  function lire(ed) {
-    var l = [];
-    ed.childNodes.forEach(function (n) {
-      if (n.nodeType === 3) { if (n.nodeValue !== "") l.push(n.nodeValue); return; }
+  // Les lignes d'un élément qui contient des blocs (l'éditeur, une div…).
+  function blocs(racine, out) {
+    var ligne = null;
+    function finir() { if (ligne !== null) { out.push(debut(ligne)); ligne = null; } }
+    racine.childNodes.forEach(function (n) {
+      if (n.nodeType === 3) {
+        if (n.nodeValue.replace(/[\r\n]/g, "") !== "") ligne = (ligne || "") + inl(n);
+        return;
+      }
       if (n.nodeType !== 1) return;
-      if (n.hasAttribute("data-photo")) { l.push("[photo " + n.getAttribute("data-photo") + "]"); return; }
-      if (n.tagName === "BR") { l.push(""); return; }
-      // Une ligne (div) peut en contenir plusieurs après un collage.
-      n.innerText.replace(/\n$/, "").split("\n").forEach(function (x) { l.push(x); });
+      var t = n.tagName;
+      if (n.hasAttribute("data-photo")) { finir(); out.push("[photo " + n.getAttribute("data-photo") + "]"); return; }
+      if (n.hasAttribute("data-case")) {
+        finir();
+        out.push((n.getAttribute("data-cochee") === "1" ? "[x] " : "[ ] ") + enLigne(n).trim());
+        return;
+      }
+      if (t === "BR") { if (ligne === null) out.push(""); else finir(); return; }
+      if (t === "HR") { finir(); out.push("---"); return; }
+      if (/^H[1-6]$/.test(t)) { finir(); out.push("###".slice(0, Math.min(3, +t[1])) + " " + enLigne(n).trim()); return; }
+      if (t === "UL" || t === "OL") {
+        finir();
+        var k = parseInt(n.getAttribute("start"), 10) || 1;
+        Array.prototype.forEach.call(n.children, function (li) {
+          out.push((t === "UL" ? "- " : (k++) + ". ") + enLigne(li).trim());
+        });
+        return;
+      }
+      if (t === "BLOCKQUOTE") {
+        finir();
+        var sous = [];
+        blocs(n, sous);
+        sous.forEach(function (l) { out.push(l ? "> " + l : ">"); });
+        return;
+      }
+      if (BLOCS.test(t)) {
+        finir();
+        var d = [];
+        blocs(n, d);
+        if (!d.length) d.push("");
+        d.forEach(function (l) { out.push(l); });
+        return;
+      }
+      ligne = (ligne || "") + inl(n);
     });
-    return l.join("\n").replace(/ /g, " ");
+    finir();
   }
-  // La ligne (enfant direct de l'éditeur) où est le curseur.
-  function ligneCurseur(ed) {
+  // Après un collage, chaque bloc (paragraphe, liste, titre…) redevient un
+  // enfant direct de l'éditeur (le navigateur les imbrique dans la ligne).
+  function aplatir(ed) {
+    Array.prototype.slice.call(ed.children).forEach(function (n) {
+      if (!/^(DIV|P)$/.test(n.tagName) || n.hasAttribute("data-case") || n.hasAttribute("data-photo")) return;
+      if (!Array.prototype.some.call(n.children, function (c) { return BLOCS.test(c.tagName); })) return;
+      var morceaux = [], ligne = null;
+      Array.prototype.slice.call(n.childNodes).forEach(function (c) {
+        if (c.nodeType === 1 && BLOCS.test(c.tagName)) { ligne = null; morceaux.push(c); return; }
+        if (c.nodeType === 1 && c.tagName === "BR") { ligne = null; return; }
+        if (!ligne) { ligne = document.createElement("div"); morceaux.push(ligne); }
+        ligne.appendChild(c);
+      });
+      morceaux.forEach(function (m) { ed.insertBefore(m, n); });
+      ed.removeChild(n);
+      aplatir(ed);
+    });
+  }
+  function texte(ed) {
+    var l = [];
+    blocs(ed, l);
+    while (l.length && l[l.length - 1] === "") l.pop();
+    return l.join("\n");
+  }
+
+  // --- Coller : seulement une mise en forme simple, sûre -------------------
+
+  var GARDE = { B: "b", STRONG: "b", I: "i", EM: "i", U: "u", S: "s", STRIKE: "s", DEL: "s", CODE: "code",
+    H1: "h1", H2: "h2", H3: "h3", H4: "h3", H5: "h3", H6: "h3", UL: "ul", OL: "ol", LI: "li",
+    BLOCKQUOTE: "blockquote", P: "div", DIV: "div", BR: "br", HR: "hr", A: "a", PRE: "div", TR: "div", TABLE: "div" };
+  function nettoyer(src, dst) {
+    src.childNodes.forEach(function (n) {
+      if (n.nodeType === 3) { dst.appendChild(document.createTextNode(n.nodeValue)); return; }
+      if (n.nodeType !== 1 || /^(SCRIPT|STYLE|META|LINK|TITLE|NOSCRIPT|TEMPLATE|IFRAME|OBJECT|SVG|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(n.tagName)) return;
+      var tag = GARDE[n.tagName];
+      if (!tag) { nettoyer(n, dst); return; }
+      var e = document.createElement(tag);
+      if (tag === "a") {
+        var h = n.getAttribute("href") || "";
+        if (!/^(https?:\/\/|mailto:)/.test(h)) { nettoyer(n, dst); return; }
+        e.setAttribute("href", h);
+      }
+      dst.appendChild(e);
+      nettoyer(n, e);
+    });
+  }
+
+  // --- Petits outils de sélection --------------------------------------------
+
+  function blocCurseur(ed) {
     var s = window.getSelection();
     if (!s.rangeCount) return null;
     var n = s.getRangeAt(0).startContainer;
@@ -930,11 +1025,12 @@ if ("serviceWorker" in navigator) {
     s.removeAllRanges();
     s.addRange(r);
   }
-  // Pose un élément après la ligne du curseur (ou à sa place si elle est
-  // vide), suivi d'une ligne vide où l'on continue à écrire.
+  function ligneVide() { var d = document.createElement("div"); d.appendChild(document.createElement("br")); return d; }
+  // Pose un bloc après celui du curseur (à sa place s'il est vide), et
+  // une ligne vide après, où l'on continue d'écrire.
   function poser(ed, el, apres) {
-    var l = apres || ligneCurseur(ed);
-    if (l && l.parentNode === ed && !l.hasAttribute("data-photo") && l.textContent === "" && l.nodeType === 1) {
+    var l = apres && apres.parentNode === ed ? apres : blocCurseur(ed);
+    if (l && l.parentNode === ed && l.nodeType === 1 && !l.hasAttribute("data-photo") && l.tagName !== "HR" && l.textContent === "" && !l.querySelector("img")) {
       ed.replaceChild(el, l);
     } else if (l && l.parentNode === ed) {
       ed.insertBefore(el, l.nextSibling);
@@ -942,132 +1038,297 @@ if ("serviceWorker" in navigator) {
       ed.appendChild(el);
     }
     var suite = el.nextSibling;
-    if (!suite || suite.nodeType !== 1 || suite.hasAttribute("data-photo")) {
-      suite = ligne("");
+    if (!suite || suite.nodeType !== 1 || suite.hasAttribute("data-photo") || suite.tagName === "HR") {
+      suite = ligneVide();
       ed.insertBefore(suite, el.nextSibling);
     }
     return suite;
   }
+  function figure(id) {
+    var f = document.createElement("figure");
+    f.className = "photo-texte";
+    f.contentEditable = "false";
+    f.setAttribute("data-photo", id);
+    f.innerHTML = '<a target="_blank" rel="noopener"><img alt="Photo de la note"></a>' +
+      '<button type="button" class="retirer-photo" aria-label="Retirer la photo du texte">✕</button>';
+    f.querySelector("a").href = "/notes/photos/" + id;
+    f.querySelector("img").src = "/notes/photos/" + id;
+    return f;
+  }
+  function caseVide(texte) {
+    var d = document.createElement("div");
+    d.className = "case-note";
+    d.setAttribute("data-case", "");
+    d.setAttribute("data-cochee", "0");
+    if (texte) d.appendChild(document.createTextNode(texte)); else d.appendChild(document.createElement("br"));
+    return d;
+  }
+
+  var OUTILS = [
+    ["undo", "↶", "Annuler"], ["redo", "↷", "Refaire"], null,
+    ["bold", "<b>G</b>", "Gras"], ["italic", "<i>I</i>", "Italique"], ["underline", "<u>S</u>", "Souligné"],
+    ["strikeThrough", "<s>B</s>", "Barré"], ["code", "&lt;/&gt;", "Code"], null,
+    ["case", "☑", "Case à cocher"], ["insertUnorderedList", "•≡", "Liste à puces"], ["insertOrderedList", "1≡", "Liste numérotée"], null,
+    ["h1", "T1", "Titre"], ["h2", "T2", "Sous-titre"], ["h3", "T3", "Petit titre"], ["blockquote", "❝", "Citation"], null,
+    ["lien", "🔗", "Lien"], ["photo", "📷", "Photo ici"], ["hr", "―", "Ligne de séparation"]
+  ];
+
   function monter(t) {
     if (t.hasAttribute("data-editeur-pret")) return;
+    // Le contenu mis en forme : juste après le textarea (ou dans le formulaire, pour une note).
+    var modele = t.nextElementSibling;
+    if (!modele || !modele.matches("template[data-editeur-contenu]")) modele = t.form && t.form.querySelector("template[data-editeur-contenu]");
+    if (!modele) return;
+    var avecPhotos = t.hasAttribute("data-editeur"); // les notes seulement
     t.setAttribute("data-editeur-pret", "");
     var lecture = t.disabled || !!t.closest("fieldset[disabled]");
     var id = t.getAttribute("data-editeur");
     var ed = document.createElement("div");
-    ed.className = "editeur-note";
+    ed.className = "editeur-note" + (avecPhotos ? "" : " court");
     ed.contentEditable = lecture ? "false" : "true";
     ed.setAttribute("role", "textbox");
     ed.setAttribute("aria-multiline", "true");
     ed.setAttribute("aria-label", "Texte de la note");
-    t.value.split("\n").forEach(function (x) {
-      var m = MARQUE.exec(x.trim());
-      ed.appendChild(m ? figure(m[1], lecture) : ligne(x));
-    });
-    var maj = function () { t.value = lire(ed); };
-    var outils = document.createElement("div");
-    outils.className = "outils-note";
-    if (!lecture) {
-      outils.innerHTML = '<button type="button" class="bouton petit secondaire" data-case>☑️ Case</button>' +
-        '<button type="button" class="bouton petit secondaire" data-photo-ici>📷 Photo ici</button>' +
-        '<input type="file" accept="image/*" hidden data-fichier-ici>';
-    }
+    ed.appendChild(modele.content.cloneNode(true));
+    if (!ed.firstChild) ed.appendChild(ligneVide());
     t.hidden = true;
     // Hors du <label> du textarea (un clic dans un label irait au textarea caché).
     var lieu = t.closest("label") || t;
     lieu.parentNode.insertBefore(ed, lieu.nextSibling);
-    lieu.parentNode.insertBefore(outils, ed);
-    if (lecture) return;
-    var derniere = null; // ligne du curseur avant de toucher un bouton
+    if (lecture) {
+      ed.querySelectorAll("button").forEach(function (x) { x.hidden = true; });
+      return;
+    }
+    var barre = document.createElement("div");
+    barre.className = "barre-note";
+    barre.setAttribute("role", "toolbar");
+    barre.setAttribute("aria-label", "Mise en forme");
+    OUTILS.forEach(function (o) {
+      if (o && o[0] === "photo" && !avecPhotos) return;
+      if (!o) { var sep = document.createElement("span"); sep.className = "sep"; barre.appendChild(sep); return; }
+      var b = document.createElement("button");
+      b.type = "button";
+      b.setAttribute("data-outil", o[0]);
+      b.setAttribute("aria-label", o[2]);
+      b.title = o[2];
+      b.innerHTML = o[1];
+      barre.appendChild(b);
+    });
+    var fichier = document.createElement("input");
+    fichier.type = "file";
+    fichier.accept = "image/*";
+    fichier.multiple = true;
+    fichier.hidden = true;
+    barre.appendChild(fichier);
+    lieu.parentNode.insertBefore(barre, ed);
+
+    var maj = function () { t.value = texte(ed); };
+    var derniere = null; // bloc du curseur avant de toucher un bouton
+    var memo = function () { var b = blocCurseur(ed); if (b) derniere = b; };
     ed.addEventListener("input", maj);
-    ed.addEventListener("keyup", function () { derniere = ligneCurseur(ed); });
-    ed.addEventListener("mouseup", function () { derniere = ligneCurseur(ed); });
-    ed.addEventListener("blur", function () { maj(); });
+    ed.addEventListener("keyup", memo);
+    ed.addEventListener("mouseup", memo);
+    ed.addEventListener("blur", maj);
     t.form.addEventListener("submit", maj);
     try { document.execCommand("defaultParagraphSeparator", false, "div"); } catch (_) { /* rien */ }
-    // Coller : du texte simple seulement ; une image collée devient une photo.
+    try { document.execCommand("styleWithCSS", false, false); } catch (_) { /* rien */ }
+
+    // Coller : les images sont envoyées ; le reste, nettoyé.
     ed.addEventListener("paste", function (e) {
       var cd = e.clipboardData;
       if (!cd) return;
+      var images = Array.prototype.filter.call(cd.files || [], function (f) { return /^image\//.test(f.type); });
       e.preventDefault();
-      if (cd.files && cd.files[0] && /^image\//.test(cd.files[0].type)) { envoyer(cd.files[0]); return; }
-      document.execCommand("insertText", false, cd.getData("text/plain"));
-    });
-    ed.addEventListener("click", function (e) {
-      var x = e.target.closest(".retirer-photo");
-      if (!x) return;
-      e.preventDefault();
-      var f = x.closest("figure");
-      f.parentNode.removeChild(f);
+      if (images.length) { images.forEach(envoyer); return; }
+      var html = cd.getData("text/html");
+      if (html) {
+        var src = new DOMParser().parseFromString(html, "text/html").body;
+        var propre = document.createElement("div");
+        nettoyer(src, propre);
+        document.execCommand("insertHTML", false, propre.innerHTML);
+        aplatir(ed);
+      } else {
+        document.execCommand("insertText", false, cd.getData("text/plain"));
+      }
       maj();
-      window.fcToast("Photo retirée du texte : elle reste en bas de la note");
     });
-    // Entrée au bout d'une case ou d'une puce : la suivante.
+    // Glisser une image dans la note.
+    ed.addEventListener("dragover", function (e) { if (e.dataTransfer && Array.prototype.some.call(e.dataTransfer.types, function (x) { return x === "Files"; })) e.preventDefault(); });
+    ed.addEventListener("drop", function (e) {
+      var fs = e.dataTransfer && Array.prototype.filter.call(e.dataTransfer.files || [], function (f) { return /^image\//.test(f.type); });
+      if (!fs || !fs.length) return;
+      e.preventDefault();
+      if (document.caretRangeFromPoint) {
+        var r = document.caretRangeFromPoint(e.clientX, e.clientY);
+        if (r) { var s = window.getSelection(); s.removeAllRanges(); s.addRange(r); memo(); }
+      }
+      fs.forEach(envoyer);
+    });
+    // Cases cochées dans l'éditeur ; ✕ d'une photo ; lien touché.
+    ed.addEventListener("change", maj);
+    var bulle = null;
+    function fermerBulle() { if (bulle) { bulle.remove(); bulle = null; } }
+    ed.addEventListener("click", function (e) {
+      fermerBulle();
+      // Toucher la case (à gauche de la ligne) : cochée / décochée.
+      var cs = e.target.closest && e.target.closest("[data-case]");
+      if (cs && e.clientX - cs.getBoundingClientRect().left < 30) {
+        e.preventDefault();
+        cs.setAttribute("data-cochee", cs.getAttribute("data-cochee") === "1" ? "0" : "1");
+        maj();
+        return;
+      }
+      var x = e.target.closest(".retirer-photo");
+      if (x) {
+        e.preventDefault();
+        var f = x.closest("figure");
+        f.parentNode.removeChild(f);
+        maj();
+        window.fcToast("Photo retirée du texte : elle reste en bas de la note");
+        return;
+      }
+      var a = e.target.closest("a[href]");
+      if (a && !a.closest("figure")) {
+        e.preventDefault();
+        bulle = document.createElement("span");
+        bulle.className = "bulle-lien";
+        bulle.contentEditable = "false";
+        var o = document.createElement("a");
+        o.href = a.href;
+        o.target = "_blank";
+        o.rel = "noopener noreferrer";
+        o.textContent = "↗ Ouvrir le lien";
+        bulle.appendChild(o);
+        a.parentNode.insertBefore(bulle, a.nextSibling);
+      }
+    });
+    // Entrée au bout d'une case : la suivante ; sur une case vide : fin.
     ed.addEventListener("keydown", function (e) {
       if (e.key !== "Enter" || e.shiftKey || e.isComposing) return;
-      var l = ligneCurseur(ed);
-      if (!l || l.nodeType !== 1 || l.hasAttribute("data-photo")) return;
-      var v = l.textContent.replace(/ /g, " ");
-      var m = /^(\s*(?:[-*] )?)(\[[ xX]\] ?)?(.*)$/.exec(v);
-      if (!m || (!m[2] && !/[-*] $/.test(m[1]))) return;
-      var s = window.getSelection();
-      var r = document.createRange();
+      var l = blocCurseur(ed);
+      if (!l || l.nodeType !== 1 || !l.hasAttribute("data-case")) return;
+      var s = window.getSelection(), r = document.createRange();
       r.selectNodeContents(l);
       r.setEnd(s.getRangeAt(0).startContainer, s.getRangeAt(0).startOffset);
-      if (r.toString().length !== l.textContent.length) return; // pas au bout de la ligne
+      if (r.toString().length !== l.textContent.length) return; // pas au bout
       e.preventDefault();
-      if (m[3].trim() === "") { l.textContent = ""; l.appendChild(document.createElement("br")); maj(); return; }
-      var n = ligne(m[1] + (m[2] ? "[ ] " : ""));
-      ed.insertBefore(n, l.nextSibling);
-      curseurAuBout(n);
+      if (l.textContent.trim() === "") {
+        var v = ligneVide();
+        ed.replaceChild(v, l);
+        curseurAuBout(v);
+      } else {
+        var n = caseVide("");
+        ed.insertBefore(n, l.nextSibling);
+        curseurAuBout(n);
+      }
       maj();
     });
-    outils.addEventListener("mousedown", function (e) { e.preventDefault(); }); // le curseur reste dans le texte
-    outils.addEventListener("click", function (e) {
-      if (e.target.closest("[data-case]")) {
-        var n = ligne("[ ] ");
-        var suite = poser(ed, n, derniere);
-        if (suite.textContent === "") suite.parentNode.removeChild(suite);
-        curseurAuBout(n);
-        derniere = n;
-        maj();
-        ed.focus();
-        curseurAuBout(n);
-        return;
+
+    // La barre : le curseur reste dans le texte.
+    barre.addEventListener("mousedown", function (e) { if (e.target.closest("button")) e.preventDefault(); });
+    barre.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-outil]");
+      if (!b) return;
+      var o = b.getAttribute("data-outil");
+      if (document.activeElement !== ed && o !== "photo") { ed.focus(); if (derniere && derniere.parentNode === ed) curseurAuBout(derniere); }
+      var bl = blocCurseur(ed);
+      switch (o) {
+        case "h1": case "h2": case "h3": case "blockquote":
+          var deja = bl && bl.nodeType === 1 && (bl.tagName === o.toUpperCase() || (o === "blockquote" && bl.closest && bl.closest("blockquote")));
+          document.execCommand("formatBlock", false, deja ? "div" : o);
+          break;
+        case "case":
+          if (bl && bl.nodeType === 1 && bl.hasAttribute("data-case")) {
+            var p = document.createElement("div");
+            enfants(bl, p);
+            if (!p.firstChild) p.appendChild(document.createElement("br"));
+            ed.replaceChild(p, bl);
+            curseurAuBout(p);
+          } else if (bl && bl.parentNode === ed && bl.nodeType === 1 && /^(DIV|P|H[1-6])$/.test(bl.tagName)) {
+            var c = caseVide("");
+            c.removeChild(c.lastChild); // la ligne garde son texte (ou son <br>)
+            enfants(bl, c);
+            if (!c.firstChild) c.appendChild(document.createElement("br"));
+            ed.replaceChild(c, bl);
+            curseurAuBout(c);
+          } else {
+            var c2 = caseVide("");
+            poser(ed, c2, bl);
+            curseurAuBout(c2);
+          }
+          break;
+        case "code":
+          var s = window.getSelection();
+          if (!s.rangeCount || s.isCollapsed) { window.fcToast("Sélectionnez d'abord le texte"); return; }
+          var dans = s.anchorNode && s.anchorNode.parentElement && s.anchorNode.parentElement.closest("code");
+          if (dans && ed.contains(dans)) {
+            dans.replaceWith(document.createTextNode(dans.textContent));
+          } else {
+            var code = document.createElement("code");
+            code.textContent = s.toString();
+            var r = s.getRangeAt(0);
+            r.deleteContents();
+            r.insertNode(code);
+          }
+          break;
+        case "lien":
+          var sel = window.getSelection().toString();
+          var u = window.prompt("Adresse du lien (https://…)", /^https?:\/\//.test(sel) ? sel : "https://");
+          if (!u || !/^(https?:\/\/|mailto:)\S+$/.test(u.trim())) return;
+          if (sel) document.execCommand("createLink", false, u.trim());
+          else document.execCommand("insertText", false, u.trim());
+          break;
+        case "hr":
+          var hr = document.createElement("hr");
+          hr.contentEditable = "false";
+          curseurAuBout(poser(ed, hr, bl));
+          break;
+        case "photo":
+          if (!id) {
+            // Note pas encore enregistrée : elle l'est d'abord (la photo a besoin d'elle).
+            maj();
+            window.fcToast("Note enregistrée : touchez de nouveau 📷");
+            var sv = t.form.querySelector("button[name=suite]");
+            if (sv) sv.click(); else t.form.requestSubmit();
+            return;
+          }
+          fichier.click();
+          return;
+        default:
+          document.execCommand(o, false, null);
       }
-      if (!e.target.closest("[data-photo-ici]")) return;
-      if (!id) {
-        // Note pas encore enregistrée : elle l'est d'abord (la photo a besoin d'elle).
-        maj();
-        var b = t.form.querySelector("button[name=suite]");
-        window.fcToast("Note enregistrée : touchez de nouveau « 📷 Photo ici »");
-        if (b) b.click(); else t.form.requestSubmit();
-        return;
-      }
-      outils.querySelector("[data-fichier-ici]").click();
+      maj();
+      memo();
     });
-    outils.addEventListener("change", function (e) {
-      var f = e.target;
-      if (!f.matches("[data-fichier-ici]") || !f.files || !f.files[0]) return;
-      envoyer(f.files[0]);
-      f.value = "";
+    function enfants(de, vers) {
+      Array.prototype.slice.call(de.childNodes).forEach(function (x) {
+        if (x.nodeType === 1 && x.classList.contains("coche-note")) return;
+        vers.appendChild(x);
+      });
+    }
+    fichier.addEventListener("change", function () {
+      Array.prototype.forEach.call(fichier.files || [], envoyer);
+      fichier.value = "";
     });
-    function envoyer(fichier) {
+    function envoyer(f) {
+      if (!avecPhotos) { window.fcToast("Les photos se mettent dans les notes", true); return; }
+      if (!id) { window.fcToast("Enregistrez d'abord la note (📷), puis collez la photo", true); return; }
       if (!window.createImageBitmap) { window.fcToast("Photo non prise en charge par ce navigateur", true); return; }
-      var attente = ligne("⏳ Envoi de la photo…");
+      var attente = document.createElement("div");
       attente.contentEditable = "false";
       attente.className = "photo-attente";
-      derniere = poser(ed, attente, derniere);
-      window.fcReduirePhoto(fichier, 1600).then(function (blob) {
+      attente.textContent = "⏳ Envoi de la photo…";
+      derniere = poser(ed, attente, derniere || blocCurseur(ed));
+      window.fcReduirePhoto(f, 1600).then(function (blob) {
         return fetch("/notes/" + id + "/photos?place=1", { method: "POST", credentials: "same-origin",
           headers: { "X-Jeton": jeton(), "Content-Type": "image/jpeg" }, body: blob });
       }).then(function (rep) {
-        if (!rep.ok) throw new Error("refusée");
+        if (!rep.ok) return rep.text().then(function () { throw new Error("refusée"); });
         return rep.json();
       }).then(function (r) {
-        var f = figure(String(r.id), false);
-        ed.replaceChild(f, attente);
-        // On continue d'écrire sous la photo.
-        derniere = f.nextSibling;
+        var fig = figure(String(r.id));
+        ed.replaceChild(fig, attente);
+        derniere = fig.nextSibling;
         ed.focus();
         curseurAuBout(derniere);
         maj();
@@ -1081,16 +1342,88 @@ if ("serviceWorker" in navigator) {
     document.querySelectorAll("[data-placer]").forEach(function (b) {
       b.hidden = false;
       b.addEventListener("click", function () {
-        var f = figure(b.getAttribute("data-placer"), false);
-        poser(ed, f, derniere || ed.lastChild);
+        var f = figure(b.getAttribute("data-placer"));
+        derniere = poser(ed, f, derniere || ed.lastChild);
         var p = b.closest(".piece");
         if (p) p.parentNode.removeChild(p);
         maj();
         window.fcToast("Photo placée : pensez à enregistrer la note");
       });
     });
+    maj();
   }
-  function tout() { document.querySelectorAll("textarea[data-editeur]").forEach(monter); }
+  function tout() { document.querySelectorAll("textarea[data-editeur], textarea[data-riche]").forEach(monter); }
   document.addEventListener("DOMContentLoaded", tout);
   document.addEventListener("htmx:afterSettle", tout);
+})();
+
+// Graphiques (svg.graphique, dessinés par le serveur) : un toucher ou la
+// souris montre un repère et une bulle (date et valeur du point le plus
+// proche, ou détail de la barre). Chaque point ou barre porte data-info.
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  function cibles(svg) {
+    var l = [];
+    svg.querySelectorAll("circle[data-info]").forEach(function (c) {
+      l.push({ x: +c.getAttribute("cx"), y: +c.getAttribute("cy"), info: c.getAttribute("data-info"), el: c });
+    });
+    svg.querySelectorAll("g[data-info]").forEach(function (g) {
+      l.push({ x: +g.getAttribute("data-x"), y: null, info: g.getAttribute("data-info"), el: g });
+    });
+    return l;
+  }
+  function montrer(svg, e) {
+    var l = svg._cibles || (svg._cibles = cibles(svg));
+    if (!l.length) return;
+    var r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+    var x = (e.clientX - r.left) * vb.width / r.width;
+    var près = l[0];
+    l.forEach(function (c) { if (Math.abs(c.x - x) < Math.abs(près.x - x)) près = c; });
+    var h = vb.height;
+    var rep = svg.querySelector(".g-repere");
+    if (!rep) { rep = document.createElementNS(NS, "line"); rep.setAttribute("class", "g-repere"); svg.appendChild(rep); }
+    rep.setAttribute("x1", près.x); rep.setAttribute("x2", près.x);
+    rep.setAttribute("y1", 10); rep.setAttribute("y2", h - 22);
+    var pt = svg.querySelector(".g-actif");
+    if (près.y !== null) {
+      if (!pt) { pt = document.createElementNS(NS, "circle"); pt.setAttribute("class", "g-actif"); pt.setAttribute("r", 5); svg.appendChild(pt); }
+      pt.setAttribute("cx", près.x); pt.setAttribute("cy", près.y);
+    } else if (pt) pt.remove();
+    svg.querySelectorAll(".g-barre.choisie").forEach(function (g) { g.classList.remove("choisie"); });
+    if (près.y === null) près.el.classList.add("choisie");
+    var cadre = svg.parentNode, bulle = cadre.querySelector(".bulle-graphique");
+    if (!bulle) { bulle = document.createElement("div"); bulle.className = "bulle-graphique"; bulle.setAttribute("aria-live", "polite"); cadre.appendChild(bulle); }
+    bulle.textContent = près.info;
+    bulle.hidden = false;
+    var rc = cadre.getBoundingClientRect();
+    var px = r.left - rc.left + près.x * r.width / vb.width;
+    var w = bulle.offsetWidth, max = cadre.clientWidth - w - 4;
+    bulle.style.left = Math.max(4, Math.min(max, px - w / 2)) + "px";
+    bulle.style.top = Math.max(2, r.top - rc.top - bulle.offsetHeight + 4) + "px"; // juste au-dessus du dessin
+  }
+  function cacher(svg) {
+    var x = svg.querySelector(".g-repere"); if (x) x.remove();
+    var p = svg.querySelector(".g-actif"); if (p) p.remove();
+    svg.querySelectorAll(".g-barre.choisie").forEach(function (g) { g.classList.remove("choisie"); });
+    var b = svg.parentNode.querySelector(".bulle-graphique"); if (b) b.hidden = true;
+  }
+  document.addEventListener("pointermove", function (e) {
+    var svg = e.target.closest && e.target.closest("svg.graphique");
+    if (svg && e.pointerType === "mouse") montrer(svg, e);
+  });
+  document.addEventListener("pointerdown", function (e) {
+    var svg = e.target.closest && e.target.closest("svg.graphique");
+    document.querySelectorAll("svg.graphique").forEach(function (s) { if (s !== svg) cacher(s); });
+    if (svg) montrer(svg, e);
+  });
+  document.addEventListener("pointerout", function (e) {
+    var svg = e.target.closest && e.target.closest("svg.graphique");
+    if (svg && e.pointerType === "mouse" && !svg.contains(e.relatedTarget)) cacher(svg);
+  });
+  // Glisser le doigt le long de la courbe.
+  document.addEventListener("touchmove", function (e) {
+    var svg = e.target.closest && e.target.closest("svg.graphique");
+    if (svg && e.touches[0]) montrer(svg, e.touches[0]);
+  }, { passive: true });
 })();

@@ -110,12 +110,18 @@ func Courbe(titre string, points []Point, format func(float64) string, dateCourt
 	for _, p := range points {
 		trace = append(trace, fmt.Sprintf("%.1f,%.1f", x(p.Date), y(p.Valeur)))
 	}
-	fmt.Fprintf(&b, `<polyline class="g-ligne" points="%s"/>`, strings.Join(trace, " "))
-	if len(points) <= 60 {
-		for _, p := range points {
-			fmt.Fprintf(&b, `<circle class="g-point" cx="%.1f" cy="%.1f" r="2.5"><title>%s : %s</title></circle>`,
-				x(p.Date), y(p.Valeur), esc(p.Date.Format("02/01/2006")), esc(format(p.Valeur)))
-		}
+	fmt.Fprintf(&b, `<polyline class="g-ligne" pathLength="1" points="%s"/>`, strings.Join(trace, " "))
+	// Chaque point porte sa date et sa valeur (data-info) : app.js les
+	// montre au toucher. Au-delà de 60 points, ils sont cachés (la courbe
+	// suffit) mais restent là pour le toucher.
+	classe := "g-point"
+	if len(points) > 60 {
+		classe += " cache"
+	}
+	for _, p := range points {
+		info := p.Date.Format("02/01/2006") + " : " + format(p.Valeur)
+		fmt.Fprintf(&b, `<circle class="%s" cx="%.1f" cy="%.1f" r="2.5" data-info="%s"><title>%s</title></circle>`,
+			classe, x(p.Date), y(p.Valeur), esc(info), esc(info))
 	}
 	// Dates : la première et la dernière.
 	fmt.Fprintf(&b, `<text class="g-date" x="%d" y="%d">%s</text>`, gauche, hauteur-6, esc(dateCourte(debut)))
@@ -150,7 +156,7 @@ func Barres(titre string, barres []Barre, format func(float64) string) template.
 	for i, br := range barres {
 		x := float64(gauche) + case_*float64(i) + (case_-l)/2
 		base := ymin
-		fmt.Fprintf(&b, `<g><title>%s</title>`, esc(br.Detail))
+		fmt.Fprintf(&b, `<g class="g-barre" data-x="%.1f" data-info="%s"><title>%s</title>`, x+l/2, esc(br.Detail), esc(br.Detail))
 		for s, v := range br.Valeurs {
 			if v <= 0 {
 				continue

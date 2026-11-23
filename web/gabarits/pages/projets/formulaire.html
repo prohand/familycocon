@@ -18,7 +18,7 @@
     <label class="champ"><span>Objectif (date)</span><input type="date" name="objectif" value="{{.P.Objectif}}"></label>
     {{if $c.EstParent}}<label class="champ"><span>Budget prévu</span><input name="budget" value="{{.Budget}}" inputmode="decimal" placeholder="0,00"></label>{{end}}
   </div>
-  <label class="champ"><span>Description (facultatif)</span><textarea name="description" rows="3" maxlength="2000">{{.P.Description}}</textarea></label>
+  <label class="champ"><span>Description (facultatif)</span><textarea name="description" rows="3" maxlength="2000" data-riche>{{.P.Description}}</textarea><template data-editeur-contenu>{{richeEdition .P.Description}}</template></label>
   {{if or .Nouveau .P.PersoDe}}
   <label class="interrupteur">
     <span class="emoji">🔒</span><span class="nom">Privé <small class="aide">(vous seul le voyez ; on peut le partager plus tard)</small></span>

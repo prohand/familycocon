@@ -19,7 +19,7 @@
   </div>
   {{template "choix-contact" dict "Nom" "veterinaire_id" "Titre" "🩺 Vétérinaire (dans vos contacts)" "Choisi" .A.VeterinaireID "Contacts" .Contacts}}
   <label class="champ"><span>… ou noté ici (nom, téléphone)</span><input name="veterinaire" value="{{.A.Veterinaire}}" maxlength="200"></label>
-  <label class="champ"><span>Notes (allergies, nourriture…)</span><textarea name="notes" rows="2" maxlength="1000">{{.A.Notes}}</textarea></label>
+  <label class="champ"><span>Notes (allergies, nourriture…)</span><textarea name="notes" rows="2" maxlength="1000" data-riche>{{.A.Notes}}</textarea><template data-editeur-contenu>{{richeEdition .A.Notes}}</template></label>
   {{if .Nouveau}}<p class="aide">Ensuite, ajoutez les soins : vaccins, vermifuge, antiparasitaire…</p>{{end}}
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>

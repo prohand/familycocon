@@ -28,7 +28,7 @@
   {{template "choix-contact" dict "Nom" "magasin_id" "Titre" "🏬 Magasin (dans vos contacts)" "Choisi" .G.MagasinID "Contacts" .Contacts}}
   <label class="champ"><span>… ou noté ici</span><input name="magasin" value="{{.G.Magasin}}" maxlength="200"></label>
   <label class="champ"><span>📁 Où est la facture ?</span><input name="facture" value="{{.G.Facture}}" maxlength="200" placeholder="Ex. : classeur bleu, boîte mail de Marie"></label>
-  <label class="champ"><span>Notes (n° de série…)</span><textarea name="notes" rows="2" maxlength="1000">{{.G.Notes}}</textarea></label>
+  <label class="champ"><span>Notes (n° de série…)</span><textarea name="notes" rows="2" maxlength="1000" data-riche>{{.G.Notes}}</textarea><template data-editeur-contenu>{{richeEdition .G.Notes}}</template></label>
   <p class="aide">La fin de garantie sera rappelée 7 jours avant.</p>
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>
