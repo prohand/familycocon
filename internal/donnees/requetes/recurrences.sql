@@ -6,13 +6,20 @@ SELECT * FROM recurrences WHERE famille_id = ? ORDER BY sens DESC, montant DESC;
 -- name: RecurrenceParID :one
 SELECT * FROM recurrences WHERE id = ? AND famille_id = ?;
 
+-- name: CompterRecurrences :one
+SELECT count(*) FROM recurrences WHERE famille_id = ?;
+
 -- name: CreerRecurrence :one
 INSERT INTO recurrences (famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
--- name: ModifierRecurrence :exec
-UPDATE recurrences SET sens = ?, montant = ?, categorie = ?, libelle = ?, membre_id = ?, frequence = ?, debut = ?, fin = ?, faites = ?
-WHERE id = ? AND famille_id = ?;
+-- Seulement si " faites " n'a pas bouge depuis la lecture (une occurrence
+-- ecrite entre-temps ne doit pas etre ecrite une seconde fois).
+-- name: ModifierRecurrence :execrows
+UPDATE recurrences SET sens = sqlc.arg(sens), montant = sqlc.arg(montant), categorie = sqlc.arg(categorie),
+  libelle = sqlc.arg(libelle), membre_id = sqlc.arg(membre_id), frequence = sqlc.arg(frequence),
+  debut = sqlc.arg(debut), fin = sqlc.arg(fin), faites = sqlc.arg(faites)
+WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND faites = sqlc.arg(faites_avant);
 
 -- name: ArreterRecurrence :exec
 UPDATE recurrences SET fin = ? WHERE id = ? AND famille_id = ?;
@@ -21,7 +28,7 @@ UPDATE recurrences SET fin = ? WHERE id = ? AND famille_id = ?;
 DELETE FROM recurrences WHERE id = ? AND famille_id = ?;
 
 -- name: AvancerRecurrence :execrows
-UPDATE recurrences SET faites = faites + 1 WHERE id = ? AND faites = ?;
+UPDATE recurrences SET faites = faites + 1 WHERE id = ? AND famille_id = ? AND faites = ?;
 
 -- name: CreerOccurrence :one
 INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, membre_id, recurrence_id, cree_par, cree_le)
@@ -38,6 +45,10 @@ SELECT * FROM abonnements WHERE id = ? AND famille_id = ?;
 
 -- name: AbonnementDeRecurrence :one
 SELECT * FROM abonnements WHERE recurrence_id = ? AND famille_id = ?;
+
+-- Les recurrences qui sont des abonnements (une requete pour toute la page).
+-- name: RecurrencesAbonnees :many
+SELECT recurrence_id FROM abonnements WHERE famille_id = ?;
 
 -- name: CreerAbonnement :one
 INSERT INTO abonnements (famille_id, recurrence_id, emoji, engagement_fin, site, notes, cree_le)

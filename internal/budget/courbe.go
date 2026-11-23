@@ -8,6 +8,9 @@ import (
 	"html/template"
 	"strconv"
 	"strings"
+	"time"
+
+	"familycocon/internal/appli"
 )
 
 // Courbe des dépenses du mois, dessinée en SVG par le serveur (pas de
@@ -71,8 +74,10 @@ func (c Courbe) SVG() template.HTML {
 	for _, j := range []int{1, 15, c.Jours} {
 		fmt.Fprintf(&s, `<text class="etiquette-axe" x="%.1f" y="%d" text-anchor="middle">%d</text>`, max(min(x(j-1, c.Jours), largeur-14), 14), hauteur-6, j)
 	}
-	if len(c.Precedent) > 1 {
-		fmt.Fprintf(&s, `<polyline class="precedent" points="%s"/>`, points(c.Precedent, len(c.Precedent)))
+	// Mois précédent : même échelle de jours que le mois affiché (le 15 sous
+	// le 15) ; ses jours en trop (un 31 sous un mois de 30) ne sont pas tracés.
+	if prec := c.Precedent[:min(len(c.Precedent), c.Jours)]; len(prec) > 1 {
+		fmt.Fprintf(&s, `<polyline class="precedent" points="%s"/>`, points(prec, c.Jours))
 	}
 	if len(c.Actuel) > 0 {
 		pts := points(c.Actuel, c.Jours)
@@ -102,10 +107,8 @@ func arrondiHaut(v int64) int64 {
 
 // court : « 1,5 k€ », « 300 € ».
 func court(centimes int64, devise string) string {
-	sym := map[string]string{"EUR": "€", "USD": "$", "GBP": "£"}[devise]
-	if sym == "" {
-		sym = devise
-	}
+	// Le symbole de la devise : celui d'appli.Montant (« 0,00 € » sans le « 0,00 »).
+	sym := strings.TrimSpace(strings.TrimPrefix(appli.Montant(0, devise), "0,00"))
 	e := centimes / 100
 	if e >= 1000 {
 		k := strconv.FormatFloat(float64(e)/1000, 'f', 1, 64)
@@ -117,6 +120,16 @@ func court(centimes int64, devise string) string {
 // LireMontant lit un montant saisi : « 12 », « 12,5 », « 1 234,56 € »,
 // « 12.50 » → centimes. Strictement positif, au plus 10 millions.
 func LireMontant(s string) (int64, error) {
+	c, err := LireMontantOuZero(s)
+	if err != nil || c == 0 {
+		return 0, errMontant
+	}
+	return c, nil
+}
+
+// LireMontantOuZero : comme LireMontant, mais « 0 » est accepté (il veut dire
+// « aucun » : pas de budget pour un projet, intervention gratuite).
+func LireMontantOuZero(s string) (int64, error) {
 	s = strings.NewReplacer(" ", "", " ", "", " ", "", "€", "", "$", "", "£", "").Replace(strings.TrimSpace(s))
 	s = strings.Replace(s, ",", ".", 1)
 	if s == "" || strings.Count(s, ".") > 1 || strings.HasPrefix(s, "-") || strings.HasPrefix(s, "+") {
@@ -143,11 +156,22 @@ func LireMontant(s string) (int64, error) {
 	if err1 != nil || err2 != nil || e > 10_000_000 {
 		return 0, errMontant
 	}
-	c := e*100 + d
-	if c <= 0 {
-		return 0, errMontant
+	return e*100 + d, nil
+}
+
+// MontantSaisie : 1234 centimes → « 12,34 » (pour un champ de formulaire).
+func MontantSaisie(n int64) string {
+	return fmt.Sprintf("%d,%02d", n/100, n%100)
+}
+
+// LireJour : une date « AAAA-MM-JJ » saisie, entre 1900 et dans 50 ans (une
+// date absurde, « 9999-06-01 », fausserait les tris et les rappels).
+func LireJour(v string, aujourdhui time.Time) (string, bool) {
+	j, err := time.Parse("2006-01-02", v)
+	if err != nil || j.Year() < 1900 || j.Year() > aujourdhui.Year()+50 {
+		return "", false
 	}
-	return c, nil
+	return v, true
 }
 
 var errMontant = errors.New("Montant invalide (ex. : 12,50).")

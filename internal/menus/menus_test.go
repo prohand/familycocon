@@ -83,3 +83,41 @@ func TestEnfantNeVidePas(t *testing.T) {
 		t.Fatalf("vidage par un enfant : %d", code)
 	}
 }
+
+// Revue : un ingrédient trop long est refusé à l'enregistrement, et un
+// double envoi de « aux courses » n'ajoute les ingrédients qu'une fois.
+func TestIngredientsLongsEtDoubleEnvoi(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, brancher)
+	marie := essai.Famille(t, srv)
+	jour := "2026-11-24"
+	marie.Get("/menus/" + jour + "/soir")
+	long := strings.Repeat("a", 81)
+	if code, _ := marie.Post("/menus/"+jour+"/soir", map[string]string{"nom": "Soupe", "ingredients": "Poireaux\n" + long}); code != http.StatusBadRequest {
+		t.Fatalf("ingrédient de 81 caractères accepté : %d", code)
+	}
+	if code, _ := marie.Post("/menus/"+jour+"/soir", map[string]string{"nom": "Soupe", "ingredients": "Poireaux\nCarottes"}); code != 200 {
+		t.Fatalf("enregistrement : %d", code)
+	}
+	// Ancienne donnée (enregistrée avant la limite) : la ligne trop longue
+	// est ignorée, sans erreur ni doublon.
+	if _, err := a.DB.Exec(`UPDATE repas SET ingredients = ?`, "Poireaux\n"+long+"\nCarottes"); err != nil {
+		t.Fatal(err)
+	}
+	marie.Htmx = true
+	for i := range 2 {
+		if code, _ := marie.Post("/menus/"+jour+"/soir/courses", nil); code != 200 {
+			t.Fatalf("aux courses (envoi %d) : %d", i+1, code)
+		}
+	}
+	// Bouton « semaine » juste après : rien de plus.
+	marie.Post("/menus/semaine/courses", map[string]string{"date": jour})
+	var n int
+	if err := a.DB.QueryRow(`SELECT count(*) FROM produits`).Scan(&n); err != nil || n != 2 {
+		t.Fatalf("produits aux courses : %d (attendu 2) %v", n, err)
+	}
+	// Année hors bornes : créneau inconnu.
+	marie.Htmx = false
+	if code, _ := marie.Get("/menus/9999-01-01/soir"); code != http.StatusNotFound {
+		t.Fatalf("année 9999 acceptée : %d", code)
+	}
+}

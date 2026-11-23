@@ -14,6 +14,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -61,9 +62,19 @@ type carteNote struct {
 type vueNotes struct {
 	Filtre    string
 	Recherche string
+	Params    string // filtre et recherche, encodés pour une adresse (« voir=…&q=… »)
 	Epinglees []carteNote
 	Autres    []carteNote
+	Tronquee  bool // la liste est coupée (notesListe)
 }
+
+// Bornes : notes par famille, notes montrées dans la liste, et longueur du
+// début de texte montré sur chaque carte.
+const (
+	notesMax   = 5000
+	notesListe = 300
+	debutMax   = 300
+)
 
 func lireFiltre(r *http.Request) (filtre, recherche string) {
 	filtre = r.URL.Query().Get("voir")
@@ -88,15 +99,25 @@ func visible(c *appli.Contexte, n donnees.Note) bool {
 	return n.Privee == 0 || (n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID)
 }
 
-// motifLike : « pain » → « %pain% » (les % et _ tapés sont des caractères normaux).
-func motifLike(s string) string {
-	s = strings.NewReplacer("%", "", "_", "").Replace(s)
-	return "%" + s + "%"
+// paramsListe : « voir=privees&q=pain+%26+beurre », pour les adresses de
+// la liste (les attributs hx-* ne sont pas encodés par le gabarit).
+func paramsListe(filtre, recherche string) string {
+	v := url.Values{}
+	if filtre != toutes {
+		v.Set("voir", filtre)
+	}
+	if recherche != "" {
+		v.Set("q", recherche)
+	}
+	return v.Encode()
 }
 
 func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre, recherche string) (*vueNotes, error) {
-	notes, err := m.a.Q.NotesVisibles(ctx, donnees.NotesVisiblesParams{
-		FamilleID: c.Famille.ID, MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Motif: motifLike(recherche)})
+	// Le filtre, la recherche (texte cherché tel quel, % et _ compris) et la
+	// borne sont appliqués en SQL ; seul le début du texte est lu.
+	lignes, err := m.a.Q.NotesVisibles(ctx, donnees.NotesVisiblesParams{
+		FamilleID: c.Famille.ID, MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true},
+		Filtre: filtre, Motif: recherche, Nombre: notesListe + 1})
 	if err != nil {
 		return nil, err
 	}
@@ -104,14 +125,16 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre, recherche s
 	if err != nil {
 		return nil, err
 	}
-	parID := map[int64]*donnees.Membre{}
-	for i := range membres {
-		parID[membres[i].ID] = &membres[i]
+	parID := appli.MembresParID(membres)
+	v := &vueNotes{Filtre: filtre, Recherche: recherche, Params: paramsListe(filtre, recherche)}
+	if len(lignes) > notesListe {
+		lignes, v.Tronquee = lignes[:notesListe], true
 	}
-	v := &vueNotes{Filtre: filtre, Recherche: recherche}
-	for _, n := range notes {
-		if (filtre == partagees && n.Privee == 1) || (filtre == privees && n.Privee == 0) {
-			continue
+	for _, l := range lignes {
+		n := donnees.Note{ID: l.ID, FamilleID: c.Famille.ID, AuteurID: l.AuteurID, Titre: l.Titre, Texte: l.Debut,
+			Couleur: l.Couleur, Epinglee: l.Epinglee, Privee: l.Privee, ModifieLe: l.ModifieLe}
+		if utf8.RuneCountInString(n.Texte) >= debutMax {
+			n.Texte += "…"
 		}
 		cn := carteNote{Note: n, Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n)}
 		if n.AuteurID.Valid {
@@ -168,10 +191,22 @@ type formNote struct {
 	Note        donnees.Note
 	Modifiable  bool
 	Supprimable bool
+	// PeutPriver : la case « Privée » est proposée (toujours à la création
+	// et pour une note déjà privée ; pour une note partagée, seulement à un
+	// parent qui en est l'auteur).
+	PeutPriver bool
+}
+
+// peutPriver : qui peut rendre privée une note déjà partagée ? Seulement
+// un parent qui en est l'auteur : la note disparaît pour le reste de la
+// famille, ce qui revient à la supprimer (réservé aux parents).
+func peutPriver(c *appli.Contexte, n donnees.Note) bool {
+	auteur := n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID
+	return auteur && (n.Privee == 1 || c.EstParent())
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	f := formNote{Nouvelle: r.PathValue("id") == "", Modifiable: true}
+	f := formNote{Nouvelle: r.PathValue("id") == "", Modifiable: true, PeutPriver: true}
 	if f.Nouvelle {
 		f.Note = donnees.Note{Couleur: 1}
 		if r.URL.Query().Get("voir") == privees {
@@ -183,7 +218,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			m.a.PageErreur(w, r, c, http.StatusNotFound, "Note introuvable", "Cette note n'existe plus.")
 			return
 		}
-		f.Note, f.Modifiable = n, modifiable(c, n)
+		f.Note, f.Modifiable, f.PeutPriver = n, modifiable(c, n), peutPriver(c, n)
 		f.Supprimable = c.EstParent() && (n.Privee == 0 || n.AuteurID.Int64 == c.Membre.ID)
 	}
 	titre := "Nouvelle note"
@@ -244,6 +279,13 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
+	if nb, err := m.a.Q.CompterNotesFamille(r.Context(), c.Famille.ID); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	} else if nb >= notesMax {
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("%d notes au plus : demandez à un parent d'en supprimer.", notesMax))
+		return
+	}
 	t := time.Now().Unix()
 	n, err := m.a.Q.CreerNote(r.Context(), donnees.CreerNoteParams{
 		FamilleID: c.Famille.ID, AuteurID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Titre: s.titre, Texte: s.texte,
@@ -276,8 +318,10 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
-	// Seul l'auteur peut rendre une note privée (sinon elle disparaîtrait pour lui).
-	if !(n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID) {
+	// Rendre privée une note partagée la fait disparaître pour les autres :
+	// réservé à un parent qui en est l'auteur. Et seul l'auteur change ce
+	// réglage (sinon la note disparaîtrait pour lui).
+	if !(n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID) || (s.privee == 1 && !peutPriver(c, n)) {
 		s.privee = n.Privee
 	}
 	if err := m.a.Q.ModifierNote(r.Context(), donnees.ModifierNoteParams{

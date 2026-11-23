@@ -27,6 +27,12 @@ import (
 
 const mod = "projets"
 
+// Plafonds (garde-fous : la base ne grossit pas sans fin).
+const (
+	ProjetsMax = 200
+	EtapesMax  = 200 // par projet
+)
+
 // Emojis proposés pour un projet.
 var Emojis = []string{"🎯", "🏖️", "✈️", "🏠", "🔨", "📦", "🎉", "🎄", "🌱", "🎓", "💍", "🚀"}
 
@@ -213,7 +219,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.P = p
 		if p.Budget > 0 {
-			f.Budget = strings.Replace(fmt.Sprintf("%d.%02d", p.Budget/100, p.Budget%100), ".", ",", 1)
+			f.Budget = budget.MontantSaisie(p.Budget)
 		}
 	}
 	m.a.Afficher(w, r, c, "projets/formulaire", "Projet", mod, f)
@@ -237,14 +243,15 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		return
 	}
 	objectif := r.PostFormValue("objectif")
-	if _, err := time.Parse("2006-01-02", objectif); objectif != "" && err != nil {
+	if _, ok := budget.LireJour(objectif, c.Maintenant()); objectif != "" && !ok {
 		m.a.Echec(w, r, http.StatusBadRequest, "Date d'objectif invalide.")
 		return
 	}
+	// Vide ou « 0 » : pas de budget.
 	var montant int64
 	if b := strings.TrimSpace(r.PostFormValue("budget")); b != "" {
-		v, err := budget.LireMontant(b)
-		if err != nil || v < 0 {
+		v, err := budget.LireMontantOuZero(b)
+		if err != nil {
 			m.a.Echec(w, r, http.StatusBadRequest, "Budget invalide.")
 			return
 		}
@@ -257,6 +264,13 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 	emoji := emojiValide(r.PostFormValue("emoji"))
 	id := idDe(r)
 	if r.PathValue("id") == "" {
+		if n, err := m.a.Q.CompterProjets(ctx, c.Famille.ID); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		} else if n >= ProjetsMax {
+			m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Trop de projets (%d au plus) : supprimez-en d'abord.", ProjetsMax))
+			return
+		}
 		p, err := m.a.Q.CreerProjet(ctx, donnees.CreerProjetParams{FamilleID: c.Famille.ID, Nom: nom, Emoji: emoji, Couleur: couleur,
 			Description: desc, Objectif: objectif, Budget: montant, CreeLe: time.Now().Unix()})
 		if err != nil {
@@ -286,6 +300,11 @@ func (m *Module) terminer(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	p, ok := m.projet(r, c, idDe(r))
 	if !ok {
 		m.a.Echec(w, r, http.StatusNotFound, "Projet introuvable.")
+		return
+	}
+	// État voulu envoyé par la page : un double clic ne rouvre pas le projet.
+	if v := r.PostFormValue("termine"); (v == "1" && p.TermineLe > 0) || (v == "0" && p.TermineLe == 0) {
+		m.a.Rediriger(w, r, fmt.Sprintf("/projets/%d", p.ID))
 		return
 	}
 	var le int64
@@ -339,8 +358,15 @@ func (m *Module) ajouterEtape(w http.ResponseWriter, r *http.Request, c *appli.C
 		return
 	}
 	jour := r.PostFormValue("jour")
-	if _, err := time.Parse("2006-01-02", jour); jour != "" && err != nil {
+	if _, ok := budget.LireJour(jour, c.Maintenant()); jour != "" && !ok {
 		m.a.Echec(w, r, http.StatusBadRequest, "Date invalide.")
+		return
+	}
+	if n, err := m.a.Q.CompterEtapesProjet(r.Context(), donnees.CompterEtapesProjetParams{ProjetID: p.ID, FamilleID: c.Famille.ID}); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	} else if n >= EtapesMax {
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Trop d'étapes (%d au plus) : supprimez-en d'abord.", EtapesMax))
 		return
 	}
 	var membre sql.NullInt64
@@ -409,15 +435,9 @@ func (m *Module) supprimerEtape(w http.ResponseWriter, r *http.Request, c *appli
 // ---------- Accueil et rappels ----------
 
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
-	l, err := m.a.Q.ProjetsFamille(ctx, c.Famille.ID)
+	n, err := m.a.Q.CompterProjetsEnCours(ctx, c.Famille.ID)
 	if err != nil {
 		return appli.Resume{}
-	}
-	n := 0
-	for _, p := range l {
-		if p.TermineLe == 0 {
-			n++
-		}
 	}
 	if n == 0 {
 		return appli.Resume{Info: "Aucun projet en cours"}

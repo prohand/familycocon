@@ -44,7 +44,7 @@ func (a *App) Route(motif, module string, acces Acces, h Gestionnaire) {
 		}
 		if c == nil {
 			if r.Method == http.MethodGet {
-				a.Rediriger(w, r, "/connexion?suite="+url.QueryEscape(r.URL.RequestURI()))
+				a.RedirigerComplet(w, r, "/connexion?suite="+url.QueryEscape(suiteDemandee(r)))
 				return
 			}
 			a.Echec(w, r, http.StatusUnauthorized, "Session terminée : reconnectez-vous.")
@@ -65,6 +65,20 @@ func (a *App) Route(motif, module string, acces Acces, h Gestionnaire) {
 		}
 		h(w, r.WithContext(context.WithValue(r.Context(), cleContexte{}, c)), c)
 	})
+}
+
+// suiteDemandee : où revenir après la connexion. Pour un fragment demandé
+// par htmx (un bloc de page, pas un lien), c'est la page affichée par le
+// navigateur (en-tête HX-Current-URL), pas le fragment lui-même : sinon on
+// arriverait sur un morceau de page sans mise en page.
+func suiteDemandee(r *http.Request) string {
+	if !EstHtmx(r) || r.Header.Get("HX-Boosted") == "true" {
+		return r.URL.RequestURI()
+	}
+	if u, err := url.Parse(r.Header.Get("HX-Current-URL")); err == nil && strings.HasPrefix(u.Path, "/") {
+		return u.RequestURI()
+	}
+	return "/"
 }
 
 // EstHtmx : requête envoyée par htmx (et pas un chargement de page complet).
@@ -157,6 +171,12 @@ func (a *App) Echec(w http.ResponseWriter, r *http.Request, statut int, message 
 
 // ErreurInterne : écrit l'erreur dans le journal, répond 500 sans détail.
 func (a *App) ErreurInterne(w http.ResponseWriter, r *http.Request, err error) {
+	// Navigateur parti avant la réponse (page quittée, flux temps réel
+	// fermé) : ce n'est pas une erreur du serveur, et personne n'attend plus.
+	if r.Context().Err() != nil {
+		a.Journal.Debug("requête abandonnée par le navigateur", "chemin", r.URL.Path)
+		return
+	}
 	a.Journal.Error("erreur interne", "chemin", r.URL.Path, "erreur", err)
 	a.Echec(w, r, http.StatusInternalServerError, "Erreur interne : réessayez dans un instant.")
 }

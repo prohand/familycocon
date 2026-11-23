@@ -51,3 +51,12 @@ ORDER BY e.jour;
 SELECT id, nom, emoji, objectif FROM projets
 WHERE famille_id = sqlc.arg(famille_id) AND termine_le = 0
   AND objectif >= sqlc.arg(du) AND objectif < sqlc.arg(au);
+
+-- name: CompterProjets :one
+SELECT count(*) FROM projets WHERE famille_id = ?;
+
+-- name: CompterProjetsEnCours :one
+SELECT count(*) FROM projets WHERE famille_id = ? AND termine_le = 0;
+
+-- name: CompterEtapesProjet :one
+SELECT count(*) FROM projet_etapes WHERE projet_id = ? AND famille_id = ?;

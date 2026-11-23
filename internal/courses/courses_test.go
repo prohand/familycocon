@@ -162,3 +162,39 @@ func TestTempsReel(t *testing.T) {
 		}
 	}
 }
+
+// Revue : messages et plafonds.
+func TestBornesCourses(t *testing.T) {
+	a, n, id := nouvelleFamille(t)
+	// Quantité trop longue : le message parle bien de la quantité.
+	n.Htmx = true
+	req := func(champs map[string]string) (int, string) { return n.Post("/courses/liste/"+id+"/produits", champs) }
+	if code, _ := req(map[string]string{"produit": strings.Repeat("9", 25) + " kg de farine"}); code != http.StatusBadRequest {
+		t.Fatalf("quantité de 25 chiffres acceptée : %d", code)
+	}
+	if !SaisieValide("2 kg de farine") || SaisieValide(strings.Repeat("a", 81)) || SaisieValide("  ") {
+		t.Fatal("SaisieValide")
+	}
+	// Liste pleine : refus clair.
+	if _, err := a.DB.Exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
+		INSERT INTO produits (liste_id, nom, quantite, rayon, emoji, cree_le) SELECT ?, 'p' || i, '', 'autre', '', 0 FROM n`, produitsMax, id); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := req(map[string]string{"produit": "Pain"}); code != http.StatusBadRequest {
+		t.Fatalf("liste pleine : %d", code)
+	}
+	// 50 listes au plus (une existe déjà).
+	n.Htmx = false
+	for i := 1; i < listesMax; i++ {
+		if code, _ := n.Post("/courses/listes", map[string]string{"nom": "Liste"}); code != 200 {
+			t.Fatalf("liste %d : %d", i+1, code)
+		}
+	}
+	if code, _ := n.Post("/courses/listes", map[string]string{"nom": "De trop"}); code != http.StatusBadRequest {
+		t.Fatalf("51e liste acceptée : %d", code)
+	}
+	// « Ranger » sans htmx : retour à la page, pas un bloc nu.
+	if code, page := n.Post("/courses/liste/"+id+"/vider", nil); code != 200 || !strings.Contains(page, "<html") {
+		t.Fatalf("vider sans htmx : %d", code)
+	}
+}

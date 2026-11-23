@@ -12,10 +12,10 @@ package abonnements
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +24,7 @@ import (
 
 	"familycocon/internal/appli"
 	"familycocon/internal/budget"
+	"familycocon/internal/contacts"
 	"familycocon/internal/donnees"
 	"familycocon/internal/repetition"
 )
@@ -79,7 +80,7 @@ func recurrence(x donnees.ListeAbonnementsRow) donnees.Recurrence {
 
 func (m *Module) lignes(ctx context.Context, c *appli.Contexte) ([]Ligne, error) {
 	// Les prélèvements dus sont d'abord écrits dans le budget.
-	if err := budget.Generer(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
+	if err := budget.GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		return nil, err
 	}
 	l, err := m.a.Q.ListeAbonnements(ctx, c.Famille.ID)
@@ -91,7 +92,7 @@ func (m *Module) lignes(ctx context.Context, c *appli.Contexte) ([]Ligne, error)
 	for _, x := range l {
 		li := Ligne{ListeAbonnementsRow: x, Frequence: budget.NomFrequence(x.Frequence), ParMois: budget.ParMois(x.Montant, x.Frequence),
 			ParAn: budget.ParAn(x.Montant, x.Frequence),
-			Lien:  SiteSur(x.Site)}
+			Lien:  contacts.SiteSur(x.Site)}
 		if j, ok := budget.Prochaine(recurrence(x)); ok {
 			li.Prochain = appli.DateLongue(j)
 		} else {
@@ -169,8 +170,8 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			m.a.PageErreur(w, r, c, http.StatusNotFound, "Abonnement introuvable", "Cet abonnement n'existe plus.")
 			return
 		}
-		f.A, f.R, f.Lien = ab, rec, SiteSur(ab.Site)
-		f.Montant = fmt.Sprintf("%d,%02d", rec.Montant/100, rec.Montant%100)
+		f.A, f.R, f.Lien = ab, rec, contacts.SiteSur(ab.Site)
+		f.Montant = budget.MontantSaisie(rec.Montant)
 		if j, ok := budget.Prochaine(rec); ok {
 			f.Prochain = repetition.CleJour(j)
 		} else {
@@ -198,30 +199,15 @@ func emojiValide(e string) string {
 	return "📺"
 }
 
-// siteValide : vide, ou une adresse http(s) (« exemple.fr » devient https://exemple.fr).
-func siteValide(s string) (string, bool) {
-	if s == "" {
-		return "", true
-	}
-	if !strings.Contains(s, "://") {
-		s = "https://" + s
-	}
-	u, err := url.Parse(s)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || len(s) > 300 {
-		return "", false
-	}
-	return u.String(), true
-}
-
 func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
 	nom := strings.TrimSpace(r.PostFormValue("nom"))
 	notes := strings.TrimSpace(r.PostFormValue("notes"))
 	montant, errM := budget.LireMontant(r.PostFormValue("montant"))
 	freq, prochain, engagement := r.PostFormValue("frequence"), r.PostFormValue("prochain"), r.PostFormValue("engagement_fin")
-	_, errP := time.Parse("2006-01-02", prochain)
-	_, errE := time.Parse("2006-01-02", engagement)
-	site, siteOk := siteValide(strings.TrimSpace(r.PostFormValue("site")))
+	_, okP := budget.LireJour(prochain, c.Maintenant())
+	_, okE := budget.LireJour(engagement, c.Maintenant())
+	site, siteOk := contacts.NormaliserSite(strings.TrimSpace(r.PostFormValue("site")))
 	cat, catOk := budget.CategorieParCle(r.PostFormValue("categorie"))
 	msg := ""
 	switch {
@@ -229,9 +215,9 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		msg = "Le nom doit faire entre 1 et 80 caractères."
 	case errM != nil:
 		msg = errM.Error()
-	case !budget.FrequenceValide(freq) || errP != nil:
+	case !budget.FrequenceValide(freq) || !okP:
 		msg = "Indiquez la fréquence et la date du prochain prélèvement."
-	case engagement != "" && errE != nil:
+	case engagement != "" && !okE:
 		msg = "Date de fin d'engagement invalide."
 	case !siteOk:
 		msg = "Adresse du site invalide (http ou https)."
@@ -260,8 +246,11 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			m.a.Echec(w, r, http.StatusBadRequest, msg)
 			return
 		}
-		if recs, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID); err != nil || len(recs) >= budget.RecurrencesMax {
-			m.a.Echec(w, r, http.StatusBadRequest, "Trop d'opérations qui reviennent : arrêtez-en d'abord.")
+		if msg, err := budget.PlaceRecurrence(ctx, m.a, c.Famille.ID); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		} else if msg != "" {
+			m.a.Echec(w, r, http.StatusBadRequest, msg)
 			return
 		}
 		err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
@@ -282,22 +271,30 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		}
 		// Nouvelle date ou nouvelle fréquence : on repart de la date donnée
 		// (après la dernière déjà passée : rien n'est écrit deux fois).
-		debut, faites := rec.Debut, rec.Faites
-		if j, ok := budget.Prochaine(rec); !ok || repetition.CleJour(j) != prochain || freq != rec.Frequence {
-			if msg := budget.ValiderProchaine(prochain, &rec, c.Maintenant()); msg != "" {
-				m.a.Echec(w, r, http.StatusBadRequest, msg)
-				return
-			}
-			debut, faites = prochain, 0
+		debut, faites, msg := budget.Replanifier(rec, prochain, freq, c.Maintenant())
+		if msg != "" {
+			m.a.Echec(w, r, http.StatusBadRequest, msg)
+			return
 		}
 		err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
-			if err := q.ModifierRecurrence(ctx, donnees.ModifierRecurrenceParams{Sens: "depense", Montant: montant, Categorie: cat.Cle,
-				Libelle: nom, MembreID: membre, Frequence: freq, Debut: debut, Fin: rec.Fin, Faites: faites, ID: rec.ID, FamilleID: c.Famille.ID}); err != nil {
+			// Rien n'est écrit si un prélèvement a été ajouté au budget depuis la
+			// lecture (il serait écrit une seconde fois).
+			n, err := q.ModifierRecurrence(ctx, donnees.ModifierRecurrenceParams{Sens: "depense", Montant: montant, Categorie: cat.Cle,
+				Libelle: nom, MembreID: membre, Frequence: freq, Debut: debut, Fin: rec.Fin, Faites: faites, ID: rec.ID, FamilleID: c.Famille.ID,
+				FaitesAvant: rec.Faites})
+			if err != nil {
 				return err
+			}
+			if n == 0 {
+				return errModifiee
 			}
 			return q.ModifierAbonnement(ctx, donnees.ModifierAbonnementParams{Emoji: emoji, EngagementFin: engagement, Site: site,
 				Notes: notes, ID: ab.ID, FamilleID: c.Famille.ID})
 		})
+		if errors.Is(err, errModifiee) {
+			m.a.Echec(w, r, http.StatusConflict, budget.MessageModifiee)
+			return
+		}
 	}
 	if err == nil {
 		err = budget.Generer(ctx, m.a, c.Famille.ID, c.Maintenant())
@@ -306,6 +303,8 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, mod, "")
+	m.a.Publier(c, "budget", "")
 	m.a.Flash(w, "Abonnement enregistré "+emoji)
 	m.a.Rediriger(w, r, "/abonnements")
 }
@@ -327,6 +326,8 @@ func (m *Module) resilier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, mod, "")
+	m.a.Publier(c, "budget", "")
 	m.a.Flash(w, "« "+rec.Libelle+" » résilié : plus de prélèvement prévu")
 	m.a.Rediriger(w, r, "/abonnements")
 }
@@ -342,18 +343,14 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, mod, "")
+	m.a.Publier(c, "budget", "")
 	m.a.Flash(w, "« "+rec.Libelle+" » supprimé")
 	m.a.Rediriger(w, r, "/abonnements")
 }
 
-// SiteSur : le lien de gestion, seulement en http(s) (vérifié à
-// l'enregistrement, revérifié ici).
-func SiteSur(s string) template.URL {
-	if v, ok := siteValide(s); ok && v != "" {
-		return template.URL(v) // #nosec G203 -- schéma vérifié
-	}
-	return ""
-}
+// errModifiee : la récurrence a changé entre la lecture et l'écriture.
+var errModifiee = errors.New("abonnement modifié entre-temps")
 
 // ---------- Accueil et rappels ----------
 

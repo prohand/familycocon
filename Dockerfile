@@ -30,6 +30,8 @@ COPY --from=construction /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=construction /familycocon /familycocon
 COPY --from=construction /src/LICENSE /licences/
 COPY --from=construction /src/web/statique/fonts/OFL.txt /licences/nunito-OFL.txt
+# Mentions des bibliothèques embarquées (BSD, MIT).
+COPY --from=construction /src/THIRD-PARTY.md /licences/
 # Le volume reprend ce propriétaire à sa création (non root, uid 65532).
 COPY --from=construction --chown=65532:65532 /out/donnees /donnees
 ARG VERSION=dev

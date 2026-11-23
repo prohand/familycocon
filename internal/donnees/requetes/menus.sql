@@ -17,8 +17,9 @@ RETURNING *;
 -- name: ViderRepas :exec
 DELETE FROM repas WHERE famille_id = ? AND jour = ? AND moment = ?;
 
--- name: MarquerDansCourses :exec
-UPDATE repas SET dans_courses = 1 WHERE id = ?;
+-- Une seule fois : 0 ligne si le repas est deja aux courses (double envoi).
+-- name: MarquerDansCourses :execrows
+UPDATE repas SET dans_courses = 1 WHERE id = ? AND famille_id = ? AND dans_courses = 0;
 
 -- name: RecetteParCle :one
 SELECT * FROM recettes WHERE famille_id = ? AND cle = ?;
@@ -32,3 +33,6 @@ ON CONFLICT (famille_id, cle) DO UPDATE SET
 
 -- name: RecettesConnues :many
 SELECT nom FROM recettes WHERE famille_id = ? ORDER BY compte DESC, vu_le DESC LIMIT 80;
+
+-- name: CompterRecettes :one
+SELECT count(*) FROM recettes WHERE famille_id = ?;

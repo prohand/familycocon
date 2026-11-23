@@ -85,6 +85,41 @@ func (q *Queries) CompterAPrendre(ctx context.Context, familleID int64) (int64, 
 	return count, err
 }
 
+const compterListes = `-- name: CompterListes :one
+
+SELECT count(*) FROM listes WHERE famille_id = ?
+`
+
+// Plafonds (une famille ne remplit pas la base).
+func (q *Queries) CompterListes(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterListes, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterProduitsConnus = `-- name: CompterProduitsConnus :one
+SELECT count(*) FROM produits_connus WHERE famille_id = ?
+`
+
+func (q *Queries) CompterProduitsConnus(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterProduitsConnus, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterProduitsListe = `-- name: CompterProduitsListe :one
+SELECT count(*) FROM produits WHERE liste_id = ?
+`
+
+func (q *Queries) CompterProduitsListe(ctx context.Context, listeID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterProduitsListe, listeID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const corrigerRayon = `-- name: CorrigerRayon :exec
 INSERT INTO produits_connus (famille_id, cle, nom, rayon, emoji, compte, vu_le)
 VALUES (?, ?, ?, ?, ?, 1, ?)

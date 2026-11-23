@@ -81,21 +81,29 @@ type Anniversaire struct {
 	Proche bool
 }
 
-func (m *Module) anniversaires(ctx context.Context, f donnees.Famille, auj time.Time) ([]Anniversaire, error) {
+// anniversaires : contacts et membres, du plus proche au plus lointain.
+// c : le contexte de la requête s'il y en a un (les membres déjà chargés
+// pour la page resservent), nil pour les rappels de fond.
+func (m *Module) anniversaires(ctx context.Context, c *appli.Contexte, f donnees.Famille, auj time.Time) ([]Anniversaire, error) {
 	var out []Anniversaire
 	contacts, err := m.a.Q.ContactsAvecNaissance(ctx, f.ID)
 	if err != nil {
 		return nil, err
 	}
-	for _, c := range contacts {
-		n, ok := LireNaissance(c.Naissance)
+	for _, ct := range contacts {
+		n, ok := LireNaissance(ct.Naissance)
 		if !ok {
 			continue
 		}
 		d := n.Prochain(auj)
-		out = append(out, Anniversaire{Nom: c.Nom, Date: d, Age: n.Age(d), URL: fmt.Sprintf("/contacts/%d", c.ID), Idees: c.Idees})
+		out = append(out, Anniversaire{Nom: ct.Nom, Date: d, Age: n.Age(d), URL: fmt.Sprintf("/contacts/%d", ct.ID), Idees: ct.Idees})
 	}
-	membres, err := m.a.Q.MembresDeFamille(ctx, f.ID)
+	var membres []donnees.Membre
+	if c != nil && c.Famille.ID == f.ID {
+		membres, err = m.a.Membres(ctx, c)
+	} else {
+		membres, err = m.a.Q.MembresDeFamille(ctx, f.ID)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +136,7 @@ func titreAnniv(a Anniversaire) string {
 
 // echeances : les anniversaires de la période (rappels).
 func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin time.Time) ([]appli.Echeance, error) {
-	l, err := m.anniversaires(ctx, f, debut)
+	l, err := m.anniversaires(ctx, appli.ContexteDe(ctx), f, debut)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +156,7 @@ type moisAnniv struct {
 
 func (m *Module) pageAnniversaires(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	auj := minuit(c.Maintenant())
-	l, err := m.anniversaires(r.Context(), c.Famille, auj)
+	l, err := m.anniversaires(r.Context(), c, c.Famille, auj)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -170,7 +178,7 @@ func (m *Module) pageAnniversaires(w http.ResponseWriter, r *http.Request, c *ap
 
 func (m *Module) resumeAnniv(ctx context.Context, c *appli.Contexte) appli.Resume {
 	auj := minuit(c.Maintenant())
-	l, err := m.anniversaires(ctx, c.Famille, auj)
+	l, err := m.anniversaires(ctx, c, c.Famille, auj)
 	if err != nil || len(l) == 0 {
 		return appli.Resume{Info: "Aucune date"}
 	}

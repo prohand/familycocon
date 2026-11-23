@@ -29,6 +29,10 @@ type Contexte struct {
 	Actifs  map[string]bool // modules activés
 	CSRF    string
 	jeton   []byte // empreinte de la session
+	// membres : membres de la famille, lus une seule fois par requête
+	// (l'accueil les demandait six fois). Voir App.Membres.
+	membres   []donnees.Membre
+	membresLu bool
 }
 
 // EstParent : le membre est-il un parent ?

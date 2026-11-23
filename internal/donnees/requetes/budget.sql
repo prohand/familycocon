@@ -23,3 +23,9 @@ SELECT
   CAST(coalesce(sum(CASE WHEN sens = 'revenu' THEN montant ELSE 0 END), 0) AS INTEGER) AS revenus,
   CAST(coalesce(sum(CASE WHEN sens = 'depense' THEN montant ELSE 0 END), 0) AS INTEGER) AS depenses
 FROM operations WHERE famille_id = ? AND jour >= sqlc.arg(du) AND jour <= sqlc.arg(au);
+
+-- Meme operation ecrite a l'instant par la meme personne (double envoi).
+-- name: OperationIdentiqueRecente :one
+SELECT count(*) FROM operations
+WHERE famille_id = ? AND sens = ? AND montant = ? AND categorie = ? AND libelle = ? AND jour = ?
+  AND cree_par = ? AND recurrence_id IS NULL AND cree_le >= ?;

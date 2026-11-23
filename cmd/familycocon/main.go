@@ -98,6 +98,13 @@ func servir(cfg *config.Config) error {
 	journal.Info("démarrage de FamilyCocon", "version", version.Version, "adresse", cfg.Adresse,
 		"url", cfg.URLPublique.String(), "donnees", cfg.Donnees)
 
+	// Un seul serveur par dossier de données ; la restauration prend le même
+	// verrou et refuse donc de remplacer la base d'un serveur en marche.
+	liberer, err := base.Verrouiller(cfg.Donnees)
+	if err != nil {
+		return err
+	}
+	defer liberer()
 	db, err := ouvrirBase(cfg)
 	if err != nil {
 		return fmt.Errorf("ouverture de la base : %w", err)

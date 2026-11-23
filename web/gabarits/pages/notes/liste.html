@@ -22,7 +22,7 @@
 
 {{define "notes"}}
 {{with .Donnees}}
-<div id="notes" hx-get="/notes/contenu?voir={{.Filtre}}&amp;q={{.Recherche}}" hx-trigger="maj-notes from:body delay:300ms" hx-swap="outerHTML">
+<div id="notes" hx-get="/notes/contenu?{{.Params}}" hx-trigger="maj-notes from:body delay:300ms" hx-swap="outerHTML">
   {{if .Epinglees}}
   <h2 class="sous-titre">📌 Épinglées</h2>
   <div class="mur-notes">{{range .Epinglees}}{{template "carte-note" dict "N" . "V" $.Donnees}}{{end}}</div>
@@ -31,6 +31,7 @@
   {{if .Epinglees}}<h2 class="sous-titre">Les autres</h2>{{end}}
   <div class="mur-notes">{{range .Autres}}{{template "carte-note" dict "N" . "V" $.Donnees}}{{end}}</div>
   {{end}}
+  {{if .Tronquee}}<p class="aide">Seules les notes les plus récentes sont montrées : utilisez la recherche pour retrouver les autres.</p>{{end}}
   {{if not (or .Epinglees .Autres)}}
   <div class="carte vide"><span class="emoji">📝</span>{{if .Recherche}}Aucune note ne contient « {{.Recherche}} ».{{else}}Pas encore de note. Courses de Noël, codes du wifi, idées de vacances…{{end}}</div>
   {{end}}
@@ -49,7 +50,7 @@
     {{with $n.Auteur}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}
     <span class="note-date">{{if eq $n.Privee 1}}🔒 {{end}}{{$n.Date}}</span>
     {{if $n.Modifiable}}
-    <button class="epingle{{if eq $n.Epinglee 1}} actif{{end}}" hx-post="/notes/{{$n.ID}}/epingler?voir={{.V.Filtre}}&amp;q={{.V.Recherche}}" hx-target="#notes" hx-swap="outerHTML"
+    <button class="epingle{{if eq $n.Epinglee 1}} actif{{end}}" hx-post="/notes/{{$n.ID}}/epingler?{{.V.Params}}" hx-target="#notes" hx-swap="outerHTML"
             aria-label="{{if eq $n.Epinglee 1}}Désépingler{{else}}Épingler{{end}}">📌</button>
     {{end}}
   </footer>

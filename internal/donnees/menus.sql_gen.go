@@ -10,6 +10,17 @@ import (
 	"database/sql"
 )
 
+const compterRecettes = `-- name: CompterRecettes :one
+SELECT count(*) FROM recettes WHERE famille_id = ?
+`
+
+func (q *Queries) CompterRecettes(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterRecettes, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const enregistrerRepas = `-- name: EnregistrerRepas :one
 INSERT INTO repas (famille_id, jour, moment, nom, ingredients, cree_par, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -54,13 +65,22 @@ func (q *Queries) EnregistrerRepas(ctx context.Context, arg EnregistrerRepasPara
 	return i, err
 }
 
-const marquerDansCourses = `-- name: MarquerDansCourses :exec
-UPDATE repas SET dans_courses = 1 WHERE id = ?
+const marquerDansCourses = `-- name: MarquerDansCourses :execrows
+UPDATE repas SET dans_courses = 1 WHERE id = ? AND famille_id = ? AND dans_courses = 0
 `
 
-func (q *Queries) MarquerDansCourses(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, marquerDansCourses, id)
-	return err
+type MarquerDansCoursesParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+// Une seule fois : 0 ligne si le repas est deja aux courses (double envoi).
+func (q *Queries) MarquerDansCourses(ctx context.Context, arg MarquerDansCoursesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, marquerDansCourses, arg.ID, arg.FamilleID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const recetteParCle = `-- name: RecetteParCle :one

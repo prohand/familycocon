@@ -4,6 +4,7 @@ package base
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -241,5 +242,78 @@ func TestMigrationPrestataires(t *testing.T) {
 	}
 	if _, err := db.ExecContext(ctx, `SELECT 1 FROM prestataires`); err == nil {
 		t.Fatal("table prestataires encore là")
+	}
+}
+
+// Une sauvegarde automatique interrompue ne laisse aucun fichier : elle ne
+// prend pas la place d'une bonne copie dans la rotation.
+func TestSauvegardeAutoInterrompue(t *testing.T) {
+	dossier := t.TempDir()
+	db, err := Ouvrir(filepath.Join(dossier, NomFichier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := Migrer(context.Background(), db, dossier); err != nil {
+		t.Fatal(err)
+	}
+	ctx, annuler := context.WithCancel(context.Background())
+	annuler()
+	sauv := filepath.Join(dossier, "sauvegardes")
+	if _, err := SauvegardeAuto(ctx, db, sauv, 2); err == nil {
+		t.Fatal("erreur attendue (contexte annulé)")
+	}
+	if entrees, _ := os.ReadDir(sauv); len(entrees) != 0 {
+		t.Fatalf("%d fichier(s) laissé(s) par une sauvegarde interrompue", len(entrees))
+	}
+}
+
+// Un seul preneur du verrou : la restauration refuse un serveur en marche.
+func TestVerrouDuDossier(t *testing.T) {
+	ctx := context.Background()
+	dossier := t.TempDir()
+	db, err := Ouvrir(filepath.Join(dossier, NomFichier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Migrer(ctx, db, dossier); err != nil {
+		t.Fatal(err)
+	}
+	copie, err := Copier(ctx, db, dossier, "copie.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	liberer, err := Verrouiller(dossier) // le « serveur »
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Verrouiller(dossier); !errors.Is(err, ErrServeurEnMarche) {
+		t.Fatalf("second verrou : %v", err)
+	}
+	if _, err := Restaurer(ctx, copie, dossier); !errors.Is(err, ErrServeurEnMarche) {
+		t.Fatalf("restauration sous un serveur en marche : %v", err)
+	}
+	liberer()
+	if _, err := Restaurer(ctx, copie, dossier); err != nil {
+		t.Fatalf("restauration, serveur arrêté : %v", err)
+	}
+}
+
+// Copies « avant-migration » : jamais plus que la limite, les plus récentes.
+func TestGarderDernieres(t *testing.T) {
+	dossier := t.TempDir()
+	for _, nom := range []string{"avant-migration-v3-20260101-000000.db", "avant-migration-v3-20260102-000000.db",
+		"avant-migration-v3-20260103-000000.db", "auto-20260101-000000.db"} {
+		os.WriteFile(filepath.Join(dossier, nom), []byte("x"), 0o600)
+	}
+	garderDernieres(dossier, "avant-migration-", 2)
+	entrees, _ := os.ReadDir(dossier)
+	var noms []string
+	for _, e := range entrees {
+		noms = append(noms, e.Name())
+	}
+	if strings.Join(noms, " ") != "auto-20260101-000000.db avant-migration-v3-20260102-000000.db avant-migration-v3-20260103-000000.db" {
+		t.Fatalf("fichiers gardés : %v", noms)
 	}
 }

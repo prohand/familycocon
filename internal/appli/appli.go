@@ -137,22 +137,26 @@ func (a *App) routesDeBase() {
 // Sante : réponse de /health (supervision : Uptime Kuma, Docker, Zabbix…).
 type Sante struct {
 	Etat     string `json:"etat"` // « ok » ou « erreur »
-	Version  string `json:"version"`
-	Schema   int    `json:"schema"`
-	Depuis_s int64  `json:"depuis_s"`
+	Version  string `json:"version,omitempty"`
+	Schema   int    `json:"schema,omitempty"`
+	Depuis_s int64  `json:"depuis_s,omitempty"`
 	Erreur   string `json:"erreur,omitempty"`
 }
 
 func (a *App) sante(w http.ResponseWriter, r *http.Request) {
 	ctx, annuler := context.WithTimeout(r.Context(), 3*time.Second)
 	defer annuler()
-	s := Sante{Etat: "ok", Version: version.Version, Depuis_s: int64(time.Since(a.Demarre).Seconds())}
-	v, err := base.Version(ctx, a.DB)
-	s.Schema = v
+	s := Sante{Etat: "ok"}
+	v, err := base.VersionLue(ctx, a.DB)
 	statut := http.StatusOK
 	if err != nil {
 		s.Etat, s.Erreur, statut = "erreur", "base inaccessible", http.StatusServiceUnavailable
 		a.Journal.Error("santé : base inaccessible", "erreur", err)
+	}
+	// Version et durée : seulement pour la machine elle-même et le réseau
+	// local (Docker, supervision). Un visiteur d'Internet ne voit que l'état.
+	if ip := a.IPClient(r); ip.IsLoopback() || ip.IsPrivate() {
+		s.Version, s.Schema, s.Depuis_s = version.Version, v, int64(time.Since(a.Demarre).Seconds())
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")

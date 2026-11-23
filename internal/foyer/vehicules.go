@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -52,8 +51,16 @@ func (m *Module) brancherVehicules() {
 			return v.Nom, err == nil
 		},
 		URL: func(id int64) string { return fmt.Sprintf("/vehicules/%d", id) },
-		NoterKm: func(ctx context.Context, famille, id, km int64) {
-			_ = a.Q.NoterKilometrage(ctx, donnees.NoterKilometrageParams{Kilometrage: km, ID: id, FamilleID: famille, Kilometrage_2: km})
+		Noms: func(ctx context.Context, famille int64) (map[int64]string, error) {
+			l, err := a.Q.NomsVehicules(ctx, famille)
+			noms := make(map[int64]string, len(l))
+			for _, x := range l {
+				noms[x.ID] = x.Nom
+			}
+			return noms, err
+		},
+		NoterKm: func(ctx context.Context, famille, id, km int64) error {
+			return a.Q.NoterKilometrage(ctx, donnees.NoterKilometrageParams{Kilometrage: km, ID: id, FamilleID: famille, Kilometrage_2: km})
 		},
 	})
 	a.AjouterResume(modVehicules, func(ctx context.Context, c *appli.Contexte) appli.Resume {
@@ -61,8 +68,9 @@ func (m *Module) brancherVehicules() {
 		if err != nil || len(l) == 0 {
 			return appli.Resume{Info: "Aucun véhicule"}
 		}
+		alertes := m.alertes(ctx, c, modVehicules)
 		for _, v := range l {
-			if al := m.alerte(ctx, c, modVehicules, v.ID); al != "" {
+			if al := alertes[v.ID]; al != "" {
 				return appli.Resume{Info: al, Badge: 1}
 			}
 		}
@@ -84,13 +92,14 @@ func (m *Module) listeVehicules(w http.ResponseWriter, r *http.Request, c *appli
 	}
 	v := vueListe{Titre: "Véhicules", Emoji: "🚗", Module: modVehicules, Nouveau: "/vehicules/nouveau", TexteNouveau: "＋ Véhicule",
 		Vide: "Ajoutez la voiture, le scooter… pour ne plus oublier le contrôle technique ou l'assurance."}
+	alertes := m.alertes(r.Context(), c, modVehicules)
 	for _, x := range l {
 		detail := x.Modele
 		if x.Immatriculation != "" {
 			detail = strings.TrimSpace(x.Immatriculation + " · " + detail)
 		}
 		v.Elements = append(v.Elements, Element{URL: fmt.Sprintf("/vehicules/%d", x.ID), Emoji: emojiGenre(x.Genre), Nom: x.Nom,
-			Detail: strings.Trim(detail, " ·"), Alerte: m.alerte(r.Context(), c, modVehicules, x.ID)})
+			Detail: strings.Trim(detail, " ·"), Alerte: alertes[x.ID]})
 	}
 	m.a.Afficher(w, r, c, "foyer/liste", "Véhicules", modVehicules, v)
 }
@@ -127,7 +136,7 @@ type formVehicule struct {
 	Nouveau  bool
 	V        donnees.Vehicule
 	Genres   any
-	Contacts []donnees.Contact
+	Contacts []donnees.ContactsChoixRow
 }
 
 func (m *Module) formVehicule(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -158,13 +167,22 @@ func (m *Module) enregistrerVehicule(w http.ResponseWriter, r *http.Request, c *
 	if emojiGenre(genre) == "🚙" && genre != "autre" {
 		genre = "autre"
 	}
-	km, _ := strconv.ParseInt(strings.ReplaceAll(r.PostFormValue("kilometrage"), " ", ""), 10, 64)
-	if km < 0 || km > 5_000_000 {
-		km = 0
+	// Un kilométrage illisible est refusé (avant : remis à 0 sans rien dire).
+	km, ok := lireKm(r.PostFormValue("kilometrage"))
+	if !ok {
+		m.a.Echec(w, r, http.StatusBadRequest, "Kilométrage invalide (un nombre, par exemple 45000).")
+		return
 	}
 	immat = strings.ToUpper(immat)
 	id := idDe(r)
 	if r.PathValue("id") == "" {
+		if n, err := m.a.Q.CompterVehicules(ctx, c.Famille.ID); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		} else if n >= ObjetsMax {
+			m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Trop de véhicules (%d au plus).", ObjetsMax))
+			return
+		}
 		v, err := m.a.Q.CreerVehicule(ctx, donnees.CreerVehiculeParams{FamilleID: c.Famille.ID, Nom: nom, Genre: genre,
 			Immatriculation: immat, Modele: modele, Kilometrage: km, Notes: notes, GarageID: m.lireContact(r, c, "garage_id"),
 			AssureurID: m.lireContact(r, c, "assureur_id"), CreeLe: time.Now().Unix()})
@@ -185,6 +203,7 @@ func (m *Module) enregistrerVehicule(w http.ResponseWriter, r *http.Request, c *
 			return
 		}
 	}
+	m.a.Publier(c, modVehicules, "")
 	m.a.Flash(w, "Véhicule enregistré ✓")
 	m.a.Rediriger(w, r, fmt.Sprintf("/vehicules/%d", id))
 }
@@ -192,8 +211,8 @@ func (m *Module) enregistrerVehicule(w http.ResponseWriter, r *http.Request, c *
 // kilometrage : mise à jour rapide du compteur (il ne peut que monter).
 func (m *Module) kilometrage(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	x, ok := m.vehicule(r, c)
-	km, err := strconv.ParseInt(strings.ReplaceAll(r.PostFormValue("km"), " ", ""), 10, 64)
-	if !ok || err != nil || km < 0 || km > 5_000_000 {
+	km, okKm := lireKm(r.PostFormValue("km"))
+	if !ok || !okKm || strings.TrimSpace(r.PostFormValue("km")) == "" {
 		m.a.Echec(w, r, http.StatusBadRequest, "Kilométrage invalide.")
 		return
 	}
@@ -201,6 +220,7 @@ func (m *Module) kilometrage(w http.ResponseWriter, r *http.Request, c *appli.Co
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, modVehicules, "")
 	m.a.Flash(w, "Kilométrage enregistré ✓")
 	m.a.Rediriger(w, r, fmt.Sprintf("/vehicules/%d", x.ID))
 }

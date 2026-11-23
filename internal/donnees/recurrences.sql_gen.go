@@ -76,20 +76,32 @@ func (q *Queries) ArreterRecurrence(ctx context.Context, arg ArreterRecurrencePa
 }
 
 const avancerRecurrence = `-- name: AvancerRecurrence :execrows
-UPDATE recurrences SET faites = faites + 1 WHERE id = ? AND faites = ?
+UPDATE recurrences SET faites = faites + 1 WHERE id = ? AND famille_id = ? AND faites = ?
 `
 
 type AvancerRecurrenceParams struct {
-	ID     int64
-	Faites int64
+	ID        int64
+	FamilleID int64
+	Faites    int64
 }
 
 func (q *Queries) AvancerRecurrence(ctx context.Context, arg AvancerRecurrenceParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, avancerRecurrence, arg.ID, arg.Faites)
+	result, err := q.db.ExecContext(ctx, avancerRecurrence, arg.ID, arg.FamilleID, arg.Faites)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected()
+}
+
+const compterRecurrences = `-- name: CompterRecurrences :one
+SELECT count(*) FROM recurrences WHERE famille_id = ?
+`
+
+func (q *Queries) CompterRecurrences(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterRecurrences, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const creerAbonnement = `-- name: CreerAbonnement :one
@@ -319,27 +331,32 @@ func (q *Queries) ModifierAbonnement(ctx context.Context, arg ModifierAbonnement
 	return err
 }
 
-const modifierRecurrence = `-- name: ModifierRecurrence :exec
-UPDATE recurrences SET sens = ?, montant = ?, categorie = ?, libelle = ?, membre_id = ?, frequence = ?, debut = ?, fin = ?, faites = ?
-WHERE id = ? AND famille_id = ?
+const modifierRecurrence = `-- name: ModifierRecurrence :execrows
+UPDATE recurrences SET sens = ?1, montant = ?2, categorie = ?3,
+  libelle = ?4, membre_id = ?5, frequence = ?6,
+  debut = ?7, fin = ?8, faites = ?9
+WHERE id = ?10 AND famille_id = ?11 AND faites = ?12
 `
 
 type ModifierRecurrenceParams struct {
-	Sens      string
-	Montant   int64
-	Categorie string
-	Libelle   string
-	MembreID  sql.NullInt64
-	Frequence string
-	Debut     string
-	Fin       string
-	Faites    int64
-	ID        int64
-	FamilleID int64
+	Sens        string
+	Montant     int64
+	Categorie   string
+	Libelle     string
+	MembreID    sql.NullInt64
+	Frequence   string
+	Debut       string
+	Fin         string
+	Faites      int64
+	ID          int64
+	FamilleID   int64
+	FaitesAvant int64
 }
 
-func (q *Queries) ModifierRecurrence(ctx context.Context, arg ModifierRecurrenceParams) error {
-	_, err := q.db.ExecContext(ctx, modifierRecurrence,
+// Seulement si " faites " n'a pas bouge depuis la lecture (une occurrence
+// ecrite entre-temps ne doit pas etre ecrite une seconde fois).
+func (q *Queries) ModifierRecurrence(ctx context.Context, arg ModifierRecurrenceParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, modifierRecurrence,
 		arg.Sens,
 		arg.Montant,
 		arg.Categorie,
@@ -351,8 +368,12 @@ func (q *Queries) ModifierRecurrence(ctx context.Context, arg ModifierRecurrence
 		arg.Faites,
 		arg.ID,
 		arg.FamilleID,
+		arg.FaitesAvant,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const recurrenceParID = `-- name: RecurrenceParID :one
@@ -383,6 +404,34 @@ func (q *Queries) RecurrenceParID(ctx context.Context, arg RecurrenceParIDParams
 		&i.CreeLe,
 	)
 	return i, err
+}
+
+const recurrencesAbonnees = `-- name: RecurrencesAbonnees :many
+SELECT recurrence_id FROM abonnements WHERE famille_id = ?
+`
+
+// Les recurrences qui sont des abonnements (une requete pour toute la page).
+func (q *Queries) RecurrencesAbonnees(ctx context.Context, familleID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, recurrencesAbonnees, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var recurrence_id int64
+		if err := rows.Scan(&recurrence_id); err != nil {
+			return nil, err
+		}
+		items = append(items, recurrence_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const recurrencesFamille = `-- name: RecurrencesFamille :many

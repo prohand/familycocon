@@ -76,3 +76,15 @@ func TestSessionMax(t *testing.T) {
 		t.Fatalf("30 < 90 accepté : %v", err)
 	}
 }
+
+// Réglages acceptés autrefois mais inutilisables : refusés au démarrage.
+func TestCheminsRefuses(t *testing.T) {
+	if _, err := LireDepuis(envDe(map[string]string{"FC_URL_PUBLIQUE": "https://exemple.fr/cocon"})); err == nil || !strings.Contains(err.Error(), "sans chemin") {
+		t.Fatalf("adresse avec chemin acceptée : %v", err)
+	}
+	for _, d := range []string{"/donnees?x", "/l'appli", "/a#b"} {
+		if _, err := LireDepuis(envDe(map[string]string{"FC_DONNEES": d})); err == nil || !strings.Contains(err.Error(), "FC_DONNEES") {
+			t.Fatalf("FC_DONNEES=%q accepté : %v", d, err)
+		}
+	}
+}

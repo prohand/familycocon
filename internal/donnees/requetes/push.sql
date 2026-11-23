@@ -6,6 +6,10 @@ SELECT valeur FROM serveur WHERE nom = ?;
 -- name: EcrireServeur :exec
 INSERT INTO serveur (nom, valeur) VALUES (?, ?) ON CONFLICT (nom) DO NOTHING;
 
+-- Petite valeur du serveur, remplacee si elle existe (dernier jour des rappels).
+-- name: NoterServeur :exec
+INSERT INTO serveur (nom, valeur) VALUES (?, ?) ON CONFLICT (nom) DO UPDATE SET valeur = excluded.valeur;
+
 -- name: Abonner :exec
 INSERT INTO abonnements_push (membre_id, adresse, p256dh, auth, cree_le) VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (adresse) DO UPDATE SET membre_id = excluded.membre_id, p256dh = excluded.p256dh, auth = excluded.auth;

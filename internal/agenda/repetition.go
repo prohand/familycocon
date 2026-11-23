@@ -46,15 +46,12 @@ type regle struct {
 	Jours [8]bool // « jours » : index 1 (lundi) à 7 (dimanche)
 }
 
+// lireRegle : « certains jours » se lit et s'écrit comme pour les tâches
+// (paquet repetition) ; les autres types sont ceux de Choix.
 func lireRegle(s string) regle {
-	if j, ok := strings.CutPrefix(s, "jours:"); ok {
-		r := regle{Type: "jours"}
-		for _, x := range strings.Split(j, ",") {
-			if n, err := strconv.Atoi(x); err == nil && n >= 1 && n <= 7 {
-				r.Jours[n] = true
-			}
-		}
-		return r
+	if strings.HasPrefix(s, repetition.Jours+":") {
+		r := repetition.Lire(s) // règle abîmée (aucun jour) : « une fois »
+		return regle{Type: r.Type, Jours: r.Jours}
 	}
 	for _, c := range Choix {
 		if c.Cle == s {
@@ -65,16 +62,10 @@ func lireRegle(s string) regle {
 }
 
 func (r regle) String() string {
-	if r.Type != "jours" {
+	if r.Type != repetition.Jours {
 		return r.Type
 	}
-	var l []string
-	for i := 1; i <= 7; i++ {
-		if r.Jours[i] {
-			l = append(l, strconv.Itoa(i))
-		}
-	}
-	return "jours:" + strings.Join(l, ",")
+	return repetition.Regle{Type: repetition.Jours, Jours: r.Jours}.String()
 }
 
 // rang : 1 pour le 1er mardi du mois… 5 pour « le dernier ».

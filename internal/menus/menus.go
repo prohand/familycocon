@@ -116,9 +116,8 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time) (*vu
 	aujourdhui := repetition.CleJour(c.Maintenant())
 	for j := lundi; !j.After(dimanche); j = j.AddDate(0, 0, 1) {
 		cle := repetition.CleJour(j)
-		jour := appli.JourFR(j)
 		v.Jours = append(v.Jours, jourMenu{
-			Cle: cle, Titre: strings.ToUpper(jour[:1]) + jour[1:] + fmt.Sprintf(" %d", j.Day()), Aujourdhui: cle == aujourdhui,
+			Cle: cle, Titre: appli.TitreJour(j), Aujourdhui: cle == aujourdhui,
 			Midi: trouver(cle, "midi"), Soir: trouver(cle, "soir"),
 		})
 	}
@@ -130,11 +129,17 @@ func reference(r *http.Request, c *appli.Contexte) time.Time {
 	if q == "" {
 		q = r.PostFormValue("date")
 	}
-	if d, err := time.ParseInLocation("2006-01-02", q, c.Lieu); err == nil {
+	if d, err := time.ParseInLocation("2006-01-02", q, c.Lieu); err == nil && anneeValide(d) {
 		return d
 	}
 	return c.Maintenant()
 }
+
+// anneeValide : mêmes bornes que l'agenda (1900 à 2200).
+func anneeValide(t time.Time) bool { return t.Year() >= 1900 && t.Year() <= 2200 }
+
+// recettesMax : recettes retenues par famille (suggestions).
+const recettesMax = 2000
 
 func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	v, err := m.vue(r.Context(), c, reference(r, c))
@@ -166,7 +171,7 @@ func (m *Module) contenu(w http.ResponseWriter, r *http.Request, c *appli.Contex
 func creneau(r *http.Request, c *appli.Contexte) (time.Time, string, bool) {
 	j, err := time.ParseInLocation("2006-01-02", r.PathValue("jour"), c.Lieu)
 	moment := r.PathValue("moment")
-	return j, moment, err == nil && (moment == "midi" || moment == "soir")
+	return j, moment, err == nil && anneeValide(j) && (moment == "midi" || moment == "soir")
 }
 
 type formRepas struct {
@@ -187,9 +192,11 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	if rp, err := m.a.Q.RepasDuCreneau(ctx, donnees.RepasDuCreneauParams{FamilleID: c.Famille.ID, Jour: f.Creneau.Jour, Moment: moment}); err == nil {
 		f.Creneau.Repas = &rp
 	}
-	jour := appli.JourFR(j)
-	f.Titre = strings.ToUpper(jour[:1]) + jour[1:] + fmt.Sprintf(" %d, ", j.Day()) + map[string]string{"midi": "midi", "soir": "soir"}[moment]
-	f.Recettes, _ = m.a.Q.RecettesConnues(ctx, c.Famille.ID)
+	f.Titre = appli.TitreJour(j) + ", " + moment
+	var err error
+	if f.Recettes, err = m.a.Q.RecettesConnues(ctx, c.Famille.ID); err != nil {
+		m.a.Journal.Warn("menus : recettes illisibles", "erreur", err) // le formulaire marche sans
+	}
 	m.a.Afficher(w, r, c, "menus/repas", f.Titre, mod, f)
 }
 
@@ -210,12 +217,19 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		m.a.Echec(w, r, http.StatusBadRequest, "40 ingrédients au plus.")
 		return
 	}
+	// Chaque ligne doit pouvoir devenir un produit de la liste de courses.
+	for _, l := range lignes(ingr) {
+		if !courses.SaisieValide(l) {
+			m.a.Echec(w, r, http.StatusBadRequest, "Un ingrédient par ligne, de 80 caractères au plus.")
+			return
+		}
+	}
 	cle := courses.Cle(nom)
 	// Recette connue et aucun ingrédient saisi : on reprend les siens.
-	if ingr == "" {
-		if rec, err := m.a.Q.RecetteParCle(ctx, donnees.RecetteParCleParams{FamilleID: c.Famille.ID, Cle: cle}); err == nil {
-			ingr = rec.Ingredients
-		}
+	rec, err := m.a.Q.RecetteParCle(ctx, donnees.RecetteParCleParams{FamilleID: c.Famille.ID, Cle: cle})
+	connue := err == nil
+	if ingr == "" && connue {
+		ingr = rec.Ingredients
 	}
 	if _, err := m.a.Q.EnregistrerRepas(ctx, donnees.EnregistrerRepasParams{
 		FamilleID: c.Famille.ID, Jour: repetition.CleJour(j), Moment: moment, Nom: nom, Ingredients: ingr,
@@ -224,9 +238,17 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	if err := m.a.Q.RetenirRecette(ctx, donnees.RetenirRecetteParams{FamilleID: c.Famille.ID, Cle: cle, Nom: nom, Ingredients: ingr, VuLe: time.Now().Unix()}); err != nil {
-		m.a.ErreurInterne(w, r, err)
-		return
+	// La recette est retenue (une nouvelle : seulement s'il reste de la place).
+	retenir := connue
+	if !retenir {
+		n, err := m.a.Q.CompterRecettes(ctx, c.Famille.ID)
+		retenir = err == nil && n < recettesMax
+	}
+	if retenir {
+		if err := m.a.Q.RetenirRecette(ctx, donnees.RetenirRecetteParams{FamilleID: c.Famille.ID, Cle: cle, Nom: nom, Ingredients: ingr, VuLe: time.Now().Unix()}); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
 	}
 	m.a.Publier(c, mod, fmt.Sprintf("%s a prévu « %s » 🍽️", c.Membre.Nom, nom))
 	m.a.Flash(w, "Repas enregistré ✓")
@@ -248,13 +270,16 @@ func (m *Module) vider(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	m.a.Rediriger(w, r, "/menus?date="+repetition.CleJour(j))
 }
 
-// ajouterAuxCourses : les ingrédients d'un repas vont dans la liste de courses.
-func (m *Module) ajouterAuxCourses(ctx context.Context, c *appli.Contexte, rp donnees.Repas) (int, error) {
-	n, err := courses.AjouterProduits(ctx, m.a, c, lignes(rp.Ingredients))
-	if err != nil {
-		return n, err
+// ajouterAuxCourses : les ingrédients d'un repas vont dans la liste de
+// courses, une seule fois. Le repas est d'abord marqué « aux courses » : si
+// aucune ligne ne change (double clic, deux membres en même temps), rien
+// n'est ajouté. q : les requêtes d'une transaction (tout ou rien).
+func ajouterAuxCourses(ctx context.Context, q *donnees.Queries, c *appli.Contexte, rp donnees.Repas) (int, error) {
+	marques, err := q.MarquerDansCourses(ctx, donnees.MarquerDansCoursesParams{ID: rp.ID, FamilleID: c.Famille.ID})
+	if err != nil || marques == 0 {
+		return 0, err
 	}
-	return n, m.a.Q.MarquerDansCourses(ctx, rp.ID)
+	return courses.AjouterProduits(ctx, q, c, lignes(rp.Ingredients))
 }
 
 func (m *Module) auxCourses(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -273,12 +298,18 @@ func (m *Module) auxCourses(w http.ResponseWriter, r *http.Request, c *appli.Con
 		m.a.Echec(w, r, http.StatusNotFound, "Pas de repas à ce créneau.")
 		return
 	}
-	n, err := m.ajouterAuxCourses(ctx, c, rp)
+	var n int
+	err = m.a.Transaction(ctx, func(q *donnees.Queries) (err error) {
+		n, err = ajouterAuxCourses(ctx, q, c, rp)
+		return err
+	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	m.a.Publier(c, "courses", fmt.Sprintf("%s a ajouté les ingrédients de « %s » aux courses 🛒", c.Membre.Nom, rp.Nom))
+	if n > 0 {
+		m.a.Publier(c, "courses", fmt.Sprintf("%s a ajouté les ingrédients de « %s » aux courses 🛒", c.Membre.Nom, rp.Nom))
+	}
 	m.a.Publier(c, mod, "")
 	appli.Notifier(w, appli.Pluriel(n, "ingrédient ajouté", "ingrédients ajoutés")+" aux courses 🛒", false)
 	m.renvoyer(w, r, c, j)
@@ -292,22 +323,29 @@ func (m *Module) semaineAuxCourses(w http.ResponseWriter, r *http.Request, c *ap
 	}
 	ref := reference(r, c)
 	lundi := repetition.Lundi(ref)
-	repas, err := m.a.Q.RepasPeriode(ctx, donnees.RepasPeriodeParams{FamilleID: c.Famille.ID, Du: repetition.CleJour(lundi), Au: repetition.CleJour(lundi.AddDate(0, 0, 6))})
+	// Lecture et ajouts dans une seule transaction : toute la semaine, ou rien.
+	total := 0
+	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		total = 0
+		repas, err := q.RepasPeriode(ctx, donnees.RepasPeriodeParams{FamilleID: c.Famille.ID, Du: repetition.CleJour(lundi), Au: repetition.CleJour(lundi.AddDate(0, 0, 6))})
+		if err != nil {
+			return err
+		}
+		for _, rp := range repas {
+			if rp.DansCourses == 1 || rp.Ingredients == "" {
+				continue
+			}
+			n, err := ajouterAuxCourses(ctx, q, c, rp)
+			if err != nil {
+				return err
+			}
+			total += n
+		}
+		return nil
+	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
-	}
-	total := 0
-	for _, rp := range repas {
-		if rp.DansCourses == 1 || rp.Ingredients == "" {
-			continue
-		}
-		n, err := m.ajouterAuxCourses(ctx, c, rp)
-		if err != nil {
-			m.a.ErreurInterne(w, r, err)
-			return
-		}
-		total += n
 	}
 	if total > 0 {
 		m.a.Publier(c, "courses", fmt.Sprintf("%s a ajouté les ingrédients de la semaine aux courses 🛒", c.Membre.Nom))

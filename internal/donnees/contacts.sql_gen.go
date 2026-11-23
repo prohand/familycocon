@@ -23,18 +23,55 @@ func (q *Queries) AjouterContactEvenement(ctx context.Context, arg AjouterContac
 	return err
 }
 
-const basculerFavori = `-- name: BasculerFavori :exec
-UPDATE contacts SET favori = 1 - favori WHERE id = ? AND famille_id = ?
+const clesContacts = `-- name: ClesContacts :many
+SELECT nom, telephone, tel_fixe, tel_travail FROM contacts WHERE famille_id = ?
 `
 
-type BasculerFavoriParams struct {
-	ID        int64
-	FamilleID int64
+type ClesContactsRow struct {
+	Nom        string
+	Telephone  string
+	TelFixe    string
+	TelTravail string
 }
 
-func (q *Queries) BasculerFavori(ctx context.Context, arg BasculerFavoriParams) error {
-	_, err := q.db.ExecContext(ctx, basculerFavori, arg.ID, arg.FamilleID)
-	return err
+// Doublons a l'import : nom et telephones seulement.
+func (q *Queries) ClesContacts(ctx context.Context, familleID int64) ([]ClesContactsRow, error) {
+	rows, err := q.db.QueryContext(ctx, clesContacts, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ClesContactsRow{}
+	for rows.Next() {
+		var i ClesContactsRow
+		if err := rows.Scan(
+			&i.Nom,
+			&i.Telephone,
+			&i.TelFixe,
+			&i.TelTravail,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const compterAdresses = `-- name: CompterAdresses :one
+SELECT count(*) FROM contacts WHERE famille_id = ? AND adresse <> ''
+`
+
+func (q *Queries) CompterAdresses(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterAdresses, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const compterContacts = `-- name: CompterContacts :one
@@ -130,6 +167,46 @@ func (q *Queries) ContactsAvecNaissance(ctx context.Context, familleID int64) ([
 			&i.Favori,
 			&i.Pro,
 			&i.Groupes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const contactsChoix = `-- name: ContactsChoix :many
+SELECT id, nom, pro, metier FROM contacts WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
+`
+
+type ContactsChoixRow struct {
+	ID     int64
+	Nom    string
+	Pro    int64
+	Metier string
+}
+
+// Listes de choix (veterinaire, garage...) : le strict necessaire.
+func (q *Queries) ContactsChoix(ctx context.Context, familleID int64) ([]ContactsChoixRow, error) {
+	rows, err := q.db.QueryContext(ctx, contactsChoix, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ContactsChoixRow{}
+	for rows.Next() {
+		var i ContactsChoixRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nom,
+			&i.Pro,
+			&i.Metier,
 		); err != nil {
 			return nil, err
 		}
@@ -313,6 +390,21 @@ func (q *Queries) CreerContact(ctx context.Context, arg CreerContactParams) (Con
 	return i, err
 }
 
+const definirFavori = `-- name: DefinirFavori :exec
+UPDATE contacts SET favori = ? WHERE id = ? AND famille_id = ?
+`
+
+type DefinirFavoriParams struct {
+	Favori    int64
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) DefinirFavori(ctx context.Context, arg DefinirFavoriParams) error {
+	_, err := q.db.ExecContext(ctx, definirFavori, arg.Favori, arg.ID, arg.FamilleID)
+	return err
+}
+
 const modifierContact = `-- name: ModifierContact :exec
 UPDATE contacts SET nom = ?, relation = ?, naissance = ?, telephone = ?, tel_fixe = ?, tel_travail = ?, email = ?, adresse = ?,
   societe = ?, metier = ?, site = ?, favori = ?, pro = ?, groupes = ?, notes = ?, idees = ?, modifie_le = ?
@@ -364,6 +456,38 @@ func (q *Queries) ModifierContact(ctx context.Context, arg ModifierContactParams
 		arg.FamilleID,
 	)
 	return err
+}
+
+const nomsPrestataires = `-- name: NomsPrestataires :many
+SELECT id, nom FROM contacts WHERE famille_id = ? AND pro = 1
+`
+
+type NomsPrestatairesRow struct {
+	ID  int64
+	Nom string
+}
+
+func (q *Queries) NomsPrestataires(ctx context.Context, familleID int64) ([]NomsPrestatairesRow, error) {
+	rows, err := q.db.QueryContext(ctx, nomsPrestataires, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NomsPrestatairesRow{}
+	for rows.Next() {
+		var i NomsPrestatairesRow
+		if err := rows.Scan(&i.ID, &i.Nom); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const prestatairesFamille = `-- name: PrestatairesFamille :many

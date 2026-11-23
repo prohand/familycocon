@@ -3,10 +3,14 @@
 package taches
 
 import (
+	"database/sql"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
+	"familycocon/internal/donnees"
 	"familycocon/internal/essai"
 )
 
@@ -85,5 +89,80 @@ func TestDroitsEnfant(t *testing.T) {
 	marie.Get("/taches")
 	if code, page := marie.Post("/taches/"+id+"/supprimer", nil); code != 200 || !strings.Contains(page, "supprimée") || !strings.Contains(page, "Mettre la table</span>") {
 		t.Fatalf("suppression : %d", code)
+	}
+}
+
+// Revue : tâche « une fois » faite un autre jour, scores au-delà de 100
+// coches, double coche, tâche pas prévue aujourd'hui, membre retiré.
+func TestRevueTaches(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	ctx := t.Context()
+	marie.Get("/taches/nouvelle")
+	marie.Post("/taches", map[string]string{"titre": "Ranger le garage", "repetition": "unique"})
+	marie.Post("/taches", map[string]string{"titre": "Sortir les poubelles", "repetition": "jour"})
+	_, page := marie.Get("/taches")
+	idGarage := essai.Trouver(t, page, `/taches/(\d+)/faire"[^>]*Ranger le garage`)
+	idPoubelles := essai.Trouver(t, page, `/taches/(\d+)/faire"[^>]*Sortir les poubelles`)
+
+	// Double coche : une seule annonce « Bravo » (la seconde ne change rien).
+	marie.Htmx = true
+	marie.Post("/taches/"+idGarage+"/faire", nil)
+	req, _ := http.NewRequest("POST", srv.URL+"/taches/"+idGarage+"/faire", nil)
+	req.Header.Set("X-Jeton", marie.Jeton)
+	req.Header.Set("HX-Request", "true")
+	rep, err := marie.C.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep.Body.Close()
+	if rep.Header.Get("HX-Trigger") != "" {
+		t.Fatal("seconde coche : « Bravo » annoncé deux fois")
+	}
+	marie.Htmx = false
+
+	// Faite hier : la tâche « une fois » n'est plus chargée du tout.
+	hier := time.Now().AddDate(0, 0, -30).Unix() // bien avant cette semaine
+	if _, err := a.DB.Exec(`UPDATE taches_faites SET fait_le = ? WHERE tache_id = ?`, hier, idGarage); err != nil {
+		t.Fatal(err)
+	}
+	actives, err := a.Q.TachesActives(ctx, donnees.TachesActivesParams{FamilleID: 1, Depuis: time.Now().Add(-12 * time.Hour).Unix()})
+	if err != nil || len(actives) != 1 || actives[0].Titre != "Sortir les poubelles" {
+		t.Fatalf("tâche « une fois » faite hier encore chargée : %v %v", actives, err)
+	}
+
+	// Scores : 150 coches cette semaine sont toutes comptées (l'historique
+	// affiché, lui, s'arrête à 100 lignes).
+	if _, err := a.DB.Exec(`WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 150)
+		INSERT INTO taches_faites (tache_id, occurrence, fait_par, fait_le) SELECT ?, 'essai' || i, 1, ? FROM n`, idPoubelles, time.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	if _, page = marie.Get("/taches"); !strings.Contains(page, ">150<") {
+		t.Fatalf("score de 150 absent :\n%s", page)
+	}
+
+	// « Certains jours », un jour non prévu : pas de coche par envoi direct.
+	autre := (int(time.Now().UTC().Weekday())+2)%7 + 1 // ni hier, ni aujourd'hui, ni demain (quel que soit le fuseau)
+	marie.Post("/taches", map[string]string{"titre": "Arroser", "repetition": "jours", "jour" + strconv.Itoa(autre): "1"})
+	_, page = marie.Get("/taches")
+	var idArroser string
+	if err := a.DB.QueryRow(`SELECT id FROM taches WHERE titre = 'Arroser'`).Scan(&idArroser); err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := marie.Post("/taches/"+idArroser+"/faire", nil); code != http.StatusBadRequest {
+		t.Fatalf("tâche cochée un jour non prévu : %d", code)
+	}
+
+	// Membre retiré : ses tâches reviennent à tout le monde.
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	_ = lea
+	marie.Get("/taches/nouvelle")
+	marie.Post("/taches", map[string]string{"titre": "Nourrir le chat", "repetition": "jour", "assigne": "2"})
+	if err := a.Q.LibererTachesMembre(ctx, donnees.LibererTachesMembreParams{FamilleID: 1, AssigneA: sql.NullInt64{Int64: 2, Valid: true}}); err != nil {
+		t.Fatal(err)
+	}
+	var reste int
+	if err := a.DB.QueryRow(`SELECT count(*) FROM taches WHERE assigne_a = 2`).Scan(&reste); err != nil || reste != 0 {
+		t.Fatalf("tâches encore confiées au membre retiré : %d %v", reste, err)
 	}
 }

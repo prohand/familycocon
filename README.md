@@ -194,6 +194,12 @@ Le script :
 3. la met en place, en gardant l'ancienne base dans le volume (`familycocon.db.avant-restauration-…`) ;
 4. redémarre le conteneur.
 
+Si le fichier est refusé (abîmé, version trop récente), l'ancienne base reste en
+place et le service est relancé. Le binaire refuse aussi de restaurer tant
+qu'un serveur tourne sur le même dossier de données (verrou
+`familycocon.verrou`). Lancez le script en root (ou avec `sudo`) : la copie
+temporaire n'est alors lisible que par le conteneur.
+
 Pour restaurer une sauvegarde automatique du volume, copiez-la d'abord sur l'hôte :
 
 ```bash
@@ -202,11 +208,14 @@ docker cp familycocon:/donnees/sauvegardes/auto-20261122-033000.db .
 
 ## Supervision
 
-**Santé** : `GET /health` répond en JSON (200 si la base répond, 503 sinon) :
+**Santé** : `GET /health` répond en JSON (200 si la base répond, 503 sinon).
+Depuis la machine ou le réseau local (Docker, Uptime Kuma, Zabbix) :
 
 ```json
 {"etat":"ok","version":"0.1.0","schema":8,"depuis_s":3600}
 ```
+
+Depuis Internet, seul `{"etat":"ok"}` est donné (pas de numéro de version aux inconnus).
 
 **Docker** : le `HEALTHCHECK` appelle `familycocon -sante` (l'image n'a ni curl ni wget).
 

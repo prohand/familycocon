@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -81,12 +80,7 @@ func ligne(ct donnees.Contact) Ligne {
 }
 
 func premierTel(ct donnees.Contact) string {
-	for _, t := range []string{ct.Telephone, ct.TelFixe, ct.TelTravail} {
-		if t != "" {
-			return t
-		}
-	}
-	return ""
+	return PremierTel(ct.Telephone, ct.TelFixe, ct.TelTravail)
 }
 
 // initialeTri : la lettre de rangement (« É » → « E », chiffre ou symbole → « # »).
@@ -227,15 +221,9 @@ func (m *Module) pageAdresses(w http.ResponseWriter, r *http.Request, c *appli.C
 }
 
 func (m *Module) resumeAdresses(ctx context.Context, c *appli.Contexte) appli.Resume {
-	tous, err := m.a.Q.ContactsFamille(ctx, c.Famille.ID)
+	n, err := m.a.Q.CompterAdresses(ctx, c.Famille.ID)
 	if err != nil {
 		return appli.Resume{}
-	}
-	n := 0
-	for _, ct := range tous {
-		if ct.Adresse != "" {
-			n++
-		}
 	}
 	if n == 0 {
 		return appli.Resume{Info: "Aucune adresse"}
@@ -263,6 +251,7 @@ type vueFiche struct {
 	Contact     donnees.Contact
 	Telephones  []Telephone
 	Carte       string       // lien OpenStreetMap
+	Mail        template.URL // mailto: (adresse échappée)
 	Site        template.URL // http(s) seulement
 	Relation    string
 	Naissance   string // « 5 mars 2018 (8 ans) »
@@ -270,20 +259,6 @@ type vueFiche struct {
 	Retour      string // page d'où l'on vient
 	TitreRetour string
 	Prestataire bool // lien vers les interventions
-}
-
-// carte : lien OpenStreetMap pour une adresse.
-func carte(adresse string) string {
-	return "https://www.openstreetmap.org/search?query=" + strings.ReplaceAll(url.QueryEscape(strings.ReplaceAll(adresse, "\n", ", ")), "+", "%20")
-}
-
-// SiteSur : le site, seulement s'il est en http(s).
-func SiteSur(s string) template.URL {
-	u, err := url.Parse(s)
-	if s == "" || err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-		return ""
-	}
-	return template.URL(u.String()) // #nosec G203 -- schéma vérifié
 }
 
 // retour : la page par laquelle on revient (le premier module activé).
@@ -311,7 +286,7 @@ func (m *Module) fiche(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.PageErreur(w, r, c, http.StatusNotFound, "Contact introuvable", "Ce contact n'existe plus.")
 		return
 	}
-	v := vueFiche{Contact: ct, Site: SiteSur(ct.Site), Groupes: Groupes(ct.Groupes), Prestataire: ct.Pro == 1 && c.Actif(modPrestataires)}
+	v := vueFiche{Contact: ct, Site: SiteSur(ct.Site), Mail: LienMail(ct.Email), Groupes: Groupes(ct.Groupes), Prestataire: ct.Pro == 1 && c.Actif(modPrestataires)}
 	v.Retour, v.TitreRetour = retour(c, ct)
 	for _, t := range []Telephone{{"Mobile", ct.Telephone, ""}, {"Fixe", ct.TelFixe, ""}, {"Travail", ct.TelTravail, ""}} {
 		if t.Numero != "" {
@@ -320,7 +295,7 @@ func (m *Module) fiche(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		}
 	}
 	if ct.Adresse != "" {
-		v.Carte = carte(ct.Adresse)
+		v.Carte = LienCarte(ct.Adresse)
 	}
 	for _, rel := range Relations {
 		if rel.Cle == ct.Relation {
@@ -345,18 +320,27 @@ func (m *Module) fiche(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	m.a.Afficher(w, r, c, "contacts/fiche", ct.Nom, module, v)
 }
 
-// favori : ajoute ou retire des favoris.
+// favori : ajoute ou retire des favoris. La page envoie l'état voulu
+// (favori=1 ou 0) : un double envoi ne défait pas ce qui vient d'être fait.
 func (m *Module) favori(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ct, ok := m.contact(r, c)
 	if !ok || !actif(c) {
 		m.a.Echec(w, r, http.StatusNotFound, "Contact introuvable.")
 		return
 	}
-	if err := m.a.Q.BasculerFavori(r.Context(), donnees.BasculerFavoriParams{ID: ct.ID, FamilleID: c.Famille.ID}); err != nil {
+	voulu := 1 - ct.Favori // ancienne page sans le champ : bascule
+	switch r.PostFormValue("favori") {
+	case "1":
+		voulu = 1
+	case "0":
+		voulu = 0
+	}
+	if err := m.a.Q.DefinirFavori(r.Context(), donnees.DefinirFavoriParams{Favori: voulu, ID: ct.ID, FamilleID: c.Famille.ID}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	if ct.Favori == 0 {
+	m.a.Publier(c, modContacts, "")
+	if voulu == 1 {
 		m.a.Flash(w, "⭐ Ajouté aux favoris")
 	} else {
 		m.a.Flash(w, "Retiré des favoris")
@@ -456,16 +440,12 @@ func lire(r *http.Request) (saisie, string) {
 		utf8.RuneCountInString(s.metier) > 60 || utf8.RuneCountInString(s.notes) > 2000 || utf8.RuneCountInString(s.idees) > 1000 {
 		return s, "Un des champs est trop long."
 	}
-	if s.email != "" && (!strings.Contains(s.email, "@") || strings.ContainsAny(s.email, " <>\"")) {
+	if s.email != "" && !EmailValide(s.email) {
 		return s, "Adresse e-mail invalide."
 	}
-	if s.site != "" {
-		if !strings.Contains(s.site, "://") {
-			s.site = "https://" + s.site
-		}
-		if SiteSur(s.site) == "" || len(s.site) > 300 {
-			return s, "Adresse du site invalide (http ou https)."
-		}
+	var siteOk bool
+	if s.site, siteOk = NormaliserSite(s.site); !siteOk {
+		return s, "Adresse du site invalide (http ou https)."
 	}
 	if d := r.PostFormValue("naissance"); d != "" {
 		t, err := time.Parse("2006-01-02", d)
@@ -497,11 +477,19 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
+	if n, err := m.a.Q.CompterContacts(r.Context(), c.Famille.ID); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	} else if n >= ContactsMax {
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Le carnet est plein (%d contacts au plus).", ContactsMax))
+		return
+	}
 	ct, err := m.creerContact(r.Context(), c.Famille.ID, s)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, modContacts, "")
 	m.a.Flash(w, "Contact enregistré ✓")
 	if s.naissance != "" && r.PostFormValue("anniv") == "1" {
 		m.a.Rediriger(w, r, "/anniversaires")
@@ -541,6 +529,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, modContacts, "")
 	m.a.Flash(w, "Contact enregistré ✓")
 	m.a.Rediriger(w, r, fmt.Sprintf("/contacts/%d", ct.ID))
 }
@@ -567,6 +556,7 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, modContacts, "")
 	m.a.Flash(w, ct.Nom+" supprimé(e)")
 	dest, _ := retour(c, ct)
 	m.a.Rediriger(w, r, dest)

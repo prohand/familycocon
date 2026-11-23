@@ -25,6 +25,26 @@ func (q *Queries) AnnulerFaite(ctx context.Context, arg AnnulerFaiteParams) erro
 	return err
 }
 
+const compterTachesActives = `-- name: CompterTachesActives :one
+SELECT count(*) FROM taches
+WHERE taches.famille_id = ?1 AND taches.active = 1
+  AND NOT (taches.repetition = '' AND EXISTS (
+    SELECT 1 FROM taches_faites f
+    WHERE f.tache_id = taches.id AND f.occurrence = 'unique' AND f.fait_le < ?2))
+`
+
+type CompterTachesActivesParams struct {
+	FamilleID int64
+	Depuis    int64
+}
+
+func (q *Queries) CompterTachesActives(ctx context.Context, arg CompterTachesActivesParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterTachesActives, arg.FamilleID, arg.Depuis)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const creerTache = `-- name: CreerTache :one
 INSERT INTO taches (famille_id, titre, emoji, assigne_a, repetition, cree_par, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le
@@ -134,7 +154,22 @@ func (q *Queries) HistoriqueTaches(ctx context.Context, arg HistoriqueTachesPara
 	return items, nil
 }
 
-const marquerFaite = `-- name: MarquerFaite :exec
+const libererTachesMembre = `-- name: LibererTachesMembre :exec
+UPDATE taches SET assigne_a = NULL WHERE famille_id = ? AND assigne_a = ?
+`
+
+type LibererTachesMembreParams struct {
+	FamilleID int64
+	AssigneA  sql.NullInt64
+}
+
+// Membre retire : ses taches reviennent a tout le monde.
+func (q *Queries) LibererTachesMembre(ctx context.Context, arg LibererTachesMembreParams) error {
+	_, err := q.db.ExecContext(ctx, libererTachesMembre, arg.FamilleID, arg.AssigneA)
+	return err
+}
+
+const marquerFaite = `-- name: MarquerFaite :execrows
 INSERT INTO taches_faites (tache_id, occurrence, fait_par, fait_le) VALUES (?, ?, ?, ?)
 ON CONFLICT (tache_id, occurrence) DO NOTHING
 `
@@ -146,14 +181,18 @@ type MarquerFaiteParams struct {
 	FaitLe     int64
 }
 
-func (q *Queries) MarquerFaite(ctx context.Context, arg MarquerFaiteParams) error {
-	_, err := q.db.ExecContext(ctx, marquerFaite,
+// 0 ligne si elle est deja cochee (deux membres en meme temps).
+func (q *Queries) MarquerFaite(ctx context.Context, arg MarquerFaiteParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, marquerFaite,
 		arg.TacheID,
 		arg.Occurrence,
 		arg.FaitPar,
 		arg.FaitLe,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const modifierTache = `-- name: ModifierTache :exec
@@ -195,6 +234,47 @@ func (q *Queries) RetirerTache(ctx context.Context, arg RetirerTacheParams) erro
 	return err
 }
 
+const scoresTaches = `-- name: ScoresTaches :many
+SELECT taches_faites.fait_par, count(*) AS nombre
+FROM taches_faites JOIN taches ON taches.id = taches_faites.tache_id
+WHERE taches.famille_id = ? AND taches_faites.fait_le >= ? AND taches_faites.fait_par IS NOT NULL
+GROUP BY taches_faites.fait_par
+`
+
+type ScoresTachesParams struct {
+	FamilleID int64
+	FaitLe    int64
+}
+
+type ScoresTachesRow struct {
+	FaitPar sql.NullInt64
+	Nombre  int64
+}
+
+// Scores de la semaine : comptes en SQL (pas de plafond de lignes).
+func (q *Queries) ScoresTaches(ctx context.Context, arg ScoresTachesParams) ([]ScoresTachesRow, error) {
+	rows, err := q.db.QueryContext(ctx, scoresTaches, arg.FamilleID, arg.FaitLe)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ScoresTachesRow{}
+	for rows.Next() {
+		var i ScoresTachesRow
+		if err := rows.Scan(&i.FaitPar, &i.Nombre); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const tacheParID = `-- name: TacheParID :one
 SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le FROM taches WHERE id = ? AND famille_id = ? AND active = 1
 `
@@ -223,12 +303,24 @@ func (q *Queries) TacheParID(ctx context.Context, arg TacheParIDParams) (Tache, 
 
 const tachesActives = `-- name: TachesActives :many
 
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le FROM taches WHERE famille_id = ? AND active = 1 ORDER BY id
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le FROM taches
+WHERE taches.famille_id = ?1 AND taches.active = 1
+  AND NOT (taches.repetition = '' AND EXISTS (
+    SELECT 1 FROM taches_faites f
+    WHERE f.tache_id = taches.id AND f.occurrence = 'unique' AND f.fait_le < ?2))
+ORDER BY taches.id
 `
 
+type TachesActivesParams struct {
+	FamilleID int64
+	Depuis    int64
+}
+
 // Taches menageres.
-func (q *Queries) TachesActives(ctx context.Context, familleID int64) ([]Tache, error) {
-	rows, err := q.db.QueryContext(ctx, tachesActives, familleID)
+// Une tache " une fois " faite avant aujourd'hui (depuis = minuit, heure de
+// la famille) n'est plus chargee : elle n'est plus montree nulle part.
+func (q *Queries) TachesActives(ctx context.Context, arg TachesActivesParams) ([]Tache, error) {
+	rows, err := q.db.QueryContext(ctx, tachesActives, arg.FamilleID, arg.Depuis)
 	if err != nil {
 		return nil, err
 	}
@@ -262,12 +354,15 @@ func (q *Queries) TachesActives(ctx context.Context, familleID int64) ([]Tache, 
 
 const tachesFaitesOccurrences = `-- name: TachesFaitesOccurrences :many
 SELECT taches_faites.id, taches_faites.tache_id, taches_faites.occurrence, taches_faites.fait_par, taches_faites.fait_le FROM taches_faites JOIN taches ON taches.id = taches_faites.tache_id
-WHERE taches.famille_id = ? AND taches.active = 1 AND taches_faites.occurrence IN (/*SLICE:occurrences*/?)
+WHERE taches.famille_id = ?1 AND taches.active = 1
+  AND taches_faites.occurrence IN (/*SLICE:occurrences*/?)
+  AND (taches_faites.occurrence <> 'unique' OR taches_faites.fait_le >= ?3)
 `
 
 type TachesFaitesOccurrencesParams struct {
 	FamilleID   int64
 	Occurrences []string
+	Depuis      int64
 }
 
 func (q *Queries) TachesFaitesOccurrences(ctx context.Context, arg TachesFaitesOccurrencesParams) ([]TacheFaite, error) {
@@ -282,6 +377,7 @@ func (q *Queries) TachesFaitesOccurrences(ctx context.Context, arg TachesFaitesO
 	} else {
 		query = strings.Replace(query, "/*SLICE:occurrences*/?", "NULL", 1)
 	}
+	queryParams = append(queryParams, arg.Depuis)
 	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
 		return nil, err

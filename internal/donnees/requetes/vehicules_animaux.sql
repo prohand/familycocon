@@ -36,3 +36,16 @@ WHERE id = ? AND famille_id = ?;
 
 -- name: SupprimerAnimal :exec
 DELETE FROM animaux WHERE id = ? AND famille_id = ?;
+
+-- Noms seuls (rappels : pas une requete par echeance).
+-- name: NomsVehicules :many
+SELECT id, nom FROM vehicules WHERE famille_id = ?;
+
+-- name: NomsAnimaux :many
+SELECT id, nom FROM animaux WHERE famille_id = ?;
+
+-- name: CompterVehicules :one
+SELECT count(*) FROM vehicules WHERE famille_id = ?;
+
+-- name: CompterAnimaux :one
+SELECT count(*) FROM animaux WHERE famille_id = ?;

@@ -72,7 +72,17 @@ func LireDepuis(env func(string) string) (*Config, error) {
 		u = &url.URL{Scheme: "http", Host: "localhost:8080"}
 	}
 	u.Path = strings.TrimSuffix(u.Path, "/")
+	if u.Path != "" || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		// Routes, cookies « __Host- » et manifeste sont à la racine du site.
+		errs = append(errs, errors.New("FC_URL_PUBLIQUE : l'adresse du site seulement, sans chemin (ex. https://famille.exemple.fr, pas …/cocon)"))
+		u = &url.URL{Scheme: u.Scheme, Host: u.Host}
+	}
 	c.URLPublique = u
+	// Le chemin de la base entre dans une adresse SQLite (« file:…?… ») et
+	// dans VACUUM INTO '…' : ces caractères le casseraient.
+	if strings.ContainsAny(c.Donnees, "?#'") {
+		errs = append(errs, errors.New("FC_DONNEES : le chemin ne doit contenir ni ?, ni #, ni apostrophe"))
+	}
 
 	for _, p := range strings.FieldsFunc(env("FC_PROXYS"), func(r rune) bool { return r == ',' || r == ' ' }) {
 		pre, err := netip.ParsePrefix(p)

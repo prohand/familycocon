@@ -10,7 +10,7 @@
   {{- range $i, $t := .Telephones}}{{if eq $i 0}}
   <a class="action" href="tel:{{$t.Lien}}"><span class="emoji">📞</span>Appeler</a>
   <a class="action" href="sms:{{$t.Lien}}"><span class="emoji">💬</span>SMS</a>{{end}}{{end}}
-  {{if .Contact.Email}}<a class="action" href="mailto:{{.Contact.Email}}"><span class="emoji">✉️</span>E-mail</a>{{end}}
+  {{if .Mail}}<a class="action" href="{{.Mail}}"><span class="emoji">✉️</span>E-mail</a>{{end}}
   {{if .Carte}}<a class="action" href="{{.Carte}}" target="_blank" rel="noopener noreferrer"><span class="emoji">🗺️</span>Plan</a>{{end}}
   {{if .Site}}<a class="action" href="{{.Site}}" target="_blank" rel="noopener noreferrer"><span class="emoji">🌐</span>Site</a>{{end}}
 </div>
@@ -27,7 +27,8 @@
 <div class="boutons">
   <a class="bouton" href="/contacts/{{.Contact.ID}}/modifier">✏️ Modifier</a>
   <form method="post" action="/contacts/{{.Contact.ID}}/favori">
-    {{template "jeton" $c.CSRF}}<button class="bouton secondaire">{{if .Contact.Favori}}☆ Retirer des favoris{{else}}⭐ Favori{{end}}</button>
+    {{template "jeton" $c.CSRF}}<input type="hidden" name="favori" value="{{if .Contact.Favori}}0{{else}}1{{end}}">
+    <button class="bouton secondaire">{{if .Contact.Favori}}☆ Retirer des favoris{{else}}⭐ Favori{{end}}</button>
   </form>
   {{if $c.EstParent}}
   <form method="post" action="/contacts/{{.Contact.ID}}/supprimer" hx-confirm="Supprimer {{.Contact.Nom}} ?">

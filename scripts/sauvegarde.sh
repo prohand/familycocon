@@ -7,6 +7,9 @@
 #
 # Variables : CONTENEUR (défaut : familycocon), GARDER (défaut : 30 copies).
 set -eu
+# La base contient des empreintes de mots de passe et des secrets : les
+# fichiers créés ici ne sont lisibles que par leur propriétaire, dès l'écriture.
+umask 077
 
 CONTENEUR=${CONTENEUR:-familycocon}
 GARDER=${GARDER:-30}

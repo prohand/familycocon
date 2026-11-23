@@ -2,7 +2,6 @@
 .github
 donnees
 dist
-mockup
 *.md
 !THIRD-PARTY.md
 .env

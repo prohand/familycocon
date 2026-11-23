@@ -15,6 +15,10 @@
 package contacts
 
 import (
+	"html/template"
+	"net/url"
+	"strings"
+
 	"familycocon/internal/appli"
 	"familycocon/internal/donnees"
 )
@@ -99,4 +103,60 @@ func LienTel(t string) string {
 		}
 	}
 	return string(b)
+}
+
+// PremierTel : le premier numéro connu (mobile, fixe, travail).
+func PremierTel(mobile, fixe, travail string) string {
+	for _, t := range []string{mobile, fixe, travail} {
+		if t != "" {
+			return t
+		}
+	}
+	return ""
+}
+
+// NormaliserSite : vide, ou une adresse http(s) de 300 caractères au plus
+// (« exemple.fr » devient « https://exemple.fr »). ok = faux si invalide.
+func NormaliserSite(s string) (string, bool) {
+	if s == "" {
+		return "", true
+	}
+	if !strings.Contains(s, "://") {
+		s = "https://" + s
+	}
+	u, err := url.Parse(s)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || len(s) > 300 {
+		return "", false
+	}
+	return u.String(), true
+}
+
+// SiteSur : le site pour un lien, seulement s'il est en http(s) (vérifié à
+// l'enregistrement, revérifié ici).
+func SiteSur(s string) template.URL {
+	u, err := url.Parse(s)
+	if s == "" || err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+		return ""
+	}
+	return template.URL(u.String()) // #nosec G203 -- schéma vérifié
+}
+
+// LienMail : « mailto: » pour une adresse (échappée : pas de « ?cc=… »
+// ni de « &body=… » glissés dans l'adresse).
+func LienMail(email string) template.URL {
+	if !EmailValide(email) {
+		return ""
+	}
+	// PathEscape échappe « ? » (début des champs cc, body…) ; « & » en plus, par prudence.
+	return template.URL("mailto:" + strings.ReplaceAll(url.PathEscape(email), "&", "%26")) // #nosec G203 -- adresse échappée
+}
+
+// EmailValide : une adresse plausible (un « @ », pas d'espace ni de < > ").
+func EmailValide(email string) bool {
+	return strings.Contains(email, "@") && !strings.ContainsAny(email, " <>\"")
+}
+
+// LienCarte : le plan OpenStreetMap d'une adresse postale.
+func LienCarte(adresse string) string {
+	return "https://www.openstreetmap.org/search?query=" + strings.ReplaceAll(url.QueryEscape(strings.ReplaceAll(adresse, "\n", ", ")), "+", "%20")
 }

@@ -12,6 +12,7 @@ package agenda
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -22,12 +23,28 @@ import (
 	"unicode/utf8"
 
 	"familycocon/internal/appli"
+	"familycocon/internal/contacts"
 	"familycocon/internal/donnees"
 	"familycocon/internal/repetition"
 )
 
 // Module : le module Agenda.
-type Module struct{ a *appli.App }
+type Module struct {
+	a *appli.App
+	// aujourdhui : occurrences du jour, gardées le temps d'une requête
+	// (l'accueil les demande deux fois : tuile et bloc).
+	aujourdhui appli.MemoRequete[[]Occurrence]
+}
+
+// evenementsMax : événements par famille.
+const evenementsMax = 20000
+
+// contactsMax : contacts cités par un événement.
+const contactsMax = 10
+
+// idsMax : au-delà, on ne passe plus la liste des événements à SQLite
+// (nombre de paramètres) : on lit ceux de toute la famille.
+const idsMax = 500
 
 const mod = "agenda"
 
@@ -83,37 +100,63 @@ func chevauche(d, f, debut, fin time.Time) bool {
 	return d.Before(fin) && (f.After(debut) || !d.Before(debut))
 }
 
-// contactsParEvenement : les contacts cités, par événement.
-func (m *Module) contactsParEvenement(ctx context.Context, c *appli.Contexte) (map[int64][]ContactEvt, error) {
-	l, err := m.a.Q.ContactsEvenementsFamille(ctx, c.Famille.ID)
+// carnetActif : un module montre-t-il le carnet (contacts cités) ?
+func carnetActif(c *appli.Contexte) bool { return c.Actif("contacts") || c.Actif("adresses") }
+
+// contactsParEvenement : les contacts cités par ces événements (ids déjà
+// vérifiés : ils viennent d'une requête filtrée par famille).
+func (m *Module) contactsParEvenement(ctx context.Context, c *appli.Contexte, ids []int64) (map[int64][]ContactEvt, error) {
+	out := map[int64][]ContactEvt{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	if len(ids) > idsMax {
+		l, err := m.a.Q.ContactsEvenementsFamille(ctx, c.Famille.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, x := range l {
+			out[x.EvenementID] = append(out[x.EvenementID], ContactEvt{ID: x.ID, Nom: x.Nom, Tel: contacts.LienTel(x.Telephone)})
+		}
+		return out, nil
+	}
+	l, err := m.a.Q.ContactsDesEvenements(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
-	out := map[int64][]ContactEvt{}
 	for _, x := range l {
-		out[x.EvenementID] = append(out[x.EvenementID], ContactEvt{ID: x.ID, Nom: x.Nom, Tel: lienTel(x.Telephone)})
+		out[x.EvenementID] = append(out[x.EvenementID], ContactEvt{ID: x.ID, Nom: x.Nom, Tel: contacts.LienTel(x.Telephone)})
 	}
 	return out, nil
 }
 
-// lienTel : chiffres et « + » au début seulement (lien tel:).
-func lienTel(t string) string {
-	var b []rune
-	for _, r := range t {
-		if (r >= '0' && r <= '9') || (r == '+' && len(b) == 0) {
-			b = append(b, r)
-		}
+// participants : les membres concernés par ces événements (même règle).
+func (m *Module) participants(ctx context.Context, c *appli.Contexte, ids []int64) ([]donnees.EvenementsMembre, error) {
+	switch {
+	case len(ids) == 0:
+		return nil, nil
+	case len(ids) > idsMax:
+		return m.a.Q.ParticipantsDeFamille(ctx, c.Famille.ID)
 	}
-	return string(b)
+	return m.a.Q.ParticipantsDesEvenements(ctx, ids)
 }
 
 // Occurrences : les occurrences de la période [debut, fin[, triées.
 func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin time.Time) ([]Occurrence, error) {
-	evts, err := m.a.Q.EvenementsPeriode(ctx, donnees.EvenementsPeriodeParams{FamilleID: c.Famille.ID, FinPeriode: fin.Unix(), DebutPeriode: debut.Unix()})
+	// Un événement répété dont la fin de répétition est passée n'est plus lu.
+	// Marge d'un an : une occurrence de plusieurs jours commencée avant la
+	// fin peut encore toucher la période (deplier fait le tri exact).
+	evts, err := m.a.Q.EvenementsPeriode(ctx, donnees.EvenementsPeriodeParams{FamilleID: c.Famille.ID, FinPeriode: fin.Unix(),
+		DebutPeriode: debut.Unix(), JourMin: repetition.CleJour(debut.AddDate(-1, 0, -1))})
 	if err != nil {
 		return nil, err
 	}
-	parts, err := m.a.Q.ParticipantsDeFamille(ctx, c.Famille.ID)
+	// Participants et contacts : seulement ceux des événements lus.
+	ids := make([]int64, len(evts))
+	for i := range evts {
+		ids[i] = evts[i].ID
+	}
+	parts, err := m.participants(ctx, c, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -121,10 +164,7 @@ func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin 
 	if err != nil {
 		return nil, err
 	}
-	parID := map[int64]*donnees.Membre{}
-	for i := range membres {
-		parID[membres[i].ID] = &membres[i]
-	}
+	parID := appli.MembresParID(membres)
 	parEvt := map[int64][]*donnees.Membre{}
 	for _, p := range parts {
 		if mb := parID[p.MembreID]; mb != nil {
@@ -132,16 +172,16 @@ func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin 
 		}
 	}
 	// Contacts cités : seulement si un module montre le carnet.
-	contacts := map[int64][]ContactEvt{}
-	if c.Actif("contacts") || c.Actif("adresses") {
-		if contacts, err = m.contactsParEvenement(ctx, c); err != nil {
+	cites := map[int64][]ContactEvt{}
+	if carnetActif(c) {
+		if cites, err = m.contactsParEvenement(ctx, c, ids); err != nil {
 			return nil, err
 		}
 	}
 	var out []Occurrence
 	for _, e := range evts {
 		for _, dates := range deplier(e, c.Lieu, debut, fin) {
-			out = append(out, Occurrence{Evt: e, Debut: dates[0], Fin: dates[1], Membres: parEvt[e.ID], Contacts: contacts[e.ID]})
+			out = append(out, Occurrence{Evt: e, Debut: dates[0], Fin: dates[1], Membres: parEvt[e.ID], Contacts: cites[e.ID]})
 		}
 	}
 	sort.SliceStable(out, func(i, j int) bool {
@@ -210,11 +250,6 @@ func (m *Module) filtreTaches(w http.ResponseWriter, r *http.Request) string {
 	return "tous"
 }
 
-func titreJour(t time.Time) string {
-	j := appli.JourFR(t)
-	return strings.ToUpper(j[:1]) + j[1:] + " " + strconv.Itoa(t.Day())
-}
-
 func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request, taches string) (*vueAgenda, error) {
 	q := r.URL.Query()
 	maintenant := c.Maintenant()
@@ -271,7 +306,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request, ta
 	}
 	for j := debut; j.Before(fin); j = j.AddDate(0, 0, 1) {
 		cle := repetition.CleJour(j)
-		jour := Jour{Date: j, Cle: cle, Titre: titreJour(j), Aujourdhui: j.Equal(aujourdhui),
+		jour := Jour{Date: j, Cle: cle, Titre: appli.TitreJour(j), Aujourdhui: j.Equal(aujourdhui),
 			DansMois: v.Vue == "semaine" || j.Month() == ref.Month(), Occurrences: duJour(occ, j), Elements: elements[cle]}
 		v.Jours = append(v.Jours, jour)
 	}
@@ -323,8 +358,8 @@ type formEvt struct {
 	Regle      regle  // répétition actuelle (cases des jours)
 	TexteRep   string // « Chaque 2e mardi du mois »
 	Semaine    []caseJour
-	Contacts   []donnees.Contact // carnet (liste de choix)
-	Cites      map[int64]bool    // contacts cités par l'événement
+	Contacts   []donnees.ContactsChoixAgendaRow // carnet (liste de choix : nom et métier)
+	Cites      map[int64]bool                   // contacts cités par l'événement
 	ContactsEv []ContactEvt
 }
 
@@ -344,16 +379,18 @@ func (m *Module) evenement(r *http.Request, c *appli.Contexte) (donnees.Evenemen
 }
 
 func modifiable(c *appli.Contexte, e donnees.Evenement) bool {
-	return c.EstParent() || (e.CreePar.Valid && e.CreePar.Int64 == c.Membre.ID)
+	return appli.PeutModifier(c, e.CreePar.Int64, e.CreePar.Valid)
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
 	f := &formEvt{Nouveau: r.PathValue("id") == "", Modifiable: true, Choisis: map[int64]bool{}, Choix: Choix, Cites: map[int64]bool{}}
-	if c.Actif("contacts") || c.Actif("adresses") {
-		f.Contacts, _ = m.a.Q.ContactsFamille(ctx, c.Famille.ID)
-	}
 	var err error
+	if carnetActif(c) {
+		if f.Contacts, err = m.a.Q.ContactsChoixAgenda(ctx, c.Famille.ID); err != nil {
+			m.a.Journal.Warn("agenda : carnet illisible", "erreur", err) // le formulaire marche sans
+		}
+	}
 	if f.Membres, err = m.a.Membres(ctx, c); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -372,7 +409,12 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.Evt, f.Modifiable = e, modifiable(c, e)
 		f.Regle, f.TexteRep = lireRegle(e.Repetition), TexteRepetition(e, c.Lieu)
-		if cites, err := m.contactsParEvenement(ctx, c); err == nil && f.Contacts != nil {
+		if f.Contacts != nil {
+			cites, err := m.contactsParEvenement(ctx, c, []int64{e.ID})
+			if err != nil {
+				m.a.ErreurInterne(w, r, err)
+				return
+			}
 			f.ContactsEv = cites[e.ID]
 			for _, x := range f.ContactsEv {
 				f.Cites[x.ID] = true
@@ -383,15 +425,13 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		if e.Journee == 0 {
 			f.HeureDebut, f.HeureFin = d.Format("15:04"), fin.Format("15:04")
 		}
-		parts, err := m.a.Q.ParticipantsDeFamille(ctx, c.Famille.ID)
+		parts, err := m.participants(ctx, c, []int64{e.ID})
 		if err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		}
 		for _, p := range parts {
-			if p.EvenementID == e.ID {
-				f.Choisis[p.MembreID] = true
-			}
+			f.Choisis[p.MembreID] = true
 		}
 	}
 	for i := 1; i <= 7; i++ {
@@ -412,6 +452,9 @@ type saisie struct {
 	journee                       bool
 	membres                       []int64
 	contacts                      []int64
+	// carnet : le formulaire proposait-il les contacts ? Sinon (carnet
+	// désactivé) les contacts déjà cités ne sont pas touchés.
+	carnet bool
 }
 
 func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
@@ -495,18 +538,30 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 			s.membres = append(s.membres, mb.ID)
 		}
 	}
-	// Contacts cités : seulement ceux de la famille, 10 au plus.
-	for _, v := range f["contacts"] {
-		id, err := strconv.ParseInt(v, 10, 64)
-		if err != nil || id <= 0 || len(s.contacts) == 10 {
-			continue
-		}
-		if _, err := m.a.Q.ContactParID(r.Context(), donnees.ContactParIDParams{ID: id, FamilleID: c.Famille.ID}); err == nil {
-			s.contacts = append(s.contacts, id)
+	// Contacts cités : seulement ceux de la famille, 10 au plus. La liste
+	// reçue est bornée AVANT la boucle (une requête par valeur).
+	s.carnet = carnetActif(c)
+	if len(f["contacts"]) > contactsMax {
+		return s, fmt.Sprintf("%d contacts au plus par événement.", contactsMax)
+	}
+	if s.carnet {
+		vus := map[int64]bool{}
+		for _, v := range f["contacts"] {
+			id, err := strconv.ParseInt(v, 10, 64)
+			if err != nil || id <= 0 || vus[id] {
+				continue
+			}
+			vus[id] = true
+			if _, err := m.a.Q.ContactParID(r.Context(), donnees.ContactParIDParams{ID: id, FamilleID: c.Famille.ID}); err == nil {
+				s.contacts = append(s.contacts, id)
+			}
 		}
 	}
 	return s, ""
 }
+
+// errAgendaPlein : plafond d'événements atteint.
+var errAgendaPlein = errors.New("agenda plein")
 
 func bool01(b bool) int64 {
 	if b {
@@ -548,7 +603,13 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	var e donnees.Evenement
 	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
-		var err error
+		n, err := q.CompterEvenements(ctx, c.Famille.ID)
+		if err != nil {
+			return err
+		}
+		if n >= evenementsMax {
+			return errAgendaPlein
+		}
 		e, err = q.CreerEvenement(ctx, donnees.CreerEvenementParams{
 			FamilleID: c.Famille.ID, Titre: s.titre, Lieu: s.lieu, Note: s.note, Debut: s.debut.Unix(), Fin: s.fin.Unix(),
 			Journee: bool01(s.journee), Repetition: s.repetition, RepetitionFin: s.repetitionFin, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
@@ -561,11 +622,15 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		}
 		return enregistrerContacts(ctx, q, e.ID, s.contacts)
 	})
+	if errors.Is(err, errAgendaPlein) {
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("L'agenda est plein (%d événements) : demandez à un parent d'en supprimer.", evenementsMax))
+		return
+	}
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	quand := appli.JourFR(s.debut) + " " + strconv.Itoa(s.debut.Day())
+	quand := strings.ToLower(appli.TitreJour(s.debut))
 	m.a.Publier(c, mod, fmt.Sprintf("%s a ajouté « %s » (%s) 🗓️", c.Membre.Nom, e.Titre, quand))
 	m.a.Flash(w, "Événement ajouté ✓")
 	m.a.Rediriger(w, r, "/agenda?date="+repetition.CleJour(s.debut))
@@ -597,6 +662,9 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		if err := m.enregistrerMembres(ctx, q, e.ID, s.membres); err != nil {
 			return err
 		}
+		if !s.carnet { // carnet désactivé : les contacts cités restent tels quels
+			return nil
+		}
 		return enregistrerContacts(ctx, q, e.ID, s.contacts)
 	})
 	if err != nil {
@@ -623,10 +691,12 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 	m.a.Rediriger(w, r, "/agenda")
 }
 
-// duJourMeme : les occurrences d'aujourd'hui.
+// duJourMeme : les occurrences d'aujourd'hui (calculées une fois par requête).
 func (m *Module) duJourMeme(ctx context.Context, c *appli.Contexte) ([]Occurrence, error) {
-	j := minuit(c.Maintenant())
-	return m.Occurrences(ctx, c, j, j.AddDate(0, 0, 1))
+	return m.aujourdhui.Lire(c, func() ([]Occurrence, error) {
+		j := minuit(c.Maintenant())
+		return m.Occurrences(ctx, c, j, j.AddDate(0, 0, 1))
+	})
 }
 
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {

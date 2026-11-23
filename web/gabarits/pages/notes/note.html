@@ -21,7 +21,7 @@
     <span class="emoji">📌</span><span class="nom">Épinglée en haut</span>
     <input type="checkbox" name="epinglee" value="1"{{if eq .Note.Epinglee 1}} checked{{end}}><span class="glissiere"></span>
   </label>
-  {{if or .Nouvelle (and .Note.AuteurID.Valid (eq .Note.AuteurID.Int64 $c.Membre.ID))}}
+  {{if .PeutPriver}}
   <label class="interrupteur">
     <span class="emoji">🔒</span><span class="nom">Privée <small class="aide">(vous seul la voyez)</small></span>
     <input type="checkbox" name="privee" value="1"{{if eq .Note.Privee 1}} checked{{end}}><span class="glissiere"></span>

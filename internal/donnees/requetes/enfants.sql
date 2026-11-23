@@ -22,14 +22,18 @@ SELECT missions_faites.* FROM missions_faites JOIN missions ON missions.id = mis
 WHERE missions.famille_id = ? AND missions.active = 1 AND missions_faites.occurrence IN (sqlc.slice('occurrences'));
 
 -- Une mission refusee peut etre recochee ; une mission validee ne bouge plus.
--- name: CocherMission :exec
-INSERT INTO missions_faites (mission_id, occurrence, etat, etoiles, coche_le) VALUES (?, ?, 'attente', ?, ?)
+-- La mission doit etre a la famille ; 0 ligne si elle est deja cochee.
+-- name: CocherMission :execrows
+INSERT INTO missions_faites (mission_id, occurrence, etat, etoiles, coche_le)
+SELECT m.id, sqlc.arg(occurrence), 'attente', sqlc.arg(etoiles), sqlc.arg(coche_le)
+FROM missions m WHERE m.id = sqlc.arg(mission_id) AND m.famille_id = sqlc.arg(famille_id)
 ON CONFLICT (mission_id, occurrence) DO UPDATE SET
   etat = 'attente', etoiles = excluded.etoiles, coche_le = excluded.coche_le, decide_par = NULL, decide_le = NULL
 WHERE missions_faites.etat = 'refusee';
 
 -- name: AnnulerCoche :exec
-DELETE FROM missions_faites WHERE mission_id = ? AND occurrence = ? AND etat = 'attente';
+DELETE FROM missions_faites WHERE mission_id = ? AND occurrence = ? AND etat = 'attente'
+  AND mission_id IN (SELECT m.id FROM missions m WHERE m.famille_id = ?);
 
 -- name: FaiteMissionParID :one
 SELECT missions_faites.*, missions.titre, missions.emoji, missions.enfant_id
@@ -37,7 +41,8 @@ FROM missions_faites JOIN missions ON missions.id = missions_faites.mission_id
 WHERE missions_faites.id = ? AND missions.famille_id = ?;
 
 -- name: DeciderMission :execrows
-UPDATE missions_faites SET etat = ?, decide_par = ?, decide_le = ? WHERE id = ? AND etat = 'attente';
+UPDATE missions_faites SET etat = ?, decide_par = ?, decide_le = ? WHERE missions_faites.id = ? AND missions_faites.etat = 'attente'
+  AND mission_id IN (SELECT m.id FROM missions m WHERE m.famille_id = ?);
 
 -- name: MissionsEnAttente :many
 SELECT missions_faites.id, missions_faites.etoiles, missions_faites.coche_le, missions.titre, missions.emoji, missions.enfant_id
@@ -80,13 +85,18 @@ UPDATE recompenses SET active = 0 WHERE id = ? AND famille_id = ?;
 -- name: CreerEchange :one
 INSERT INTO echanges (recompense_id, enfant_id, prix, etat, demande_le) VALUES (?, ?, ?, 'attente', ?) RETURNING *;
 
+-- Une demande deja en attente pour cette recompense (double envoi).
+-- name: EchangeEnAttente :one
+SELECT count(*) FROM echanges WHERE recompense_id = ? AND enfant_id = ? AND etat = 'attente';
+
 -- name: EchangeParID :one
 SELECT echanges.*, recompenses.titre, recompenses.emoji
 FROM echanges JOIN recompenses ON recompenses.id = echanges.recompense_id
 WHERE echanges.id = ? AND recompenses.famille_id = ?;
 
 -- name: DeciderEchange :execrows
-UPDATE echanges SET etat = ?, decide_par = ?, decide_le = ? WHERE id = ? AND etat = 'attente';
+UPDATE echanges SET etat = ?, decide_par = ?, decide_le = ? WHERE echanges.id = ? AND echanges.etat = 'attente'
+  AND recompense_id IN (SELECT r.id FROM recompenses r WHERE r.famille_id = ?);
 
 -- name: EchangesEnAttente :many
 SELECT echanges.*, recompenses.titre, recompenses.emoji
