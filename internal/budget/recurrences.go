@@ -385,11 +385,29 @@ func (m *Module) supprimerRecurrence(w http.ResponseWriter, r *http.Request, c *
 		m.a.Echec(w, r, http.StatusNotFound, "Introuvable.")
 		return
 	}
-	if err := m.a.Q.SupprimerRecurrence(r.Context(), donnees.SupprimerRecurrenceParams{ID: x.ID, FamilleID: c.Famille.ID}); err != nil {
+	ctx := r.Context()
+	avecPassees := r.PostFormValue("passees") == "1"
+	var n int64
+	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		// Sur demande : aussi les opérations déjà ajoutées automatiquement
+		// (par exemple une ancienne opération « fixe » devenue récurrente).
+		if avecPassees {
+			var err error
+			if n, err = q.SupprimerOccurrences(ctx, donnees.SupprimerOccurrencesParams{RecurrenceID: sql.NullInt64{Int64: x.ID, Valid: true}, FamilleID: c.Famille.ID}); err != nil {
+				return err
+			}
+		}
+		return q.SupprimerRecurrence(ctx, donnees.SupprimerRecurrenceParams{ID: x.ID, FamilleID: c.Famille.ID})
+	})
+	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
 	m.a.Publier(c, mod, "")
-	m.a.Flash(w, "Supprimée (les opérations passées restent)")
+	if avecPassees {
+		m.a.Flash(w, "Supprimée, avec "+appli.Pluriel(n, "opération ajoutée", "opérations ajoutées"))
+	} else {
+		m.a.Flash(w, "Supprimée (les opérations passées restent)")
+	}
 	m.a.Rediriger(w, r, "/budget/recurrences")
 }

@@ -49,8 +49,12 @@ func TestProjet(t *testing.T) {
 
 	// Léa coche une étape ; elle ne peut pas en supprimer.
 	etape := essai.Trouver(t, page, `action="/projets/etapes/(\d+)/cocher"`)
-	if code, page := lea.Post("/projets/etapes/"+etape+"/cocher", nil); code != 200 || !strings.Contains(page, `max="2" value="1"`) {
+	if code, page := lea.Post("/projets/etapes/"+etape+"/cocher", map[string]string{"faite": "1"}); code != 200 || !strings.Contains(page, `max="2" value="1"`) {
 		t.Fatalf("cocher : %d", code)
+	}
+	// Double clic (même état demandé) : reste cochée.
+	if _, page := lea.Post("/projets/etapes/"+etape+"/cocher", map[string]string{"faite": "1"}); !strings.Contains(page, `max="2" value="1"`) {
+		t.Fatal("double clic : décochée")
 	}
 	if code, _ := lea.Post("/projets/etapes/"+etape+"/supprimer", nil); code != http.StatusForbidden {
 		t.Fatalf("suppression enfant : %d", code)

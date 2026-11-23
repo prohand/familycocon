@@ -148,3 +148,26 @@ func TestGenerer(t *testing.T) {
 		t.Fatalf("%d occurrences, attendu 4", len(ops))
 	}
 }
+
+// Supprimer une récurrence avec ses opérations déjà ajoutées (réparation
+// d'une ancienne opération « fixe » devenue récurrente).
+func TestSupprimerAvecOccurrences(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	paris, _ := time.LoadLocation("Europe/Paris")
+	debut := time.Now().In(paris).AddDate(0, -3, 0)
+	debut = time.Date(debut.Year(), debut.Month(), 1, 0, 0, 0, 0, paris)
+	marie.Get("/budget/nouvelle")
+	marie.Post("/budget", map[string]string{"montant": "50", "categorie": "loisirs", "jour": debut.Format("2006-01-02"), "frequence": "mois", "libelle": "Ancien club"})
+	marie.Post("/budget", map[string]string{"montant": "10", "categorie": "courses", "jour": time.Now().In(paris).Format("2006-01-02"), "libelle": "Pain"})
+	_, page := marie.Get("/budget/recurrences")
+	id := essai.Trouver(t, page, `href="/recurrences/(\d+)"`)
+	marie.Get("/recurrences/" + id)
+	if _, page := marie.Post("/recurrences/"+id+"/supprimer", map[string]string{"passees": "1"}); !strings.Contains(page, "opérations ajoutées") {
+		t.Fatalf("suppression :\n%s", page)
+	}
+	ops, _ := a.Q.OperationsPeriode(context.Background(), donnees.OperationsPeriodeParams{FamilleID: 1, Du: "2000-01-01", Au: "2999-01-01"})
+	if len(ops) != 1 || ops[0].Libelle != "Pain" {
+		t.Fatalf("%d opérations restantes", len(ops))
+	}
+}

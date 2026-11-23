@@ -152,3 +152,26 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
   2.1 / 3.0 / 4.0 (quoted-printable, Latin-1, anniversaire sans année,
   « 1604 » d'Apple). Photos ignorées. Doublon = même nom et même téléphone.
   Import et export réservés aux parents ; 8 Mo au plus pour l'envoi.
+
+## 11. Revue de sécurité et de bugs (23/11/2026)
+Quatre relectures (authentification, isolation des familles, entrées, bugs),
+chaque point vérifié puis corrigé avec un test :
+- connexion : adresse de retour toujours locale ; défis de passkey anonymes
+  limités par adresse et rangés à part ; mot de passe redemandé (et limité)
+  pour ajouter une passkey ou activer le TOTP ; invitation à usage unique même
+  en double envoi ; pas de code PIN pour un compte à mot de passe ; appareils
+  de confiance révocables (bouton, et au retrait d'un parent) ;
+- notifications et temps réel : désabonnement à la déconnexion, abonnement qui
+  suit la personne connectée sur un appareil partagé, supprimé au retrait ou à
+  la réinitialisation ; flux temps réel coupé dès que la session n'existe plus ;
+  10 appareils par membre ; client d'envoi sans redirection ni adresse interne ;
+- entrées : import vCard linéaire et borné ; agenda borné (dates, durée,
+  occurrences) ; récurrences bornées (date de départ, nombre) ;
+- bugs : étoiles d'une mission réattribuée, abonnement résilié réactivé,
+  renouvellement du jour, report de fin de mois, journée au changement d'heure,
+  rappels à 9 h dans le fuseau de chaque famille, menus « déjà aux courses ».
+Aucun accès aux données d'une autre famille n'a été trouvé.
+
+Non corrigé (choix à faire) : changer de mot de passe ne retire pas les
+passkeys ; un inconnu peut bloquer un compte 15 min et plus en ratant le mot
+de passe (la passkey reste possible) ; sessions glissantes sans durée maximale.

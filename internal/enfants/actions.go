@@ -337,11 +337,30 @@ func (m *Module) modifierMission(w http.ResponseWriter, r *http.Request, c *appl
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
-	if err := m.a.Q.ModifierMission(r.Context(), donnees.ModifierMissionParams{
-		EnfantID: s.enfant, Titre: s.titre, Emoji: s.emoji, Etoiles: s.etoiles, Categorie: s.categorie,
-		Repetition: s.regle.String(), ID: mi.ID, FamilleID: c.Famille.ID,
-	}); err != nil {
-		m.a.ErreurInterne(w, r, err)
+	ctx := r.Context()
+	var err2 error
+	if s.enfant != mi.EnfantID {
+		// Autre enfant : les étoiles déjà gagnées restent au premier. La
+		// mission est archivée et recréée pour le nouvel enfant (les étoiles
+		// sont comptées par mission ; la déplacer les déplacerait aussi).
+		err2 = m.a.Transaction(ctx, func(q *donnees.Queries) error {
+			if err := q.RetirerMission(ctx, donnees.RetirerMissionParams{ID: mi.ID, FamilleID: c.Famille.ID}); err != nil {
+				return err
+			}
+			_, err := q.CreerMission(ctx, donnees.CreerMissionParams{
+				FamilleID: c.Famille.ID, EnfantID: s.enfant, Titre: s.titre, Emoji: s.emoji, Etoiles: s.etoiles,
+				Categorie: s.categorie, Repetition: s.regle.String(), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+			})
+			return err
+		})
+	} else {
+		err2 = m.a.Q.ModifierMission(ctx, donnees.ModifierMissionParams{
+			EnfantID: s.enfant, Titre: s.titre, Emoji: s.emoji, Etoiles: s.etoiles, Categorie: s.categorie,
+			Repetition: s.regle.String(), ID: mi.ID, FamilleID: c.Famille.ID,
+		})
+	}
+	if err2 != nil {
+		m.a.ErreurInterne(w, r, err2)
 		return
 	}
 	m.a.Publier(c, mod, "")

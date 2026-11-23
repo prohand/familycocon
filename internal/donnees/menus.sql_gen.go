@@ -14,7 +14,8 @@ const enregistrerRepas = `-- name: EnregistrerRepas :one
 INSERT INTO repas (famille_id, jour, moment, nom, ingredients, cree_par, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (famille_id, jour, moment) DO UPDATE SET
-  nom = excluded.nom, ingredients = excluded.ingredients, dans_courses = 0
+  nom = excluded.nom, ingredients = excluded.ingredients,
+  dans_courses = CASE WHEN repas.ingredients = excluded.ingredients THEN repas.dans_courses ELSE 0 END
 RETURNING id, famille_id, jour, moment, nom, ingredients, dans_courses, cree_par, cree_le
 `
 

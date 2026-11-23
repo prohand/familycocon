@@ -142,24 +142,33 @@ func (a *App) blocAVenir(ctx context.Context, c *Contexte) (template.HTML, error
 	return a.RendreBloc("accueil", "a-venir", c, lignes)
 }
 
-// rappelsQuotidiens : chaque jour vers 9 h (heure de la famille), une
-// notification pour ce qui tombe aujourd'hui et dans 7 jours.
+// heureRappels : l'heure des rappels, dans le fuseau de chaque famille.
+const heureRappels = 9
+
+// rappelsQuotidiens : à chaque heure pile, les familles pour qui il est 9 h
+// (dans leur fuseau) reçoivent une notification pour ce qui tombe aujourd'hui
+// et dans 7 jours.
 func (a *App) rappelsQuotidiens(ctx context.Context) {
 	for {
-		attente := time.Until(prochaine(time.Now(), "09:00"))
-		minuteur := time.NewTimer(attente)
+		maintenant := time.Now()
+		minuteur := time.NewTimer(maintenant.Truncate(time.Hour).Add(time.Hour).Sub(maintenant))
 		select {
 		case <-ctx.Done():
 			minuteur.Stop()
 			return
-		case <-minuteur.C:
+		case t := <-minuteur.C:
+			a.envoyerRappelsA(ctx, t, true)
 		}
-		a.EnvoyerRappels(ctx, time.Now())
 	}
 }
 
 // EnvoyerRappels : les notifications de rappel du jour (toutes les familles).
 func (a *App) EnvoyerRappels(ctx context.Context, maintenant time.Time) int {
+	return a.envoyerRappelsA(ctx, maintenant, false)
+}
+
+// envoyerRappelsA : seulement aux familles pour qui il est 9 h si seule9h.
+func (a *App) envoyerRappelsA(ctx context.Context, maintenant time.Time, seule9h bool) int {
 	if a.Push == nil {
 		return 0
 	}
@@ -170,7 +179,11 @@ func (a *App) EnvoyerRappels(ctx context.Context, maintenant time.Time) int {
 	}
 	n := 0
 	for _, f := range familles {
-		auj := minuitDe(maintenant.In(lieuFamille(f)))
+		local := maintenant.Add(time.Minute).In(lieuFamille(f)) // minuteur un peu en avance : arrondi
+		if seule9h && local.Hour() != heureRappels {
+			continue
+		}
+		auj := minuitDe(local)
 		for _, decalage := range []int{0, 7} {
 			jour := auj.AddDate(0, 0, decalage)
 			for _, e := range a.Echeances(ctx, f, jour, jour.AddDate(0, 0, 1)) {

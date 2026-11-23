@@ -372,6 +372,11 @@ func (m *Module) cocher(w http.ResponseWriter, r *http.Request, c *appli.Context
 		m.a.Echec(w, r, http.StatusNotFound, "Étape introuvable.")
 		return
 	}
+	// État voulu envoyé par la page : un double clic ne décoche pas.
+	if v := r.PostFormValue("faite"); (v == "1" && e.FaiteLe > 0) || (v == "0" && e.FaiteLe == 0) {
+		m.a.Rediriger(w, r, fmt.Sprintf("/projets/%d", e.ProjetID))
+		return
+	}
 	arg := donnees.CocherEtapeParams{ID: e.ID, FamilleID: c.Famille.ID}
 	msg := "À refaire"
 	if e.FaiteLe == 0 {

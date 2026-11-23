@@ -10,7 +10,8 @@ SELECT * FROM repas WHERE famille_id = ? AND jour = ? AND moment = ?;
 INSERT INTO repas (famille_id, jour, moment, nom, ingredients, cree_par, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (famille_id, jour, moment) DO UPDATE SET
-  nom = excluded.nom, ingredients = excluded.ingredients, dans_courses = 0
+  nom = excluded.nom, ingredients = excluded.ingredients,
+  dans_courses = CASE WHEN repas.ingredients = excluded.ingredients THEN repas.dans_courses ELSE 0 END
 RETURNING *;
 
 -- name: ViderRepas :exec

@@ -45,3 +45,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: ModifierAbonnement :exec
 UPDATE abonnements SET emoji = ?, engagement_fin = ?, site = ?, notes = ? WHERE id = ? AND famille_id = ?;
+
+-- name: SupprimerOccurrences :execrows
+DELETE FROM operations WHERE recurrence_id = ? AND famille_id = ?;
