@@ -459,7 +459,12 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	m.a.Publier(c, mod, fmt.Sprintf("%s a ajouté la tâche « %s » %s", c.Membre.Nom, t.Titre, t.Emoji))
+	// Confiée à quelqu'un : lui seul est notifié.
+	var pour []int64
+	if assigne.Valid {
+		pour = []int64{assigne.Int64}
+	}
+	m.a.PublierPour(c, mod, fmt.Sprintf("%s a ajouté la tâche « %s » %s", c.Membre.Nom, t.Titre, t.Emoji), pour)
 	m.a.Flash(w, "Tâche ajoutée ✓")
 	m.a.Rediriger(w, r, "/taches")
 }
@@ -520,6 +525,11 @@ func (m *Module) faire(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	if n == 1 {
 		m.a.Publier(c, mod, fmt.Sprintf("%s a fait « %s » %s", c.Membre.Nom, t.Titre, t.Emoji))
 		appli.Notifier(w, "Bravo "+c.Membre.Nom+" ! 🎉", false)
+	}
+	// Cochée depuis l'accueil : seule la ligne change.
+	if r.PostFormValue("depuis") == "accueil" && appli.EstHtmx(r) {
+		m.a.Fragment(w, r, c, "taches/liste", "accueil-tache-faite", t)
+		return
 	}
 	m.renvoyer(w, r, c, lirePourForm(r))
 }

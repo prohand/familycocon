@@ -81,7 +81,7 @@
 {{if .}}
 <ul class="elements-jour">
   {{- range .}}
-  <li class="{{if .Faite}}faite{{end}}"><a href="{{.URL}}"><span class="coche-mini" aria-hidden="true"></span>{{.Emoji}} {{.Titre}}</a>{{with .Membre}}<span class="avatar mini c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}</li>
+  <li class="{{if .Faite}}faite{{end}}"><a href="{{.URL}}">{{if eq .Module "taches"}}<span class="coche-mini" aria-hidden="true"></span>{{end}}{{.Emoji}} {{.Titre}}</a>{{with .Membre}}<span class="avatar mini c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}</li>
   {{- end}}
 </ul>
 {{end}}

@@ -35,6 +35,8 @@
     <label><input type="radio" name="repetition" value="jour"{{if eq .Type "jour"}} checked{{end}}><span>Chaque jour</span></label>
     <label><input type="radio" name="repetition" value="jours"{{if eq .Type "jours"}} checked{{end}}><span>Certains jours</span></label>
     <label><input type="radio" name="repetition" value="semaine"{{if eq .Type "semaine"}} checked{{end}}><span>Chaque semaine</span></label>
+    <label><input type="radio" name="repetition" value="2semaines"{{if eq .Type "2semaines"}} checked{{end}}><span>Toutes les 2 semaines</span></label>
+    <label><input type="radio" name="repetition" value="mois"{{if eq .Type "mois"}} checked{{end}}><span>Chaque mois</span></label>
   </div>
   <div class="jours-semaine">
     {{- range $i, $nom := joursSemaine}}{{if $i}}

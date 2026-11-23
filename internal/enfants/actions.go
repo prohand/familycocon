@@ -76,7 +76,8 @@ func (m *Module) faire(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	// Déjà cochée ou déjà validée (double envoi) : rien n'a changé, les
 	// parents ne sont pas notifiés une seconde fois.
 	if n > 0 {
-		m.a.Publier(c, mod, fmt.Sprintf("%s a fini « %s » %s : à valider", c.Membre.Nom, mi.Titre, mi.Emoji))
+		// « À valider » : pour les parents seulement.
+		m.a.PublierPour(c, mod, fmt.Sprintf("%s a fini « %s » %s : à valider", c.Membre.Nom, mi.Titre, mi.Emoji), m.a.Parents(r.Context(), c))
 		appli.Notifier(w, "Super ! Un parent va vérifier 👀", false)
 	}
 	m.renvoyer(w, r, c, mi.EnfantID)
@@ -125,11 +126,12 @@ func (m *Module) decider(w http.ResponseWriter, r *http.Request, c *appli.Contex
 	}
 	if n > 0 {
 		enfant := m.nomEnfant(r, c, f.EnfantID)
+		pour := append(m.a.Parents(ctx, c), f.EnfantID) // l'enfant et les parents
 		if etat == Validee {
-			m.a.Publier(c, mod, fmt.Sprintf("Bravo %s ! +%d ⭐ pour « %s »", enfant, f.Etoiles, f.Titre))
+			m.a.PublierPour(c, mod, fmt.Sprintf("Bravo %s ! +%d ⭐ pour « %s »", enfant, f.Etoiles, f.Titre), pour)
 			appli.Notifier(w, fmt.Sprintf("+%d ⭐ pour %s", f.Etoiles, enfant), false)
 		} else {
-			m.a.Publier(c, mod, fmt.Sprintf("%s : « %s » est à refaire 💪", enfant, f.Titre))
+			m.a.PublierPour(c, mod, fmt.Sprintf("%s : « %s » est à refaire 💪", enfant, f.Titre), pour)
 			appli.Notifier(w, "Mission à refaire", false)
 		}
 	}
@@ -206,7 +208,7 @@ func (m *Module) demander(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.renvoyer(w, r, c, c.Membre.ID)
 		return
 	}
-	m.a.Publier(c, mod, fmt.Sprintf("%s voudrait « %s » %s (%d ⭐)", c.Membre.Nom, rec.Titre, rec.Emoji, rec.Prix))
+	m.a.PublierPour(c, mod, fmt.Sprintf("%s voudrait « %s » %s (%d ⭐)", c.Membre.Nom, rec.Titre, rec.Emoji, rec.Prix), m.a.Parents(r.Context(), c))
 	appli.Notifier(w, "Demande envoyée aux parents 🎁", false)
 	m.renvoyer(w, r, c, c.Membre.ID)
 }
@@ -235,10 +237,11 @@ func (m *Module) deciderEchange(w http.ResponseWriter, r *http.Request, c *appli
 	}
 	if n > 0 {
 		enfant := m.nomEnfant(r, c, e.EnfantID)
+		pour := append(m.a.Parents(ctx, c), e.EnfantID) // l'enfant et les parents
 		if etat == "confirme" {
-			m.a.Publier(c, mod, fmt.Sprintf("🎉 %s a gagné « %s » %s !", enfant, e.Titre, e.Emoji))
+			m.a.PublierPour(c, mod, fmt.Sprintf("🎉 %s a gagné « %s » %s !", enfant, e.Titre, e.Emoji), pour)
 		} else {
-			m.a.Publier(c, mod, fmt.Sprintf("%s : « %s » sera pour une autre fois", enfant, e.Titre))
+			m.a.PublierPour(c, mod, fmt.Sprintf("%s : « %s » sera pour une autre fois", enfant, e.Titre), pour)
 		}
 	}
 	m.renvoyer(w, r, c, e.EnfantID)
@@ -349,7 +352,7 @@ func (m *Module) creerMission(w http.ResponseWriter, r *http.Request, c *appli.C
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	m.a.Publier(c, mod, fmt.Sprintf("Nouvelle mission : « %s » %s (%d ⭐)", mi.Titre, mi.Emoji, mi.Etoiles))
+	m.a.PublierPour(c, mod, fmt.Sprintf("Nouvelle mission : « %s » %s (%d ⭐)", mi.Titre, mi.Emoji, mi.Etoiles), []int64{s.enfant})
 	m.a.Flash(w, "Mission ajoutée ⭐")
 	m.a.Rediriger(w, r, fmt.Sprintf("/enfants/enfant/%d", s.enfant))
 }

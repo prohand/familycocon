@@ -344,6 +344,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: var(--texte-doux);
   cursor: pointer;
 }
+/* Courses : « Souvent achetés », un toucher pour ajouter. */
+.pilules-souvent { display: flex; flex-wrap: wrap; gap: 8px; }
+.pilules-souvent form { display: contents; }
+.pilules-souvent .pilule { font-family: inherit; }
 .pilule.active { background: var(--texte); border-color: var(--texte); color: var(--fond); }
 
 /* ---------- Formulaires ---------- */

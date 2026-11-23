@@ -99,8 +99,12 @@ func (a *App) cleVAPID(ctx context.Context) (*ecdsa.PrivateKey, error) {
 
 // Annoncer met une notification dans la file (sans attendre).
 func (p *Pousseur) Annoncer(famille, auteur int64, module, texte string) {
+	p.annoncer(annonce{famille: famille, auteur: auteur, module: module, texte: texte})
+}
+
+func (p *Pousseur) annoncer(an annonce) {
 	select {
-	case p.file <- annonce{famille: famille, auteur: auteur, module: module, texte: texte}:
+	case p.file <- an:
 	default:
 		p.a.Journal.Warn("file des notifications pleine : notification perdue")
 	}

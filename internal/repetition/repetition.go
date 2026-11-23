@@ -10,6 +10,8 @@
 //	"jour"          chaque jour
 //	"jours:1,3,5"   certains jours (1 = lundi … 7 = dimanche)
 //	"semaine"       une fois par semaine (n'importe quel jour)
+//	"2semaines"     une fois toutes les deux semaines
+//	"mois"          une fois par mois
 package repetition
 
 import (
@@ -26,7 +28,14 @@ const (
 	Jour    = "jour"
 	Jours   = "jours"
 	Semaine = "semaine"
+	// DeuxSemaines : une fois dans chaque période de deux semaines (comptées
+	// à partir du lundi 1er janvier 2024 : les mêmes pour toute la famille).
+	DeuxSemaines = "2semaines"
+	Mois         = "mois"
 )
+
+// origineQuinzaines : premier lundi des périodes de deux semaines.
+var origineQuinzaines = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // CleUnique : clé de l'occurrence d'une tâche « une fois ».
 const CleUnique = "unique"
@@ -43,7 +52,7 @@ var NomsJours = []string{"", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"}
 // Lire décode une règle (une règle abîmée vaut « une fois »).
 func Lire(s string) Regle {
 	switch {
-	case s == Jour || s == Semaine:
+	case s == Jour || s == Semaine || s == DeuxSemaines || s == Mois:
 		return Regle{Type: s}
 	case strings.HasPrefix(s, Jours+":"):
 		r := Regle{Type: Jours}
@@ -81,6 +90,10 @@ func (r Regle) Texte() string {
 		return "Chaque jour"
 	case Semaine:
 		return "Chaque semaine"
+	case DeuxSemaines:
+		return "Toutes les 2 semaines"
+	case Mois:
+		return "Chaque mois"
 	case Jours:
 		var l []string
 		for i := 1; i <= 7; i++ {
@@ -126,17 +139,33 @@ func (r Regle) Occurrence(t time.Time) (cle string, aFaire bool) {
 		return CleJour(t), r.Jours[NumeroJour(t)]
 	case Semaine:
 		return "s" + CleJour(Lundi(t)), true
+	case DeuxSemaines:
+		return "q" + CleJour(DebutQuinzaine(t)), true
+	case Mois:
+		return "m" + t.Format("2006-01"), true
 	}
 	return CleUnique, true
 }
 
+// DebutQuinzaine : le lundi qui ouvre la période de deux semaines du jour t.
+func DebutQuinzaine(t time.Time) time.Time {
+	lundi := Lundi(t)
+	// Nombre de jours depuis l'origine, compté sur les dates (pas sur les
+	// heures : un changement d'heure ne décale rien).
+	jours := int(time.Date(lundi.Year(), lundi.Month(), lundi.Day(), 0, 0, 0, 0, time.UTC).Sub(origineQuinzaines).Hours() / 24)
+	if (jours/7)%2 != 0 {
+		lundi = lundi.AddDate(0, 0, -7)
+	}
+	return lundi
+}
+
 // DepuisFormulaire lit les champs « repetition » (unique, jour, jours,
-// semaine) et « jour1 » … « jour7 » d'un formulaire.
+// semaine, 2semaines, mois) et « jour1 » … « jour7 » d'un formulaire.
 func DepuisFormulaire(v url.Values) (Regle, error) {
 	switch t := v.Get("repetition"); t {
 	case "", "unique":
 		return Regle{}, nil
-	case Jour, Semaine:
+	case Jour, Semaine, DeuxSemaines, Mois:
 		return Regle{Type: t}, nil
 	case Jours:
 		r := Regle{Type: Jours}

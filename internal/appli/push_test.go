@@ -112,6 +112,13 @@ func TestNotificationsPush(t *testing.T) {
 		t.Fatalf("envois : %v", l)
 	}
 
+	// Notification pour Marie seulement : rien pour Thomas.
+	a.PublierPour(cMarie, "agenda", "Pour Marie seulement", []int64{membreID(t, a, "marie")})
+	time.Sleep(100 * time.Millisecond)
+	if l := attendre(1); len(l) != 1 {
+		t.Fatalf("notification ciblée envoyée à un autre membre : %v", l)
+	}
+
 	// Thomas a une page ouverte : pas de push.
 	ch := a.Direct.abonner(1, membreID(t, a, "thomas"))
 	a.Publier(cMarie, "agenda", "Marie a ajouté « Dentiste »")
@@ -256,5 +263,19 @@ func TestTexteRappels(t *testing.T) {
 	}
 	if texte, url := texteRappels([]Echeance{e, e}, []string{"a", "b"}); url != "/" || texte != "a\nb" {
 		t.Fatalf("deux rappels : %q %q", texte, url)
+	}
+}
+
+// Temps réel : le texte d'une notification ciblée ne s'affiche que chez les
+// membres visés ; les autres pages se mettent quand même à jour.
+func TestDirectCible(t *testing.T) {
+	d := nouveauDirect()
+	vise, autre := d.abonner(1, 10), d.abonner(1, 20)
+	d.PublierPour(1, Message{Module: "enfants", Texte: "à valider"}, []int64{10})
+	if m := string(<-vise); !strings.Contains(m, "à valider") {
+		t.Fatalf("membre visé : %s", m)
+	}
+	if m := string(<-autre); strings.Contains(m, "à valider") || !strings.Contains(m, `"module":"enfants"`) {
+		t.Fatalf("autre membre : %s", m)
 	}
 }

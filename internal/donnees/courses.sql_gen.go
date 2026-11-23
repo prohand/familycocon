@@ -247,6 +247,20 @@ func (q *Queries) ModifierProduit(ctx context.Context, arg ModifierProduitParams
 	return err
 }
 
+const oublierProduit = `-- name: OublierProduit :exec
+DELETE FROM produits_connus WHERE famille_id = ? AND cle = ?
+`
+
+type OublierProduitParams struct {
+	FamilleID int64
+	Cle       string
+}
+
+func (q *Queries) OublierProduit(ctx context.Context, arg OublierProduitParams) error {
+	_, err := q.db.ExecContext(ctx, oublierProduit, arg.FamilleID, arg.Cle)
+	return err
+}
+
 const produitConnu = `-- name: ProduitConnu :one
 SELECT famille_id, cle, nom, rayon, emoji, compte, vu_le FROM produits_connus WHERE famille_id = ? AND cle = ?
 `
@@ -298,6 +312,48 @@ func (q *Queries) ProduitParID(ctx context.Context, arg ProduitParIDParams) (Pro
 		&i.PrisLe,
 	)
 	return i, err
+}
+
+const produitsCles = `-- name: ProduitsCles :many
+SELECT id, nom, quantite, pris FROM produits WHERE liste_id = ? ORDER BY pris, id
+`
+
+type ProduitsClesRow struct {
+	ID       int64
+	Nom      string
+	Quantite string
+	Pris     int64
+}
+
+// Produits d'une liste dont la cle (nom simplifie) est donnee : un produit
+// ajoute deux fois ne fait pas deux lignes. La cle est calculee en Go ;
+// la liste est bornee (2000 produits), lue en entier.
+func (q *Queries) ProduitsCles(ctx context.Context, listeID int64) ([]ProduitsClesRow, error) {
+	rows, err := q.db.QueryContext(ctx, produitsCles, listeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ProduitsClesRow{}
+	for rows.Next() {
+		var i ProduitsClesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nom,
+			&i.Quantite,
+			&i.Pris,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const produitsDeListe = `-- name: ProduitsDeListe :many
@@ -354,6 +410,20 @@ func (q *Queries) RenommerListe(ctx context.Context, arg RenommerListeParams) er
 	return err
 }
 
+const reprendreProduit = `-- name: ReprendreProduit :exec
+UPDATE produits SET quantite = ?, pris = 0, pris_par = NULL, pris_le = NULL WHERE id = ?
+`
+
+type ReprendreProduitParams struct {
+	Quantite string
+	ID       int64
+}
+
+func (q *Queries) ReprendreProduit(ctx context.Context, arg ReprendreProduitParams) error {
+	_, err := q.db.ExecContext(ctx, reprendreProduit, arg.Quantite, arg.ID)
+	return err
+}
+
 const retenirProduit = `-- name: RetenirProduit :exec
 INSERT INTO produits_connus (famille_id, cle, nom, rayon, emoji, compte, vu_le)
 VALUES (?, ?, ?, ?, ?, 1, ?)
@@ -380,6 +450,43 @@ func (q *Queries) RetenirProduit(ctx context.Context, arg RetenirProduitParams) 
 		arg.VuLe,
 	)
 	return err
+}
+
+const souventAchetes = `-- name: SouventAchetes :many
+SELECT cle, nom, emoji FROM produits_connus
+WHERE famille_id = ? AND compte >= 2
+ORDER BY compte DESC, vu_le DESC LIMIT 40
+`
+
+type SouventAchetesRow struct {
+	Cle   string
+	Nom   string
+	Emoji string
+}
+
+// Souvent achetes : produits connus ajoutes deux fois ou plus. Ceux deja
+// sur la liste sont retires en Go (la cle des produits est calculee en Go).
+func (q *Queries) SouventAchetes(ctx context.Context, familleID int64) ([]SouventAchetesRow, error) {
+	rows, err := q.db.QueryContext(ctx, souventAchetes, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SouventAchetesRow{}
+	for rows.Next() {
+		var i SouventAchetesRow
+		if err := rows.Scan(&i.Cle, &i.Nom, &i.Emoji); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const suggestionsProduits = `-- name: SuggestionsProduits :many

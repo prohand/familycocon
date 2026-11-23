@@ -53,6 +53,15 @@ func TestTachesDuJour(t *testing.T) {
 	if _, frag = marie.Post("/taches/"+id+"/defaire", map[string]string{"pour": "0"}); strings.Contains(frag, "par Marie") {
 		t.Fatal("décochage sans effet")
 	}
+	// Cochée depuis l'accueil : la ligne seule revient, cochée.
+	marie.Htmx = false
+	if _, page := marie.Get("/"); !strings.Contains(page, `hx-post="/taches/`+id+`/faire"`) {
+		t.Fatal("pas de case à cocher dans le bloc de l'accueil")
+	}
+	marie.Htmx = true
+	if code, frag := marie.Post("/taches/"+id+"/faire", map[string]string{"depuis": "accueil"}); code != 200 || !strings.Contains(frag, "Fait par Marie") || strings.Contains(frag, "Qui a fait quoi") {
+		t.Fatalf("faite depuis l'accueil : %d\n%s", code, frag)
+	}
 }
 
 func TestDroitsEnfant(t *testing.T) {

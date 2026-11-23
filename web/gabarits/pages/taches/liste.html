@@ -91,11 +91,21 @@
 <div class="section-titre"><h2>Tâches du jour</h2><a href="/taches">Tout voir ›</a></div>
 <div class="carte">
   {{- range .Donnees}}
-  <div class="ligne">
-    {{template "avatar-petit" .Assigne}}
+  <div class="ligne tache">
+    <button class="coche" hx-post="/taches/{{.ID}}/faire" hx-vals='{"depuis": "accueil"}' hx-target="closest .ligne" hx-swap="outerHTML" aria-label="J'ai fait {{.Titre}}"></button>
     <span>{{.Emoji}}</span>
     <span class="quoi">{{.Titre}}<small>{{.Regle.Texte}}</small></span>
+    {{template "avatar-petit" .Assigne}}
   </div>
   {{- end}}
+</div>
+{{end}}
+
+{{/* Tâche cochée depuis l'accueil : la ligne seule est remplacée. */}}
+{{define "accueil-tache-faite"}}
+<div class="ligne tache faite">
+  <span class="coche cochee" aria-hidden="true"></span>
+  <span>{{.Donnees.Emoji}}</span>
+  <span class="quoi">{{.Donnees.Titre}}<small>Fait par {{.C.Membre.Nom}}</small></span>
 </div>
 {{end}}

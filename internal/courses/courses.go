@@ -41,6 +41,7 @@ func Brancher(a *appli.App) {
 	a.Route("GET /courses/produit/{pid}/modifier", mod, appli.Membre, m.edition)
 	a.Route("POST /courses/produit/{pid}", mod, appli.Membre, m.modifier)
 	a.Route("POST /courses/produit/{pid}/supprimer", mod, appli.Parent, m.supprimer)
+	a.Route("POST /courses/oublier", mod, appli.Parent, m.oublier)
 
 	a.AjouterResume(mod, m.resume)
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "🛒", Texte: "Un produit à acheter", URL: "/courses?ajout=1"})
@@ -84,7 +85,7 @@ func AjouterProduits(ctx context.Context, q *donnees.Queries, c *appli.Contexte,
 		if deja+int64(n) >= produitsMax {
 			break
 		}
-		if _, err := ajouterProduit(ctx, q, c, liste.ID, s, ""); err != nil {
+		if _, _, err := ajouterProduit(ctx, q, c, liste.ID, s, ""); err != nil {
 			return n, err
 		}
 		n++
@@ -163,7 +164,11 @@ type vueListe struct {
 	Edition     int64 // produit en cours de modification
 	Ajout       bool  // venu du bouton « + » : curseur dans le champ
 	Rafraichir  bool  // le bloc se recharge sur un changement venu d'ailleurs
+	Souvent     []donnees.SouventAchetesRow // souvent achetés, pas sur la liste
 }
+
+// souventMax : pastilles « Souvent achetés » affichées sous la liste.
+const souventMax = 10
 
 func (m *Module) vue(ctx context.Context, c *appli.Contexte, liste donnees.Liste) (*vueListe, error) {
 	v := &vueListe{Liste: liste, TousRayons: Rayons, Rafraichir: true}
@@ -207,6 +212,22 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, liste donnees.Liste
 	}
 	for _, g := range groupes { // rayon inconnu (ne devrait pas arriver)
 		v.Rayons = append(v.Rayons, *g)
+	}
+	// Souvent achetés : un toucher pour les remettre sur la liste.
+	surListe := map[string]bool{}
+	for _, p := range produits {
+		if p.Pris == 0 {
+			surListe[Cle(p.Nom)] = true
+		}
+	}
+	souvent, err := m.a.Q.SouventAchetes(ctx, c.Famille.ID)
+	if err != nil {
+		m.a.Journal.Warn("courses : souvent achetés illisibles", "erreur", err) // la page marche sans
+	}
+	for _, x := range souvent {
+		if !surListe[x.Cle] && len(v.Souvent) < souventMax {
+			v.Souvent = append(v.Souvent, x)
+		}
 	}
 	return v, nil
 }
@@ -273,12 +294,33 @@ func peutRetenir(ctx context.Context, q *donnees.Queries, famille int64, connu b
 
 // ajouterProduit : analyse la saisie, choisit le rayon (choisi, retenu par
 // la famille, ou deviné), enregistre. q : a.Q, ou les requêtes d'une transaction.
-func ajouterProduit(ctx context.Context, q *donnees.Queries, c *appli.Contexte, liste int64, saisie, rayonChoisi string) (donnees.Produit, error) {
+// Un produit déjà sur la liste ne fait pas une seconde ligne : sa quantité
+// est complétée (« 2 » + « 1 » = « 3 ») et, s'il était pris, il redevient
+// à prendre. deja : vrai dans ce cas.
+func ajouterProduit(ctx context.Context, q *donnees.Queries, c *appli.Contexte, liste int64, saisie, rayonChoisi string) (p donnees.Produit, deja bool, err error) {
 	if !SaisieValide(saisie) {
-		return donnees.Produit{}, errSaisie
+		return donnees.Produit{}, false, errSaisie
 	}
 	nom, quantite := Analyser(saisie)
 	cle := Cle(nom)
+	existants, err := q.ProduitsCles(ctx, liste)
+	if err != nil {
+		return p, false, err
+	}
+	for _, x := range existants {
+		if Cle(x.Nom) != cle {
+			continue
+		}
+		qte := quantite
+		if x.Pris == 0 {
+			qte = Additionner(x.Quantite, quantite)
+		}
+		if err := q.ReprendreProduit(ctx, donnees.ReprendreProduitParams{Quantite: qte, ID: x.ID}); err != nil {
+			return p, true, err
+		}
+		p, err = q.ProduitParID(ctx, donnees.ProduitParIDParams{ID: x.ID, FamilleID: c.Famille.ID})
+		return p, true, err
+	}
 	rayon, emoji := Deviner(nom)
 	connu, err := q.ProduitConnu(ctx, donnees.ProduitConnuParams{FamilleID: c.Famille.ID, Cle: cle})
 	dejaConnu := err == nil
@@ -293,19 +335,56 @@ func ajouterProduit(ctx context.Context, q *donnees.Queries, c *appli.Contexte, 
 		}
 		if retenir {
 			if err := q.CorrigerRayon(ctx, donnees.CorrigerRayonParams{FamilleID: c.Famille.ID, Cle: cle, Nom: nom, Rayon: rayon, Emoji: emoji, VuLe: time.Now().Unix()}); err != nil {
-				return donnees.Produit{}, err
+				return donnees.Produit{}, false, err
 			}
 		}
 	}
-	p, err := q.AjouterProduit(ctx, donnees.AjouterProduitParams{
+	p, err = q.AjouterProduit(ctx, donnees.AjouterProduitParams{
 		ListeID: liste, Nom: nom, Quantite: quantite, Rayon: rayon, Emoji: emoji,
 		AjoutePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 	})
 	if err != nil || !retenir {
-		return p, err
+		return p, false, err
 	}
 	err = q.RetenirProduit(ctx, donnees.RetenirProduitParams{FamilleID: c.Famille.ID, Cle: cle, Nom: nom, Rayon: rayon, Emoji: emoji, VuLe: time.Now().Unix()})
-	return p, err
+	return p, false, err
+}
+
+// Additionner : la quantité d'un produit ajouté une seconde fois.
+// « 2 » + « 3 » = « 5 », « 500 g » + « 250 g » = « 750 g » ; sinon les deux
+// sont mises bout à bout (« 2 + 1 kg »), ou la nouvelle si c'est trop long.
+func Additionner(avant, ajout string) string {
+	switch {
+	case ajout == "":
+		return avant
+	case avant == "":
+		return ajout
+	}
+	na, ua, okA := nombreEtUnite(avant)
+	nb, ub, okB := nombreEtUnite(ajout)
+	if okA && okB && strings.EqualFold(ua, ub) {
+		return strings.TrimSpace(strconv.Itoa(na+nb) + " " + ua)
+	}
+	if somme := avant + " + " + ajout; utf8.RuneCountInString(somme) <= quantiteMax {
+		return somme
+	}
+	return ajout
+}
+
+// nombreEtUnite : « 500 g » → 500, « g » ; « 3 » → 3, « » (entiers seulement).
+func nombreEtUnite(s string) (int, string, bool) {
+	mots := strings.Fields(s)
+	if len(mots) == 0 || len(mots) > 2 {
+		return 0, "", false
+	}
+	n, err := strconv.Atoi(mots[0])
+	if err != nil || n < 0 || n > 100000 {
+		return 0, "", false
+	}
+	if len(mots) == 2 {
+		return n, mots[1], true
+	}
+	return n, "", true
 }
 
 var (
@@ -325,6 +404,7 @@ func (m *Module) ajouter(w http.ResponseWriter, r *http.Request, c *appli.Contex
 		return
 	}
 	var p donnees.Produit
+	var deja bool
 	err = m.a.Transaction(r.Context(), func(q *donnees.Queries) error {
 		n, err := q.CompterProduitsListe(r.Context(), liste.ID)
 		if err != nil {
@@ -333,7 +413,7 @@ func (m *Module) ajouter(w http.ResponseWriter, r *http.Request, c *appli.Contex
 		if n >= produitsMax {
 			return errListePleine
 		}
-		p, err = ajouterProduit(r.Context(), q, c, liste.ID, saisie, r.PostFormValue("rayon"))
+		p, deja, err = ajouterProduit(r.Context(), q, c, liste.ID, saisie, r.PostFormValue("rayon"))
 		return err
 	})
 	if errors.Is(err, errSaisie) {
@@ -348,7 +428,17 @@ func (m *Module) ajouter(w http.ResponseWriter, r *http.Request, c *appli.Contex
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	m.a.Publier(c, "courses", fmt.Sprintf("%s a ajouté « %s » %s", c.Membre.Nom, p.Nom, p.Emoji))
+	if deja {
+		// Déjà sur la liste : pas de seconde ligne, ni de notification.
+		m.a.Publier(c, "courses", "")
+		texte := "« " + p.Nom + " » est déjà sur la liste"
+		if p.Quantite != "" {
+			texte += " (" + p.Quantite + ")"
+		}
+		appli.Notifier(w, texte, false)
+	} else {
+		m.a.Publier(c, "courses", fmt.Sprintf("%s a ajouté « %s » %s", c.Membre.Nom, p.Nom, p.Emoji))
+	}
 	if !appli.EstHtmx(r) {
 		http.Redirect(w, r, fmt.Sprintf("/courses/liste/%d", liste.ID), http.StatusSeeOther)
 		return
@@ -455,6 +545,23 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 	}
 	m.a.Publier(c, "courses", "")
 	m.renvoyerListeDuProduit(w, r, c, p, 0)
+}
+
+// oublier : un parent retire une suggestion (faute de frappe…). Le produit
+// n'est plus proposé ; s'il est rajouté, il est de nouveau retenu.
+func (m *Module) oublier(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	nom, _ := Analyser(strings.TrimSpace(r.PostFormValue("nom")))
+	if nom == "" {
+		m.a.Echec(w, r, http.StatusBadRequest, "Écrivez le produit à oublier.")
+		return
+	}
+	if err := m.a.Q.OublierProduit(r.Context(), donnees.OublierProduitParams{FamilleID: c.Famille.ID, Cle: Cle(nom)}); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Publier(c, "courses", "")
+	m.a.Flash(w, "« "+nom+" » ne sera plus proposé")
+	m.a.Rediriger(w, r, "/courses")
 }
 
 func (m *Module) vider(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {

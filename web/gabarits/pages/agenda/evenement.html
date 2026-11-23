@@ -61,6 +61,10 @@
     <label class="champ fin-repetition"><span>Jusqu'au (facultatif)</span><input type="date" name="repetition_fin" value="{{.Evt.RepetitionFin}}"></label>
   </fieldset>
 
+  <label class="interrupteur">
+    <span class="emoji">⏰</span><span class="nom">Me le rappeler <small class="aide">(le matin même et 7 jours avant, et dans « À venir »)</small></span>
+    <input type="checkbox" name="rappel" value="1"{{if eq .Evt.Rappel 1}} checked{{end}}><span class="glissiere"></span>
+  </label>
   <label class="champ"><span>Où ? (facultatif)</span><input name="lieu" value="{{.Evt.Lieu}}" maxlength="80"></label>
   <label class="champ"><span>Note (facultatif)</span><textarea name="note" rows="3" maxlength="500">{{.Evt.Note}}</textarea></label>
   {{if .Modifiable}}<div class="boutons"><button class="bouton">{{if .Nouveau}}Ajouter{{else}}Enregistrer{{end}}</button></div>{{end}}

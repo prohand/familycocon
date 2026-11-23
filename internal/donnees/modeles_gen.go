@@ -141,6 +141,7 @@ type Evenement struct {
 	CreePar       sql.NullInt64
 	CreeLe        int64
 	RepetitionFin string
+	Rappel        int64
 }
 
 type EvenementsContact struct {

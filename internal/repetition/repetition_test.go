@@ -9,7 +9,7 @@ import (
 )
 
 func TestLectureEcriture(t *testing.T) {
-	for _, s := range []string{"", "jour", "semaine", "jours:1,3,5", "jours:6,7"} {
+	for _, s := range []string{"", "jour", "semaine", "2semaines", "mois", "jours:1,3,5", "jours:6,7"} {
 		if got := Lire(s).String(); got != s {
 			t.Errorf("%q relu en %q", s, got)
 		}
@@ -41,6 +41,22 @@ func TestOccurrence(t *testing.T) {
 	if c1 != c2 || c1 != "s2026-11-16" {
 		t.Fatalf("%s / %s", c1, c2)
 	}
+	// Deux semaines : même clé sur 14 jours, pour tout le monde.
+	q1, _ := Lire("2semaines").Occurrence(time.Date(2026, 11, 16, 9, 0, 0, 0, paris))
+	q2, _ := Lire("2semaines").Occurrence(time.Date(2026, 11, 29, 23, 0, 0, 0, paris))
+	q3, _ := Lire("2semaines").Occurrence(time.Date(2026, 11, 30, 9, 0, 0, 0, paris))
+	if q1 != q2 || q1 == q3 || (q1 != "q2026-11-16" && q1 != "q2026-11-09") {
+		t.Fatalf("deux semaines : %s / %s / %s", q1, q2, q3)
+	}
+	// Changement d'heure (29 mars 2026) : les périodes ne bougent pas.
+	a, _ := Lire("2semaines").Occurrence(time.Date(2026, 3, 23, 9, 0, 0, 0, paris))
+	b, _ := Lire("2semaines").Occurrence(time.Date(2026, 4, 5, 9, 0, 0, 0, paris))
+	if a != b {
+		t.Fatalf("période coupée par le changement d'heure : %s / %s", a, b)
+	}
+	if c, _ := Lire("mois").Occurrence(dimanche); c != "m2026-11" {
+		t.Fatal(c)
+	}
 	if c, _ := Lire("").Occurrence(dimanche); c != CleUnique {
 		t.Fatal(c)
 	}
@@ -54,7 +70,10 @@ func TestFormulaire(t *testing.T) {
 	if _, err := DepuisFormulaire(url.Values{"repetition": {"jours"}}); err == nil {
 		t.Fatal("aucun jour accepté")
 	}
-	if _, err := DepuisFormulaire(url.Values{"repetition": {"mois"}}); err == nil {
+	if r, err := DepuisFormulaire(url.Values{"repetition": {"mois"}}); err != nil || r.Texte() != "Chaque mois" {
+		t.Fatal("chaque mois refusé")
+	}
+	if _, err := DepuisFormulaire(url.Values{"repetition": {"toutes-les-heures"}}); err == nil {
 		t.Fatal("type inconnu accepté")
 	}
 }
