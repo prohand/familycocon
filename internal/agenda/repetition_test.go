@@ -90,3 +90,38 @@ func TestFormulaireRepetition(t *testing.T) {
 		t.Fatalf("répétition inconnue : %d (elle devient « une fois »)", code)
 	}
 }
+
+// Journée entière qui revient un jour de passage à l'heure d'été (23 h) :
+// elle ne déborde pas sur le lendemain.
+func TestJourneeChangementHeure(t *testing.T) {
+	paris, _ := time.LoadLocation("Europe/Paris")
+	d := time.Date(2027, 3, 21, 0, 0, 0, 0, paris)
+	e := donnees.Evenement{Debut: d.Unix(), Fin: d.AddDate(0, 0, 1).Add(-time.Second).Unix(), Journee: 1, Repetition: "semaine"}
+	lundi := time.Date(2027, 3, 29, 0, 0, 0, 0, paris)
+	if occ := deplier(e, paris, lundi, lundi.AddDate(0, 0, 1)); len(occ) != 0 {
+		t.Fatalf("déborde sur le lundi : %v", occ)
+	}
+	if occ := deplier(e, paris, lundi.AddDate(0, 0, -1), lundi); len(occ) != 1 {
+		t.Fatalf("absent le dimanche 28 : %v", occ)
+	}
+}
+
+// Événement démesuré : refusé à la saisie, et plafonné s'il existait déjà.
+func TestAgendaDemesure(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	marie.Get("/agenda/nouveau")
+	if code, _ := marie.Post("/agenda", map[string]string{"titre": "X", "date": "1800-01-01", "date_fin": "2090-01-01", "repetition": "jour"}); code != 400 {
+		t.Fatalf("événement de 290 ans accepté : %d", code)
+	}
+	if code, _ := marie.Post("/agenda", map[string]string{"titre": "X", "date": "2026-01-01", "date_fin": "2026-03-01", "repetition": "semaine"}); code != 400 {
+		t.Fatalf("événement de 2 mois chaque semaine accepté : %d", code)
+	}
+	paris, _ := time.LoadLocation("Europe/Paris")
+	d := time.Date(1900, 1, 1, 0, 0, 0, 0, paris)
+	e := donnees.Evenement{Debut: d.Unix(), Fin: time.Date(2090, 1, 1, 0, 0, 0, 0, paris).Unix(), Journee: 1, Repetition: "jour"}
+	semaine := time.Date(2026, 11, 23, 0, 0, 0, 0, paris)
+	if occ := deplier(e, paris, semaine, semaine.AddDate(0, 0, 7)); len(occ) > occurrencesMax {
+		t.Fatalf("%d occurrences", len(occ))
+	}
+}

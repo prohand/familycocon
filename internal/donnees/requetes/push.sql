@@ -30,3 +30,8 @@ UPDATE membres SET push_modules = ? WHERE id = ?;
 
 -- name: SupprimerAbonnementsPushMembre :exec
 DELETE FROM abonnements_push WHERE membre_id = ?;
+
+-- name: GarderDerniersAbonnements :exec
+DELETE FROM abonnements_push WHERE abonnements_push.membre_id = sqlc.arg(membre) AND abonnements_push.id NOT IN (
+  SELECT r.id FROM abonnements_push r WHERE r.membre_id = sqlc.arg(membre) ORDER BY r.id DESC LIMIT sqlc.arg(garder)
+);

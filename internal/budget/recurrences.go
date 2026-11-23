@@ -70,6 +70,41 @@ func Occurrence(debut, freq string, k int64) (time.Time, error) {
 	return premier.AddDate(0, 0, min(d.Day(), dernierJour)-1), nil
 }
 
+// ParAn : le montant sur une année (exact, sans arrondi).
+func ParAn(montant int64, freq string) int64 {
+	f, _ := frequence(freq)
+	if f.Mois == 0 {
+		return montant * 52
+	}
+	return montant * int64(12/f.Mois)
+}
+
+// RecurrencesMax : par famille (garde-fou).
+const RecurrencesMax = 300
+
+// ValiderProchaine : la date de la prochaine fois est-elle acceptable ?
+// Pas plus d'un an dans le passé (sinon des centaines d'opérations seraient
+// écrites d'un coup), pas plus de 50 ans plus tard, et après la dernière
+// occurrence déjà écrite (sinon elle serait écrite deux fois). rec : la
+// récurrence modifiée (nil pour une nouvelle). « » si tout va bien.
+func ValiderProchaine(prochaine string, rec *donnees.Recurrence, aujourdhui time.Time) string {
+	j, err := time.Parse("2006-01-02", prochaine)
+	switch {
+	case err != nil:
+		return "Date invalide."
+	case j.Before(aujourdhui.AddDate(-1, 0, -1)):
+		return "La première date ne peut pas être plus d'un an en arrière."
+	case j.After(aujourdhui.AddDate(50, 0, 0)):
+		return "Date trop lointaine."
+	}
+	if rec != nil && rec.Faites > 0 {
+		if derniere, err := Occurrence(rec.Debut, rec.Frequence, rec.Faites-1); err == nil && prochaine <= repetition.CleJour(derniere) {
+			return "La prochaine date doit suivre la dernière déjà passée (" + appli.DateLongue(derniere) + ")."
+		}
+	}
+	return ""
+}
+
 // ParMois : le montant ramené à un mois (pour les totaux).
 func ParMois(montant int64, freq string) int64 {
 	f, _ := frequence(freq)
@@ -297,6 +332,12 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	}
 	// Nouvelle date ou nouvelle fréquence : on repart de la date donnée.
 	debut, faites := x.Debut, x.Faites
+	if j, ok := Prochaine(x); !ok || repetition.CleJour(j) != prochaine || freq != x.Frequence {
+		if msg := ValiderProchaine(prochaine, &x, c.Maintenant()); msg != "" {
+			m.a.Echec(w, r, http.StatusBadRequest, msg)
+			return
+		}
+	}
 	if j, ok := Prochaine(x); !ok || repetition.CleJour(j) != prochaine || freq != x.Frequence {
 		debut, faites = prochaine, 0
 	}

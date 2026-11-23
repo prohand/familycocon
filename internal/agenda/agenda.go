@@ -440,7 +440,7 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 	}
 	s.repetition = rg.String()
 	jour, err := time.ParseInLocation("2006-01-02", f.Get("date"), c.Lieu)
-	if err != nil {
+	if err != nil || jour.Year() < 1900 || jour.Year() > 2200 {
 		return s, "Date invalide."
 	}
 	jourFin := jour
@@ -463,7 +463,8 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 	} else {
 		hd, err1 := time.Parse("15:04", f.Get("heure_debut"))
 		s.debut = time.Date(jour.Year(), jour.Month(), jour.Day(), hd.Hour(), hd.Minute(), 0, 0, c.Lieu)
-		s.fin = s.debut.Add(time.Hour)
+		// Sans heure de fin : une heure, le dernier jour choisi.
+		s.fin = time.Date(jourFin.Year(), jourFin.Month(), jourFin.Day(), hd.Hour(), hd.Minute(), 0, 0, c.Lieu).Add(time.Hour)
 		var err2 error
 		if f.Get("heure_fin") != "" {
 			var hf time.Time
@@ -476,6 +477,14 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 		if s.fin.Before(s.debut) {
 			return s, "La fin doit être après le début."
 		}
+	}
+	if jourFin.Year() > 2200 {
+		return s, "Date de fin invalide."
+	}
+	// Un événement répété ne dure pas plus longtemps que l'écart entre deux
+	// répétitions (sinon il se chevauche lui-même à l'infini).
+	if max := dureeMax(rg.Type); s.repetition != "" && s.fin.Sub(s.debut) > max {
+		return s, "Un événement qui revient ne peut pas durer plus longtemps que l'écart entre deux fois."
 	}
 	membres, err := m.a.Membres(r.Context(), c)
 	if err != nil {
@@ -634,4 +643,26 @@ func (m *Module) blocAccueil(ctx context.Context, c *appli.Contexte) (template.H
 		return "", err
 	}
 	return m.a.RendreBloc("agenda/agenda", "accueil-agenda", c, occ)
+}
+
+// dureeMax : la durée la plus longue d'un événement selon sa répétition.
+func dureeMax(t string) time.Duration {
+	jour := 24 * time.Hour
+	switch t {
+	case "jour", "jours":
+		return jour
+	case "semaine":
+		return 7 * jour
+	case "2semaines":
+		return 14 * jour
+	case "mois", "mois-rang":
+		return 28 * jour
+	case "2mois":
+		return 59 * jour
+	case "trimestre":
+		return 89 * jour
+	case "semestre":
+		return 181 * jour
+	}
+	return 365 * jour
 }

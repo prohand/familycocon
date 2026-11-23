@@ -59,6 +59,7 @@ type Ligne struct {
 	donnees.ListeAbonnementsRow
 	Frequence  string // « Chaque mois »
 	ParMois    int64
+	ParAn      int64
 	Prochain   string // « Vendredi 5 décembre »
 	Engagement string // « Engagé jusqu'au 30 juin 2027 », si l'engagement court encore
 	Bientot    bool   // fin d'engagement dans moins de 60 jours
@@ -89,7 +90,8 @@ func (m *Module) lignes(ctx context.Context, c *appli.Contexte) ([]Ligne, error)
 	var out []Ligne
 	for _, x := range l {
 		li := Ligne{ListeAbonnementsRow: x, Frequence: budget.NomFrequence(x.Frequence), ParMois: budget.ParMois(x.Montant, x.Frequence),
-			Lien: SiteSur(x.Site)}
+			ParAn: budget.ParAn(x.Montant, x.Frequence),
+			Lien:  SiteSur(x.Site)}
 		if j, ok := budget.Prochaine(recurrence(x)); ok {
 			li.Prochain = appli.DateLongue(j)
 		} else {
@@ -119,8 +121,8 @@ func (m *Module) liste(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		}
 		v.Actifs = append(v.Actifs, x)
 		v.ParMois += x.ParMois
+		v.ParAn += x.ParAn
 	}
-	v.ParAn = v.ParMois * 12
 	// Les plus chers en haut.
 	sort.SliceStable(v.Actifs, func(i, j int) bool { return v.Actifs[i].ParMois > v.Actifs[j].ParMois })
 	m.a.Afficher(w, r, c, "abonnements/liste", "Abonnements", mod, v)
@@ -254,6 +256,14 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 
 	var err error
 	if r.PathValue("id") == "" {
+		if msg := budget.ValiderProchaine(prochain, nil, c.Maintenant()); msg != "" {
+			m.a.Echec(w, r, http.StatusBadRequest, msg)
+			return
+		}
+		if recs, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID); err != nil || len(recs) >= budget.RecurrencesMax {
+			m.a.Echec(w, r, http.StatusBadRequest, "Trop d'opérations qui reviennent : arrêtez-en d'abord.")
+			return
+		}
 		err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
 			rec, err := q.CreerRecurrence(ctx, donnees.CreerRecurrenceParams{FamilleID: c.Famille.ID, Sens: "depense", Montant: montant,
 				Categorie: cat.Cle, Libelle: nom, MembreID: membre, Frequence: freq, Debut: prochain, CreePar: auteur, CreeLe: time.Now().Unix()})
@@ -270,14 +280,19 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			m.a.Echec(w, r, http.StatusNotFound, "Abonnement introuvable.")
 			return
 		}
-		// Nouvelle date ou nouvelle fréquence : on repart de la date donnée.
+		// Nouvelle date ou nouvelle fréquence : on repart de la date donnée
+		// (après la dernière déjà passée : rien n'est écrit deux fois).
 		debut, faites := rec.Debut, rec.Faites
 		if j, ok := budget.Prochaine(rec); !ok || repetition.CleJour(j) != prochain || freq != rec.Frequence {
+			if msg := budget.ValiderProchaine(prochain, &rec, c.Maintenant()); msg != "" {
+				m.a.Echec(w, r, http.StatusBadRequest, msg)
+				return
+			}
 			debut, faites = prochain, 0
 		}
 		err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
 			if err := q.ModifierRecurrence(ctx, donnees.ModifierRecurrenceParams{Sens: "depense", Montant: montant, Categorie: cat.Cle,
-				Libelle: nom, MembreID: membre, Frequence: freq, Debut: debut, Fin: "", Faites: faites, ID: rec.ID, FamilleID: c.Famille.ID}); err != nil {
+				Libelle: nom, MembreID: membre, Frequence: freq, Debut: debut, Fin: rec.Fin, Faites: faites, ID: rec.ID, FamilleID: c.Famille.ID}); err != nil {
 				return err
 			}
 			return q.ModifierAbonnement(ctx, donnees.ModifierAbonnementParams{Emoji: emoji, EngagementFin: engagement, Site: site,
@@ -372,10 +387,15 @@ func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin ti
 	var out []appli.Echeance
 	for _, x := range l {
 		rec := recurrence(x)
-		j, actif := budget.Prochaine(rec)
-		if !actif {
+		if _, actif := budget.Prochaine(rec); !actif {
 			continue
 		}
+		// Depuis la dernière occurrence écrite : celle du jour (déjà dans le
+		// budget) doit rester dans « À venir » et le rappel du matin.
+		if rec.Faites > 0 {
+			rec.Faites--
+		}
+		j, actif := budget.Prochaine(rec)
 		if x.Frequence == "annee" || x.Frequence == "semestre" || x.Frequence == "trimestre" {
 			// Les occurrences dans la période (souvent une seule).
 			for k := 0; k < 5 && repetition.CleJour(j) < au; k++ {

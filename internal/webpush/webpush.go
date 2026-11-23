@@ -33,10 +33,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -326,4 +329,28 @@ func Envoyer(ctx context.Context, client *http.Client, a *Abonnement, clair []by
 		return ErrExpire
 	}
 	return fmt.Errorf("service de push %s : HTTP %d", u.Hostname(), rep.StatusCode)
+}
+
+// ClientSur : le client HTTP à utiliser pour Envoyer. Il ne suit aucune
+// redirection et refuse de joindre une adresse interne (réseau privé,
+// bouclage, lien local), même si le nom d'un service connu y menait.
+func ClientSur(delai time.Duration) *http.Client {
+	numero := &net.Dialer{Timeout: 10 * time.Second, Control: func(_, adresse string, _ syscall.RawConn) error {
+		hote, _, err := net.SplitHostPort(adresse)
+		if err != nil {
+			return err
+		}
+		ip, err := netip.ParseAddr(hote)
+		if err != nil || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+			return fmt.Errorf("adresse refusée : %s", hote)
+		}
+		return nil
+	}}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DialContext = numero.DialContext
+	return &http.Client{
+		Timeout:       delai,
+		Transport:     transport,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
 }

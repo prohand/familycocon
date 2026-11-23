@@ -3,6 +3,7 @@
 package abonnements
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -10,6 +11,7 @@ import (
 
 	"familycocon/internal/appli"
 	"familycocon/internal/budget"
+	"familycocon/internal/donnees"
 	"familycocon/internal/essai"
 )
 
@@ -67,5 +69,48 @@ func TestAbonnements(t *testing.T) {
 	marie.Post("/abonnements/"+id+"/resilier", nil)
 	if _, page := marie.Get("/abonnements"); !strings.Contains(page, "Résiliés (1)") {
 		t.Fatalf("résilié :\n%s", page)
+	}
+}
+
+// Bugs de la revue : un abonnement résilié modifié reste résilié et rien
+// n'est écrit deux fois ; une date trop ancienne est refusée ; le
+// renouvellement du jour reste dans « À venir ».
+func TestAbonnementsRevue(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, brancher)
+	marie := essai.Famille(t, srv)
+	paris, _ := time.LoadLocation("Europe/Paris")
+	auj := time.Now().In(paris)
+	jour := func(n int) string { return auj.AddDate(0, 0, n).Format("2006-01-02") }
+	marie.Get("/abonnements/nouveau")
+	if code, _ := marie.Post("/abonnements", map[string]string{"nom": "Vieux", "montant": "5", "frequence": "semaine", "prochain": "0001-01-01"}); code != 400 {
+		t.Fatalf("date de l'an 1 acceptée : %d", code)
+	}
+	// Commencé il y a 40 jours : 2 prélèvements écrits.
+	marie.Post("/abonnements", map[string]string{"nom": "Vidéo", "montant": "10", "frequence": "mois", "prochain": jour(-40)})
+	_, page := marie.Get("/abonnements")
+	id := essai.Trouver(t, page, `href="/abonnements/(\d+)"`)
+	marie.Post("/abonnements/"+id+"/resilier", nil)
+	_, form := marie.Get("/abonnements/" + id)
+	prochain := essai.Trouver(t, form, `name="prochain" value="([0-9-]*)"`)
+	// Modifié (les notes) : il reste résilié, pas de prélèvement en double.
+	marie.Post("/abonnements/"+id, map[string]string{"nom": "Vidéo", "montant": "10", "frequence": "mois", "prochain": prochain, "notes": "résilié en ligne"})
+	if _, page := marie.Get("/abonnements"); !strings.Contains(page, "Résiliés (1)") {
+		t.Fatal("réactivé par une simple modification")
+	}
+	ctx := context.Background()
+	f, _ := a.Q.ToutesFamilles(ctx)
+	ops, _ := a.Q.OperationsPeriode(ctx, donnees.OperationsPeriodeParams{FamilleID: f[0].ID, Du: "2000-01-01", Au: "2999-01-01"})
+	if len(ops) != 2 {
+		t.Fatalf("%d prélèvements, attendu 2", len(ops))
+	}
+	// Renouvellement annuel aujourd'hui : écrit au budget ET dans « À venir ».
+	marie.Post("/abonnements", map[string]string{"nom": "Assurance", "montant": "240", "frequence": "annee", "prochain": jour(0)})
+	if _, page := marie.Get("/"); !strings.Contains(page, "Renouvellement : Assurance") {
+		t.Fatal("renouvellement du jour absent de « À venir »")
+	}
+	// Total annuel exact (100 €/an et non 99,96 €).
+	marie.Post("/abonnements", map[string]string{"nom": "Cent", "montant": "100", "frequence": "annee", "prochain": jour(30)})
+	if _, page := marie.Get("/abonnements"); !strings.Contains(page, "340,00") {
+		t.Fatal("total annuel inexact")
 	}
 }
