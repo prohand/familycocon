@@ -27,6 +27,7 @@
 | Contacts (carnet central, vCard, liens avec Prestataires, Animaux, Véhicules, Agenda) | **fait** |
 | Revue sécurité, bugs, design, performance (v0.4.3, SPEC § 12) | **fait** |
 | Suite de la revue : pages à jour toutes seules, `latest` après la Release, garde sur les modules (v0.4.4, SPEC § 13) | **fait** |
+| Revue des fonctions : lot 1 (bugs), lot 2 (petites fonctions), lot 3 (socle et interface), lot 4 (grosses fonctions, module Garanties) (v0.5.0, SPEC § 14) | **fait** |
 
 ## Mesures
 
@@ -36,8 +37,13 @@
 | 22/11/2026 | 10 | 15,7 Mo (amd64), 14,7 Mo (arm64) | ~16 Mo installée (couches), 6,8 Mo compressée | 8,3 Mio au démarrage, 7,3 Mio après usage | 19,4 Mio (30 SSE + 20 clients, 190 req/s à 0,5 cœur, 0 erreur) |
 | 22/11/2026 | modules | 16,3 Mo (amd64), 15,3 Mo (arm64) | non remesurée (≈ +0,4 Mo) | +2 Mio environ (10 Mio de mémoire propre contre 8 avant, hors Docker) | — |
 | 23/11/2026 | revue v0.4.3 | 16,9 Mo (amd64), contre 16,6 avant | non remesurée | 11,2 Mio de mémoire propre au démarrage, comme avant (hors Docker) | 27,6 Mio de mémoire totale du processus après un parcours de toutes les pages (hors Docker) |
+| 23/11/2026 | v0.5.0 (4 lots) | 17,4 Mo (amd64), contre 16,9 avant (+0,6) | non remesurée | 14,2 Mio de mémoire propre au démarrage, contre 11,3 mesurés au même moment pour v0.4.4 (hors Docker) | 16,0 Mio de mémoire propre (31,3 Mio en tout) après un parcours de toutes les pages, contre 12,9 (27,3) pour v0.4.4 |
 
 Notes :
+- v0.5.0 : les +3 Mio au démarrage viennent probablement des gabarits (7 pages de
+  plus, chacune analysée avec tous les partiels) et des nouveaux modules ;
+  aucune donnée n'est gardée en mémoire en plus (la « Corbeille » des
+  annulations est vide au repos).
 - La première mesure de l'étape 10 donnait 38,9 Mio au démarrage : l'empreinte
   « leurre » Argon2id (19 Mio) était calculée au lancement. Corrigé : elle est
   écrite en dur, et la mémoire d'Argon2id est rendue au système 5 s après le
@@ -58,5 +64,6 @@ réussis à chaque étape (le build multi-arch passe sans émulation).
 ## Idées pour la suite
 
 - Glisser-déposer pour réordonner les listes ; listes de courses « modèles ».
-- Export du budget (CSV).
+- Export du budget (CSV) (l'export JSON de toute la famille existe).
+- Choisir la liste de courses qui reçoit les ingrédients des menus.
 - Sauvegardes distantes (rclone, SFTP) comme dans mirador-stack.

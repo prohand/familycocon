@@ -241,3 +241,76 @@ Les points laissés « à décider » par la revue sont traités :
   sa page.
 - **Image de construction** épinglée par empreinte (`golang:1.27.4-bookworm@sha256:…`).
 - **Accueil** : abonnements et anniversaires lus une seule fois par requête.
+
+## 14. Revue des fonctions et de l'interface (v0.5.0)
+Relecture des modules du quotidien, de l'argent et du suivi, du socle et de
+l'interface. Tout ce qui a été trouvé est fait, en quatre lots, avec des tests.
+- **Rappels** : une seule notification par matin (elles se remplaçaient à
+  l'écran), qui ouvre la page de l'échéance quand il n'y en a qu'une.
+  L'agenda fournit ses événements « Me le rappeler » (migration 0020).
+- **Notifications ciblées** (`PublierPour`) : participants d'un événement,
+  personne(s) d'une tâche, enfant d'une mission, parents pour « à valider ».
+  Les autres pages se mettent quand même à jour. Moi › Notifications ne
+  montre que les modules qui notifient (`Notifie` dans le `Catalogue`).
+- **Recherche sans accents** : fonction SQL `plier()` (enregistrée dans
+  `internal/base/fonctions.go`, code `internal/texte`), pour les notes, le
+  budget et la recherche globale (`/chercher`, une fonction par module :
+  `AjouterRecherche`).
+- **Temps réel** : après une coupure (veille du téléphone), tous les blocs se
+  rechargent (`maj-tout`) ; l'accueil écoute `maj` (n'importe quel module).
+  Pas de réseau : un message ; un lien ouvre la page hors ligne.
+- **Hors ligne** : le service worker garde la dernière liste de courses
+  ouverte (cache `familycocon-pages`, vidé par app.js à la déconnexion).
+- **Annuler** : une suppression rapide (courses) se rattrape 15 s ; ce qu'il
+  faut pour remettre est gardé en mémoire (`Corbeille`, 200 au plus), jamais
+  en base.
+- **Partager** (`share_target` du manifeste, GET `/partager`) : chaque module
+  propose son action (`AjouterPartage`).
+- **Thème** : cookie `fc_pref_theme` (clair, sombre, vide = téléphone),
+  attribut `data-theme` ; chaque règle sombre du CSS existe deux fois (dans
+  la requête média et forcée).
+- **Export** `/famille/export.json` (parents) : toutes les tables de la
+  famille, section par section, sans secret ni note privée d'un autre.
+- **Serveur** : résultat de la sauvegarde automatique noté dans la table
+  `serveur` ; montré dans `/health` (réseau local) et, sur un serveur d'une
+  seule famille, aux parents (carte « Serveur »).
+- **Agenda** : fois annulées (`evenements_exceptions`, migration 0023) ;
+  lien secret iCalendar par membre (`agenda_ical`, empreinte seulement,
+  migration 0024), flux public `/ical/{jeton}.ics` en lecture seule (3 mois
+  avant, 1 an après, fois une par une), coupé au retrait du membre ou à la
+  réinitialisation de sa sécurité.
+- **Tâches** : « toutes les 2 semaines » (périodes comptées depuis le lundi
+  1er janvier 2024) et « chaque mois » ; tour de rôle (colonne `tour`,
+  migration 0025) : la fois n revient au membre n modulo leur nombre
+  (`Regle.Numero`), sans tâche de fond.
+- **Courses** : un produit déjà sur la liste n'est pas ajouté deux fois
+  (quantités additionnées) ; « Souvent achetés » ; un parent oublie une
+  suggestion.
+- **Budget** : catégories du sens choisi seulement ; impôts, assurances,
+  crédit, épargne ; plafonds par catégorie (`budget_plafonds`, migration
+  0021) ; payé par ; recherche ; vue de l'année.
+- **Espace enfants** : mission pour plusieurs enfants ; tout valider ; étoiles
+  données ou retirées avec un motif (`etoiles_bonus`, migration 0022), jamais
+  sous zéro.
+- **Suivi** : échéance modifiable et reportable par tous ; ligne du carnet
+  corrigeable ; « ajouter aussi au budget » (`carnet.operation_id`, migration
+  0026 : la dépense suit les corrections et part avec la ligne) ; litres d'un
+  plein, coût pour 100 km et consommation.
+- **Garanties** (nouveau module, migration 0027, ajouté aux familles
+  existantes) : table `garanties` ; la fin de garantie est une échéance du
+  suivi, tenue à jour à chaque enregistrement. Pas de fichier envoyé : on note
+  où est la facture.
+- **Contacts** : « Cité par », doublon signalé (même nom sans accents ou
+  même numéro), fusion par un parent (champs vides complétés, liens repris).
+- **Menus** : ingrédients d'une recette remplis par htmx, cases « déjà à la
+  maison », reprise de la semaine, page Recettes.
+- **Notes** : listes à cocher (« [ ] ») cochables par tous ceux qui voient la
+  note ; une modification sur une version dépassée est refusée (409).
+- **Index** des nouveaux liens (migration 0028).
+- **Accessibilité** : erreurs en `role="alert"` et affichées 8 s, contour du
+  champ d'ajout, boutons de 44 px, `prefers-reduced-motion`, noms des
+  boutons de validation et des cases du calendrier.
+
+Restent des choix à faire : montants du carnet (projets, véhicules) visibles
+par les enfants alors que le budget leur est fermé ; liste de courses où
+vont les ingrédients des menus (toujours la première).

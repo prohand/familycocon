@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"familycocon/internal/appli"
@@ -67,6 +68,7 @@ type Navigateur struct {
 	Htmx  bool   // envoie les en-têtes de htmx (HX-Request, X-Jeton)
 	// EnTetes : en-têtes de la dernière réponse (HX-Trigger…).
 	EnTetes http.Header
+	mu      sync.Mutex // un test peut envoyer plusieurs requêtes à la fois
 }
 
 // NouveauNavigateur : navigateur sans cookie.
@@ -83,8 +85,10 @@ func (n *Navigateur) lire(rep *http.Response, err error) (int, string) {
 		n.t.Fatal(err)
 	}
 	defer rep.Body.Close()
-	n.EnTetes = rep.Header
 	b, _ := io.ReadAll(rep.Body)
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.EnTetes = rep.Header
 	if m := reJeton.FindSubmatch(b); m != nil {
 		n.Jeton = string(m[1]) + string(m[2])
 	}
