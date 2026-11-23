@@ -257,17 +257,17 @@
 {{define "onglet-chiffres"}}
 {{$s := .S}}{{$v := .S.Chiffres}}{{$p := .P}}
 {{/* Une période choisie ne recharge que les chiffres (htmx), l'adresse suit. */}}
-<div id="chiffres" hx-target="#chiffres" hx-select="#chiffres" hx-swap="outerHTML" hx-push-url="true">
+<div id="chiffres">
 <section class="carte bloc">
   <h2>📊 Chiffres <small>{{$v.Titre}}</small></h2>
   <nav class="pilules petites defile" aria-label="Période">
     {{- range $v.Choix}}
-    <a class="pilule{{if .Actif}} active{{end}}" href="{{$.Chemin}}?onglet=chiffres&amp;periode={{.Cle}}" hx-get="{{$.Chemin}}?onglet=chiffres&amp;periode={{.Cle}}"{{if .Actif}} aria-current="page"{{end}}>{{.Texte}}</a>
+    <a class="pilule{{if .Actif}} active{{end}}" href="{{$.Chemin}}?onglet=chiffres&amp;periode={{.Cle}}" hx-get="{{$.Chemin}}?onglet=chiffres&amp;periode={{.Cle}}" hx-target="#chiffres" hx-select="#chiffres" hx-swap="outerHTML" hx-push-url="true" hx-disinherit="*"{{if .Actif}} aria-current="page"{{end}}>{{.Texte}}</a>
     {{- end}}
   </nav>
   <details class="choix-dates"{{if eq $v.Periode "dates"}} open{{end}}>
     <summary class="lien-ajout">📅 Choisir les dates</summary>
-    <form method="get" action="{{$.Chemin}}" hx-get="{{$.Chemin}}" class="rangee dates">
+    <form method="get" action="{{$.Chemin}}" hx-get="{{$.Chemin}}" hx-target="#chiffres" hx-select="#chiffres" hx-swap="outerHTML" hx-push-url="true" hx-disinherit="*" class="rangee dates">
       <input type="hidden" name="onglet" value="chiffres"><input type="hidden" name="periode" value="dates">
       <label class="champ"><span>Du</span><input type="date" name="du" value="{{$v.Du}}" required></label>
       <label class="champ"><span>Au</span><input type="date" name="au" value="{{$v.Au}}" required></label>
