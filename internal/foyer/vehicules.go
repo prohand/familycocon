@@ -5,6 +5,7 @@ package foyer
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"net/http"
 	"strings"
 	"time"
@@ -37,6 +38,7 @@ func (m *Module) brancherVehicules() {
 	a.Route("GET /vehicules/nouveau", modVehicules, appli.Membre, m.formVehicule)
 	a.Route("POST /vehicules", modVehicules, appli.Membre, m.enregistrerVehicule)
 	a.Route("GET /vehicules/{id}", modVehicules, appli.Membre, m.ficheVehicule)
+	a.Route("GET /vehicules/plein", modVehicules, appli.Membre, m.raccourciPlein)
 	a.AjouterRecherche(modVehicules, m.chercherVehicules)
 	a.Route("GET /vehicules/{id}/modifier", modVehicules, appli.Membre, m.formVehicule)
 	a.Route("POST /vehicules/{id}", modVehicules, appli.Membre, m.enregistrerVehicule)
@@ -78,7 +80,34 @@ func (m *Module) brancherVehicules() {
 		}
 		return appli.Resume{Info: appli.Pluriel(len(l), "véhicule", "véhicules")}
 	})
+	a.AjouterAction(appli.Ajout{Module: modVehicules, Emoji: "⛽", Texte: "Un plein", URL: "/vehicules/plein"})
 	a.AjouterAction(appli.Ajout{Module: modVehicules, Emoji: "🚗", Texte: "Un véhicule", URL: "/vehicules/nouveau"})
+}
+
+// raccourciPlein : « Ajouter un plein » (page Ajouter, appui long sur
+// l'icône de l'appli) : la fiche du véhicule du dernier plein (ou le seul),
+// fenêtre d'ajout ouverte.
+func (m *Module) raccourciPlein(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	l, err := m.a.Q.VehiculesFamille(ctx, c.Famille.ID)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if len(l) == 0 {
+		m.a.Flash(w, "Ajoutez d'abord un véhicule")
+		m.a.Rediriger(w, r, "/vehicules/nouveau")
+		return
+	}
+	id := l[0].ID
+	if d, err := m.a.Q.DernierObjetPlein(ctx, donnees.DernierObjetPleinParams{FamilleID: c.Famille.ID, Module: modVehicules}); err == nil {
+		for _, x := range l {
+			if x.ID == d {
+				id = d
+			}
+		}
+	}
+	m.a.Rediriger(w, r, fmt.Sprintf("/vehicules/%d?ajout=plein", id))
 }
 
 func (m *Module) vehicule(r *http.Request, c *appli.Contexte) (donnees.Vehicule, bool) {
@@ -118,9 +147,7 @@ func (m *Module) ficheVehicule(w http.ResponseWriter, r *http.Request, c *appli.
 	if x.Immatriculation != "" {
 		v.Infos = append(v.Infos, "🔖 "+x.Immatriculation)
 	}
-	if x.Kilometrage > 0 {
-		v.Infos = append(v.Infos, fmt.Sprintf("🛣️ %s km", appli.Milliers(x.Kilometrage)))
-	}
+	v.Kilometrage = x.Kilometrage // dans le résumé, en haut de la fiche
 	if x.Notes != "" {
 		v.Infos = append(v.Infos, "📝 "+x.Notes)
 	}
@@ -131,6 +158,14 @@ func (m *Module) ficheVehicule(w http.ResponseWriter, r *http.Request, c *appli.
 		v.Contacts = append(v.Contacts, ct)
 	}
 	v.KmURL = fmt.Sprintf("/vehicules/%d/km", x.ID)
+	// Les autres véhicules : on peut changer de véhicule dans la fenêtre « Ajouter un plein ».
+	if l, err := m.a.Q.VehiculesFamille(r.Context(), c.Famille.ID); err == nil && len(l) > 1 {
+		for _, y := range l {
+			if y.ID != x.ID {
+				v.Autres = append(v.Autres, Lien{URL: template.URL(fmt.Sprintf("/vehicules/%d?ajout=plein", y.ID)), Emoji: emojiGenre(y.Genre), Texte: y.Nom})
+			}
+		}
+	}
 	if c.EstParent() {
 		v.FuelioURL = fmt.Sprintf("/vehicules/%d/fuelio", x.ID)
 	}

@@ -114,6 +114,13 @@ DELETE FROM pieces WHERE id = ? AND famille_id = ?;
 SELECT count(*) FROM carnet
 WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = ? AND montant = ? AND km = ?;
 
+-- Import Fuelio : un plein deja repris sous l'autre libelle (complet ou
+-- partiel) est corrige, pas ajoute une seconde fois.
+-- name: RenommerPleinImporte :execrows
+UPDATE carnet SET libelle = sqlc.arg(nouveau)
+WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id) AND jour = sqlc.arg(jour)
+  AND libelle = sqlc.arg(ancien) AND montant = sqlc.arg(montant) AND km = sqlc.arg(km) AND litres = sqlc.arg(litres);
+
 -- Vehicules : les pleins (lignes avec des litres) a part de l'entretien.
 
 -- name: EntretienObjet :many
@@ -125,11 +132,11 @@ SELECT * FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.a
 SELECT * FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
   AND litres > 0 ORDER BY jour DESC, km DESC, id DESC LIMIT sqlc.arg(nombre) OFFSET sqlc.arg(decalage);
 
--- Pleins d'une periode (du : AAAA-MM-JJ ; '0000' : tout), dans l'ordre.
+-- Pleins d'une periode (du, au : AAAA-MM-JJ ; '0000' et '9999' : tout), dans l'ordre.
 -- name: PleinsPeriodeObjet :many
 SELECT id, jour, libelle, km, litres, montant FROM carnet
 WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
-  AND litres > 0 AND jour >= sqlc.arg(du) ORDER BY jour, km, id;
+  AND litres > 0 AND jour >= sqlc.arg(du) AND jour <= sqlc.arg(au) ORDER BY jour, km, id;
 
 -- Depenses par mois : carburant (pleins) et entretien (le reste).
 -- name: DepensesMoisObjet :many
@@ -137,7 +144,7 @@ SELECT CAST(substr(jour, 1, 7) AS TEXT) AS mois,
   CAST(coalesce(sum(CASE WHEN litres > 0 THEN montant ELSE 0 END), 0) AS INTEGER) AS carburant,
   CAST(coalesce(sum(CASE WHEN litres = 0 THEN montant ELSE 0 END), 0) AS INTEGER) AS entretien
 FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
-  AND jour >= sqlc.arg(du) GROUP BY mois ORDER BY mois;
+  AND jour >= sqlc.arg(du) AND jour <= sqlc.arg(au) GROUP BY mois ORDER BY mois;
 
 -- Kilometrage le plus haut note chaque mois (tout le carnet).
 -- name: KmMoisObjet :many
@@ -157,3 +164,18 @@ FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module
 -- name: DernierCarburant :one
 SELECT carburant FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
   AND litres > 0 AND carburant != '' ORDER BY jour DESC, id DESC LIMIT 1;
+
+-- Notes des derniers pleins (les stations proposees pour le suivant).
+-- name: NotesPleinsRecents :many
+SELECT note FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
+  AND litres > 0 AND note != '' ORDER BY jour DESC, id DESC LIMIT 30;
+
+-- Le vehicule du dernier plein note (raccourci Ajouter un plein).
+-- name: DernierObjetPlein :one
+SELECT objet_id FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND litres > 0
+ORDER BY cree_le DESC, id DESC LIMIT 1;
+
+-- Premier jour du carnet (annees proposees pour les graphiques).
+-- name: PremierJourObjet :one
+SELECT CAST(coalesce(min(jour), '') AS TEXT) FROM carnet
+WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id);

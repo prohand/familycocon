@@ -100,7 +100,7 @@ func TestRepriseFuelio(t *testing.T) {
 		}
 	}
 	// Les pleins sont dans leur onglet, pas dans l'entretien.
-	if strings.Contains(page, "Lyon") {
+	if strings.Contains(page, "Lyon</small>") {
 		t.Error("plein affiché dans l'onglet entretien")
 	}
 	if _, p := marie.Get("/vehicules/" + id + "?onglet=pleins&periode=tout"); !strings.Contains(p, "Lyon") || strings.Contains(p, "Vidange</span>") {
@@ -270,5 +270,45 @@ func TestScanTicket(t *testing.T) {
 		"litres": "20", "ticket": "pas du base64 !"})
 	if !strings.Contains(page, "photo du ticket non jointe") || !strings.Contains(page, "1 500 km") {
 		t.Fatal("plein avec une photo abîmée")
+	}
+}
+
+// Fuelio « Full = 2 » (partiel, niveau estimé) : repris comme partiel ; un
+// plein déjà repris comme complet est corrigé, pas doublé ; aucune dépense
+// dans la sauvegarde : le message le dit.
+func TestFuelioPartielEstime(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+	})
+	marie := essai.Famille(t, srv)
+	_, page := marie.Post("/vehicules", map[string]string{"nom": "Focus", "genre": "voiture"})
+	id := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	carnet := "/suivi/vehicules/" + id + "/carnet"
+	// Déjà là, repris avant comme un plein complet.
+	marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2025-01-30", "km": "105189", "litres": "8,51", "montant": "15,01"})
+	csv := "\"## Vehicle\"\n\"Name\",\"DistUnit\",\"FuelUnit\"\n\"Focus\",\"0\",\"0\"\n" +
+		"\"## Log\"\n\"Date\",\"Odo (km)\",\"Fuel (L)\",\"Full\",\"Price\",\"UniqueId\"\n" +
+		"\"2025-01-20\",\"104800\",\"40\",\"1\",\"70\",\"1\"\n" +
+		"\"2025-01-30\",\"105189.0\",\"8.51\",\"2\",\"15.01\",\"2\"\n" +
+		"\"## CostCategories\"\n\"CostTypeID\",\"Name\",\"priority\",\"color\"\n" +
+		"\"## Costs\"\n\"CostTitle\",\"Date\",\"Odo\",\"CostTypeID\",\"Notes\",\"Cost\",\"isTemplate\",\"isIncome\",\"UniqueId\"\n"
+	req, _ := http.NewRequest("POST", srv.URL+"/vehicules/"+id+"/fuelio", strings.NewReader(csv))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("X-Jeton", marie.Jeton)
+	rep, err := marie.C.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep.Body.Close()
+	_, page = marie.Get("/vehicules/" + id + "?onglet=pleins")
+	for _, attendu := range []string{"1 plein repris", "1 plein corrigé (partiel)", "aucune dépense (entretien) dans cette sauvegarde", "8,51 L · Plein partiel"} {
+		if !strings.Contains(page, attendu) {
+			t.Errorf("sans « %s »", attendu)
+		}
+	}
+	if n := strings.Count(page, `<summary class="ligne">`); n != 2 {
+		t.Errorf("plein doublé : %d lignes", n)
 	}
 }

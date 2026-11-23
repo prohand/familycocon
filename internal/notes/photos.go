@@ -70,10 +70,18 @@ func (m *Module) ajouterPhoto(w http.ResponseWriter, r *http.Request, c *appli.C
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	if _, err := m.a.Q.AjouterPhotoNote(ctx, donnees.AjouterPhotoNoteParams{FamilleID: c.Famille.ID, NoteID: n.ID, Fichier: nom,
-		Taille: int64(len(jpeg)), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix()}); err != nil {
+	p, err := m.a.Q.AjouterPhotoNote(ctx, donnees.AjouterPhotoNoteParams{FamilleID: c.Famille.ID, NoteID: n.ID, Fichier: nom,
+		Taille: int64(len(jpeg)), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix()})
+	if err != nil {
 		_ = photo.Effacer(m.a.DossierPieces(), c.Famille.ID, nom)
 		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	// Photo placée dans le texte par l'éditeur : il reçoit son numéro et
+	// écrit le repère ; la page ne change pas (la saisie continue).
+	if r.URL.Query().Get("place") == "1" {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"id":%d}`, p.ID)
 		return
 	}
 	m.a.Publier(c, mod, "")

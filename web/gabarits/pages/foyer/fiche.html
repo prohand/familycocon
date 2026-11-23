@@ -27,21 +27,17 @@
   {{- end}}
 </section>
 {{end}}
-{{if .KmURL}}
-<form class="carte bloc rangee" method="post" action="{{.KmURL}}">
-  {{template "jeton" $c.CSRF}}
-  <label class="champ"><span>🛣️ Kilométrage du compteur</span><input name="km" inputmode="numeric" required></label>
-  <button class="bouton petit">Noter</button>
-</form>
-{{end}}
 {{if .Suivi.Onglets}}
+{{template "resume-vehicule" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "KmURL" .KmURL}}
 {{template "onglets-vehicule" dict "S" .Suivi "Chemin" $.Chemin}}
-{{if .Suivi.Pleins}}{{template "onglet-pleins" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Chemin" $.Chemin}}
+{{if eq .Suivi.Onglet "pleins"}}{{template "onglet-pleins" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Chemin" $.Chemin}}
+{{else if eq .Suivi.Onglet "chiffres"}}{{template "onglet-chiffres" dict "S" .Suivi "P" $c.EstParent "Chemin" $.Chemin}}
 {{else}}{{template "bloc-suivi" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Titre" .TitreSuivi "TitreCarnet" .TitreCarnet}}{{end}}
 {{else}}
 {{template "bloc-suivi" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Titre" .TitreSuivi "TitreCarnet" .TitreCarnet}}
 {{end}}
 </div>
+{{if .Suivi.Ajout}}{{template "fenetres-vehicule" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Nom" .Nom "Autres" .Autres "Ouvrir" .Ouvrir}}{{end}}
 {{if .FuelioURL}}
 <details class="bloc carte fuelio">
   <summary class="lien-ajout">📥 Reprendre depuis Fuelio</summary>

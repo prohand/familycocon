@@ -1556,3 +1556,70 @@ button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer
 .apercu-ticket { display: block; max-width: 96px; max-height: 128px; margin-top: 8px; border-radius: 8px; border: 1px solid var(--bordure); }
 input.lu, select.lu { background: var(--corail-doux); border-color: var(--corail); }
 .apercu-ticket[hidden] { display: none; }
+
+/* Véhicule : résumé en haut de la fiche (tuiles) et boutons d'ajout. */
+.tuiles-resume { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.case-resume { background: var(--fond); border-radius: var(--rayon-petit); padding: 10px 12px; }
+.case-resume small { display: block; color: var(--texte-doux); font-size: .78rem; }
+.case-resume b { display: block; font-size: 1.05rem; overflow-wrap: anywhere; }
+.case-resume.alerte { background: var(--corail-doux); }
+.case-resume.alerte b { color: var(--rouge); }
+.case-resume.proche { background: var(--corail-doux); }
+details.case-km > summary { cursor: pointer; list-style: none; }
+details.case-km > summary::-webkit-details-marker { display: none; }
+details.case-km[open] { grid-column: 1 / -1; }
+details.case-km form { margin-top: 6px; }
+.actions-vehicule { display: grid; grid-template-columns: 3fr 2fr; gap: 10px; margin-top: 14px; }
+.actions-vehicule .bouton { font-size: 1.05rem; padding: 14px 8px; justify-content: center; text-align: center; }
+
+/* Onglet Pleins : une ligne par plein ; touchée, elle s'ouvre. */
+details.ligne-plein > summary { list-style: none; cursor: pointer; }
+details.ligne-plein > summary::-webkit-details-marker { display: none; }
+details.ligne-plein[open] > summary { background: var(--fond); border-radius: 12px; }
+.detail-plein { padding: 4px 0 12px; border-bottom: 1px solid var(--bordure); }
+.detail-plein .boutons { margin: 6px 0; }
+
+/* Onglet Chiffres : période (boutons qui défilent) et dates. */
+.pilules.defile { margin-top: 8px; }
+details.choix-dates > summary { margin: 6px 0; }
+.rangee.dates { align-items: end; }
+
+/* Fenêtres par-dessus la page (ajout d'un plein, d'un entretien). */
+dialog.fenetre { border: 0; border-radius: var(--rayon); padding: 0; background: var(--carte); color: var(--texte);
+  width: min(94vw, 480px); max-height: 92vh; box-shadow: var(--ombre-forte); }
+dialog.fenetre::backdrop { background: rgba(0, 0, 0, .55); }
+dialog.fenetre form { padding: 14px 16px 18px; }
+.tete-fenetre { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.tete-fenetre h2 { margin: 0; }
+.tete-fenetre .fermer { border: 0; background: var(--fond); color: var(--texte); width: 40px; height: 40px; border-radius: 50%; font-size: 1.1rem; cursor: pointer; }
+.autres-vehicules a { font-weight: 800; color: var(--corail-fonce); }
+.scan-grand { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; padding: 14px; margin-top: 10px;
+  border: 2px dashed var(--corail); border-radius: var(--rayon-petit); background: var(--corail-doux); color: var(--texte); font: inherit; cursor: pointer; }
+.scan-grand b { font-size: 1.1rem; }
+.scan-grand span { font-size: .85rem; color: var(--texte-doux); }
+.scan-grand:disabled { opacity: .6; }
+.grands-champs { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 10px; }
+.champ.grand input { font-size: 1.4rem; font-weight: 800; padding: 12px; }
+.grands-champs .champ { margin-bottom: 4px; }
+.calcul { text-align: center; font-weight: 800; color: var(--texte-doux); min-height: 1.2em; margin: 0 0 4px; }
+[data-etat-km] { margin-top: -6px; }
+[data-etat-km].attention { color: var(--rouge); font-weight: 800; }
+.pilules-choix label.lu span { background: var(--corail-doux); border-color: var(--corail); }
+.stations { margin: -4px 0 10px; }
+.bouton.gros { width: 100%; justify-content: center; font-size: 1.1rem; padding: 15px; margin-top: 8px; }
+
+/* Notes : éditeur qui montre les photos dans le texte. */
+.outils-note { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.editeur-note { min-height: 12em; padding: 12px 14px; border: 1.5px solid var(--bordure); border-radius: var(--rayon-petit);
+  background: var(--fond); color: var(--texte); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; font-weight: 400; }
+.editeur-note:focus { border-color: var(--corail); }
+.editeur-note[contenteditable="false"] { min-height: 0; }
+figure.photo-texte { position: relative; margin: 8px 0; }
+figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; border-radius: 12px; }
+figure.photo-texte .retirer-photo { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; border: 0;
+  background: rgba(0, 0, 0, .6); color: #fff; font-size: 1rem; cursor: pointer; }
+.photo-attente { color: var(--texte-doux); font-style: italic; }
+.piece .placer { display: block; margin-top: 4px; border: 0; background: none; color: var(--corail-fonce); font: inherit; font-weight: 800; font-size: .8rem; cursor: pointer; }
+.piece .placer[hidden] { display: none; }
+.cases-note .texte-note { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cases-note .ligne-vide { height: .6em; }

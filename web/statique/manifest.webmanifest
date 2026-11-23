@@ -17,6 +17,7 @@
   ],
   "shortcuts": [
     { "name": "Ajouter", "url": "/ajouter", "icons": [{ "src": "/statique/img/icone-192.png", "sizes": "192x192" }] },
+    { "name": "Ajouter un plein", "short_name": "Plein", "url": "/vehicules/plein", "icons": [{ "src": "/statique/img/icone-192.png", "sizes": "192x192" }] },
     { "name": "Chercher", "url": "/chercher", "icons": [{ "src": "/statique/img/icone-192.png", "sizes": "192x192" }] }
   ],
   "share_target": {

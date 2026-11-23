@@ -4,10 +4,12 @@ package notes
 
 import (
 	"bytes"
+	"encoding/json"
 	"image"
 	"image/png"
 	"net/http"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -81,7 +83,7 @@ func TestPhotosNotes(t *testing.T) {
 	lea := essai.Enfant(t, srv, marie, "Léa")
 	marie.Get("/notes/nouvelle")
 	_, page := marie.Post("/notes", map[string]string{"titre": "Plan du camping", "texte": "allée B", "suite": "ouvrir"})
-	id := essai.Trouver(t, page, `data-piece="/notes/(\d+)/photos"`)
+	id := essai.Trouver(t, page, `data-editeur="(\d+)"`)
 	marie.Post("/notes", map[string]string{"titre": "Secret", "texte": "x", "privee": "1", "suite": "ouvrir"})
 	_, page = marie.Get("/notes?voir=privees")
 	idPrivee := essai.Trouver(t, page, `href="/notes/(\d+)"`)
@@ -140,5 +142,65 @@ func TestPhotosNotes(t *testing.T) {
 	marie.Post("/notes/"+idPrivee+"/supprimer", nil)
 	if n := fichiers(); n != 0 {
 		t.Fatalf("%d photos restées sur le disque", n)
+	}
+}
+
+// Photo dans le texte : l'éditeur l'envoie (?place=1 : son numéro en
+// JSON), écrit « [photo N] » ; elle s'affiche à cet endroit et plus en bas ;
+// le repère d'une photo d'une autre note est retiré.
+func TestPhotoDansLeTexte(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	marie.Get("/notes/nouvelle")
+	_, page := marie.Post("/notes", map[string]string{"titre": "Potager", "texte": "Plan\n[photo 99]", "suite": "ouvrir"})
+	id := essai.Trouver(t, page, `data-editeur="(\d+)"`)
+	if strings.Contains(page, "[photo 99]") {
+		t.Fatal("repère d'une photo inconnue gardé à la création")
+	}
+	_, page = marie.Post("/notes", map[string]string{"titre": "Autre", "texte": "x", "suite": "ouvrir"})
+	autre := essai.Trouver(t, page, `data-editeur="(\d+)"`)
+	var b bytes.Buffer
+	_ = png.Encode(&b, image.NewRGBA(image.Rect(0, 0, 400, 300)))
+	envoyer := func(note string) string {
+		req, _ := http.NewRequest("POST", srv.URL+"/notes/"+note+"/photos?place=1", bytes.NewReader(b.Bytes()))
+		req.Header.Set("Content-Type", "image/png")
+		req.Header.Set("X-Jeton", marie.Jeton)
+		rep, err := marie.C.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rep.Body.Close()
+		var r struct{ ID int64 }
+		if err := json.NewDecoder(rep.Body).Decode(&r); err != nil || r.ID == 0 || rep.StatusCode != 200 {
+			t.Fatalf("envoi placé : %d %v", rep.StatusCode, err)
+		}
+		return strconv.FormatInt(r.ID, 10)
+	}
+	ph, etrangere := envoyer(id), envoyer(autre)
+	_, page = marie.Get("/notes/" + id)
+	version := essai.Trouver(t, page, `name="version" value="(\d+)"`)
+	marie.Post("/notes/"+id, map[string]string{"titre": "Potager", "version": version, "couleur": "1",
+		"texte": "Plan\n[photo " + ph + "]\n[photo " + etrangere + "]\n[ ] Terreau"})
+	_, page = marie.Get("/notes/" + id)
+	if !strings.Contains(page, "[photo "+ph+"]") || strings.Contains(page, "[photo "+etrangere+"]") {
+		t.Fatalf("repères mal gardés :\n%s", page)
+	}
+	// Note avec une case : lue en entier (texte, photo à sa place, case).
+	if !strings.Contains(page, `<p class="texte-note">Plan</p>`) || !strings.Contains(page, `<figure class="photo-texte"><a href="/notes/photos/`+ph+`"`) {
+		t.Fatalf("photo absente du texte :\n%s", page)
+	}
+	// Placée dans le texte : plus en bas de la note.
+	if strings.Contains(page, `data-placer="`+ph+`"`) {
+		t.Error("photo du texte aussi en bas")
+	}
+	if _, p := marie.Get("/notes"); !strings.Contains(p, "Plan\n📷\n☐ Terreau") {
+		t.Errorf("aperçu de la carte :\n%s", p)
+	}
+	// Retirée du texte : elle revient en bas (pas effacée).
+	_, page = marie.Get("/notes/" + id)
+	version = essai.Trouver(t, page, `name="version" value="(\d+)"`)
+	marie.Post("/notes/"+id, map[string]string{"titre": "Potager", "version": version, "couleur": "1", "texte": "Plan\n[ ] Terreau"})
+	if _, p := marie.Get("/notes/" + id); !strings.Contains(p, `data-placer="`+ph+`"`) {
+		t.Error("photo retirée du texte : pas revenue en bas")
 	}
 }

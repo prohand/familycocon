@@ -39,7 +39,9 @@ var fuelioUn sync.Mutex
 // fuelioRetour : ce que la reprise a fait.
 type fuelioRetour struct {
 	pleins, depenses, deja, photos, sansLigne int  // sansLigne : photos non jointes
+	corriges                                  int  // pleins déjà là, devenus partiels (ou complets)
 	plein                                     bool // carnet plein : la fin n'est pas reprise
+	ecart                                     fuelio.Ecart
 }
 
 func (x fuelioRetour) message() string {
@@ -57,6 +59,9 @@ func (x fuelioRetour) message() string {
 	if x.deja > 0 {
 		t += fmt.Sprintf(" · %d déjà là", x.deja)
 	}
+	if x.corriges > 0 {
+		t += " · " + appli.Pluriel(x.corriges, "plein corrigé (partiel)", "pleins corrigés (partiels)")
+	}
 	if x.photos > 0 {
 		t += " · " + appli.Pluriel(x.photos, "photo jointe", "photos jointes")
 	}
@@ -65,6 +70,24 @@ func (x fuelioRetour) message() string {
 	}
 	if x.plein {
 		t += " · carnet plein"
+	}
+	// Ce qui n'a pas été repris, pour que l'oubli ne passe pas inaperçu.
+	e := x.ecart
+	if e.DepensesLues == 0 {
+		t += " · aucune dépense (entretien) dans cette sauvegarde"
+	}
+	var ec []string
+	if n := e.PleinsSansDate + e.DepensesSansDate; n > 0 {
+		ec = append(ec, fmt.Sprintf("%d sans date lisible", n))
+	}
+	if e.Modeles > 0 {
+		ec = append(ec, appli.Pluriel(e.Modeles, "modèle de dépense répétée", "modèles de dépenses répétées"))
+	}
+	if e.Recettes > 0 {
+		ec = append(ec, appli.Pluriel(e.Recettes, "recette", "recettes"))
+	}
+	if len(ec) > 0 {
+		t += " · écartés : " + strings.Join(ec, ", ")
 	}
 	return t
 }
@@ -133,7 +156,7 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	var ret fuelioRetour
+	ret := fuelioRetour{ecart: v.Ecart}
 	ids := make([]int64, len(v.Lignes)) // ligne du carnet créée pour chaque ligne Fuelio (0 : aucune)
 	var kmMax int64
 	auteur := sql.NullInt64{Int64: c.Membre.ID, Valid: true}
@@ -148,6 +171,20 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 			if deja > 0 {
 				ret.deja++
 				continue
+			}
+			// Plein repris avant sous l'autre libellé (complet / partiel) :
+			// corrigé sur place.
+			if l.Plein {
+				ancien := map[string]string{"Plein": "Plein partiel", "Plein partiel": "Plein"}[l.Libelle]
+				n, err := q.RenommerPleinImporte(ctx, donnees.RenommerPleinImporteParams{Nouveau: l.Libelle, FamilleID: c.Famille.ID,
+					Module: modVehicules, ObjetID: x.ID, Jour: l.Jour, Ancien: ancien, Montant: l.Montant, Km: l.Km, Litres: l.Litres})
+				if err != nil {
+					return err
+				}
+				if n > 0 {
+					ret.corriges++
+					continue
+				}
 			}
 			if n >= suivi.CarnetMax {
 				ret.plein = true
@@ -207,8 +244,10 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 			m.a.Journal.Error("fuelio : kilométrage non noté", "erreur", err)
 		}
 	}
-	m.a.Journal.Info("reprise Fuelio", "vehicule", x.ID, "pleins", ret.pleins, "depenses", ret.depenses, "deja", ret.deja,
-		"photos", ret.photos, "photos_sans_ligne", ret.sansLigne, "images_zip", len(sv.Images))
+	m.a.Journal.Info("reprise Fuelio", "vehicule", x.ID, "pleins", ret.pleins, "depenses", ret.depenses, "deja", ret.deja, "corriges", ret.corriges,
+		"photos", ret.photos, "photos_sans_ligne", ret.sansLigne, "images_zip", len(sv.Images),
+		"depenses_lues", v.Ecart.DepensesLues, "modeles", v.Ecart.Modeles, "recettes", v.Ecart.Recettes,
+		"sans_date", v.Ecart.PleinsSansDate+v.Ecart.DepensesSansDate, "vehicules", len(sv.Vehicules), "nom", v.Nom)
 	m.a.Publier(c, modVehicules, "")
 	m.a.Flash(w, ret.message())
 	m.a.Rediriger(w, r, fmt.Sprintf("/vehicules/%d", x.ID))
