@@ -48,6 +48,7 @@ func Brancher(a *appli.App) {
 	a.Route("GET /notes/photos/{id}", mod, appli.Membre, m.photo)
 	a.Route("POST /notes/photos/{id}/supprimer", mod, appli.Membre, m.supprimerPhoto)
 	a.Route("POST /notes/{id}/supprimer", mod, appli.Membre, m.supprimer)
+	m.routesRangement()
 
 	a.AjouterResume(mod, m.resume)
 	a.AjouterRecherche(mod, m.chercher)
@@ -60,11 +61,13 @@ const (
 	toutes    = ""
 	partagees = "partagees"
 	privees   = "privees"
+	listes    = "listes" // notes avec des cases à cocher
 )
 
 type carteNote struct {
 	donnees.Note
-	Photos     int64 // nombre de photos
+	Photos     int64  // nombre de photos
+	Rappel     string // « 28/11 18:00 » (rappel à venir)
 	Auteur     *donnees.Membre
 	Date       string
 	Modifiable bool
@@ -89,7 +92,7 @@ const (
 
 func lireFiltre(r *http.Request) (filtre, recherche string) {
 	filtre = r.URL.Query().Get("voir")
-	if filtre != partagees && filtre != privees {
+	if filtre != partagees && filtre != privees && filtre != listes {
 		filtre = toutes
 	}
 	recherche = strings.TrimSpace(r.URL.Query().Get("q"))
@@ -160,6 +163,9 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre, recherche s
 		}
 		n.Texte = apercuCases(n.Texte)
 		cn := carteNote{Note: n, Photos: l.Photos, Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n)}
+		if l.RappelLe > 0 && l.RappelEnvoye == 0 {
+			cn.Rappel = time.Unix(l.RappelLe, 0).In(c.Lieu).Format("02/01 15:04")
+		}
 		if n.AuteurID.Valid {
 			cn.Auteur = parID[n.AuteurID.Int64]
 		}
@@ -219,6 +225,9 @@ type formNote struct {
 	Photos      []donnees.PhotoNote
 	Edition     template.HTML // contenu de l'éditeur (voir format.go)
 	Ouvert      bool          // note avec des cases : éditeur déplié (« ?modifier=1 »)
+	// Rappel : valeur du champ (« 2026-11-28T18:00 ») et texte
+	// (« vendredi 28/11 à 18:00 ») ; vides : aucun rappel à venir.
+	RappelValeur, RappelTexte string
 	// PeutPriver : la case « Privée » est proposée (toujours à la création
 	// et pour une note déjà privée ; pour une note partagée, seulement à un
 	// parent qui en est l'auteur).
@@ -255,7 +264,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		f.Note, f.Modifiable, f.PeutPriver = n, modifiable(c, n), peutPriver(c, n)
 		f.Supprimable = supprimable(c, n)
 		if len(Cases(n.Texte)) > 0 {
-			f.Cases = vueCases(c, n)
+			f.Cases = vueCases(c, n, false)
 		}
 		photos, err := m.a.Q.PhotosNote(r.Context(), donnees.PhotosNoteParams{NoteID: n.ID, FamilleID: c.Famille.ID})
 		if err != nil {
@@ -266,6 +275,10 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	}
 	f.Edition = riche.HTML(f.Note.Texte, riche.Options{Mode: riche.Edition, Note: f.Note.ID})
 	f.Ouvert = r.URL.Query().Get("modifier") == "1"
+	if f.Note.RappelLe > 0 && f.Note.RappelEnvoye == 0 {
+		t := time.Unix(f.Note.RappelLe, 0).In(c.Lieu)
+		f.RappelValeur, f.RappelTexte = t.Format(formatRappel), quandRappel(t, c.Maintenant())
+	}
 	titre := "Nouvelle note"
 	if f.Liste {
 		titre = "Nouvelle liste"

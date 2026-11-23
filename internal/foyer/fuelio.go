@@ -92,47 +92,63 @@ func (x fuelioRetour) message() string {
 	return t
 }
 
-// importerFuelio : POST du fichier, envoyé tel quel (corps brut, voir app.js).
-func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	ctx := r.Context()
-	x, ok := m.vehicule(r, c)
-	if !ok {
-		m.a.Echec(w, r, http.StatusNotFound, "Véhicule introuvable.")
-		return
-	}
+// recevoirFuelio : le fichier envoyé (corps brut, voir app.js), écrit sur
+// le disque puis ouvert. fin : à appeler quand tout est fini (ferme, efface
+// le fichier provisoire, libère la place). ok faux : réponse déjà faite.
+func (m *Module) recevoirFuelio(w http.ResponseWriter, r *http.Request) (sv *fuelio.Sauvegarde, fin func(), ok bool) {
 	if !fuelioUn.TryLock() {
 		m.a.Echec(w, r, http.StatusServiceUnavailable, "Une reprise Fuelio est déjà en cours : réessayez dans un instant.")
-		return
+		return nil, nil, false
 	}
-	defer fuelioUn.Unlock()
-
 	// Le fichier va sur le disque (dossier des données), jamais en mémoire.
 	tmp, err := os.CreateTemp(m.a.Config.Donnees, "fuelio-*.tmp")
 	if err != nil {
+		fuelioUn.Unlock()
 		m.a.ErreurInterne(w, r, err)
-		return
+		return nil, nil, false
 	}
-	defer os.Remove(tmp.Name())
+	nettoyer := func() { _ = os.Remove(tmp.Name()); fuelioUn.Unlock() }
 	_, err = io.Copy(tmp, r.Body) // borné par le serveur (appli.TailleMaxFuelio)
 	if errFermer := tmp.Close(); err == nil {
 		err = errFermer
 	}
 	var trop *http.MaxBytesError
 	if errors.As(err, &trop) {
+		nettoyer()
 		m.a.Echec(w, r, http.StatusRequestEntityTooLarge, fmt.Sprintf("Fichier trop gros (%d Mo au plus).", appli.TailleMaxFuelio>>20))
-		return
+		return nil, nil, false
 	}
 	if err != nil {
+		nettoyer()
 		m.a.Echec(w, r, http.StatusBadRequest, "Envoi interrompu : réessayez.")
-		return
+		return nil, nil, false
 	}
-	sv, err := fuelio.Ouvrir(tmp.Name())
+	sv, err = fuelio.Ouvrir(tmp.Name())
 	if err != nil {
+		nettoyer()
 		m.a.Echec(w, r, http.StatusBadRequest, "Ce fichier n'est pas une sauvegarde Fuelio (.fuelio, .zip ou .csv).")
+		return nil, nil, false
+	}
+	return sv, func() { _ = sv.Fermer(); nettoyer() }, true
+}
+
+// memeNom : deux noms de véhicule pareils (accents et majuscules à part).
+func memeNom(a, b string) bool {
+	return txt.Plier(strings.TrimSpace(a)) == txt.Plier(strings.TrimSpace(b))
+}
+
+// importerFuelio : POST du fichier sur la fiche d'un véhicule.
+func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	x, ok := m.vehicule(r, c)
+	if !ok {
+		m.a.Echec(w, r, http.StatusNotFound, "Véhicule introuvable.")
 		return
 	}
-	defer sv.Fermer()
-
+	sv, fin, ok := m.recevoirFuelio(w, r)
+	if !ok {
+		return
+	}
+	defer fin()
 	// Plusieurs véhicules dans la sauvegarde : celui qui porte le même nom.
 	v := sv.Vehicules[0]
 	if len(sv.Vehicules) > 1 {
@@ -140,23 +156,119 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 		var noms []string
 		for _, y := range sv.Vehicules {
 			noms = append(noms, "« "+y.Nom+" »")
-			if !trouve && txt.Plier(strings.TrimSpace(y.Nom)) == txt.Plier(strings.TrimSpace(x.Nom)) {
+			if !trouve && memeNom(y.Nom, x.Nom) {
 				v, trouve = y, true
 			}
 		}
 		if !trouve {
 			m.a.Echec(w, r, http.StatusBadRequest, "Cette sauvegarde contient plusieurs véhicules ("+strings.Join(noms, ", ")+
-				") : donnez ici le même nom que dans Fuelio, puis recommencez.")
+				") : donnez ici le même nom que dans Fuelio, ou reprenez-les tous depuis la liste des véhicules.")
 			return
 		}
 	}
-
-	n, err := m.a.Q.CompterCarnetObjet(ctx, donnees.CompterCarnetObjetParams{FamilleID: c.Famille.ID, Module: modVehicules, ObjetID: x.ID})
+	ret, err := m.reprendre(r.Context(), c, x, v, sv.Images)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, modVehicules, "")
+	m.a.Flash(w, ret.message())
+	m.a.Rediriger(w, r, fmt.Sprintf("/vehicules/%d", x.ID))
+}
+
+// importerFuelioTous : POST du fichier sur la liste des véhicules : chaque
+// véhicule de la sauvegarde va dans celui du même nom, créé s'il manque
+// (immatriculation, marque, modèle et année de Fuelio). Un véhicule créé
+// dont le dernier plein a plus d'un an est rangé dans les anciens (depuis
+// ce plein) : il se corrige sur sa fiche.
+func (m *Module) importerFuelioTous(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	sv, fin, ok := m.recevoirFuelio(w, r)
+	if !ok {
+		return
+	}
+	defer fin()
+	existants, err := m.a.Q.VehiculesFamille(ctx, c.Famille.ID)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	var bilan []string
+	for _, v := range sv.Vehicules {
+		var x donnees.Vehicule
+		trouve := false
+		for _, e := range existants {
+			if memeNom(e.Nom, v.Nom) {
+				x, trouve = e, true
+				break
+			}
+		}
+		nom := strings.TrimSpace(v.Nom)
+		if nom == "" {
+			nom = "Véhicule Fuelio"
+		}
+		cree := false
+		if !trouve {
+			if len(existants) >= ObjetsMax {
+				bilan = append(bilan, nom+" : pas créé (trop de véhicules)")
+				continue
+			}
+			x, err = m.a.Q.CreerVehicule(ctx, donnees.CreerVehiculeParams{FamilleID: c.Famille.ID, Nom: couper(nom, 60), Genre: "voiture",
+				Immatriculation: strings.ToUpper(v.Plaque), Modele: v.Modele, CreeLe: time.Now().Unix()})
+			if err != nil {
+				m.a.ErreurInterne(w, r, err)
+				return
+			}
+			existants = append(existants, x)
+			cree = true
+		}
+		ret, err := m.reprendre(ctx, c, x, v, sv.Images)
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		ligne := x.Nom
+		if cree {
+			ligne += " (ajouté"
+			// Dernier plein il y a plus d'un an : un ancien véhicule.
+			dernier := ""
+			for _, l := range v.Lignes {
+				if l.Jour > dernier {
+					dernier = l.Jour
+				}
+			}
+			if dernier != "" && dernier < c.Maintenant().AddDate(-1, 0, 0).Format("2006-01-02") {
+				if err := m.a.Q.ChangerVenduVehicule(ctx, donnees.ChangerVenduVehiculeParams{VenduLe: dernier, ID: x.ID, FamilleID: c.Famille.ID}); err != nil {
+					m.a.ErreurInterne(w, r, err)
+					return
+				}
+				ligne += ", rangé dans les anciens"
+			}
+			ligne += ")"
+		}
+		bilan = append(bilan, ligne+" : "+strings.TrimPrefix(ret.message(), "Fuelio : "))
+	}
+	m.a.Publier(c, modVehicules, "")
+	m.a.Flash(w, "Fuelio · "+strings.Join(bilan, " — "))
+	m.a.Rediriger(w, r, "/vehicules")
+}
+
+// couper : au plus n caractères.
+func couper(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n])
+	}
+	return s
+}
+
+// reprendre : les lignes d'un véhicule Fuelio dans le carnet du véhicule x
+// (sans doublon), puis leurs photos, puis le compteur.
+func (m *Module) reprendre(ctx context.Context, c *appli.Contexte, x donnees.Vehicule, v fuelio.Vehicule, images []fuelio.Image) (fuelioRetour, error) {
 	ret := fuelioRetour{ecart: v.Ecart}
+	n, err := m.a.Q.CompterCarnetObjet(ctx, donnees.CompterCarnetObjetParams{FamilleID: c.Famille.ID, Module: modVehicules, ObjetID: x.ID})
+	if err != nil {
+		return ret, err
+	}
 	ids := make([]int64, len(v.Lignes)) // ligne du carnet créée pour chaque ligne Fuelio (0 : aucune)
 	var kmMax int64
 	auteur := sql.NullInt64{Int64: c.Membre.ID, Valid: true}
@@ -176,12 +288,12 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 			// corrigé sur place.
 			if l.Plein {
 				ancien := map[string]string{"Plein": "Plein partiel", "Plein partiel": "Plein"}[l.Libelle]
-				n, err := q.RenommerPleinImporte(ctx, donnees.RenommerPleinImporteParams{Nouveau: l.Libelle, FamilleID: c.Famille.ID,
+				k, err := q.RenommerPleinImporte(ctx, donnees.RenommerPleinImporteParams{Nouveau: l.Libelle, FamilleID: c.Famille.ID,
 					Module: modVehicules, ObjetID: x.ID, Jour: l.Jour, Ancien: ancien, Montant: l.Montant, Km: l.Km, Litres: l.Litres})
 				if err != nil {
 					return err
 				}
-				if n > 0 {
+				if k > 0 {
 					ret.corriges++
 					continue
 				}
@@ -208,8 +320,7 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 		return nil
 	})
 	if err != nil {
-		m.a.ErreurInterne(w, r, err)
-		return
+		return ret, err
 	}
 
 	// Les photos, une à une et hors transaction (la base reste libre
@@ -219,7 +330,7 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 	// veille) : les lignes sont déjà écrites, leurs photos ne doivent pas
 	// manquer.
 	ctx = context.WithoutCancel(ctx)
-	liens, sansLigne := fuelio.Rattacher(v, sv.Images)
+	liens, sansLigne := fuelio.Rattacher(v, images)
 	ret.sansLigne = sansLigne
 	for _, l := range liens {
 		if ids[l.Ligne] == 0 {
@@ -245,10 +356,8 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 		}
 	}
 	m.a.Journal.Info("reprise Fuelio", "vehicule", x.ID, "pleins", ret.pleins, "depenses", ret.depenses, "deja", ret.deja, "corriges", ret.corriges,
-		"photos", ret.photos, "photos_sans_ligne", ret.sansLigne, "images_zip", len(sv.Images),
+		"photos", ret.photos, "photos_sans_ligne", ret.sansLigne, "images_zip", len(images),
 		"depenses_lues", v.Ecart.DepensesLues, "modeles", v.Ecart.Modeles, "recettes", v.Ecart.Recettes,
-		"sans_date", v.Ecart.PleinsSansDate+v.Ecart.DepensesSansDate, "vehicules", len(sv.Vehicules), "nom", v.Nom)
-	m.a.Publier(c, modVehicules, "")
-	m.a.Flash(w, ret.message())
-	m.a.Rediriger(w, r, fmt.Sprintf("/vehicules/%d", x.ID))
+		"sans_date", v.Ecart.PleinsSansDate+v.Ecart.DepensesSansDate, "nom", v.Nom)
+	return ret, nil
 }

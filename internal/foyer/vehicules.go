@@ -44,6 +44,7 @@ func (m *Module) brancherVehicules() {
 	a.Route("POST /vehicules/{id}", modVehicules, appli.Membre, m.enregistrerVehicule)
 	a.Route("POST /vehicules/{id}/km", modVehicules, appli.Membre, m.kilometrage)
 	a.Route("POST /vehicules/{id}/fuelio", modVehicules, appli.Parent, m.importerFuelio)
+	a.Route("POST /vehicules/fuelio", modVehicules, appli.Parent, m.importerFuelioTous)
 	a.Route("POST /vehicules/{id}/supprimer", modVehicules, appli.Parent, m.supprimerVehicule)
 
 	m.s.Enregistrer(suivi.Objet{
@@ -68,7 +69,13 @@ func (m *Module) brancherVehicules() {
 		},
 	})
 	a.AjouterResume(modVehicules, func(ctx context.Context, c *appli.Contexte) appli.Resume {
-		l, err := a.Q.VehiculesFamille(ctx, c.Famille.ID)
+		tous, err := a.Q.VehiculesFamille(ctx, c.Famille.ID)
+		var l []donnees.Vehicule
+		for _, x := range tous {
+			if x.VenduLe == "" {
+				l = append(l, x)
+			}
+		}
 		if err != nil || len(l) == 0 {
 			return appli.Resume{Info: "Aucun véhicule"}
 		}
@@ -89,10 +96,16 @@ func (m *Module) brancherVehicules() {
 // fenêtre d'ajout ouverte.
 func (m *Module) raccourciPlein(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
-	l, err := m.a.Q.VehiculesFamille(ctx, c.Famille.ID)
+	tous, err := m.a.Q.VehiculesFamille(ctx, c.Famille.ID)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
+	}
+	var l []donnees.Vehicule // ceux qui sont encore à la famille
+	for _, x := range tous {
+		if x.VenduLe == "" {
+			l = append(l, x)
+		}
 	}
 	if len(l) == 0 {
 		m.a.Flash(w, "Ajoutez d'abord un véhicule")
@@ -129,8 +142,18 @@ func (m *Module) listeVehicules(w http.ResponseWriter, r *http.Request, c *appli
 		if x.Immatriculation != "" {
 			detail = strings.TrimSpace(x.Immatriculation + " · " + detail)
 		}
-		v.Elements = append(v.Elements, Element{URL: fmt.Sprintf("/vehicules/%d", x.ID), Emoji: emojiGenre(x.Genre), Nom: x.Nom,
-			Detail: strings.Trim(detail, " ·"), Alerte: alertes[x.ID]})
+		e := Element{URL: fmt.Sprintf("/vehicules/%d", x.ID), Emoji: emojiGenre(x.Genre), Nom: x.Nom, Detail: strings.Trim(detail, " ·")}
+		// Ancien véhicule : à part, en bas, sans alerte.
+		if x.VenduLe != "" {
+			e.Detail = strings.Trim("plus à nous depuis le "+dateFR(x.VenduLe)+" · "+e.Detail, " ·")
+			v.Anciens = append(v.Anciens, e)
+			continue
+		}
+		e.Alerte = alertes[x.ID]
+		v.Elements = append(v.Elements, e)
+	}
+	if c.EstParent() {
+		v.Fuelio = "/vehicules/fuelio"
 	}
 	m.a.Afficher(w, r, c, "foyer/liste", "Véhicules", modVehicules, v)
 }
@@ -144,6 +167,9 @@ func (m *Module) ficheVehicule(w http.ResponseWriter, r *http.Request, c *appli.
 	v := vueFiche{Retour: "/vehicules", TitreRetour: "Véhicules", Emoji: emojiGenre(x.Genre), Nom: x.Nom, Sous: x.Modele,
 		TitreSuivi: "Échéances", TitreCarnet: "Carnet d'entretien",
 		Modifier: fmt.Sprintf("/vehicules/%d/modifier", x.ID), Supprimer: fmt.Sprintf("/vehicules/%d/supprimer", x.ID)}
+	if x.VenduLe != "" {
+		v.Infos = append(v.Infos, "🏁 Ancien véhicule : plus à nous depuis le "+dateFR(x.VenduLe)+" (plus de rappels)")
+	}
 	if x.Immatriculation != "" {
 		v.Infos = append(v.Infos, "🔖 "+x.Immatriculation)
 	}
@@ -161,7 +187,7 @@ func (m *Module) ficheVehicule(w http.ResponseWriter, r *http.Request, c *appli.
 	// Les autres véhicules : on peut changer de véhicule dans la fenêtre « Ajouter un plein ».
 	if l, err := m.a.Q.VehiculesFamille(r.Context(), c.Famille.ID); err == nil && len(l) > 1 {
 		for _, y := range l {
-			if y.ID != x.ID {
+			if y.ID != x.ID && y.VenduLe == "" {
 				v.Autres = append(v.Autres, Lien{URL: template.URL(fmt.Sprintf("/vehicules/%d?ajout=plein", y.ID)), Emoji: emojiGenre(y.Genre), Texte: y.Nom})
 			}
 		}
@@ -243,9 +269,30 @@ func (m *Module) enregistrerVehicule(w http.ResponseWriter, r *http.Request, c *
 			return
 		}
 	}
+	// Ancien véhicule : « Je ne l'ai plus », depuis le (aujourd'hui si la
+	// date manque ou est dans le futur).
+	vendu := ""
+	if r.PostFormValue("ancien") == "1" {
+		vendu = c.Maintenant().Format("2006-01-02")
+		if d, err := time.Parse("2006-01-02", r.PostFormValue("vendu_le")); err == nil && d.Year() >= 1950 && d.Format("2006-01-02") <= vendu {
+			vendu = d.Format("2006-01-02")
+		}
+	}
+	if err := m.a.Q.ChangerVenduVehicule(ctx, donnees.ChangerVenduVehiculeParams{VenduLe: vendu, ID: id, FamilleID: c.Famille.ID}); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
 	m.a.Publier(c, modVehicules, "")
 	m.a.Flash(w, "Véhicule enregistré ✓")
 	m.a.Rediriger(w, r, fmt.Sprintf("/vehicules/%d", id))
+}
+
+// dateFR : « 2025-03-12 » → « 12/03/2025 ».
+func dateFR(j string) string {
+	if t, err := time.Parse("2006-01-02", j); err == nil {
+		return t.Format("02/01/2006")
+	}
+	return j
 }
 
 // kilometrage : mise à jour rapide du compteur (il ne peut que monter).

@@ -4,6 +4,7 @@ package notes
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"image"
 	"image/png"
@@ -12,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"familycocon/internal/essai"
 )
@@ -202,5 +204,80 @@ func TestPhotoDansLeTexte(t *testing.T) {
 	marie.Post("/notes/"+id, map[string]string{"titre": "Potager", "version": version, "couleur": "1", "texte": "Plan\n[ ] Terreau"})
 	if _, p := marie.Get("/notes/" + id); !strings.Contains(p, `data-placer="`+ph+`"`) {
 		t.Error("photo retirée du texte : pas revenue en bas")
+	}
+}
+
+// Onglet « Listes » : seulement les notes avec des cases à cocher.
+func TestFiltreListes(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	marie.Get("/notes/nouvelle")
+	marie.Post("/notes", map[string]string{"titre": "Valise", "texte": "Pour la mer\n[ ] maillot\n[x] crème"})
+	marie.Post("/notes", map[string]string{"titre": "Courses", "texte": "- [ ] pain"})
+	marie.Post("/notes", map[string]string{"titre": "Code wifi", "texte": "abc [ ] pas une case"})
+	_, p := marie.Get("/notes?voir=listes")
+	if !strings.Contains(p, "Valise") || !strings.Contains(p, "Courses") || strings.Contains(p, "Code wifi") {
+		t.Fatalf("onglet Listes :\n%s", p)
+	}
+	if !strings.Contains(p, `class="pilule active" href="/notes?voir=listes"`) || !strings.Contains(p, "＋ Liste") {
+		t.Error("onglet ou bouton absent")
+	}
+}
+
+// Listes : cochés en bas (affichage), ranger (modifier, déplacer,
+// supprimer), rappel envoyé une fois à son heure.
+func TestRangerEtRappel(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	marie.Get("/notes/nouvelle")
+	_, page := marie.Post("/notes", map[string]string{"titre": "Valise", "texte": "[x] crème\n[ ] maillot\n[ ] livre"})
+	id := essai.Trouver(t, page, `/notes/(\d+)/cochees`)
+	// Cochés en bas (par défaut) : maillot, livre, puis crème.
+	if i, j := strings.Index(page, "maillot"), strings.Index(page, "crème"); i < 0 || j < i || !strings.Contains(page, "<b>1/3</b> faits") {
+		t.Fatalf("cochés en bas :\n%s", page)
+	}
+	_, p := marie.Post("/notes/"+id+"/cochees", map[string]string{"en_bas": "0"})
+	if i, j := strings.Index(p, "maillot"), strings.Index(p, "crème"); j > i {
+		t.Fatal("cochés à leur place : crème devrait être en tête")
+	}
+	// Ranger : un enfant ne peut pas.
+	if code, _ := lea.Get("/notes/liste/" + id + "?ranger=1"); code != 200 {
+		t.Fatalf("liste vue par Léa : %d", code)
+	}
+	if code, _ := lea.Post("/notes/elements/"+id+"/1", map[string]string{"avant": "[ ] maillot", "texte": "x"}); code != http.StatusForbidden {
+		t.Fatalf("élément modifié par un enfant : %d", code)
+	}
+	texte := func() string {
+		_, p := marie.Get("/notes/" + id)
+		return essai.Trouver(t, p, `(?s)<textarea name="texte"[^>]*>(.*?)</textarea>`)
+	}
+	marie.Post("/notes/elements/"+id+"/1", map[string]string{"avant": "[ ] maillot", "texte": "maillot *2"})
+	marie.Post("/notes/elements/"+id+"/2/monter", map[string]string{"avant": "[ ] livre"})
+	marie.Post("/notes/elements/"+id+"/0/supprimer", map[string]string{"avant": "[x] crème"})
+	if got := texte(); got != "[ ] livre\n[ ] maillot \\*2" {
+		t.Fatalf("après rangement : %q", got)
+	}
+	// Ligne qui a changé entre-temps : rien n'est touché.
+	if code, _ := marie.Post("/notes/elements/"+id+"/0/supprimer", map[string]string{"avant": "[x] crème"}); code != http.StatusConflict {
+		t.Fatalf("ligne périmée : %d", code)
+	}
+	// Rappel : dans le passé refusé ; à venir accepté, montré, envoyé une fois.
+	if code, _ := marie.Post("/notes/"+id+"/rappel", map[string]string{"rappel": "2020-01-01T10:00"}); code != 400 {
+		t.Fatalf("rappel passé : %d", code)
+	}
+	quand := time.Now().Add(2 * time.Hour)
+	marie.Post("/notes/"+id+"/rappel", map[string]string{"rappel": quand.In(time.Local).Format("2006-01-02T15:04")})
+	if _, p := marie.Get("/notes"); !strings.Contains(p, "⏰ ") {
+		t.Fatal("rappel absent de la carte")
+	}
+	n, _ := strconv.ParseInt(id, 10, 64)
+	a.TachesMinute(context.Background(), time.Now())
+	if l, _ := a.Q.NotesARappeler(context.Background(), quand.Add(time.Hour).Unix()); len(l) != 1 || l[0].ID != n {
+		t.Fatalf("rappel parti trop tôt : %v", l)
+	}
+	a.TachesMinute(context.Background(), quand.Add(time.Minute))
+	if l, _ := a.Q.NotesARappeler(context.Background(), quand.Add(time.Hour).Unix()); len(l) != 0 {
+		t.Fatal("rappel pas marqué envoyé")
 	}
 }

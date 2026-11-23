@@ -620,7 +620,7 @@ func (q *Queries) ExportMissionsFaites(ctx context.Context, familleID int64) ([]
 }
 
 const exportNotes = `-- name: ExportNotes :many
-SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le FROM notes WHERE famille_id = ? AND (privee = 0 OR auteur_id = ?)
+SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye FROM notes WHERE famille_id = ? AND (privee = 0 OR auteur_id = ?)
 `
 
 type ExportNotesParams struct {
@@ -649,6 +649,9 @@ func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]Not
 			&i.Privee,
 			&i.CreeLe,
 			&i.ModifieLe,
+			&i.CocheesEnBas,
+			&i.RappelLe,
+			&i.RappelEnvoye,
 		); err != nil {
 			return nil, err
 		}
@@ -1099,7 +1102,7 @@ func (q *Queries) ExportTachesFaites(ctx context.Context, familleID int64) ([]Ta
 }
 
 const exportVehicules = `-- name: ExportVehicules :many
-SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id FROM vehicules WHERE famille_id = ?
+SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id, vendu_le FROM vehicules WHERE famille_id = ?
 `
 
 func (q *Queries) ExportVehicules(ctx context.Context, familleID int64) ([]Vehicule, error) {
@@ -1123,6 +1126,7 @@ func (q *Queries) ExportVehicules(ctx context.Context, familleID int64) ([]Vehic
 			&i.CreeLe,
 			&i.GarageID,
 			&i.AssureurID,
+			&i.VenduLe,
 		); err != nil {
 			return nil, err
 		}

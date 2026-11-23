@@ -47,6 +47,38 @@ func (q *Queries) AjouterPhotoNote(ctx context.Context, arg AjouterPhotoNotePara
 	return i, err
 }
 
+const changerCocheesEnBas = `-- name: ChangerCocheesEnBas :exec
+UPDATE notes SET cochees_en_bas = ?1 WHERE id = ?2 AND famille_id = ?3
+`
+
+type ChangerCocheesEnBasParams struct {
+	EnBas     int64
+	ID        int64
+	FamilleID int64
+}
+
+// Listes : cases cochees en bas (affichage) ou a leur place.
+func (q *Queries) ChangerCocheesEnBas(ctx context.Context, arg ChangerCocheesEnBasParams) error {
+	_, err := q.db.ExecContext(ctx, changerCocheesEnBas, arg.EnBas, arg.ID, arg.FamilleID)
+	return err
+}
+
+const changerRappelNote = `-- name: ChangerRappelNote :exec
+UPDATE notes SET rappel_le = ?1, rappel_envoye = 0 WHERE id = ?2 AND famille_id = ?3
+`
+
+type ChangerRappelNoteParams struct {
+	RappelLe  int64
+	ID        int64
+	FamilleID int64
+}
+
+// Rappel d'une note (0 : aucun) ; un nouveau rappel repart a zero.
+func (q *Queries) ChangerRappelNote(ctx context.Context, arg ChangerRappelNoteParams) error {
+	_, err := q.db.ExecContext(ctx, changerRappelNote, arg.RappelLe, arg.ID, arg.FamilleID)
+	return err
+}
+
 const cocherNote = `-- name: CocherNote :execrows
 UPDATE notes SET texte = ?1, modifie_le = ?2
 WHERE id = ?3 AND famille_id = ?4 AND texte = ?5
@@ -126,7 +158,7 @@ func (q *Queries) CompterPhotosNotesFamille(ctx context.Context, familleID int64
 
 const creerNote = `-- name: CreerNote :one
 INSERT INTO notes (famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye
 `
 
 type CreerNoteParams struct {
@@ -165,6 +197,9 @@ func (q *Queries) CreerNote(ctx context.Context, arg CreerNoteParams) (Note, err
 		&i.Privee,
 		&i.CreeLe,
 		&i.ModifieLe,
+		&i.CocheesEnBas,
+		&i.RappelLe,
+		&i.RappelEnvoye,
 	)
 	return i, err
 }
@@ -223,7 +258,7 @@ func (q *Queries) ModifierNote(ctx context.Context, arg ModifierNoteParams) (int
 }
 
 const noteParID = `-- name: NoteParID :one
-SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le FROM notes WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye FROM notes WHERE id = ? AND famille_id = ?
 `
 
 type NoteParIDParams struct {
@@ -245,17 +280,70 @@ func (q *Queries) NoteParID(ctx context.Context, arg NoteParIDParams) (Note, err
 		&i.Privee,
 		&i.CreeLe,
 		&i.ModifieLe,
+		&i.CocheesEnBas,
+		&i.RappelLe,
+		&i.RappelEnvoye,
 	)
 	return i, err
+}
+
+const notesARappeler = `-- name: NotesARappeler :many
+SELECT id, famille_id, auteur_id, titre, texte, privee, rappel_le FROM notes
+WHERE rappel_le > 0 AND rappel_envoye = 0 AND rappel_le <= ?1 ORDER BY rappel_le LIMIT 200
+`
+
+type NotesARappelerRow struct {
+	ID        int64
+	FamilleID int64
+	AuteurID  sql.NullInt64
+	Titre     string
+	Texte     string
+	Privee    int64
+	RappelLe  int64
+}
+
+// Rappels arrives a echeance (toutes les familles).
+func (q *Queries) NotesARappeler(ctx context.Context, maintenant int64) ([]NotesARappelerRow, error) {
+	rows, err := q.db.QueryContext(ctx, notesARappeler, maintenant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NotesARappelerRow{}
+	for rows.Next() {
+		var i NotesARappelerRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.AuteurID,
+			&i.Titre,
+			&i.Texte,
+			&i.Privee,
+			&i.RappelLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const notesVisibles = `-- name: NotesVisibles :many
 
 SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debut, n.couleur, n.epinglee, n.privee, n.modifie_le,
-  (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
+  n.rappel_le, n.rappel_envoye, (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
 FROM notes n
 WHERE n.famille_id = ?1 AND (n.privee = 0 OR n.auteur_id = ?2)
-  AND (?3 = '' OR (?3 = 'privees' AND n.privee = 1) OR (?3 = 'partagees' AND n.privee = 0))
+  AND (?3 = '' OR (?3 = 'privees' AND n.privee = 1) OR (?3 = 'partagees' AND n.privee = 0)
+    OR (?3 = 'listes' AND (n.texte LIKE '[ ]%' OR n.texte LIKE '[x]%' OR n.texte LIKE '- [ ]%' OR n.texte LIKE '- [x]%'
+      OR instr(n.texte, char(10) || '[ ]') > 0 OR instr(n.texte, char(10) || '[x]') > 0 OR instr(n.texte, char(10) || '[X]') > 0
+      OR instr(n.texte, char(10) || '- [ ]') > 0 OR instr(n.texte, char(10) || '- [x]') > 0)))
   AND (?4 = '' OR instr(plier(n.titre), plier(?4)) > 0 OR instr(plier(n.texte), plier(?4)) > 0)
 ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT ?5
 `
@@ -269,20 +357,23 @@ type NotesVisiblesParams struct {
 }
 
 type NotesVisiblesRow struct {
-	ID        int64
-	AuteurID  sql.NullInt64
-	Titre     string
-	Debut     string
-	Couleur   int64
-	Epinglee  int64
-	Privee    int64
-	ModifieLe int64
-	Photos    int64
+	ID           int64
+	AuteurID     sql.NullInt64
+	Titre        string
+	Debut        string
+	Couleur      int64
+	Epinglee     int64
+	Privee       int64
+	ModifieLe    int64
+	RappelLe     int64
+	RappelEnvoye int64
+	Photos       int64
 }
 
 // Notes : une note privee n'est visible que par son auteur.
 // Liste : debut du texte seulement, nombre borne. motif ” : pas de
 // recherche ; sinon le texte cherche, tel quel (% et _ compris) ; filtre : ”, 'partagees' ou 'privees'.
+// Filtre : ” toutes, 'privees', 'partagees', 'listes' (une ligne qui commence par une case).
 func (q *Queries) NotesVisibles(ctx context.Context, arg NotesVisiblesParams) ([]NotesVisiblesRow, error) {
 	rows, err := q.db.QueryContext(ctx, notesVisibles,
 		arg.FamilleID,
@@ -307,6 +398,8 @@ func (q *Queries) NotesVisibles(ctx context.Context, arg NotesVisiblesParams) ([
 			&i.Epinglee,
 			&i.Privee,
 			&i.ModifieLe,
+			&i.RappelLe,
+			&i.RappelEnvoye,
 			&i.Photos,
 		); err != nil {
 			return nil, err
@@ -426,6 +519,15 @@ func (q *Queries) PhotosNotesPriveesMembre(ctx context.Context, arg PhotosNotesP
 		return nil, err
 	}
 	return items, nil
+}
+
+const rappelNoteEnvoye = `-- name: RappelNoteEnvoye :exec
+UPDATE notes SET rappel_envoye = 1 WHERE id = ?
+`
+
+func (q *Queries) RappelNoteEnvoye(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, rappelNoteEnvoye, id)
+	return err
 }
 
 const supprimerNote = `-- name: SupprimerNote :exec

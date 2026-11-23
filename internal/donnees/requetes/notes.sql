@@ -2,12 +2,16 @@
 
 -- Liste : debut du texte seulement, nombre borne. motif '' : pas de
 -- recherche ; sinon le texte cherche, tel quel (% et _ compris) ; filtre : '', 'partagees' ou 'privees'.
+-- Filtre : '' toutes, 'privees', 'partagees', 'listes' (une ligne qui commence par une case).
 -- name: NotesVisibles :many
 SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debut, n.couleur, n.epinglee, n.privee, n.modifie_le,
-  (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
+  n.rappel_le, n.rappel_envoye, (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
 FROM notes n
 WHERE n.famille_id = sqlc.arg(famille_id) AND (n.privee = 0 OR n.auteur_id = sqlc.arg(membre_id))
-  AND (sqlc.arg(filtre) = '' OR (sqlc.arg(filtre) = 'privees' AND n.privee = 1) OR (sqlc.arg(filtre) = 'partagees' AND n.privee = 0))
+  AND (sqlc.arg(filtre) = '' OR (sqlc.arg(filtre) = 'privees' AND n.privee = 1) OR (sqlc.arg(filtre) = 'partagees' AND n.privee = 0)
+    OR (sqlc.arg(filtre) = 'listes' AND (n.texte LIKE '[ ]%' OR n.texte LIKE '[x]%' OR n.texte LIKE '- [ ]%' OR n.texte LIKE '- [x]%'
+      OR instr(n.texte, char(10) || '[ ]') > 0 OR instr(n.texte, char(10) || '[x]') > 0 OR instr(n.texte, char(10) || '[X]') > 0
+      OR instr(n.texte, char(10) || '- [ ]') > 0 OR instr(n.texte, char(10) || '- [x]') > 0)))
   AND (sqlc.arg(motif) = '' OR instr(plier(n.titre), plier(sqlc.arg(motif))) > 0 OR instr(plier(n.texte), plier(sqlc.arg(motif))) > 0)
 ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT sqlc.arg(nombre);
 
@@ -70,3 +74,19 @@ DELETE FROM photos_notes WHERE id = ? AND famille_id = ?;
 -- name: PhotosNotesPriveesMembre :many
 SELECT p.* FROM photos_notes p JOIN notes n ON n.id = p.note_id
 WHERE n.famille_id = ? AND n.auteur_id = ? AND n.privee = 1;
+
+-- Listes : cases cochees en bas (affichage) ou a leur place.
+-- name: ChangerCocheesEnBas :exec
+UPDATE notes SET cochees_en_bas = sqlc.arg(en_bas) WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id);
+
+-- Rappel d'une note (0 : aucun) ; un nouveau rappel repart a zero.
+-- name: ChangerRappelNote :exec
+UPDATE notes SET rappel_le = sqlc.arg(rappel_le), rappel_envoye = 0 WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id);
+
+-- Rappels arrives a echeance (toutes les familles).
+-- name: NotesARappeler :many
+SELECT id, famille_id, auteur_id, titre, texte, privee, rappel_le FROM notes
+WHERE rappel_le > 0 AND rappel_envoye = 0 AND rappel_le <= sqlc.arg(maintenant) ORDER BY rappel_le LIMIT 200;
+
+-- name: RappelNoteEnvoye :exec
+UPDATE notes SET rappel_envoye = 1 WHERE id = ?;

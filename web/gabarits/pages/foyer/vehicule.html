@@ -18,6 +18,11 @@
   {{template "choix-contact" dict "Nom" "garage_id" "Titre" "🔧 Garage" "Choisi" .V.GarageID "Contacts" .Contacts}}
   {{template "choix-contact" dict "Nom" "assureur_id" "Titre" "🛡️ Assurance" "Choisi" .V.AssureurID "Contacts" .Contacts}}
   <label class="champ"><span>Notes (facultatif)</span><textarea name="notes" rows="2" maxlength="1000" data-riche>{{.V.Notes}}</textarea><template data-editeur-contenu>{{richeEdition .V.Notes}}</template></label>
+  <label class="interrupteur">
+    <span class="emoji">🏁</span><span class="nom">Je ne l'ai plus <small class="aide">(vendu, donné… : historique gardé, plus de rappels)</small></span>
+    <input type="checkbox" name="ancien" value="1"{{if .V.VenduLe}} checked{{end}}><span class="glissiere"></span>
+  </label>
+  <label class="champ"><span>Depuis le</span><input type="date" name="vendu_le" value="{{.V.VenduLe}}"></label>
   {{if .Nouveau}}<p class="aide">Ensuite, ajoutez les échéances : contrôle technique, assurance, vidange…</p>{{end}}
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>

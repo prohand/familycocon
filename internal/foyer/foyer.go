@@ -53,6 +53,8 @@ type Element struct {
 type vueListe struct {
 	Titre, Emoji, Module, Nouveau, TexteNouveau, Vide string
 	Elements                                          []Element
+	Anciens                                           []Element // véhicules qui ne sont plus à la famille
+	Fuelio                                            string    // import Fuelio de tous les véhicules (adresse)
 }
 
 // Lien : un bouton de la fiche (appeler, écrire, site…).

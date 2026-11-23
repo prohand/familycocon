@@ -23,6 +23,7 @@ func (a *App) Demarrer(ctx context.Context) {
 		a.Journal.Error("notifications push indisponibles", "erreur", err)
 	}
 	go a.rappelsQuotidiens(ctx)
+	go a.chaqueMinute(ctx)
 	if a.Config.SauvegardeA != "" {
 		go a.sauvegardesAuto(ctx)
 	}
@@ -170,3 +171,33 @@ func CopierNouveaux(src, dst string) (int, error) {
 // DossierPieces : le dossier des photos gardées (tickets du carnet, photos
 // des notes), à côté de la base : pieces/<famille>/<nom>.jpg.
 func (a *App) DossierPieces() string { return filepath.Join(a.Config.Donnees, "pieces") }
+
+// MinuteFunc : une tâche lancée chaque minute (rappels à une heure dite…).
+type MinuteFunc func(ctx context.Context, maintenant time.Time)
+
+// AjouterMinute : une tâche de plus, lancée chaque minute (au démarrage
+// aussi : un rappel tombé pendant un arrêt part à la reprise).
+func (a *App) AjouterMinute(f MinuteFunc) { a.minutes = append(a.minutes, f) }
+
+func (a *App) chaqueMinute(ctx context.Context) {
+	minuteur := time.NewTicker(time.Minute)
+	defer minuteur.Stop()
+	for {
+		a.TachesMinute(ctx, time.Now())
+		select {
+		case <-ctx.Done():
+			return
+		case <-minuteur.C:
+		}
+	}
+}
+
+// TachesMinute : lance les tâches de chaque minute (appelée aussi par les tests).
+func (a *App) TachesMinute(ctx context.Context, maintenant time.Time) {
+	for _, f := range a.minutes {
+		func() {
+			defer a.rattraper("tâche de chaque minute")
+			f(ctx, maintenant)
+		}()
+	}
+}

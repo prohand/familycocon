@@ -9,9 +9,10 @@
     <a class="pilule{{if eq .Filtre ""}} active{{end}}" href="/notes">Toutes</a>
     <a class="pilule{{if eq .Filtre "partagees"}} active{{end}}" href="/notes?voir=partagees">👨‍👩‍👧 Partagées</a>
     <a class="pilule{{if eq .Filtre "privees"}} active{{end}}" href="/notes?voir=privees">🔒 Privées</a>
+    <a class="pilule{{if eq .Filtre "listes"}} active{{end}}" href="/notes?voir=listes">☑️ Listes</a>
   </nav>
   <span class="boutons-ajout">
-    <a class="bouton secondaire" href="/notes/nouvelle?liste=1{{if eq .Filtre "privees"}}&amp;voir=privees{{end}}">☑️ Liste</a>
+    <a class="bouton secondaire" href="/notes/nouvelle?liste=1{{if eq .Filtre "privees"}}&amp;voir=privees{{end}}">＋ Liste</a>
     <a class="bouton" href="/notes/nouvelle{{if eq .Filtre "privees"}}?voir=privees{{end}}">＋ Note</a>
   </span>
 </div>
@@ -36,7 +37,7 @@
   {{end}}
   {{if .Tronquee}}<p class="aide">Seules les notes les plus récentes sont montrées : utilisez la recherche pour retrouver les autres.</p>{{end}}
   {{if not (or .Epinglees .Autres)}}
-  <div class="carte vide"><span class="emoji">📝</span>{{if .Recherche}}Aucune note ne contient « {{.Recherche}} ».{{else}}Pas encore de note. Courses de Noël, codes du wifi, idées de vacances…{{end}}</div>
+  <div class="carte vide"><span class="emoji">📝</span>{{if .Recherche}}Aucune note ne contient « {{.Recherche}} ».{{else if eq .Filtre "listes"}}Pas encore de liste : touchez « ＋ Liste » (courses, valise, cadeaux…).{{else}}Pas encore de note. Courses de Noël, codes du wifi, idées de vacances…{{end}}</div>
   {{end}}
 </div>
 {{end}}
@@ -51,7 +52,7 @@
   </a>
   <footer>
     {{with $n.Auteur}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{visage .}}</span>{{end}}
-    <span class="note-date">{{if eq $n.Privee 1}}🔒 {{end}}{{if $n.Photos}}📷 {{$n.Photos}} · {{end}}{{$n.Date}}</span>
+    <span class="note-date">{{if eq $n.Privee 1}}🔒 {{end}}{{if $n.Photos}}📷 {{$n.Photos}} · {{end}}{{with $n.Rappel}}<span class="note-rappel">⏰ {{.}}</span> · {{end}}{{$n.Date}}</span>
     {{if $n.Modifiable}}
     <button class="epingle{{if eq $n.Epinglee 1}} actif{{end}}" hx-post="/notes/{{$n.ID}}/epingler?{{.V.Params}}" hx-target="#notes" hx-swap="outerHTML"
             aria-label="{{if eq $n.Epinglee 1}}Désépingler{{else}}Épingler{{end}}">📌</button>

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"html/template"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode"
@@ -46,6 +47,13 @@ type Options struct {
 	// et ses photos (« [photo N] ») s'affichent. 0 ailleurs : cases
 	// figées, repères de photo laissés en texte.
 	Note int64
+	// Notes, en lecture : cases cochées rangées après les autres (dans
+	// chaque suite de cases ; le texte, lui, ne change pas).
+	CocheesEnBas bool
+	// Notes, en lecture : « Ranger la liste » : chaque case devient un
+	// champ (✓ enregistrer, ↑ ↓ déplacer, ✕ supprimer). Jeton : CSRF.
+	Ranger bool
+	Jeton  string
 }
 
 var reMarque = regexp.MustCompile(`^\[photo (\d+)\]$`)
@@ -148,8 +156,28 @@ func HTML(texte string, o Options) template.HTML {
 			ouvert = tag
 		}
 	}
+	blocs := make([]bloc, len(lignes))
+	ordre := make([]int, len(lignes)) // ordre d'affichage des lignes
 	for i, l := range lignes {
-		x := lireBloc(l, i)
+		blocs[i], ordre[i] = lireBloc(l, i), i
+	}
+	if mode == Lecture && note != 0 && o.CocheesEnBas && !o.Ranger {
+		for i := 0; i < len(blocs); {
+			if blocs[i].sorte != "case" {
+				i++
+				continue
+			}
+			j := i
+			for j < len(blocs) && blocs[j].sorte == "case" {
+				j++
+			}
+			suite := ordre[i:j]
+			sort.SliceStable(suite, func(a, b int) bool { return !blocs[suite[a]].cochee && blocs[suite[b]].cochee })
+			i = j
+		}
+	}
+	for _, i := range ordre {
+		l, x := lignes[i], blocs[i]
 		if x.sorte == "photo" && note == 0 {
 			x.sorte, x.texte = "p", `\`+strings.TrimSpace(l) // hors des notes : un texte
 		}
@@ -219,6 +247,8 @@ func HTML(texte string, o Options) template.HTML {
 					etat = "1"
 				}
 				b.WriteString(`<div class="case-note" data-case data-cochee="` + etat + `">` + videOuTexte(x.texte) + `</div>`)
+			} else if o.Ranger && note != 0 {
+				b.WriteString(rangee(note, x, strings.TrimRight(l, "\r"), o.Jeton))
 			} else if note == 0 {
 				b.WriteString(fmt.Sprintf(`<label class="case-a-cocher"><input type="checkbox"%s disabled> %s</label>`, coche, enLigne(x.texte, true)))
 			} else {
@@ -414,4 +444,24 @@ func fermeture(s string, debut int, signe string) int {
 		}
 	}
 	return -1
+}
+
+// rangee : une case de la liste en mode « Ranger » : son texte dans un
+// champ, et les boutons. « avant » : la ligne telle qu'elle était (le
+// serveur vérifie qu'elle n'a pas changé entre-temps).
+func rangee(note int64, x bloc, ligne, jeton string) string {
+	base := fmt.Sprintf("/notes/elements/%d/%d", note, x.ligne)
+	cible := ` hx-target="#cases-note" hx-swap="outerHTML"`
+	esc := template.HTMLEscapeString
+	classe := "rangee-element"
+	if x.cochee {
+		classe += " cochee"
+	}
+	return `<form class="` + classe + `" method="post" action="` + base + `" hx-post="` + base + `"` + cible + `>` +
+		`<input type="hidden" name="_jeton" value="` + esc(jeton) + `"><input type="hidden" name="avant" value="` + esc(ligne) + `">` +
+		`<input name="texte" value="` + esc(enLigne(x.texte, false)) + `" maxlength="200" aria-label="Élément" required autocomplete="off">` +
+		`<button class="bouton petit" aria-label="Enregistrer">✓</button>` +
+		`<button type="button" class="crayon" hx-post="` + base + `/monter"` + cible + ` aria-label="Monter">↑</button>` +
+		`<button type="button" class="crayon" hx-post="` + base + `/descendre"` + cible + ` aria-label="Descendre">↓</button>` +
+		`<button type="button" class="crayon" hx-post="` + base + `/supprimer"` + cible + ` aria-label="Supprimer">✕</button></form>`
 }

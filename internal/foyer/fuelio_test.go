@@ -312,3 +312,64 @@ func TestFuelioPartielEstime(t *testing.T) {
 		t.Errorf("plein doublé : %d lignes", n)
 	}
 }
+
+// Import de tous les véhicules depuis la liste : celui qui existe reçoit
+// ses pleins, celui qui manque est créé (immatriculation, modèle) et rangé
+// dans les anciens si son dernier plein a plus d'un an.
+func TestFuelioTousEtAnciens(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+	})
+	marie := essai.Famille(t, srv)
+	_, page := marie.Post("/vehicules", map[string]string{"nom": "Mazda 3", "genre": "voiture"})
+	mazda := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	recent := time.Now().AddDate(0, -1, 0).Format("2006-01-02")
+	vehicule := func(nom, plaque, marque, modele, annee string, pleins ...string) string {
+		s := "\"## Vehicle\"\n\"Name\",\"Plate\",\"Make\",\"Model\",\"Year\"\n\"" + nom + "\",\"" + plaque + "\",\"" + marque + "\",\"" + modele + "\",\"" + annee + "\"\n" +
+			"\"## Log\"\n\"Date\",\"Odo (km)\",\"Fuel (L)\",\"Full\",\"Price\",\"UniqueId\"\n"
+		for i, j := range pleins {
+			s += fmt.Sprintf("\"%s\",\"%d\",\"40\",\"1\",\"70\",\"%d\"\n", j, 1000+i*500, i+1)
+		}
+		return s
+	}
+	var b bytes.Buffer
+	z := zip.NewWriter(&b)
+	for nom, contenu := range map[string]string{
+		"vehicle-1-local.csv": vehicule("Mazda 3", "fv-320-qa", "Mazda", "3", "2021", recent),
+		"vehicle-2-local.csv": vehicule("Kia Rio", "", "Kia", "Rio", "0", "2015-07-04", "2018-07-28"),
+	} {
+		w, _ := z.Create(nom)
+		_, _ = w.Write([]byte(contenu))
+	}
+	_ = z.Close()
+	req, _ := http.NewRequest("POST", srv.URL+"/vehicules/fuelio", bytes.NewReader(b.Bytes()))
+	req.Header.Set("Content-Type", "application/octet-stream")
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("X-Jeton", marie.Jeton)
+	rep, err := marie.C.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rep.Body.Close()
+	_, page = marie.Get("/vehicules")
+	for _, attendu := range []string{"Mazda 3 : 1 plein repris", "Kia Rio (ajouté, rangé dans les anciens) : 2 pleins repris",
+		"🏁 Anciens véhicules", "plus à nous depuis le 28/07/2018 · Kia Rio"} {
+		if !strings.Contains(page, attendu) {
+			t.Errorf("liste sans « %s »", attendu)
+		}
+	}
+	kia := essai.Trouver(t, page, `href="/vehicules/(\d+)"><span class="grand-emoji">🚗</span><b>Kia Rio`)
+	if _, p := marie.Get("/vehicules/" + kia); !strings.Contains(p, "🏁 Ancien véhicule") {
+		t.Error("fiche sans le bandeau « ancien »")
+	}
+	// Le raccourci « Ajouter un plein » ne propose que les véhicules encore là.
+	if _, p := marie.Get("/vehicules/plein"); !strings.Contains(p, `action="/vehicules/`+mazda+`/km"`) {
+		t.Error("raccourci : pas sur la Mazda")
+	}
+	// Rendre la Kia active (case décochée) : elle revient dans la liste.
+	marie.Post("/vehicules/"+kia, map[string]string{"nom": "Kia Rio", "genre": "voiture"})
+	if _, p := marie.Get("/vehicules"); strings.Contains(p, "Anciens véhicules") {
+		t.Error("Kia toujours dans les anciens")
+	}
+}
