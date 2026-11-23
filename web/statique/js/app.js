@@ -4,11 +4,15 @@
   "use strict";
 
   // Petite notification en bas de l'écran ; disparaît toute seule.
-  function toast(texte, erreur, couleur, initiale) {
+  // annuler : adresse du bouton « Annuler » (suppression rattrapable).
+  function toast(texte, erreur, couleur, initiale, annuler) {
     var zone = document.getElementById("toasts");
     if (!zone || !texte) return;
     var t = document.createElement("div");
     t.className = "toast" + (erreur ? " erreur" : "");
+    // Une erreur est annoncée tout de suite aux lecteurs d'écran, et reste
+    // plus longtemps à l'écran.
+    if (erreur) t.setAttribute("role", "alert");
     if (couleur) {
       var a = document.createElement("span");
       a.className = "avatar petit c" + couleur;
@@ -16,11 +20,31 @@
       t.appendChild(a);
     }
     t.appendChild(document.createTextNode(texte));
+    if (annuler) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "toast-action";
+      b.textContent = "Annuler";
+      b.addEventListener("click", function () {
+        b.disabled = true;
+        fetch(annuler, { method: "POST", credentials: "same-origin", headers: { "X-Jeton": jetonPage(), "HX-Request": "true" } })
+          .then(function (r) {
+            t.remove();
+            if (r.ok) toast("Remis ✓");
+            else toast("Trop tard pour annuler", true);
+          }).catch(function () { toast("Pas de réseau : réessayez dans un instant", true); });
+      });
+      t.appendChild(b);
+      t.classList.add("avec-action");
+    }
     zone.appendChild(t);
-    setTimeout(function () { t.remove(); }, 5200);
+    setTimeout(function () { t.remove(); }, erreur || annuler ? 8200 : 5200);
     while (zone.children.length > 3) zone.firstChild.remove();
   }
   window.fcToast = toast;
+  function jetonPage() {
+    try { return JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) { return ""; }
+  }
 
   // Double clic : les boutons d'un formulaire sont désactivés pendant
   // l'envoi (pas de dépense ou de produit ajouté deux fois).
@@ -52,10 +76,29 @@
     if (ecrit || b.querySelector("details[open]")) e.preventDefault();
   });
 
+  // Réseau coupé ou serveur indisponible (proxy en 502…) : on le dit, au
+  // lieu de ne rien faire. Un lien touché sans réseau ouvre la page « hors
+  // ligne » du service worker (navigation classique).
+  document.addEventListener("htmx:sendError", function (e) {
+    var d = e.detail || {};
+    var verbe = d.requestConfig && d.requestConfig.verb;
+    if (verbe === "get" && d.elt && d.elt.tagName === "A" && d.elt.href && !d.elt.hasAttribute("hx-get")) {
+      window.location.href = d.elt.href;
+      return;
+    }
+    toast("Pas de réseau : réessayez dans un instant", true);
+  });
+  document.addEventListener("htmx:responseError", function (e) {
+    var x = e.detail && e.detail.xhr;
+    // Les erreurs du serveur FamilyCocon portent déjà leur message (fc-toast).
+    if (x && x.getResponseHeader("HX-Trigger")) return;
+    if (x && x.status >= 500) toast("Serveur indisponible : réessayez dans un instant", true);
+  });
+
   // Notification demandée par le serveur (en-tête HX-Trigger : « fc-toast »).
   document.addEventListener("fc-toast", function (e) {
     var d = e.detail || {};
-    toast(d.texte, d.erreur, d.couleur, d.initiale);
+    toast(d.texte, d.erreur, d.couleur, d.initiale, d.annuler);
   });
 
   // Notification affichée au chargement (après une redirection) : retirée
@@ -101,6 +144,8 @@
     var url = document.body && document.body.getAttribute("data-direct");
     if (!url || source || !window.EventSource) return;
     source = new EventSource(url);
+    source.addEventListener("open", function () { document.dispatchEvent(new Event("fc-direct-ouvert")); });
+    source.addEventListener("error", function () { document.dispatchEvent(new Event("fc-direct-erreur")); });
     source.addEventListener("fc", function (e) {
       var m;
       try { m = JSON.parse(e.data); } catch (_) { return; }
@@ -111,16 +156,36 @@
         if (!saisieEnCours()) window.location.reload();
         return;
       }
-      if (m.module && window.htmx) htmx.trigger(document.body, "maj-" + m.module, m);
+      if (m.module && window.htmx) {
+        htmx.trigger(document.body, "maj-" + m.module, m);
+        htmx.trigger(document.body, "maj", m); // n'importe quel module (accueil)
+      }
       if (m.texte && String(m.auteur) !== moi) window.fcToast(m.texte, false, m.couleur, m.initiale);
     });
   }
   document.addEventListener("DOMContentLoaded", connecter);
+  // Après une coupure (téléphone en veille, réseau perdu), les messages
+  // envoyés entre-temps sont perdus : à la reconnexion, tous les blocs de la
+  // page se rechargent (« maj-tout »).
+  var perdu = false;
+  function reprise() {
+    if (!perdu) return;
+    perdu = false;
+    if (window.htmx) htmx.trigger(document.body, "maj-tout", {});
+  }
+  document.addEventListener("fc-direct-ouvert", reprise);
+  document.addEventListener("fc-direct-erreur", function () { perdu = true; });
   // Page mise en arrière-plan longtemps (téléphone) : on rafraîchit au retour.
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible" && source && source.readyState === 2) {
+    if (document.visibilityState === "hidden") {
+      perdu = true; // le navigateur peut avoir gelé la connexion
+      return;
+    }
+    if (source && source.readyState === 2) {
       source = null;
       connecter();
+    } else if (source && source.readyState === 1) {
+      reprise();
     }
   });
 })();
@@ -252,7 +317,10 @@ if ("serviceWorker" in navigator) {
     if (!f.matches || !f.matches("form[data-deconnexion]") || f.getAttribute("data-fait")) return;
     e.preventDefault();
     var finir = function () { f.setAttribute("data-fait", "1"); f.submit(); };
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) { finir(); return; }
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      (window.caches ? caches.delete("familycocon-pages") : Promise.resolve()).catch(function () {}).finally(finir);
+      return;
+    }
     // « ready » ne répond jamais si le service worker n'a pas pu s'installer :
     // après 1,5 s, on déconnecte quand même.
     var delai = new Promise(function (ok) { setTimeout(ok, 1500); });
@@ -260,7 +328,9 @@ if ("serviceWorker" in navigator) {
       if (!ab) return;
       return envoyer("/push/desabonnement", ab.toJSON()).finally(function () { return ab.unsubscribe(); });
     }).catch(function () {});
-    Promise.race([desabonner, delai]).finally(function () {
+    // La liste de courses gardée pour le mode hors ligne part aussi.
+    var oublier = window.caches ? caches.delete("familycocon-pages").catch(function () {}) : Promise.resolve();
+    Promise.race([Promise.all([desabonner, oublier]), delai]).finally(function () {
       try { sessionStorage.removeItem("fc-push-membre"); } catch (_) {}
       finir();
     });

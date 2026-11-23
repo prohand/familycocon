@@ -22,7 +22,7 @@
 
 {{define "notes"}}
 {{with .Donnees}}
-<div id="notes" hx-get="/notes/contenu?{{.Params}}" hx-trigger="maj-notes from:body delay:300ms" hx-swap="outerHTML">
+<div id="notes" hx-get="/notes/contenu?{{.Params}}" hx-trigger="maj-notes from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   {{if .Epinglees}}
   <h2 class="sous-titre">📌 Épinglées</h2>
   <div class="mur-notes">{{range .Epinglees}}{{template "carte-note" dict "N" . "V" $.Donnees}}{{end}}</div>

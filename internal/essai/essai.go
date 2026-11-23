@@ -65,6 +65,8 @@ type Navigateur struct {
 	C     *http.Client
 	Jeton string // jeton CSRF lu dans la dernière page
 	Htmx  bool   // envoie les en-têtes de htmx (HX-Request, X-Jeton)
+	// EnTetes : en-têtes de la dernière réponse (HX-Trigger…).
+	EnTetes http.Header
 }
 
 // NouveauNavigateur : navigateur sans cookie.
@@ -81,6 +83,7 @@ func (n *Navigateur) lire(rep *http.Response, err error) (int, string) {
 		n.t.Fatal(err)
 	}
 	defer rep.Body.Close()
+	n.EnTetes = rep.Header
 	b, _ := io.ReadAll(rep.Body)
 	if m := reJeton.FindSubmatch(b); m != nil {
 		n.Jeton = string(m[1]) + string(m[2])

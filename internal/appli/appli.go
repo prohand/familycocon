@@ -38,6 +38,8 @@ type App struct {
 	Limiteur *Limiteur
 	// Temps réel (Server-Sent Events).
 	Direct *Direct
+	// Corbeille : suppressions qu'on peut encore annuler (quelques secondes).
+	Corbeille *Corbeille
 	// Petites données de quelques minutes (connexion en attente, défis).
 	Memoire *MemoireCourte
 	// MemoireDefis : défis de passkey demandés sans être connecté, à part
@@ -53,6 +55,8 @@ type App struct {
 	calendrier map[string]CalendrierFunc
 	blocs      []BlocAccueil
 	ajouts     []Ajout
+	partages   []Partage
+	recherches map[string]RechercheFunc
 }
 
 // Nouvelle prépare l'application (sans encore charger les gabarits : les
@@ -67,9 +71,11 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 		Demarre:      time.Now(),
 		Limiteur:     NouveauLimiteur(),
 		Direct:       nouveauDirect(),
+		Corbeille:    nouvelleCorbeille(),
 		Memoire:      NouvelleMemoireCourte(2000),
 		MemoireDefis: NouvelleMemoireCourte(2000),
 		resumes:      map[string]ResumeFunc{},
+		recherches:   map[string]RechercheFunc{},
 		echeances:    map[string]EcheancesFunc{},
 		calendrier:   map[string]CalendrierFunc{},
 	}
@@ -88,6 +94,7 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 	a.routesMoi()
 	a.Route("GET /direct", "", Membre, a.direct)
 	a.routesPush()
+	a.Route("POST /annuler/{jeton}", "", Membre, a.annuler)
 	a.AjouterBloc(BlocAccueil{Module: "", Ordre: 0, Rendre: a.blocAVenir})
 	a.routesMFA()
 	a.Mux.HandleFunc("GET /hors-ligne", func(w http.ResponseWriter, r *http.Request) {
@@ -141,6 +148,10 @@ type Sante struct {
 	Schema   int    `json:"schema,omitempty"`
 	Depuis_s int64  `json:"depuis_s,omitempty"`
 	Erreur   string `json:"erreur,omitempty"`
+	// Dernière sauvegarde automatique (réseau local seulement) : date
+	// (RFC 3339) et réussite.
+	Sauvegarde   string `json:"sauvegarde,omitempty"`
+	SauvegardeOK *bool  `json:"sauvegarde_ok,omitempty"`
 }
 
 func (a *App) sante(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +168,9 @@ func (a *App) sante(w http.ResponseWriter, r *http.Request) {
 	// local (Docker, supervision). Un visiteur d'Internet ne voit que l'état.
 	if ip := a.IPClient(r); ip.IsLoopback() || ip.IsPrivate() {
 		s.Version, s.Schema, s.Depuis_s = version.Version, v, int64(time.Since(a.Demarre).Seconds())
+		if e, ok := a.DerniereSauvegarde(ctx); ok {
+			s.Sauvegarde, s.SauvegardeOK = time.Unix(e.Le, 0).UTC().Format(time.RFC3339), &e.OK
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")

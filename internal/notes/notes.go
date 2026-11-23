@@ -42,7 +42,9 @@ func Brancher(a *appli.App) {
 	a.Route("POST /notes/{id}/supprimer", mod, appli.Membre, m.supprimer)
 
 	a.AjouterResume(mod, m.resume)
+	a.AjouterRecherche(mod, m.chercher)
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "📝", Texte: "Une note", URL: "/notes/nouvelle"})
+	a.AjouterPartage(appli.Partage{Module: mod, Emoji: "📝", Texte: "En note", URL: "/notes/nouvelle"})
 }
 
 // Filtres de la liste.
@@ -220,6 +222,8 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	f := formNote{Nouvelle: r.PathValue("id") == "", Modifiable: true, PeutPriver: true}
 	if f.Nouvelle {
 		f.Note = donnees.Note{Couleur: 1}
+		// Venue de « Partager » : titre et texte préremplis.
+		f.Note.Titre, f.Note.Texte = appli.LirePrerempli(r, 80, 10000)
 		if r.URL.Query().Get("voir") == privees {
 			f.Note.Privee = 1
 		}

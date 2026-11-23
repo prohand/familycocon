@@ -11,7 +11,7 @@
 
 {{define "menus"}}
 {{with .Donnees}}
-<div id="menus" hx-get="/menus/contenu?date={{.Ref}}" hx-trigger="maj-menus from:body delay:300ms" hx-swap="outerHTML">
+<div id="menus" hx-get="/menus/contenu?date={{.Ref}}" hx-trigger="maj-menus from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   <div class="navigation-periode">
     <a class="fleche" href="/menus?date={{.Precedent}}" aria-label="Semaine précédente">‹</a>
     <h2>{{.Titre}}</h2>

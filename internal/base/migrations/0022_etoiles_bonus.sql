@@ -1,5 +1,5 @@
 -- Espace enfants : etoiles donnees (bonus) ou retirees par un parent, avec
--- un motif (« a aide sa soeur », « gros mot »). etoiles : de -20 a 20, jamais 0.
+-- un motif ("a aide sa soeur", "gros mot"). etoiles : de -20 a 20, jamais 0.
 CREATE TABLE etoiles_bonus (
   id         INTEGER PRIMARY KEY,
   famille_id INTEGER NOT NULL REFERENCES familles(id) ON DELETE CASCADE,

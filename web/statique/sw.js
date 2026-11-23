@@ -3,11 +3,16 @@
 //     changent jamais à adresse égale ;
 //   - pages : toujours le réseau (données à jour) ; sans réseau, une page
 //     « hors ligne » ;
+//   - liste de courses : la dernière ouverte est gardée, pour la lire au
+//     magasin sans réseau (cache vidé à la déconnexion, par app.js) ;
 //   - notifications push : affichées, et un toucher ouvre la bonne page.
 "use strict";
 // Le serveur remplace ce nom par la version des fichiers : à chaque mise à
 // jour, un nouveau cache est rempli et l'ancien est supprimé (« activate »).
 const CACHE = "familycocon-1";
+// Pages gardées pour une lecture sans réseau (la liste de courses).
+const PAGES = "familycocon-pages";
+const LISTE = /^\/courses\/liste\/\d+$/;
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
@@ -18,7 +23,7 @@ self.addEventListener("install", function (e) {
 
 self.addEventListener("activate", function (e) {
   e.waitUntil(caches.keys().then(function (cles) {
-    return Promise.all(cles.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
+    return Promise.all(cles.filter(function (k) { return k !== CACHE && k !== PAGES; }).map(function (k) { return caches.delete(k); }));
   }).then(function () { return self.clients.claim(); }));
 });
 
@@ -40,7 +45,22 @@ self.addEventListener("fetch", function (e) {
     return;
   }
   if (req.mode === "navigate") {
-    e.respondWith(fetch(req).catch(function () { return caches.match("/hors-ligne"); }));
+    const courses = LISTE.test(url.pathname) || url.pathname === "/courses";
+    e.respondWith(fetch(req).then(function (rep) {
+      // Liste de courses ouverte : une copie est gardée (aussi sous /courses,
+      // l'adresse de la barre du bas).
+      if (rep.ok && !rep.redirected && LISTE.test(url.pathname)) {
+        const copie = rep.clone(), copie2 = rep.clone();
+        caches.open(PAGES).then(function (c) {
+          c.put(url.pathname, copie);
+          c.put("/courses", copie2);
+        });
+      }
+      return rep;
+    }).catch(function () {
+      const secours = courses ? caches.open(PAGES).then(function (c) { return c.match(url.pathname); }) : Promise.resolve(null);
+      return secours.then(function (r) { return r || caches.match("/hors-ligne"); });
+    }));
   }
 });
 

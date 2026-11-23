@@ -395,6 +395,41 @@ func (q *Queries) ProduitsDeListe(ctx context.Context, listeID int64) ([]Produit
 	return items, nil
 }
 
+const remettreProduit = `-- name: RemettreProduit :exec
+INSERT INTO produits (liste_id, nom, quantite, rayon, emoji, ajoute_par, pris, pris_par, pris_le, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type RemettreProduitParams struct {
+	ListeID   int64
+	Nom       string
+	Quantite  string
+	Rayon     string
+	Emoji     string
+	AjoutePar sql.NullInt64
+	Pris      int64
+	PrisPar   sql.NullInt64
+	PrisLe    sql.NullInt64
+	CreeLe    int64
+}
+
+// Produit remis apres une suppression annulee (bouton "Annuler").
+func (q *Queries) RemettreProduit(ctx context.Context, arg RemettreProduitParams) error {
+	_, err := q.db.ExecContext(ctx, remettreProduit,
+		arg.ListeID,
+		arg.Nom,
+		arg.Quantite,
+		arg.Rayon,
+		arg.Emoji,
+		arg.AjoutePar,
+		arg.Pris,
+		arg.PrisPar,
+		arg.PrisLe,
+		arg.CreeLe,
+	)
+	return err
+}
+
 const renommerListe = `-- name: RenommerListe :exec
 UPDATE listes SET nom = ? WHERE id = ? AND famille_id = ?
 `

@@ -279,3 +279,29 @@ func TestDirectCible(t *testing.T) {
 		t.Fatalf("autre membre : %s", m)
 	}
 }
+
+// Carte « Serveur » : la dernière sauvegarde (réussie ou non) est montrée
+// aux parents d'un serveur d'une seule famille, et à la supervision.
+func TestCarteServeur(t *testing.T) {
+	a, srv, marie := familleTest(t)
+	if _, page := marie.get("/famille"); !strings.Contains(page, "🖥️ Serveur") || !strings.Contains(page, "pas encore") {
+		t.Fatal("carte Serveur absente")
+	}
+	a.noterSauvegarde(context.Background(), EtatSauvegarde{Le: time.Now().Unix(), Erreur: "la sauvegarde a échoué"})
+	if _, page := marie.get("/famille"); !strings.Contains(page, "❌") || !strings.Contains(page, "la sauvegarde a échoué") {
+		t.Fatal("échec de la sauvegarde non montré")
+	}
+	rep, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rep.Body.Close()
+	var s Sante
+	_ = json.NewDecoder(rep.Body).Decode(&s)
+	if s.Sauvegarde == "" || s.SauvegardeOK == nil || *s.SauvegardeOK {
+		t.Fatalf("/health : %+v", s)
+	}
+	if Octets(2516582) != "2,4 Mo" || Octets(2048) != "2 Ko" {
+		t.Fatal(Octets(2516582))
+	}
+}

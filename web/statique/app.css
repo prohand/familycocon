@@ -61,9 +61,14 @@
   --nav-h: 72px;
 }
 
-/* ---------- Variables : mode sombre automatique ---------- */
+/* ---------- Variables : mode sombre ----------
+   Automatique (réglage du téléphone), sauf si le membre a choisi « Clair »
+   ou « Sombre » dans Moi (attribut data-theme posé par le serveur). Chaque
+   règle sombre existe donc deux fois : dans la requête média, et forcée. */
+:root[data-theme="clair"] { color-scheme: light; }
+:root[data-theme="sombre"] { color-scheme: dark; }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="clair"]) {
     --corail: #F0826A;
     --corail-fonce: #E8735A;
     --corail-doux: #3D2621;
@@ -95,6 +100,37 @@
     --ombre-forte: 0 6px 14px rgba(0, 0, 0, .35), 0 18px 40px rgba(0, 0, 0, .35);
   }
 }
+:root[data-theme="sombre"] {
+    --corail: #F0826A;
+    --corail-fonce: #E8735A;
+    --corail-doux: #3D2621;
+
+    --fond: #181514;
+    --carte: #24201E;
+    --texte: #F2EDE9;
+    --texte-doux: #B3AAA4;
+    --bordure: #352F2C;
+
+    --courses: #1E3A2D;  --courses-t: #8FDDB5;
+    --agenda: #1D2C44;   --agenda-t: #9DBFF5;
+    --taches: #2C2546;   --taches-t: #C3B2F5;
+    --menus: #3A3018;    --menus-t: #F3CE73;
+    --budget: #173735;   --budget-t: #84D8D3;
+    --enfants: #40222F;  --enfants-t: #F5A3C3;
+    --notes: #3A3215;         --notes-t: #F2D675;
+    --anniversaires: #43271C; --anniversaires-t: #F5A985;
+    --adresses: #173440;      --adresses-t: #8AD3EC;
+    --fidelite: #24361A;      --fidelite-t: #B4E08A;
+    --vehicules: #262B36;     --vehicules-t: #B5C2DA;
+    --animaux: #3D2C16;       --animaux-t: #F0BF7A;
+    --prestataires: #33291F;  --prestataires-t: #D8BB98;
+    --projets: #36203F;       --projets-t: #DDA7F2;
+    --abonnements: #3B1F29;   --abonnements-t: #F4A6C0;
+    --contacts: #17343A;      --contacts-t: #8FD6E4;
+
+    --ombre: 0 2px 6px rgba(0, 0, 0, .25), 0 8px 24px rgba(0, 0, 0, .25);
+    --ombre-forte: 0 6px 14px rgba(0, 0, 0, .35), 0 18px 40px rgba(0, 0, 0, .35);
+  }
 
 /* ---------- Base ---------- */
 *, *::before, *::after { box-sizing: border-box; }
@@ -147,6 +183,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: var(--texte-doux);
 }
 .membres { margin-left: auto; display: flex; }
+.loupe + .membres { margin-left: 0; }
 .membres .avatar + .avatar { margin-left: -8px; }
 
 .avatar {
@@ -370,6 +407,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
   outline: none;
 }
 .ajout input::placeholder { color: var(--texte-doux); font-weight: 600; }
+/* Le champ n'a pas de contour à lui : c'est la bulle entière qui se voit. */
+.ajout:focus-within { box-shadow: var(--ombre), 0 0 0 3px var(--corail); }
 
 .bouton {
   border: 0;
@@ -593,7 +632,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
   animation: toast-entre .45s cubic-bezier(.3, 1.4, .5, 1) both, toast-sort .4s ease 4.5s forwards;
 }
 .toast:not(:has(.avatar)) { padding-left: 18px; }
-.toast.erreur { background: var(--rouge); color: #fff; }
+.toast.erreur { background: var(--rouge); color: #fff; animation-delay: 0s, 7.5s; }
+/* Notification avec « Annuler » : on peut la toucher, elle reste 8 s. */
+.toast.avec-action { pointer-events: auto; animation-delay: 0s, 7.5s; }
+.toast-action {
+  border: 0;
+  background: transparent;
+  color: var(--corail);
+  font: inherit;
+  font-weight: 900;
+  padding: 8px 4px 8px 10px;
+  min-height: 44px;
+  cursor: pointer;
+}
 .toast .avatar { border-color: var(--texte); }
 @keyframes toast-entre {
   from { opacity: 0; transform: translateY(24px) scale(.9); }
@@ -841,11 +892,12 @@ progress.progres::-moz-progress-bar { background: linear-gradient(90deg, var(--c
   border: 0;
   background: transparent;
   font-size: 1rem;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
+  flex: none;
   border-radius: 50%;
   cursor: pointer;
-  opacity: .45;
+  opacity: .65;
   transition: opacity .15s, background .15s;
 }
 .crayon:hover, .crayon:focus-visible { opacity: 1; background: var(--fond); }
@@ -1094,12 +1146,17 @@ progress.progres.enfants::-moz-progress-bar { background: linear-gradient(90deg,
 .mission.cat-routine { --fond-m: #FFE0EC; }
 .mission.cat-autre { --fond-m: #FFF0C2; }
 @media (prefers-color-scheme: dark) {
-  .mission { --fond-m: #3A3218; }
-  .mission.cat-menage { --fond-m: #1D3A2E; }
-  .mission.cat-devoirs { --fond-m: #1F2B47; }
-  .mission.cat-routine { --fond-m: #43222F; }
-  .mission.cat-autre { --fond-m: #3B3319; }
+  :root:not([data-theme="clair"]) .mission { --fond-m: #3A3218; }
+  :root:not([data-theme="clair"]) .mission.cat-menage { --fond-m: #1D3A2E; }
+  :root:not([data-theme="clair"]) .mission.cat-devoirs { --fond-m: #1F2B47; }
+  :root:not([data-theme="clair"]) .mission.cat-routine { --fond-m: #43222F; }
+  :root:not([data-theme="clair"]) .mission.cat-autre { --fond-m: #3B3319; }
 }
+:root[data-theme="sombre"] .mission { --fond-m: #3A3218; }
+:root[data-theme="sombre"] .mission.cat-menage { --fond-m: #1D3A2E; }
+:root[data-theme="sombre"] .mission.cat-devoirs { --fond-m: #1F2B47; }
+:root[data-theme="sombre"] .mission.cat-routine { --fond-m: #43222F; }
+:root[data-theme="sombre"] .mission.cat-autre { --fond-m: #3B3319; }
 .mission-emoji { font-size: 2.8rem; line-height: 1.1; }
 .mission h3 { font-size: 1rem; }
 .mission-etoiles { margin: 0; font-size: .95rem; letter-spacing: 1px; }
@@ -1107,7 +1164,10 @@ progress.progres.enfants::-moz-progress-bar { background: linear-gradient(90deg,
 .mission .crayon { position: absolute; top: 6px; right: 6px; }
 .mission.attente { opacity: .85; }
 .mission.validee { background: linear-gradient(160deg, #FFE27A, #FFB86B); }
-@media (prefers-color-scheme: dark) { .mission.validee { background: linear-gradient(160deg, #6B5410, #7A4A14); } }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="clair"]) .mission.validee { background: linear-gradient(160deg, #6B5410, #7A4A14); }
+}
+:root[data-theme="sombre"] .mission.validee { background: linear-gradient(160deg, #6B5410, #7A4A14); }
 .mission.refusee { outline: 3px dashed var(--enfants-t); }
 .gros-bouton {
   margin-top: 6px; border: 0; cursor: pointer;
@@ -1197,9 +1257,19 @@ progress.jauge.etoiles::-moz-progress-bar { background: linear-gradient(90deg, #
 .n1 { --fond-n: #FFF1B8; } .n2 { --fond-n: #FFDCD2; } .n3 { --fond-n: #D3F1E1; }
 .n4 { --fond-n: #D7E6FB; } .n5 { --fond-n: #E6DEFA; } .n6 { --fond-n: #FFFFFF; }
 @media (prefers-color-scheme: dark) {
-  .n1 { --fond-n: #3A3215; } .n2 { --fond-n: #43271F; } .n3 { --fond-n: #1E3A2D; }
-  .n4 { --fond-n: #1D2C44; } .n5 { --fond-n: #2C2546; } .n6 { --fond-n: #24201E; }
+  :root:not([data-theme="clair"]) .n1 { --fond-n: #3A3215; }
+  :root:not([data-theme="clair"]) .n2 { --fond-n: #43271F; }
+  :root:not([data-theme="clair"]) .n3 { --fond-n: #1E3A2D; }
+  :root:not([data-theme="clair"]) .n4 { --fond-n: #1D2C44; }
+  :root:not([data-theme="clair"]) .n5 { --fond-n: #2C2546; }
+  :root:not([data-theme="clair"]) .n6 { --fond-n: #24201E; }
 }
+:root[data-theme="sombre"] .n1 { --fond-n: #3A3215; }
+:root[data-theme="sombre"] .n2 { --fond-n: #43271F; }
+:root[data-theme="sombre"] .n3 { --fond-n: #1E3A2D; }
+:root[data-theme="sombre"] .n4 { --fond-n: #1D2C44; }
+:root[data-theme="sombre"] .n5 { --fond-n: #2C2546; }
+:root[data-theme="sombre"] .n6 { --fond-n: #24201E; }
 .recherche input { padding: 10px 14px; }
 .sous-titre { font-size: 1rem; color: var(--texte-doux); margin: 18px 0 10px; }
 .mur-notes { columns: 2 160px; column-gap: 12px; }
@@ -1366,3 +1436,23 @@ details.plus-champs > summary { cursor: pointer; margin-bottom: 10px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Mouvements réduits (réglage du téléphone) : pas d'animation. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Loupe de l'en-tête : recherche dans toute l'application. */
+.loupe {
+  margin-left: auto;
+  display: grid; place-items: center;
+  width: 44px; height: 44px; flex: none;
+  border-radius: 50%;
+  font-size: 1.2rem;
+}
+.loupe:hover, .loupe:focus-visible { background: var(--carte); }

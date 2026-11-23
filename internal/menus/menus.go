@@ -32,6 +32,7 @@ const mod = "menus"
 func Brancher(a *appli.App) {
 	m := &Module{a: a}
 	a.Route("GET /menus", mod, appli.Membre, m.page)
+	a.AjouterRecherche(mod, m.chercher)
 	a.Route("GET /menus/contenu", mod, appli.Membre, m.contenu)
 	a.Route("POST /menus/semaine/courses", mod, appli.Membre, m.semaineAuxCourses)
 	a.Route("GET /menus/{jour}/{moment}", mod, appli.Membre, m.formulaire)

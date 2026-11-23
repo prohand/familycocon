@@ -1,10 +1,16 @@
 {{define "base.html"}}<!doctype html>
-<html lang="fr">
+<html lang="fr"{{with .Theme}} data-theme="{{.}}"{{end}}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  {{- if eq .Theme "clair"}}
+  <meta name="theme-color" content="#FFF8F1">
+  {{- else if eq .Theme "sombre"}}
+  <meta name="theme-color" content="#181514">
+  {{- else}}
   <meta name="theme-color" content="#FFF8F1" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#181514" media="(prefers-color-scheme: dark)">
+  {{- end}}
   <meta name="htmx-config" content='{"historyCacheSize":0,"includeIndicatorStyles":false,"allowEval":false,"allowScriptTags":false,"scrollIntoViewOnBoost":false,"responseHandling":[{"code":"204","swap":false},{"code":"[234]..","swap":true,"error":false},{"code":"...","swap":false,"error":true}]}'>
   <title>{{.Titre}} · FamilyCocon</title>
   <link rel="icon" href="{{statique "img/logo.svg"}}" type="image/svg+xml">
@@ -21,6 +27,7 @@
   <div class="conteneur">
     <a class="logo-lien" href="/" aria-label="Accueil"><img class="logo" src="{{statique "img/logo.svg"}}" alt=""></a>
     <div class="famille">{{.C.Famille.Nom}}<small>FamilyCocon</small></div>
+    <a class="loupe" href="/chercher" aria-label="Chercher">🔎</a>
     <a class="membres" href="/moi" aria-label="Mon profil">
       {{- range .Membres}}<span class="avatar c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end -}}
     </a>
@@ -33,7 +40,7 @@
   {{- range .Gauche}}
   <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{.Emoji}}</span>{{.Nom}}</a>
   {{- end}}
-  <a class="plus" href="/ajouter" aria-label="Ajouter">+</a>
+  <a class="plus" href="/ajouter" aria-label="Ajouter"{{if eq .Chemin "/ajouter"}} aria-current="page"{{end}}>+</a>
   {{- range .Droite}}
   <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{.Emoji}}</span>{{.Nom}}</a>
   {{- end}}

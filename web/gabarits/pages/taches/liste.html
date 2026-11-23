@@ -21,7 +21,7 @@
 {{define "taches"}}
 {{$c := .C}}
 {{with .Donnees}}
-<div id="taches" hx-get="/taches/contenu?pour={{.Pour}}" hx-trigger="maj-taches from:body delay:300ms" hx-swap="outerHTML">
+<div id="taches" hx-get="/taches/contenu?pour={{.Pour}}" hx-trigger="maj-taches from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   <section class="bloc">
     <div class="section-titre"><h2>Aujourd'hui</h2><span class="aide">{{pluriel (len .AFaire) "à faire" "à faire"}}</span></div>
     <div class="carte liste-taches">
@@ -76,7 +76,7 @@
   {{- else if $l.AFaire}}
   <button class="coche" hx-post="/taches/{{$l.ID}}/faire" hx-vals='{"pour": "{{$.Pour}}"}' hx-target="#taches" hx-swap="outerHTML" aria-label="J'ai fait {{$l.Titre}}"></button>
   {{- else}}
-  <span class="coche attente" title="Pas aujourd'hui"></span>
+  <span class="coche attente" role="img" aria-label="Pas aujourd'hui" title="Pas aujourd'hui"></span>
   {{- end}}
   <span class="p-emoji">{{$l.Emoji}}</span>
   <span class="quoi">{{$l.Titre}}

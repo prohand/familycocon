@@ -5,6 +5,7 @@
   <h1>🎯 Projets</h1>
   <p>Vacances, travaux, fêtes… on avance ensemble</p>
 </section>
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-projets from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 <div class="boutons"><a class="bouton" href="/projets/nouveau">＋ Projet</a></div>
 {{if .EnCours}}
 <div class="liste-projets bloc">
@@ -31,5 +32,6 @@
   </div>
 </details>
 {{end}}
+</div>
 {{end}}
 {{end}}

@@ -37,6 +37,7 @@ func (m *Module) brancherVehicules() {
 	a.Route("GET /vehicules/nouveau", modVehicules, appli.Membre, m.formVehicule)
 	a.Route("POST /vehicules", modVehicules, appli.Membre, m.enregistrerVehicule)
 	a.Route("GET /vehicules/{id}", modVehicules, appli.Membre, m.ficheVehicule)
+	a.AjouterRecherche(modVehicules, m.chercherVehicules)
 	a.Route("GET /vehicules/{id}/modifier", modVehicules, appli.Membre, m.formVehicule)
 	a.Route("POST /vehicules/{id}", modVehicules, appli.Membre, m.enregistrerVehicule)
 	a.Route("POST /vehicules/{id}/km", modVehicules, appli.Membre, m.kilometrage)

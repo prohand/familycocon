@@ -51,6 +51,7 @@ func Brancher(a *appli.App) {
 	a.AjouterResume(mod, m.resume)
 	a.AjouterBloc(appli.BlocAccueil{Module: mod, Ordre: 2, Rendre: m.blocAccueil})
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "✅", Texte: "Une tâche ménagère", URL: "/taches/nouvelle"})
+	a.AjouterRecherche(mod, m.chercher)
 	a.AjouterCalendrier(mod, m.calendrier)
 }
 

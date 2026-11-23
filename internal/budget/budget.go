@@ -90,6 +90,7 @@ func Brancher(a *appli.App) {
 	a.Route("POST /budget/{id}/supprimer", mod, appli.Parent, m.supprimer)
 
 	a.AjouterResume(mod, m.resume)
+	a.AjouterRecherche(mod, m.chercherGlobal)
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "💶", Texte: "Une dépense", URL: "/budget/nouvelle"})
 }
 

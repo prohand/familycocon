@@ -16,7 +16,12 @@
     { "src": "/statique/img/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ],
   "shortcuts": [
-    { "name": "Courses", "url": "/courses", "icons": [{ "src": "/statique/img/icone-192.png", "sizes": "192x192" }] },
-    { "name": "Agenda", "url": "/agenda", "icons": [{ "src": "/statique/img/icone-192.png", "sizes": "192x192" }] }
-  ]
+    { "name": "Ajouter", "url": "/ajouter", "icons": [{ "src": "/statique/img/icone-192.png", "sizes": "192x192" }] },
+    { "name": "Chercher", "url": "/chercher", "icons": [{ "src": "/statique/img/icone-192.png", "sizes": "192x192" }] }
+  ],
+  "share_target": {
+    "action": "/partager",
+    "method": "GET",
+    "params": { "title": "titre", "text": "texte", "url": "lien" }
+  }
 }

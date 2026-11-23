@@ -63,7 +63,7 @@
 {{$c := .C}}
 {{with .Donnees}}
 <div id="liste-courses"
-  {{- if .Rafraichir}} hx-get="/courses/liste/{{.Liste.ID}}/contenu" hx-trigger="maj-courses from:body delay:300ms" hx-swap="outerHTML"{{end}}>
+  {{- if .Rafraichir}} hx-get="/courses/liste/{{.Liste.ID}}/contenu" hx-trigger="maj-courses from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML"{{end}}>
   {{if .Total}}
   <p class="avancement">{{.Pris}} pris sur {{.Total}}</p>
   <progress class="progres" max="{{.Total}}" value="{{.Pris}}">{{.Pris}} / {{.Total}}</progress>

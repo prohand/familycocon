@@ -7,7 +7,7 @@
   {{if .Sous}}<p>{{.Sous}}</p>{{end}}
 </section>
 {{/* Rechargé tout seul, sauf si quelqu'un y remplit un formulaire (data-maj-prudent, voir app.js). */}}
-<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-{{$.Module}} from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" data-maj-prudent>
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-{{$.Module}} from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" data-maj-prudent>
 {{if .Liens}}
 <div class="actions-contact">
   {{- range .Liens}}

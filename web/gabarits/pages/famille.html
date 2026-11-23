@@ -129,5 +129,21 @@
     <button class="bouton">Enregistrer</button>
   </form>
 </section>
+<section class="carte bloc">
+  <h2>📦 Exporter</h2>
+  <p class="aide">Toutes les données de la famille dans un fichier (JSON), pour les garder ou les emporter ailleurs. Sans mot de passe ni code PIN ; sans les notes privées des autres.</p>
+  <p><a class="bouton secondaire" href="/famille/export.json" download hx-boost="false">⬇️ Télécharger</a></p>
+</section>
+{{with .Serveur}}
+<section class="carte bloc">
+  <h2>🖥️ Serveur</h2>
+  <div class="ligne"><span class="quoi">Dernière sauvegarde</span>
+    <b class="{{if and .Sauvegarde (not .SauvegardeOK)}}alerte{{end}}">{{if .Sauvegarde}}{{if .SauvegardeOK}}✅{{else}}❌{{end}} {{.Sauvegarde}}{{else if .SansAuto}}désactivée{{else}}pas encore{{end}}</b></div>
+  {{if .Erreur}}<p class="aide alerte">{{.Erreur}}</p>{{end}}
+  <div class="ligne"><span class="quoi">Taille de la base</span><b>{{.Base}}</b></div>
+  <div class="ligne"><span class="quoi">Pages ouvertes en ce moment</span><b>{{.Connexions}}</b></div>
+  <div class="ligne"><span class="quoi">Version</span><b>{{.Version}}</b></div>
+</section>
+{{end}}
 {{end}}
 {{end}}

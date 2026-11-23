@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ func (a *App) routesMoi() {
 	a.Route("GET /moi", "", Membre, a.pageMoi)
 	a.Route("POST /moi/profil", "", Membre, a.profilMoi)
 	a.Route("POST /moi/raccourcis", "", Membre, a.raccourcisMoi)
+	a.Route("POST /moi/theme", "", Membre, a.themeMoi)
 	a.Route("POST /moi/mdp", "", Membre, a.mdpMoi)
 }
 
@@ -76,6 +78,19 @@ func (a *App) profilMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	}
 	a.Flash(w, "Profil enregistré ✓")
 	a.Rediriger(w, r, "/moi")
+}
+
+// themeMoi : clair, sombre ou automatique, gardé par cet appareil (un
+// téléphone partagé peut avoir un autre réglage qu'un ordinateur).
+func (a *App) themeMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
+	t := r.PostFormValue("theme")
+	if t != "" && !slices.Contains(Themes, t) {
+		a.Echec(w, r, http.StatusBadRequest, "Thème inconnu.")
+		return
+	}
+	a.PoserPreference(w, "theme", t)
+	a.Flash(w, "Thème enregistré ✓")
+	a.RedirigerComplet(w, r, "/moi") // toute la page change de couleurs
 }
 
 func (a *App) raccourcisMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {

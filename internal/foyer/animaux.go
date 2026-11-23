@@ -37,6 +37,7 @@ func (m *Module) brancherAnimaux() {
 	a.Route("GET /animaux/nouveau", modAnimaux, appli.Membre, m.formAnimal)
 	a.Route("POST /animaux", modAnimaux, appli.Membre, m.enregistrerAnimal)
 	a.Route("GET /animaux/{id}", modAnimaux, appli.Membre, m.ficheAnimal)
+	a.AjouterRecherche(modAnimaux, m.chercherAnimaux)
 	a.Route("GET /animaux/{id}/modifier", modAnimaux, appli.Membre, m.formAnimal)
 	a.Route("POST /animaux/{id}", modAnimaux, appli.Membre, m.enregistrerAnimal)
 	a.Route("POST /animaux/{id}/supprimer", modAnimaux, appli.Parent, m.supprimerAnimal)

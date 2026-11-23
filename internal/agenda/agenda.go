@@ -61,8 +61,10 @@ func Brancher(a *appli.App) {
 
 	a.AjouterResume(mod, m.resume)
 	a.AjouterEcheances(mod, m.echeances)
+	a.AjouterRecherche(mod, m.chercher)
 	a.AjouterBloc(appli.BlocAccueil{Module: mod, Ordre: 1, Rendre: m.blocAccueil})
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "🗓️", Texte: "Un événement", URL: "/agenda/nouveau"})
+	a.AjouterPartage(appli.Partage{Module: mod, Emoji: "🗓️", Texte: "À l'agenda", URL: "/agenda/nouveau"})
 }
 
 // Occurrence : un événement à une date (un événement répété en a plusieurs).
@@ -415,6 +417,8 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			jour = d
 		}
 		f.Date, f.DateFin, f.HeureDebut, f.HeureFin = repetition.CleJour(jour), repetition.CleJour(jour), "", ""
+		// Venu de « Partager » : titre et note préremplis.
+		f.Evt.Titre, f.Evt.Note = appli.LirePrerempli(r, 80, 500)
 	} else {
 		e, err := m.evenement(r, c)
 		if err != nil {

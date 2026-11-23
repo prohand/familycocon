@@ -2,6 +2,7 @@
 {{$c := .C}}
 {{with .Donnees}}
 {{$d := .}}
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-projets from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" data-maj-prudent>
 <section class="titre-page">
   <a class="retour" href="/projets">‹ Projets</a>
   <h1>{{.P.Emoji}} {{.P.Nom}}</h1>
@@ -62,6 +63,7 @@
     {{template "jeton" $c.CSRF}}<button class="bouton danger">Supprimer</button>
   </form>
   {{end}}
+</div>
 </div>
 {{end}}
 {{end}}

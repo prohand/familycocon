@@ -17,7 +17,7 @@
 
 {{define "agenda"}}
 {{with .Donnees}}
-<div id="agenda" hx-get="/agenda/contenu?vue={{.Vue}}&amp;date={{.Ref}}{{with .Choisi}}&amp;jour={{.Cle}}{{end}}" hx-trigger="maj-agenda from:body delay:300ms" hx-swap="outerHTML">
+<div id="agenda" hx-get="/agenda/contenu?vue={{.Vue}}&amp;date={{.Ref}}{{with .Choisi}}&amp;jour={{.Cle}}{{end}}" hx-trigger="maj-agenda from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   <div class="navigation-periode">
     <a class="fleche" href="/agenda?vue={{.Vue}}&amp;date={{.Precedent}}" aria-label="Période précédente">‹</a>
     <h2>{{.Titre}}</h2>
@@ -51,7 +51,8 @@
     {{- range .NomsJours}}<div class="nom-jour" role="columnheader">{{.}}</div>{{end}}
     {{- range .Jours}}
     <a class="case{{if not .DansMois}} hors-mois{{end}}{{if .Aujourdhui}} aujourdhui{{end}}{{$cle := .Cle}}{{with $.Donnees.Choisi}}{{if eq .Cle $cle}} choisie{{end}}{{end}}"
-       href="/agenda?vue=mois&amp;date={{.Cle}}&amp;jour={{.Cle}}" role="gridcell">
+       href="/agenda?vue=mois&amp;date={{.Cle}}&amp;jour={{.Cle}}" role="gridcell"
+       aria-label="{{.Titre}} {{$.Donnees.Titre}} : {{pluriel (ajouter (len .Occurrences) .Plus) "événement" "événements"}}">
       <span class="num">{{.Date.Day}}</span>
       {{- range .Occurrences}}
       <span class="evt-mini {{if .Membres}}c{{(index .Membres 0).Couleur}}{{else}}ctous{{end}}">{{.Evt.Titre}}</span>

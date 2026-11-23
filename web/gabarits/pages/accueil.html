@@ -13,6 +13,9 @@
 </a>
 {{end}}
 
+{{/* Tuiles et blocs rechargés quand un autre membre change quelque chose
+     (événement « maj » envoyé par app.js à chaque message temps réel). */}}
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj from:body delay:1s, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 {{if .Donnees.Tuiles}}
 <div class="tuiles">
   {{- range .Donnees.Tuiles}}
@@ -30,6 +33,7 @@
 <div class="carte vide"><span class="emoji">🧺</span>Aucun module n'est activé.
   {{if .C.EstParent}}<p><a class="bouton" href="/famille">Activer des modules</a></p>{{end}}</div>
 {{end}}
+</div>
 {{end}}
 
 {{/* Bloc « À venir » : anniversaires, échéances (rappels). */}}

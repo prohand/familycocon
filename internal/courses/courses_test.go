@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -250,5 +251,49 @@ func TestSouventAchetes(t *testing.T) {
 	}
 	if _, page := n.Get("/courses/liste/" + id); strings.Contains(page, `<option value="Beurre">`) {
 		t.Fatal("suggestion oubliée toujours proposée")
+	}
+}
+
+// « Annuler » après la suppression d'un produit ou des produits pris : ils
+// reviennent ; trop tard ou d'une autre famille, rien.
+func TestAnnulerSuppression(t *testing.T) {
+	_, n, id := nouvelleFamille(t)
+	n.Htmx = true
+	_, frag := n.Post("/courses/liste/"+id+"/produits", map[string]string{"produit": "3 yaourts"})
+	pid := essai.Trouver(t, frag, `/courses/produit/(\d+)/cocher`)
+	n.Post("/courses/produit/"+pid+"/supprimer", nil)
+	annuler := essai.Trouver(t, n.EnTetes.Get("HX-Trigger"), `"annuler":"(/annuler/[0-9a-f]+)"`)
+	if code, _ := n.Post(annuler, nil); code != 204 {
+		t.Fatalf("annuler : %d", code)
+	}
+	if _, frag = n.Get("/courses/liste/" + id + "/contenu"); !strings.Contains(frag, "Yaourts") || !strings.Contains(frag, "<small>3</small>") {
+		t.Fatalf("produit non remis :\n%s", frag)
+	}
+	if code, _ := n.Post(annuler, nil); code != 410 {
+		t.Fatalf("annulé deux fois : %d", code)
+	}
+	// Produits pris retirés puis remis (toujours pris).
+	pid = essai.Trouver(t, frag, `/courses/produit/(\d+)/cocher`)
+	n.Post("/courses/produit/"+pid+"/cocher", map[string]string{"pris": "1"})
+	n.Post("/courses/liste/"+id+"/vider", nil)
+	annuler = essai.Trouver(t, n.EnTetes.Get("HX-Trigger"), `"annuler":"(/annuler/[0-9a-f]+)"`)
+	n.Post(annuler, nil)
+	if _, frag = n.Get("/courses/liste/" + id + "/contenu"); !strings.Contains(frag, "1 pris sur 1") {
+		t.Fatalf("produits pris non remis :\n%s", frag)
+	}
+}
+
+// Texte partagé depuis une autre appli : une ligne = un produit.
+func TestPartageVersCourses(t *testing.T) {
+	_, n, id := nouvelleFamille(t)
+	_, page := n.Get("/partager?titre=Ingr%C3%A9dients&texte=" + url.QueryEscape("- 2 oeufs\n• 250 g farine\nhttps://recette.example"))
+	if !strings.Contains(page, "Aux courses") || !strings.Contains(page, `action="/courses/partage"`) {
+		t.Fatalf("page Partager :\n%s", page)
+	}
+	if code, _ := n.Post("/courses/partage", map[string]string{"titre": "", "texte": "- 2 oeufs\n• 250 g farine\nhttps://recette.example"}); code != 200 {
+		t.Fatalf("partage : %d", code)
+	}
+	if _, frag := n.Get("/courses/liste/" + id + "/contenu"); !strings.Contains(frag, "Oeufs") || !strings.Contains(frag, "Farine") || strings.Contains(frag, "recette.example") {
+		t.Fatalf("produits partagés :\n%s", frag)
 	}
 }

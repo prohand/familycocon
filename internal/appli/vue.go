@@ -74,6 +74,7 @@ var raccourcisFixes = []Raccourci{
 	{Cle: "accueil", Nom: "Accueil", Emoji: "🏠", URL: "/"},
 	{Cle: "moi", Nom: "Moi", Emoji: "👤", URL: "/moi"},
 	{Cle: "famille", Nom: "Famille", Emoji: "🏡", URL: "/famille"},
+	{Cle: "chercher", Nom: "Chercher", Emoji: "🔎", URL: "/chercher"},
 }
 
 // RaccourcisParDefaut : la barre d'un nouveau membre.
@@ -90,6 +91,7 @@ func RaccourcisPossibles(c *Contexte) []Raccourci {
 	if c.EstParent() {
 		out = append(out, raccourcisFixes[2])
 	}
+	out = append(out, raccourcisFixes[3])
 	for _, m := range ModulesVisibles(c) {
 		out = append(out, Raccourci{Cle: m.Cle, Nom: m.Nom, Emoji: m.Emoji, URL: m.URL})
 	}
@@ -147,6 +149,9 @@ type Vue struct {
 	// lui-même quand un autre membre change quelque chose (hx-get + hx-select).
 	Adresse string
 	Donnees any
+	// Theme : « clair » ou « sombre » choisi dans Moi ; vide : celui du
+	// téléphone (attribut data-theme de la page).
+	Theme string
 }
 
 // Gauche, Droite : les deux moitiés de la barre du bas.
@@ -166,7 +171,7 @@ func (v *Vue) Actif(r Raccourci) bool {
 // NouvelleVue prépare la mise en page. w peut être nil (fragment : pas de
 // notification « flash » à lire).
 func (a *App) NouvelleVue(w http.ResponseWriter, r *http.Request, c *Contexte, titre, module string) *Vue {
-	v := &Vue{Titre: titre, Module: module, C: c, Chemin: r.URL.Path, Adresse: r.URL.RequestURI()}
+	v := &Vue{Titre: titre, Module: module, C: c, Chemin: r.URL.Path, Adresse: r.URL.RequestURI(), Theme: a.theme(r)}
 	if w == nil {
 		return v // fragment : ni en-tête ni barre
 	}
@@ -176,4 +181,18 @@ func (a *App) NouvelleVue(w http.ResponseWriter, r *http.Request, c *Contexte, t
 		v.Membres, _ = a.Membres(context.WithoutCancel(r.Context()), c)
 	}
 	return v
+}
+
+// Themes : choix possibles (vide : automatique).
+var Themes = []string{"clair", "sombre"}
+
+// theme : le thème choisi sur cet appareil (cookie), vide : automatique.
+func (a *App) theme(r *http.Request) string {
+	t := a.LirePreference(r, "theme")
+	for _, x := range Themes {
+		if t == x {
+			return t
+		}
+	}
+	return ""
 }

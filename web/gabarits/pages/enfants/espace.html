@@ -11,7 +11,7 @@
 {{$c := .C}}
 {{with .Donnees}}
 <div id="espace" class="espace-enfant"
-     hx-get="{{if .ParParent}}/enfants/enfant/{{.Enfant.ID}}/contenu{{else}}/enfants/contenu{{end}}" hx-trigger="maj-enfants from:body delay:300ms" hx-swap="outerHTML">
+     hx-get="{{if .ParParent}}/enfants/enfant/{{.Enfant.ID}}/contenu{{else}}/enfants/contenu{{end}}" hx-trigger="maj-enfants from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   <section class="tete-enfant c{{.Enfant.Couleur}}">
     <span class="avatar grand c{{.Enfant.Couleur}}">{{initiale .Enfant.Nom}}</span>
     <div>

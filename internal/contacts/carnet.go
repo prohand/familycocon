@@ -559,3 +559,21 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 	dest, _ := retour(c, ct)
 	m.a.Rediriger(w, r, dest)
 }
+
+// chercher : recherche globale (nom, téléphones, e-mail, adresse, métier…).
+func (m *Module) chercher(ctx context.Context, c *appli.Contexte, q string) ([]appli.Resultat, error) {
+	tous, err := m.a.Q.ContactsFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return nil, err
+	}
+	var out []appli.Resultat
+	for _, ct := range tous {
+		if correspond(ct, q) {
+			out = append(out, appli.Resultat{Emoji: "👤", Titre: ct.Nom, Detail: ligne(ct).Detail, URL: "/contacts/" + strconv.FormatInt(ct.ID, 10)})
+			if len(out) == 8 {
+				break
+			}
+		}
+	}
+	return out, nil
+}

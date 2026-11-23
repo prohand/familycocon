@@ -62,6 +62,7 @@ var Metiers = []string{"Plombier", "Électricien", "Chauffagiste", "Ramoneur", "
 func Brancher(a *appli.App) {
 	m := &Module{a: a}
 	a.Route("GET /contacts", modContacts, appli.Membre, m.pageContacts)
+	a.AjouterRecherche(modContacts, m.chercher)
 	a.Route("GET /contacts/export.vcf", modContacts, appli.Parent, m.exporter)
 	a.Route("POST /contacts/import", modContacts, appli.Parent, m.importer)
 	a.Route("GET /adresses", modAdresses, appli.Membre, m.pageAdresses)

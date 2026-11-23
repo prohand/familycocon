@@ -88,3 +88,8 @@ ORDER BY compte DESC, vu_le DESC LIMIT 40;
 
 -- name: OublierProduit :exec
 DELETE FROM produits_connus WHERE famille_id = ? AND cle = ?;
+
+-- Produit remis apres une suppression annulee (bouton "Annuler").
+-- name: RemettreProduit :exec
+INSERT INTO produits (liste_id, nom, quantite, rayon, emoji, ajoute_par, pris, pris_par, pris_le, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

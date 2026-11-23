@@ -313,3 +313,32 @@ func twoDigits(n int) string {
 	}
 	return strconv.Itoa(n)
 }
+
+// chercherGlobal : recherche globale (libellés des 12 derniers mois).
+func (m *Module) chercherGlobal(ctx context.Context, c *appli.Contexte, q string) ([]appli.Resultat, error) {
+	ops, err := m.a.Q.ChercherOperations(ctx, donnees.ChercherOperationsParams{FamilleID: c.Famille.ID,
+		Depuis: repetition.CleJour(c.Maintenant().AddDate(-1, 0, 0)), Motif: q})
+	if err != nil {
+		return nil, err
+	}
+	var out []appli.Resultat
+	for i, o := range ops {
+		if i == 8 {
+			break
+		}
+		cat, ok := CategorieParCle(o.Categorie)
+		if !ok {
+			cat, _ = CategorieParCle("autre")
+		}
+		signe := "−"
+		if o.Sens == "revenu" {
+			signe = "+"
+		}
+		detail := signe + appli.Montant(o.Montant, c.Famille.Devise)
+		if d, err := time.Parse("2006-01-02", o.Jour); err == nil {
+			detail += " · " + appli.DateLongue(d) + " " + strconv.Itoa(d.Year())
+		}
+		out = append(out, appli.Resultat{Emoji: cat.Emoji, Titre: o.Libelle, Detail: detail, URL: "/budget/" + strconv.FormatInt(o.ID, 10)})
+	}
+	return out, nil
+}

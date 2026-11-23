@@ -13,7 +13,7 @@
 
 {{define "parent"}}
 {{with .Donnees}}
-<div id="parent" hx-get="/enfants/contenu" hx-trigger="maj-enfants from:body delay:300ms" hx-swap="outerHTML">
+<div id="parent" hx-get="/enfants/contenu" hx-trigger="maj-enfants from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   {{if .AValider}}
   <section class="bloc">
     <div class="section-titre"><h2>👀 À valider</h2><span class="aide">{{len .AValider}}</span></div>

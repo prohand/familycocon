@@ -46,6 +46,7 @@ type Module struct {
 func Brancher(a *appli.App, s *suivi.Suivi) {
 	m := &Module{a: a, s: s}
 	a.Route("GET /projets", mod, appli.Membre, m.liste)
+	a.AjouterRecherche(mod, m.chercher)
 	a.Route("GET /projets/nouveau", mod, appli.Membre, m.formulaire)
 	a.Route("POST /projets", mod, appli.Membre, m.enregistrer)
 	a.Route("GET /projets/{id}", mod, appli.Membre, m.fiche)

@@ -42,9 +42,12 @@ func Brancher(a *appli.App) {
 	a.Route("POST /courses/produit/{pid}", mod, appli.Membre, m.modifier)
 	a.Route("POST /courses/produit/{pid}/supprimer", mod, appli.Parent, m.supprimer)
 	a.Route("POST /courses/oublier", mod, appli.Parent, m.oublier)
+	a.Route("POST /courses/partage", mod, appli.Membre, m.partage)
+	a.AjouterRecherche(mod, m.chercher)
 
 	a.AjouterResume(mod, m.resume)
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "🛒", Texte: "Un produit à acheter", URL: "/courses?ajout=1"})
+	a.AjouterPartage(appli.Partage{Module: mod, Emoji: "🛒", Texte: "Aux courses (une ligne = un produit)", URL: "/courses/partage", Poster: true})
 }
 
 // Plafonds par famille : assez pour toute une vie de courses, et la base
@@ -544,7 +547,54 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 		return
 	}
 	m.a.Publier(c, "courses", "")
+	m.a.NotifierAnnulable(w, c, "courses", "« "+p.Nom+" » retiré", m.remettre(c, []donnees.Produit{p}))
 	m.renvoyerListeDuProduit(w, r, c, p, 0)
+}
+
+// partage : un texte partagé (liste d'ingrédients d'une recette…) ajouté
+// aux courses, une ligne par produit (puces et tirets retirés).
+func (m *Module) partage(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	var lignes []string
+	for _, l := range strings.Split(r.PostFormValue("titre")+"\n"+r.PostFormValue("texte"), "\n") {
+		l = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(l), "-•*·–—"))
+		if l != "" && !strings.HasPrefix(l, "http://") && !strings.HasPrefix(l, "https://") && len(lignes) < 100 {
+			lignes = append(lignes, l)
+		}
+	}
+	var n int
+	err := m.a.Transaction(r.Context(), func(q *donnees.Queries) (err error) {
+		n, err = AjouterProduits(r.Context(), q, c, lignes)
+		return err
+	})
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if n > 0 {
+		m.a.Publier(c, "courses", fmt.Sprintf("%s a ajouté %s aux courses 🛒", c.Membre.Nom, appli.Pluriel(n, "produit", "produits")))
+	}
+	m.a.Flash(w, appli.Pluriel(n, "produit ajouté", "produits ajoutés"))
+	m.a.Rediriger(w, r, "/courses")
+}
+
+// remettre : la fonction qui remet des produits supprimés (bouton
+// « Annuler »), dans leur liste si elle existe encore.
+func (m *Module) remettre(c *appli.Contexte, produits []donnees.Produit) func(ctx context.Context) error {
+	famille := c.Famille.ID
+	return func(ctx context.Context) error {
+		return m.a.Transaction(ctx, func(q *donnees.Queries) error {
+			for _, p := range produits {
+				if _, err := q.ListeParID(ctx, donnees.ListeParIDParams{ID: p.ListeID, FamilleID: famille}); err != nil {
+					continue // liste supprimée entre-temps
+				}
+				if err := q.RemettreProduit(ctx, donnees.RemettreProduitParams{ListeID: p.ListeID, Nom: p.Nom, Quantite: p.Quantite,
+					Rayon: p.Rayon, Emoji: p.Emoji, AjoutePar: p.AjoutePar, Pris: p.Pris, PrisPar: p.PrisPar, PrisLe: p.PrisLe, CreeLe: p.CreeLe}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
 }
 
 // oublier : un parent retire une suggestion (faute de frappe…). Le produit
@@ -570,6 +620,18 @@ func (m *Module) vider(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Echec(w, r, http.StatusNotFound, "Liste introuvable.")
 		return
 	}
+	// Les produits pris sont lus avant d'être retirés : « Annuler » les remet.
+	tous, err := m.a.Q.ProduitsDeListe(r.Context(), liste.ID)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	var pris []donnees.Produit
+	for _, p := range tous {
+		if p.Pris == 1 {
+			pris = append(pris, p)
+		}
+	}
 	n, err := m.a.Q.ViderPris(r.Context(), liste.ID)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -582,7 +644,11 @@ func (m *Module) vider(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		http.Redirect(w, r, fmt.Sprintf("/courses/liste/%d", liste.ID), http.StatusSeeOther)
 		return
 	}
-	appli.Notifier(w, appli.Pluriel(n, "produit retiré", "produits retirés"), false)
+	if n > 0 {
+		m.a.NotifierAnnulable(w, c, "courses", appli.Pluriel(n, "produit retiré", "produits retirés"), m.remettre(c, pris))
+	} else {
+		appli.Notifier(w, "Aucun produit pris à retirer", false)
+	}
 	m.renvoyerContenu(w, r, c, liste, 0)
 }
 

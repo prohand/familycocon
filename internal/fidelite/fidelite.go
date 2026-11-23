@@ -49,6 +49,7 @@ func formatValide(f string) bool {
 func Brancher(a *appli.App) {
 	m := &Module{a: a}
 	a.Route("GET /fidelite", mod, appli.Membre, m.page)
+	a.AjouterRecherche(mod, m.chercher)
 	a.Route("GET /fidelite/nouvelle", mod, appli.Membre, m.formulaire)
 	a.Route("POST /fidelite", mod, appli.Membre, m.creer)
 	a.Route("GET /fidelite/{id}", mod, appli.Membre, m.carte)
