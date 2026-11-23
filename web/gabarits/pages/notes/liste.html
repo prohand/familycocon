@@ -47,7 +47,7 @@
     {{if $n.Texte}}<p class="note-texte">{{$n.Texte}}</p>{{end}}
   </a>
   <footer>
-    {{with $n.Auteur}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}
+    {{with $n.Auteur}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{visage .}}</span>{{end}}
     <span class="note-date">{{if eq $n.Privee 1}}🔒 {{end}}{{$n.Date}}</span>
     {{if $n.Modifiable}}
     <button class="epingle{{if eq $n.Epinglee 1}} actif{{end}}" hx-post="/notes/{{$n.ID}}/epingler?{{.V.Params}}" hx-target="#notes" hx-swap="outerHTML"

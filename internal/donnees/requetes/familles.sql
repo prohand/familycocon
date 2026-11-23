@@ -45,7 +45,7 @@ SELECT count(*) FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'pare
 UPDATE membres SET naissance = ? WHERE id = ? AND famille_id = ?;
 
 -- name: ModifierProfil :exec
-UPDATE membres SET nom = ?, couleur = ? WHERE id = ? AND famille_id = ?;
+UPDATE membres SET nom = ?, couleur = ?, avatar = ? WHERE id = ? AND famille_id = ?;
 
 -- name: ModifierMdp :exec
 UPDATE membres SET mdp = ? WHERE id = ?;

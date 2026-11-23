@@ -4,9 +4,13 @@ package appli
 
 import (
 	"context"
+	"errors"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"familycocon/internal/base"
@@ -106,7 +110,59 @@ func (a *App) sauvegardesAuto(ctx context.Context) {
 				etat.Taille = fi.Size()
 			}
 			a.noterSauvegarde(ctx, etat)
+			// Les photos jointes (tickets) sont des fichiers à côté de la base :
+			// les nouvelles sont copiées dans sauvegardes/pieces.
+			if n, err := CopierNouveaux(filepath.Join(a.Config.Donnees, "pieces"), filepath.Join(dossier, "pieces")); err != nil {
+				a.Journal.Error("sauvegarde des photos ratée", "erreur", err)
+			} else if n > 0 {
+				a.Journal.Info("photos sauvegardées", "nouvelles", n)
+			}
 			a.Journal.Info("sauvegarde automatique faite", "fichier", chemin, "duree_ms", time.Since(debut).Milliseconds())
 		}()
 	}
+}
+
+// CopierNouveaux : copie de src vers dst les fichiers qui n'y sont pas
+// encore (les photos ne changent jamais une fois écrites). Renvoie le
+// nombre de fichiers copiés. src absent : rien à faire.
+func CopierNouveaux(src, dst string) (int, error) {
+	n := 0
+	err := filepath.WalkDir(src, func(p string, d fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) && p == src {
+			return fs.SkipAll
+		}
+		if err != nil || d.IsDir() || strings.HasSuffix(p, ".tmp") {
+			return err
+		}
+		rel, err := filepath.Rel(src, p)
+		if err != nil {
+			return err
+		}
+		cible := filepath.Join(dst, rel)
+		if _, err := os.Stat(cible); err == nil {
+			return nil
+		}
+		if err := os.MkdirAll(filepath.Dir(cible), 0o750); err != nil {
+			return err
+		}
+		entree, err := os.Open(p)
+		if err != nil {
+			return err
+		}
+		defer entree.Close()
+		sortie, err := os.OpenFile(cible+".tmp", os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o640)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(sortie, entree); err != nil {
+			sortie.Close()
+			return err
+		}
+		if err := sortie.Close(); err != nil {
+			return err
+		}
+		n++
+		return os.Rename(cible+".tmp", cible)
+	})
+	return n, err
 }

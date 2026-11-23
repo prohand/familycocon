@@ -29,6 +29,11 @@ const TailleMaxCorps = 1 << 20
 // TailleMaxImport : 8 Mio pour l'import d'un carnet vCard.
 const TailleMaxImport = 8 << 20
 
+// TailleMaxFuelio : 1 Gio pour une sauvegarde Fuelio avec ses photos
+// (près de 300 Mo pour quelques années de tickets ; écrite sur le disque,
+// jamais gardée en mémoire).
+const TailleMaxFuelio = 1 << 30
+
 // enregistreur garde le statut renvoyé, pour le journal.
 type enregistreur struct {
 	http.ResponseWriter
@@ -98,6 +103,13 @@ func (a *App) Envelopper(h http.Handler) http.Handler {
 			taille = TailleMaxImport // carnet d'un téléphone (photos comprises)
 			// 8 Mio sur une connexion mobile lente : plus que les 30 s du serveur.
 			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(3 * time.Minute))
+		}
+		if strings.HasPrefix(r.URL.Path, "/vehicules/") && strings.HasSuffix(r.URL.Path, "/fuelio") {
+			taille = TailleMaxFuelio
+			// Gros envoi, puis lecture des photos : 30 minutes au plus.
+			rc := http.NewResponseController(w)
+			_ = rc.SetReadDeadline(time.Now().Add(30 * time.Minute))
+			_ = rc.SetWriteDeadline(time.Now().Add(30 * time.Minute))
 		}
 		r.Body = http.MaxBytesReader(e, r.Body, taille)
 		interne.ServeHTTP(e, r)

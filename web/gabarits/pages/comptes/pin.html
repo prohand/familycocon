@@ -1,7 +1,7 @@
 {{define "contenu"}}
 {{with .Donnees}}
 <div class="marque">
-  <span class="avatar grand c{{.Enfant.Couleur}}">{{initiale .Enfant.Nom}}</span>
+  <span class="avatar grand c{{.Enfant.Couleur}}">{{visage .Enfant}}</span>
   <h1>Coucou {{.Enfant.Nom}} !</h1>
   <p>Tape ton code secret</p>
 </div>

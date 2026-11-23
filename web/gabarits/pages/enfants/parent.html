@@ -23,7 +23,7 @@
     <div class="carte">
       {{- range .AValider}}
       <div class="ligne a-valider">
-        {{with .Enfant}}<span class="avatar petit c{{.Couleur}}">{{initiale .Nom}}</span>{{end}}
+        {{with .Enfant}}<span class="avatar petit c{{.Couleur}}">{{visage .}}</span>{{end}}
         <span class="p-emoji">{{.Emoji}}</span>
         <span class="quoi">{{.Titre}}<small>{{with .Enfant}}{{.Nom}}{{end}} · {{if .Echange}}veut l'échanger contre {{.Etoiles}} ⭐{{else}}{{.Etoiles}} ⭐ à gagner{{end}}</small></span>
         <span class="boutons-decision">
@@ -46,7 +46,7 @@
     <div class="enfants-grille">
       {{- range .Enfants}}
       <a class="carte-enfant c{{.Enfant.Couleur}}" href="/enfants/enfant/{{.Enfant.ID}}">
-        <span class="avatar grand c{{.Enfant.Couleur}}">{{initiale .Enfant.Nom}}</span>
+        <span class="avatar grand c{{.Enfant.Couleur}}">{{visage .Enfant}}</span>
         <b>{{.Enfant.Nom}}</b>
         <span class="tresor-petit">⭐ {{.Solde.Disponible}}</span>
         <span class="aide">{{if .Total}}{{.Faites}} / {{.Total}} missions aujourd'hui{{else}}Pas de mission aujourd'hui{{end}}</span>

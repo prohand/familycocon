@@ -3,7 +3,11 @@
 package foyer
 
 import (
+	"bytes"
+	"image"
+	"image/png"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -225,5 +229,61 @@ func TestGaranties(t *testing.T) {
 	}
 	if _, page = marie.Get("/chercher?q=bosch"); strings.Contains(page, "Lave-linge") {
 		t.Fatal("marque effacée ne devrait plus être trouvée")
+	}
+}
+
+// Photo d'un ticket jointe à une ligne du carnet : gardée sur le disque,
+// vue par les parents seulement, effacée avec la ligne.
+func TestPiecesJointes(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+	})
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	_, page := marie.Post("/vehicules", map[string]string{"nom": "Clio", "genre": "voiture"})
+	id := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	marie.Post("/suivi/vehicules/"+id+"/carnet", map[string]string{"libelle": "Vidange", "jour": "2026-11-01", "montant": "89"})
+	_, page = marie.Get("/vehicules/" + id)
+	ligne := essai.Trouver(t, page, `data-piece="/suivi/carnet/(\d+)/pieces"`)
+	img := image.NewRGBA(image.Rect(0, 0, 800, 600))
+	var b bytes.Buffer
+	_ = png.Encode(&b, img)
+	envoyer := func(n *essai.Navigateur, corps []byte) int {
+		req, _ := http.NewRequest("POST", srv.URL+"/suivi/carnet/"+ligne+"/pieces", bytes.NewReader(corps))
+		req.Header.Set("Content-Type", "image/png")
+		req.Header.Set("X-Jeton", n.Jeton)
+		rep, err := n.C.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rep.Body.Close()
+		return rep.StatusCode
+	}
+	lea.Get("/vehicules/" + id)
+	if code := envoyer(lea, b.Bytes()); code != 403 {
+		t.Fatalf("photo envoyée par un enfant : %d", code)
+	}
+	if code := envoyer(marie, []byte("pas une image")); code != 400 {
+		t.Fatalf("fichier quelconque accepté : %d", code)
+	}
+	if code := envoyer(marie, b.Bytes()); code != 200 {
+		t.Fatalf("envoi : %d", code)
+	}
+	_, page = marie.Get("/vehicules/" + id)
+	piece := essai.Trouver(t, page, `<img src="/suivi/pieces/(\d+)"`)
+	if code, corps := marie.Get("/suivi/pieces/" + piece); code != 200 || !strings.HasPrefix(corps, "\xff\xd8") {
+		t.Fatalf("photo : %d", code)
+	}
+	if code, _ := lea.Get("/suivi/pieces/" + piece); code != 403 {
+		t.Fatalf("photo vue par un enfant : %d", code)
+	}
+	fichiers, _ := filepath.Glob(filepath.Join(a.Config.Donnees, "pieces", "*", "*.jpg"))
+	if len(fichiers) != 1 {
+		t.Fatalf("%d fichiers sur le disque", len(fichiers))
+	}
+	marie.Post("/suivi/carnet/"+ligne+"/supprimer", nil)
+	if fichiers, _ = filepath.Glob(filepath.Join(a.Config.Donnees, "pieces", "*", "*.jpg")); len(fichiers) != 0 {
+		t.Fatal("fichier gardé après la suppression de la ligne")
 	}
 }

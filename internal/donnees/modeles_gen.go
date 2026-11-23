@@ -241,6 +241,7 @@ type Membre struct {
 	Totp        string
 	TotpDernier int64
 	Naissance   string
+	Avatar      string
 }
 
 type Mission struct {
@@ -307,6 +308,16 @@ type Passkey struct {
 	Nom         string
 	CreeLe      int64
 	UtiliseLe   int64
+}
+
+type Piece struct {
+	ID        int64
+	FamilleID int64
+	CarnetID  int64
+	Fichier   string
+	Taille    int64
+	CreePar   sql.NullInt64
+	CreeLe    int64
 }
 
 type Produit struct {

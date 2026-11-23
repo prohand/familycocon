@@ -331,3 +331,53 @@ que son bloc `#maj`, ou rien. Visible dès le premier clic sur une tuile de
 l'accueil (v0.5.0), et sur certaines listes depuis la v0.4.4. Ces blocs ont
 maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 `hx-select` sans lui.
+
+## 15. Scan des cartes de fidélité, avatars (v0.6.0)
+- **Type de code détecté** (`FormatAuto`) : EAN-13, UPC-A ou EAN-8 si les
+  chiffres ont une clé juste, sinon Code 128, sinon QR code. Le choix manuel
+  reste possible (replié). EAN-8 et UPC-A sont dessinés (UPC-A = EAN-13
+  précédé d'un 0, lu pareil en caisse).
+- **Scanner la carte** : sur Android, le navigateur lit le code en direct
+  (`BarcodeDetector`) ; la caméra n'est permise que sur le formulaire des
+  cartes (`Permissions-Policy: camera=(self)`, `camera=()` partout ailleurs).
+  Sinon (iPhone), une photo réduite à 1 280 px (JPEG, sous la limite de
+  1 Mio) est lue par le serveur (`fidelite.Lire`, sans bibliothèque :
+  lignes horizontales et verticales, deux seuils, motifs EAN et Code 128,
+  clé de contrôle, marges blanches, vote). Les QR codes ne sont lus que par
+  le navigateur. La photo n'est jamais gardée ; image de plus de 16 Mpx
+  refusée.
+- **Avatars** : un emoji choisi dans une liste fermée (`appli.Avatars`)
+  remplace l'initiale dans le rond de couleur du membre (colonne
+  `membres.avatar`, migration 0029). Choisi dans Moi, ou par un parent dans
+  Ma famille. Pas de photo (base légère).
+- **Photos des tickets et factures** sur les lignes du carnet (parents
+  seulement : elles montrent des prix). Gardées sur le disque, à côté de la
+  base : `<données>/pieces/<famille>/<nom aléatoire>.jpg` ; la base n'a que
+  le nom (table `pieces`, migration 0030). Réduites à 1 600 px et réécrites
+  en JPEG qualité 80 (`internal/photo`, bibliothèque standard) : ~200 Kio
+  par photo, informations cachées du téléphone (lieu GPS) retirées. Une
+  photo décodée à la fois ; 24 Mpx au plus ; 10 par ligne, 5 000 par
+  famille. Effacées avec leur ligne ou leur objet. Copiées par la
+  sauvegarde automatique (`sauvegardes/pieces`, nouveaux fichiers
+  seulement) et par `scripts/sauvegarde.sh`.
+- **Reprise depuis Fuelio** (`internal/fuelio`, fiche du véhicule,
+  parents) : sauvegarde complète `.fuelio` (ZIP), ZIP de synchro ou CSV.
+  Les pleins (date, km, litres, prix, ville et notes) et les dépenses
+  (titre ou catégorie ; modèles et recettes ignorés) vont au carnet, pas au
+  budget. Miles et gallons convertis. Une ligne déjà présente n'est pas
+  reprise deux fois. Le fichier (1 Gio au plus ; ~300 Mo pour quelques
+  années de tickets) est écrit sur le disque le temps de la lecture, jamais
+  gardé en mémoire, puis effacé ; une reprise à la fois, 30 min au plus.
+  Format de la sauvegarde complète (vu sur une vraie, 11/2026) : un ZIP
+  avec `vehicle-N-local.csv` (un par véhicule ; celui qui porte le nom du
+  véhicule est repris) et `pictures.data`, lui-même un ZIP des photos
+  (`<GUID>.png`). Un ZIP interne rangé sans compression est lu en place,
+  sinon décompressé dans un fichier provisoire. Photos décodées par
+  morceaux depuis le ZIP (`photo.PreparerFlux`), une à la fois.
+  Rattachement : la partie `## Pictures` du CSV (`Filename`, `Type`,
+  `target_id`) donne la ligne (guid ou UniqueId). Pleins et dépenses ont
+  les mêmes UniqueId (1, 2…) : le type tranche. Ses valeurs n'étant pas
+  publiées, elles sont déduites des photos sans ambiguïté (un seul type par
+  sorte de ligne, à 4 contre 1 au moins) ; les autres (trajets…) et les
+  cas douteux sont laissés de côté et comptés dans le bilan. Sans
+  `## Pictures` : nom du fichier (identifiant, sinon date).

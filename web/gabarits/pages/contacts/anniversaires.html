@@ -14,7 +14,7 @@
     {{- range .Liste}}
     <a class="ligne anniv{{if .Proche}} proche{{end}}" href="{{.URL}}">
       <span class="date-ronde"><b>{{.Date.Day}}</b></span>
-      {{with .Membre}}<span class="avatar petit c{{.Couleur}}">{{initiale .Nom}}</span>{{else}}<span class="p-emoji">🎂</span>{{end}}
+      {{with .Membre}}<span class="avatar petit c{{.Couleur}}">{{visage .}}</span>{{else}}<span class="p-emoji">🎂</span>{{end}}
       <span class="quoi">{{.Nom}}{{if .Age}} <span class="age">{{.Age}} ans</span>{{end}}
         <small>{{.Quand}}{{if .Idees}} · 🎁 {{.Idees}}{{end}}</small></span>
     </a>

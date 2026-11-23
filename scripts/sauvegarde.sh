@@ -34,6 +34,15 @@ mv "$temp" "$fichier"
 chmod 600 "$fichier"
 echo "sauvegarde : $fichier ($(du -h "$fichier" | cut -f1))"
 
+# Photos jointes du carnet (tickets, factures) : des fichiers à côté de la
+# base, copiés eux aussi (elles ne changent jamais : seules les nouvelles
+# comptent). Rien à faire s'il n'y en a pas encore.
+DONNEES=${DONNEES:-/donnees}
+if docker exec "$CONTENEUR" /familycocon -sante >/dev/null 2>&1 \
+   && docker cp "$CONTENEUR:$DONNEES/pieces/." "$DOSSIER/pieces/" 2>/dev/null; then
+  echo "photos : $DOSSIER/pieces"
+fi
+
 # Rotation : seules les GARDER plus récentes sont gardées.
 ls -1t "$DOSSIER"/familycocon-*.db 2>/dev/null | tail -n +"$((GARDER + 1))" | while read -r ancien; do
   rm -f -- "$ancien"

@@ -11,6 +11,8 @@ import (
 
 // Codes-barres dessinés par le serveur, en SVG (aucune bibliothèque) :
 //   - EAN-13 : 13 chiffres (la plupart des cartes de supermarché) ;
+//   - UPC-A : 12 chiffres (dessiné en EAN-13 précédé d'un 0, lu pareil) ;
+//   - EAN-8 : 8 chiffres ;
 //   - Code 128 : tout le reste (lettres, chiffres, longueur libre).
 // Le SVG est en noir sur blanc, même en mode sombre : les lecteurs de caisse
 // en ont besoin.
@@ -117,6 +119,56 @@ func EstEAN13(s string) bool {
 	return CleEAN(s) == int(s[12]-'0')
 }
 
+// chiffres : que des chiffres, n en tout.
+func chiffres(s string, n int) bool {
+	if len(s) != n {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// EstUPCA : 12 chiffres avec une clé juste (un EAN-13 qui commence par 0).
+func EstUPCA(s string) bool { return chiffres(s, 12) && EstEAN13("0"+s) }
+
+// EstEAN8 : 8 chiffres avec une clé juste (poids 3, 1, 3… de la gauche).
+func EstEAN8(s string) bool {
+	if !chiffres(s, 8) {
+		return false
+	}
+	somme := 0
+	for i := 0; i < 7; i++ {
+		d := int(s[i] - '0')
+		if i%2 == 0 {
+			d *= 3
+		}
+		somme += d
+	}
+	return (10-somme%10)%10 == int(s[7]-'0')
+}
+
+// EAN8 : la suite de modules d'un EAN-8 (4 chiffres L, 4 chiffres R).
+func EAN8(s string) (string, error) {
+	if !EstEAN8(s) {
+		return "", ErrCode
+	}
+	var b strings.Builder
+	b.WriteString("101")
+	for i := 0; i < 4; i++ {
+		b.WriteString(eanL[s[i]-'0'])
+	}
+	b.WriteString("01010")
+	for i := 4; i < 8; i++ {
+		b.WriteString(eanR[s[i]-'0'])
+	}
+	b.WriteString("101")
+	return b.String(), nil
+}
+
 // EAN13 : la suite de modules (1 = barre, 0 = espace).
 func EAN13(s string) (string, error) {
 	if !EstEAN13(s) {
@@ -187,6 +239,21 @@ func SVG(numero, format string) (template.HTML, error) {
 			return "", err
 		}
 		return svgBarres(m, numero), nil
+	case "upca":
+		if !EstUPCA(numero) {
+			return "", ErrCode
+		}
+		m, err := EAN13("0" + numero)
+		if err != nil {
+			return "", err
+		}
+		return svgBarres(m, numero), nil
+	case "ean8":
+		m, err := EAN8(numero)
+		if err != nil {
+			return "", err
+		}
+		return svgBarres(m, numero), nil
 	case "code128":
 		l, err := Code128(numero)
 		if err != nil {
@@ -197,10 +264,30 @@ func SVG(numero, format string) (template.HTML, error) {
 	return "", ErrCode
 }
 
-// FormatAuto : EAN-13 si le numéro en est un, sinon Code 128.
+// FormatAuto : le type de code d'après le numéro : EAN-13, UPC-A ou EAN-8
+// (chiffres avec une clé de contrôle juste), sinon Code 128 (texte court),
+// sinon QR code (long, ou caractères hors ASCII).
 func FormatAuto(numero string) string {
-	if EstEAN13(numero) {
+	switch {
+	case EstEAN13(numero):
 		return "ean13"
+	case EstUPCA(numero):
+		return "upca"
+	case EstEAN8(numero):
+		return "ean8"
 	}
-	return "code128"
+	if _, err := Code128(numero); err == nil {
+		return "code128"
+	}
+	return "qr"
+}
+
+// NomFormat : « EAN-13 », « QR code »…
+func NomFormat(f string) string {
+	for _, x := range Formats {
+		if x.Cle == f {
+			return x.Nom
+		}
+	}
+	return f
 }

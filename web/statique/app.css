@@ -1483,3 +1483,28 @@ svg.icone { width: 1.15em; height: 1.15em; vertical-align: -0.2em; display: inli
 
 /* Menus : liste de courses choisie, au-dessus du bouton. */
 .choix-liste .champ { max-width: 280px; margin: 0 auto 8px; text-align: left; }
+
+/* Cartes de fidélité : scanner (bouton, fenêtre de la caméra). */
+.scanner-carte { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+details.type-code > summary { cursor: pointer; margin: 4px 0 10px; }
+dialog.scanner { border: 0; border-radius: var(--rayon); padding: 14px; background: var(--carte); color: var(--texte); width: min(92vw, 480px); text-align: center; }
+dialog.scanner::backdrop { background: rgba(0, 0, 0, .7); }
+dialog.scanner video { width: 100%; border-radius: 12px; background: #000; margin: 8px 0 12px; }
+
+/* Choix de l'avatar (Moi, Ma famille) : une grille d'emojis à toucher. */
+.choix-avatar { border: 0; padding: 0; margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+.choix-avatar legend { margin-bottom: 6px; }
+.choix-avatar label { position: relative; cursor: pointer; }
+.choix-avatar input { position: absolute; opacity: 0; }
+.choix-avatar span:not(.sr) { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; font-size: 1.35rem; font-weight: 800; background: var(--fond); border: 2px solid transparent; }
+.choix-avatar input:checked + span { border-color: var(--corail); background: var(--corail-doux); }
+.choix-avatar input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
+details.replie-avatar > summary { cursor: pointer; margin: 4px 0 10px; }
+
+/* Carnet : photos jointes (tickets, factures). */
+.pieces { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 0 8px 64px; }
+.piece { position: relative; }
+.piece img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; display: block; border: 1px solid var(--bordure); }
+.piece form { position: absolute; top: -10px; right: -10px; }
+.piece .crayon { width: 28px; height: 28px; font-size: .8rem; background: var(--carte); opacity: .9; }
+.ajout-piece span { display: inline-block; padding: 8px 12px; border-radius: 999px; border: 1.5px dashed var(--bordure); font-size: .85rem; font-weight: 700; color: var(--texte-doux); cursor: pointer; min-height: 40px; }

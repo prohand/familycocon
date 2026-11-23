@@ -11,7 +11,7 @@
   <h2>Qui es-tu ? 👋</h2>
   <div class="enfants-choix">
     {{- range .Enfants}}
-    <a href="/connexion/enfant/{{.ID}}"><span class="avatar grand c{{.Couleur}}">{{initiale .Nom}}</span>{{.Nom}}</a>
+    <a href="/connexion/enfant/{{.ID}}"><span class="avatar grand c{{.Couleur}}">{{visage .}}</span>{{.Nom}}</a>
     {{- end}}
   </div>
 </section>

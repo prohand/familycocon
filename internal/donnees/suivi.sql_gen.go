@@ -64,6 +64,74 @@ func (q *Queries) AjouterCarnet(ctx context.Context, arg AjouterCarnetParams) (C
 	return i, err
 }
 
+const ajouterPiece = `-- name: AjouterPiece :one
+
+INSERT INTO pieces (famille_id, carnet_id, fichier, taille, cree_par, cree_le) VALUES (?, ?, ?, ?, ?, ?) RETURNING id, famille_id, carnet_id, fichier, taille, cree_par, cree_le
+`
+
+type AjouterPieceParams struct {
+	FamilleID int64
+	CarnetID  int64
+	Fichier   string
+	Taille    int64
+	CreePar   sql.NullInt64
+	CreeLe    int64
+}
+
+// Pieces jointes (photos de tickets, factures).
+func (q *Queries) AjouterPiece(ctx context.Context, arg AjouterPieceParams) (Piece, error) {
+	row := q.db.QueryRowContext(ctx, ajouterPiece,
+		arg.FamilleID,
+		arg.CarnetID,
+		arg.Fichier,
+		arg.Taille,
+		arg.CreePar,
+		arg.CreeLe,
+	)
+	var i Piece
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.CarnetID,
+		&i.Fichier,
+		&i.Taille,
+		&i.CreePar,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
+const carnetExiste = `-- name: CarnetExiste :one
+SELECT count(*) FROM carnet
+WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = ? AND montant = ? AND km = ?
+`
+
+type CarnetExisteParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+	Jour      string
+	Libelle   string
+	Montant   int64
+	Km        int64
+}
+
+// Doublon a l'import (Fuelio) : meme jour, libelle, montant et kilometrage.
+func (q *Queries) CarnetExiste(ctx context.Context, arg CarnetExisteParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, carnetExiste,
+		arg.FamilleID,
+		arg.Module,
+		arg.ObjetID,
+		arg.Jour,
+		arg.Libelle,
+		arg.Montant,
+		arg.Km,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const carnetIdentiqueRecent = `-- name: CarnetIdentiqueRecent :one
 SELECT count(*) FROM carnet
 WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = ? AND montant = ? AND km = ? AND note = ?
@@ -178,6 +246,28 @@ type CompterEcheancesObjetParams struct {
 
 func (q *Queries) CompterEcheancesObjet(ctx context.Context, arg CompterEcheancesObjetParams) (int64, error) {
 	row := q.db.QueryRowContext(ctx, compterEcheancesObjet, arg.FamilleID, arg.Module, arg.ObjetID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterPiecesFamille = `-- name: CompterPiecesFamille :one
+SELECT count(*) FROM pieces WHERE famille_id = ?
+`
+
+func (q *Queries) CompterPiecesFamille(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterPiecesFamille, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterPiecesLigne = `-- name: CompterPiecesLigne :one
+SELECT count(*) FROM pieces WHERE carnet_id = ?
+`
+
+func (q *Queries) CompterPiecesLigne(ctx context.Context, carnetID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterPiecesLigne, carnetID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -445,6 +535,112 @@ func (q *Queries) ModifierEcheance(ctx context.Context, arg ModifierEcheancePara
 	return err
 }
 
+const pieceParID = `-- name: PieceParID :one
+SELECT id, famille_id, carnet_id, fichier, taille, cree_par, cree_le FROM pieces WHERE id = ? AND famille_id = ?
+`
+
+type PieceParIDParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) PieceParID(ctx context.Context, arg PieceParIDParams) (Piece, error) {
+	row := q.db.QueryRowContext(ctx, pieceParID, arg.ID, arg.FamilleID)
+	var i Piece
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.CarnetID,
+		&i.Fichier,
+		&i.Taille,
+		&i.CreePar,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
+const piecesLigne = `-- name: PiecesLigne :many
+SELECT id, famille_id, carnet_id, fichier, taille, cree_par, cree_le FROM pieces WHERE carnet_id = ? AND famille_id = ?
+`
+
+type PiecesLigneParams struct {
+	CarnetID  int64
+	FamilleID int64
+}
+
+func (q *Queries) PiecesLigne(ctx context.Context, arg PiecesLigneParams) ([]Piece, error) {
+	rows, err := q.db.QueryContext(ctx, piecesLigne, arg.CarnetID, arg.FamilleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Piece{}
+	for rows.Next() {
+		var i Piece
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.CarnetID,
+			&i.Fichier,
+			&i.Taille,
+			&i.CreePar,
+			&i.CreeLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const piecesObjet = `-- name: PiecesObjet :many
+SELECT pieces.id, pieces.famille_id, pieces.carnet_id, pieces.fichier, pieces.taille, pieces.cree_par, pieces.cree_le FROM pieces JOIN carnet ON carnet.id = pieces.carnet_id
+WHERE carnet.famille_id = ? AND carnet.module = ? AND carnet.objet_id = ? ORDER BY pieces.id
+`
+
+type PiecesObjetParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+func (q *Queries) PiecesObjet(ctx context.Context, arg PiecesObjetParams) ([]Piece, error) {
+	rows, err := q.db.QueryContext(ctx, piecesObjet, arg.FamilleID, arg.Module, arg.ObjetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Piece{}
+	for rows.Next() {
+		var i Piece
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.CarnetID,
+			&i.Fichier,
+			&i.Taille,
+			&i.CreePar,
+			&i.CreeLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pleinsObjet = `-- name: PleinsObjet :many
 SELECT km, litres FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? AND litres > 0 AND km > 0
 ORDER BY km
@@ -630,6 +826,20 @@ type SupprimerLigneCarnetParams struct {
 
 func (q *Queries) SupprimerLigneCarnet(ctx context.Context, arg SupprimerLigneCarnetParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerLigneCarnet, arg.ID, arg.FamilleID)
+	return err
+}
+
+const supprimerPiece = `-- name: SupprimerPiece :exec
+DELETE FROM pieces WHERE id = ? AND famille_id = ?
+`
+
+type SupprimerPieceParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) SupprimerPiece(ctx context.Context, arg SupprimerPieceParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerPiece, arg.ID, arg.FamilleID)
 	return err
 }
 

@@ -72,21 +72,24 @@ sur le téléphone de chacun.
   - import et export vCard (.vcf) pour récupérer les contacts du téléphone (parents) ;
   - « Cité par » (vétérinaire de Rex, garage de la Clio…), doublons signalés et fusion de deux fiches.
 - **Anniversaires et Adresses** : deux vues du carnet (les dates à venir avec l'âge et les idées de cadeaux ; les adresses avec le plan).
-- **Cartes de fidélité** : le code-barres (EAN-13, Code 128) ou le QR code est redessiné à l'écran, à montrer en caisse.
+- **Cartes de fidélité** : le code-barres (EAN-13, UPC-A, EAN-8, Code 128) ou le QR code est redessiné à l'écran, à montrer en caisse ;
+  le type de code est détecté tout seul, et la carte se scanne avec le téléphone (caméra sur Android, photo sur iPhone).
 - **Véhicules, Animaux, Prestataires** :
   - échéances qui reviennent (contrôle technique, assurance, vaccin, vermifuge, ramonage…) ;
   - « C'est fait » : la ligne va dans le carnet (date, coût, kilométrage) et l'échéance est reportée ;
   - prestataires : les contacts « pro » du carnet (plombier, nounou, médecin…), avec leurs interventions ;
   - vétérinaire d'un animal, garage et assurance d'un véhicule choisis dans le carnet (appel direct) ;
   - échéance modifiable ou reportée d'un mois ; dépense du carnet ajoutée aussi au budget ;
-  - véhicule : coût pour 100 km et consommation (pleins notés).
+  - véhicule : coût pour 100 km et consommation (pleins notés) ;
+  - photo du ticket ou de la facture sur une ligne du carnet (parents) ;
+  - véhicule : reprise d'une sauvegarde Fuelio (pleins, dépenses et leurs photos).
 - **Garanties** : appareils achetés, fin de garantie rappelée, où est rangée la facture, réparations.
 - **Projets** : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
 - **Rappels** : bloc « À venir » sur l'accueil (30 jours) et notification chaque matin à 9 h
   (anniversaires, échéances, étapes de projet : aujourd'hui et dans 7 jours).
 - **Personnalisation** :
   - modules activables ou désactivables par un parent ;
-  - barre du bas personnalisable par chacun ;
+  - barre du bas personnalisable par chacun ; avatar (un emoji) à la place de l'initiale ;
   - fuseau horaire et monnaie réglables dans l'interface.
 - **Notifications** : petites notifications en bas de l'écran en temps réel, et notifications Web Push sur le téléphone,
   seulement pour les personnes concernées (participants, enfant de la mission, parents pour une validation…).
@@ -177,7 +180,7 @@ Au démarrage, la base est migrée toute seule. Avant toute migration, une copie
 
 La base SQLite est copiée **à chaud**, le serveur continue de tourner (`VACUUM INTO`). Chaque copie est vérifiée (`PRAGMA integrity_check`).
 
-**1. Sauvegarde automatique** : chaque jour à `FC_SAUVEGARDE_HEURE`, dans le volume (`/donnees/sauvegardes/auto-….db`), avec rotation.
+**1. Sauvegarde automatique** : chaque jour à `FC_SAUVEGARDE_HEURE`, dans le volume (`/donnees/sauvegardes/auto-….db`), avec rotation. Les photos du carnet (`/donnees/pieces`) sont copiées dans `/donnees/sauvegardes/pieces`.
 
 **2. Sauvegarde vers l'hôte** (recommandée, à mettre dans cron) :
 
@@ -187,6 +190,7 @@ La base SQLite est copiée **à chaud**, le serveur continue de tourner (`VACUUM
 
 - Le script fait une copie `familycocon-AAAAMMJJ-HHMMSS.db` sur l'hôte.
 - Il en garde 30 (variable `GARDER`).
+- Il copie aussi les photos du carnet (tickets, factures) dans `pieces/` (seulement les nouvelles).
 - Exemple de ligne cron : `15 2 * * * /opt/familycocon/scripts/sauvegarde.sh /srv/sauvegardes/familycocon`.
 
 **À la main**, en une commande :

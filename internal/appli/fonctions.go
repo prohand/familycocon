@@ -19,6 +19,9 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		"statique": a.Statique.URL,
 		// {{initiale "marie"}} → M
 		"initiale": Initiale,
+		// {{visage .}} : l'avatar du membre, sinon son initiale.
+		"visage":  Visage,
+		"avatars": func() []string { return Avatars },
 		// {{pluriel 3 "produit" "produits"}} → 3 produits
 		"pluriel": func(n any, un, plusieurs string) string {
 			switch x := n.(type) {

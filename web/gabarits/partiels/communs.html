@@ -47,7 +47,20 @@
 {{end}}
 
 {{/* Avatar d'un membre (ou « tout le monde » si nil). */}}
-{{define "avatar-petit"}}{{if .}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{else}}<span class="avatar petit ctous" title="Tout le monde">∗</span>{{end}}{{end}}
+{{define "avatar-petit"}}{{if .}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{visage .}}</span>{{else}}<span class="avatar petit ctous" title="Tout le monde">∗</span>{{end}}{{end}}
 
 {{/* Pastilles des membres d'un événement (liste vide : toute la famille). */}}
 {{define "pastilles"}}{{range .}}<span class="pastille c{{.Couleur}}">{{.Nom}}</span>{{else}}<span class="pastille ctous">Tous</span>{{end}}{{end}}
+
+{{/* Choix de l'avatar : reçoit dict "Choisi" (emoji actuel, « » = initiale) "Initiale". */}}
+{{define "choix-avatar"}}
+<details class="replie-avatar">
+<summary class="aide">Avatar : <b>{{if .Choisi}}{{.Choisi}}{{else}}{{.Initiale}}{{end}}</b> · changer</summary>
+<fieldset class="choix-avatar">
+  <legend class="sr">Avatar</legend>
+  <label><input type="radio" name="avatar" value=""{{if eq .Choisi ""}} checked{{end}}><span>{{.Initiale}}</span><span class="sr">Initiale</span></label>
+  {{- $choisi := .Choisi}}
+  {{- range avatars}}<label><input type="radio" name="avatar" value="{{.}}"{{if eq . $choisi}} checked{{end}}><span>{{.}}</span></label>{{end}}
+</fieldset>
+</details>
+{{end}}
