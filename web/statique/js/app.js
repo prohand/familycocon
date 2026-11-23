@@ -1025,6 +1025,8 @@ if ("serviceWorker" in navigator) {
       nettoyer(n, e);
     });
   }
+  // Les balises qui portent une mise en forme (pas seulement des lignes).
+  var MISE_EN_FORME = "b, i, u, s, code, a, h1, h2, h3, ul, ol, blockquote, hr";
   // Un texte brut qui porte déjà des balises (« <b>…</b> ») ou des signes
   // de mise en forme (« **gras** », « # titre », « - [ ] case »…).
   var BALISES = /<\/?(b|strong|i|em|u|s|a|p|div|br|ul|ol|li|h[1-6]|blockquote|code|span)\b[^>]*>/i;
@@ -1184,8 +1186,17 @@ if ("serviceWorker" in navigator) {
         var src = new DOMParser().parseFromString(html, "text/html").body;
         var propre = document.createElement("div");
         nettoyer(src, propre);
-        // Les signes écrits en clair dans le HTML (« **gras** ») : mis en forme aussi.
-        if (!propre.querySelector("*") && SIGNES.test(propre.textContent)) { collerSignes(propre.textContent); return; }
+        // Balises montrées comme du texte par le site copié (« &lt;b&gt; ») : relues comme du HTML.
+        if (!propre.querySelector(MISE_EN_FORME) && BALISES.test(propre.textContent)) {
+          var src2 = new DOMParser().parseFromString(propre.textContent, "text/html").body;
+          propre = document.createElement("div");
+          nettoyer(src2, propre);
+        }
+        // Signes écrits en clair (« **gras** ») et aucune mise en forme HTML : mis en forme aussi.
+        if (!propre.querySelector(MISE_EN_FORME)) {
+          var lignes = brut || propre.innerText || propre.textContent;
+          if (SIGNES.test(lignes)) { collerSignes(lignes); return; }
+        }
         document.execCommand("insertHTML", false, propre.innerHTML);
         aplatir(ed);
         maj();
