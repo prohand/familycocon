@@ -1515,3 +1515,55 @@ if ("serviceWorker" in navigator) {
     if (svg && e.touches[0]) montrer(svg, e.touches[0]);
   }, { passive: true });
 })();
+
+// Nouvelle liste : un champ par élément (div[data-elements]). Entrée passe
+// au suivant (créé s'il manque) ; effacer un champ vide le retire ; coller
+// plusieurs lignes en fait plusieurs éléments.
+(function () {
+  "use strict";
+  function champ(apres) {
+    var i = document.createElement("input");
+    i.name = "element";
+    i.maxLength = 200;
+    i.placeholder = "Élément suivant";
+    i.autocomplete = "off";
+    i.setAttribute("enterkeyhint", "next");
+    i.setAttribute("aria-label", "Élément");
+    apres.parentNode.insertBefore(i, apres.nextSibling);
+    return i;
+  }
+  document.addEventListener("keydown", function (e) {
+    var t = e.target;
+    if (!t.matches || !t.matches("[data-elements] input")) return;
+    if (e.key === "Enter" && !e.isComposing) {
+      e.preventDefault();
+      if (t.value.trim() === "") return;
+      var suivant = t.nextElementSibling;
+      (suivant && suivant.value === "" ? suivant : champ(t)).focus();
+    } else if (e.key === "Backspace" && t.value === "" && t.previousElementSibling) {
+      e.preventDefault();
+      var avant = t.previousElementSibling;
+      if (t.parentNode.children.length > 3) t.remove();
+      avant.focus();
+      avant.setSelectionRange(avant.value.length, avant.value.length);
+    }
+  });
+  // Le dernier champ rempli : un champ vide de plus en dessous.
+  document.addEventListener("input", function (e) {
+    var t = e.target;
+    if (!t.matches || !t.matches("[data-elements] input")) return;
+    if (!t.nextElementSibling && t.value.trim() !== "") champ(t);
+  });
+  document.addEventListener("paste", function (e) {
+    var t = e.target;
+    if (!t.matches || !t.matches("[data-elements] input") || !e.clipboardData) return;
+    var l = e.clipboardData.getData("text/plain").split(/\r?\n/).map(function (x) { return x.replace(/^\s*(?:[-*•]\s+)?(?:\[[ xX]\]\s*)?/, "").trim(); }).filter(Boolean);
+    if (l.length < 2) return;
+    e.preventDefault();
+    t.value = t.value + l[0];
+    var cur = t;
+    for (var i = 1; i < l.length; i++) { var n = cur.nextElementSibling && cur.nextElementSibling.value === "" ? cur.nextElementSibling : champ(cur); n.value = l[i]; cur = n; }
+    if (!cur.nextElementSibling) champ(cur);
+    cur.focus();
+  });
+})();

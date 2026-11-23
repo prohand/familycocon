@@ -1712,3 +1712,6 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .note-rappel { font-weight: 800; color: var(--corail-fonce); }
 .rangee-element.cochee input[name=texte] { text-decoration: line-through; color: var(--texte-doux); }
 .liste-objets.anciens .objet { opacity: .7; filter: grayscale(.6); }
+.elements-liste { display: flex; flex-direction: column; gap: 6px; }
+.elements-liste input { padding: 10px 12px; border-radius: var(--rayon-petit); border: 1.5px solid var(--bordure); background: var(--fond); color: var(--texte); font: inherit; }
+.elements-liste input:focus { border-color: var(--corail); outline: none; }

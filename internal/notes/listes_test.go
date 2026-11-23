@@ -45,13 +45,17 @@ func TestListes(t *testing.T) {
 	marie := essai.Famille(t, srv)
 	lea := essai.Enfant(t, srv, marie, "Léa")
 
-	// « ☑️ Liste » : le formulaire commence par une case.
+	// « ＋ Liste » : un titre et un champ par élément (pas l'éditeur de note).
 	_, page := marie.Get("/notes/nouvelle?liste=1")
-	if !strings.Contains(page, "Nouvelle liste") || !strings.Contains(page, ">[ ] </textarea>") {
+	if !strings.Contains(page, "Nouvelle liste") || !strings.Contains(page, "data-elements") || strings.Contains(page, `name="texte"`) {
 		t.Fatalf("formulaire de liste :\n%s", page)
 	}
-	// La liste enregistrée s'ouvre aussitôt ; la case vide du bout est retirée.
-	_, page = marie.Post("/notes", map[string]string{"titre": "Valise", "texte": "[ ] pulls\n[ ] "})
+	// La liste enregistrée s'ouvre aussitôt ; les éléments vides sont ignorés,
+	// un élément collé sur deux lignes en fait deux, les signes restent tels quels.
+	_, page = marie.Post("/notes", map[string]string{"titre": "Valise", "liste": "1", "element": "pulls\n  \n*chaussettes*"})
+	if !strings.Contains(page, "> *chaussettes*</label>") {
+		t.Fatalf("liste créée :\n%s", page)
+	}
 	id := essai.Trouver(t, page, `action="/notes/(\d+)/element"`)
 	// Léa (enfant) ajoute un élément et coche ; elle ne retire pas les cochés.
 	lea.Get("/notes/" + id)

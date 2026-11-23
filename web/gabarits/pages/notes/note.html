@@ -30,10 +30,23 @@
   {{template "jeton" $c.CSRF}}
   {{if not .Nouvelle}}<input type="hidden" name="version" value="{{.Note.ModifieLe}}">{{end}}
   <fieldset class="sans-bord"{{if not .Modifiable}} disabled{{end}}>
-  <label class="champ"><span>Titre (facultatif)</span><input name="titre" value="{{.Note.Titre}}" maxlength="80"></label>
-  <label class="champ"><span>{{if .Liste}}Éléments{{else}}Note{{end}}</span><textarea name="texte" rows="10" maxlength="10000" data-liste data-editeur="{{if not .Nouvelle}}{{.Note.ID}}{{end}}"{{if .Nouvelle}} autofocus{{end}}>{{.Note.Texte}}</textarea></label>
+  <label class="champ"><span>Titre{{if not (and .Nouvelle .Liste)}} (facultatif){{end}}</span><input name="titre" value="{{.Note.Titre}}" maxlength="80"{{if and .Nouvelle .Liste}} placeholder="Courses, valise, cadeaux…" required{{end}}></label>
+  {{if and .Nouvelle .Liste}}
+  {{/* Nouvelle liste : un champ par élément ; Entrée passe au suivant (app.js en ajoute). */}}
+  <input type="hidden" name="liste" value="1">
+  <div class="champ"><span>Éléments</span>
+    <div class="elements-liste" data-elements>
+      {{- range $i := couleurs}}{{if le $i 3}}
+      <input name="element" maxlength="200" placeholder="{{if eq $i 1}}Premier élément{{else}}Élément suivant{{end}}" aria-label="Élément {{$i}}" autocomplete="off" enterkeyhint="next"{{if eq $i 1}} autofocus{{end}}>
+      {{- end}}{{end}}
+    </div>
+    <p class="aide">Entrée : élément suivant. Vous pourrez cocher, ajouter et ranger ensuite.</p>
+  </div>
+  {{else}}
+  <label class="champ"><span>{{if .Cases}}Texte de la liste{{else}}Note{{end}}</span><textarea name="texte" rows="10" maxlength="10000" data-liste data-editeur="{{if not .Nouvelle}}{{.Note.ID}}{{end}}"{{if .Nouvelle}} autofocus{{end}}>{{.Note.Texte}}</textarea></label>
   {{/* Contenu de l'éditeur (app.js le montre à la place du texte brut). */}}
   <template data-editeur-contenu>{{.Edition}}</template>
+  {{end}}
   <fieldset class="couleurs-notes">
     <legend class="sr">Couleur</legend>
     {{- range $i := couleurs}}{{if le $i 6}}
@@ -71,9 +84,9 @@
 </details>
 {{end}}
 {{if .Supprimable}}
-<form class="bloc" method="post" action="/notes/{{.Note.ID}}/supprimer" hx-confirm="Supprimer cette note ?">
+<form class="bloc" method="post" action="/notes/{{.Note.ID}}/supprimer" hx-confirm="Supprimer cette {{if .Cases}}liste{{else}}note{{end}} ?">
   {{template "jeton" $c.CSRF}}
-  <button class="bouton danger">Supprimer la note</button>
+  <button class="bouton danger">Supprimer la {{if .Cases}}liste{{else}}note{{end}}</button>
 </form>
 {{end}}
 {{end}}
