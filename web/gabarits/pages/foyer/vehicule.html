@@ -17,7 +17,7 @@
   <label class="champ"><span>Marque et modèle</span><input name="modele" value="{{.V.Modele}}" maxlength="80"></label>
   {{template "choix-contact" dict "Nom" "garage_id" "Titre" "🔧 Garage" "Choisi" .V.GarageID "Contacts" .Contacts}}
   {{template "choix-contact" dict "Nom" "assureur_id" "Titre" "🛡️ Assurance" "Choisi" .V.AssureurID "Contacts" .Contacts}}
-  <label class="champ"><span>Notes (facultatif)</span><textarea name="notes" rows="2" maxlength="1000">{{.V.Notes}}</textarea></label>
+  <label class="champ"><span>Notes (facultatif)</span><textarea name="notes" rows="2" maxlength="1000" data-riche>{{.V.Notes}}</textarea><template data-editeur-contenu>{{richeEdition .V.Notes}}</template></label>
   {{if .Nouveau}}<p class="aide">Ensuite, ajoutez les échéances : contrôle technique, assurance, vidange…</p>{{end}}
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>

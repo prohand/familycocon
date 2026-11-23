@@ -12,7 +12,9 @@ package notes
 import (
 	"context"
 	"database/sql"
+	"familycocon/internal/riche"
 	"fmt"
+	"html/template"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -215,6 +217,8 @@ type formNote struct {
 	Cases       map[string]any // liste à cocher dans le texte (voir vueCases)
 	Liste       bool           // nouvelle liste à cocher
 	Photos      []donnees.PhotoNote
+	Edition     template.HTML // contenu de l'éditeur (voir format.go)
+	Ouvert      bool          // note avec des cases : éditeur déplié (« ?modifier=1 »)
 	// PeutPriver : la case « Privée » est proposée (toujours à la création
 	// et pour une note déjà privée ; pour une note partagée, seulement à un
 	// parent qui en est l'auteur).
@@ -260,6 +264,8 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.Photos = enBas(n.Texte, photos) // celles du texte y sont montrées
 	}
+	f.Edition = riche.HTML(f.Note.Texte, riche.Options{Mode: riche.Edition, Note: f.Note.ID})
+	f.Ouvert = r.URL.Query().Get("modifier") == "1"
 	titre := "Nouvelle note"
 	if f.Liste {
 		titre = "Nouvelle liste"
@@ -310,11 +316,7 @@ func apercu(titre, texte string) string {
 	if titre != "" {
 		return titre
 	}
-	premiere := strings.SplitN(texte, "\n", 2)[0]
-	if marque(premiere) > 0 {
-		premiere = "📷"
-	}
-	r := []rune(premiere)
+	r := []rune(riche.LigneSimple(strings.SplitN(texte, "\n", 2)[0]))
 	if len(r) > 40 {
 		return string(r[:40]) + "…"
 	}
@@ -351,7 +353,12 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	m.a.Flash(w, "Note enregistrée ✓")
 	// Une liste s'ouvre aussitôt (pour cocher, ajouter des éléments ou des
 	// photos) ; une note simple ramène à la liste des notes.
-	if r.PostFormValue("suite") == "ouvrir" || len(Cases(n.Texte)) > 0 {
+	if r.PostFormValue("suite") == "ouvrir" {
+		// « Enregistrer et ajouter des photos » : l'éditeur reste ouvert.
+		m.a.Rediriger(w, r, "/notes/"+strconv.FormatInt(n.ID, 10)+"?modifier=1")
+		return
+	}
+	if len(Cases(n.Texte)) > 0 {
 		m.a.Rediriger(w, r, "/notes/"+strconv.FormatInt(n.ID, 10))
 		return
 	}

@@ -40,7 +40,7 @@
       </select></label>
   </div>
   <label class="champ"><span>Page pour gérer ou résilier (facultatif)</span><input name="site" value="{{.A.Site}}" inputmode="url" maxlength="300" placeholder="https://…"></label>
-  <label class="champ"><span>Notes (n° de contrat… jamais de mot de passe)</span><textarea name="notes" rows="2" maxlength="1000">{{.A.Notes}}</textarea></label>
+  <label class="champ"><span>Notes (n° de contrat… jamais de mot de passe)</span><textarea name="notes" rows="2" maxlength="1000" data-riche>{{.A.Notes}}</textarea><template data-editeur-contenu>{{richeEdition .A.Notes}}</template></label>
   <label class="interrupteur">
     <span class="emoji">🔒</span><span class="nom">Privé <small class="aide">(dans mon budget perso : vous seul le voyez)</small></span>
     <input type="checkbox" name="prive" value="1"{{if .R.PersoDe}} checked{{end}}><span class="glissiere"></span>

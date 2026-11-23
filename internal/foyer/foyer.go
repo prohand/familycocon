@@ -66,6 +66,7 @@ type vueFiche struct {
 	Retour, TitreRetour string
 	Emoji, Nom, Sous    string
 	Infos               []string
+	Notes               string // notes de la fiche, mises en forme (internal/riche)
 	Liens               []Lien
 	Suivi               *suivi.Bloc
 	TitreSuivi          string

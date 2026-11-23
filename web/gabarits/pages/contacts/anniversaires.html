@@ -16,7 +16,7 @@
       <span class="date-ronde"><b>{{.Date.Day}}</b></span>
       {{with .Membre}}<span class="avatar petit c{{.Couleur}}">{{visage .}}</span>{{else}}<span class="p-emoji">🎂</span>{{end}}
       <span class="quoi">{{.Nom}}{{if .Age}} <span class="age">{{.Age}} ans</span>{{end}}
-        <small>{{.Quand}}{{if .Idees}} · 🎁 {{.Idees}}{{end}}</small></span>
+        <small>{{.Quand}}{{if .Idees}} · 🎁 {{simple .Idees}}{{end}}</small></span>
     </a>
     {{- end}}
   </div>

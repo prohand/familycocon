@@ -24,14 +24,16 @@
   </div>
 </section>
 {{end}}{{end}}
-{{if .Cases}}<details class="bloc modifier-liste">
+{{if .Cases}}<details class="bloc modifier-liste"{{if .Ouvert}} open{{end}}>
   <summary class="lien-ajout">✏️ Modifier le titre, le texte, la couleur…</summary>
 {{end}}<form class="carte note-edition n{{.Note.Couleur}}" method="post" action="{{if .Nouvelle}}/notes{{else}}/notes/{{.Note.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
   {{if not .Nouvelle}}<input type="hidden" name="version" value="{{.Note.ModifieLe}}">{{end}}
   <fieldset class="sans-bord"{{if not .Modifiable}} disabled{{end}}>
   <label class="champ"><span>Titre (facultatif)</span><input name="titre" value="{{.Note.Titre}}" maxlength="80"></label>
-  <label class="champ"><span>{{if .Liste}}Éléments <small class="aide">(un par ligne : Entrée ajoute une case)</small>{{else}}Note <small class="aide">(une ligne « [ ] … » devient une case à cocher ; Entrée en ajoute une autre)</small>{{end}}</span><textarea name="texte" rows="10" maxlength="10000" data-liste data-editeur="{{if not .Nouvelle}}{{.Note.ID}}{{end}}"{{if .Nouvelle}} autofocus{{end}}>{{.Note.Texte}}</textarea></label>
+  <label class="champ"><span>{{if .Liste}}Éléments{{else}}Note{{end}}</span><textarea name="texte" rows="10" maxlength="10000" data-liste data-editeur="{{if not .Nouvelle}}{{.Note.ID}}{{end}}"{{if .Nouvelle}} autofocus{{end}}>{{.Note.Texte}}</textarea></label>
+  {{/* Contenu de l'éditeur (app.js le montre à la place du texte brut). */}}
+  <template data-editeur-contenu>{{.Edition}}</template>
   <fieldset class="couleurs-notes">
     <legend class="sr">Couleur</legend>
     {{- range $i := couleurs}}{{if le $i 6}}
@@ -69,19 +71,7 @@
 {{- with .Donnees}}
 <section class="carte bloc cases-note" id="cases-note">
   {{- $id := .ID}}
-  {{- range .Lignes}}
-  {{- if .Case}}
-  <label class="case-a-cocher{{if .Cochee}} cochee{{end}}">
-    <input type="checkbox"{{if .Cochee}} checked{{end}} hx-post="/notes/{{$id}}/cocher" hx-vals='{"ligne": "{{.Ligne}}", "cochee": "{{if .Cochee}}0{{else}}1{{end}}"}'
-           hx-trigger="change" hx-target="#cases-note" hx-swap="outerHTML"> {{.Texte}}</label>
-  {{- else if .Photo}}
-  <figure class="photo-texte"><a href="/notes/photos/{{.Photo}}" target="_blank" rel="noopener"><img src="/notes/photos/{{.Photo}}" alt="Photo de la note" loading="lazy"></a></figure>
-  {{- else if .Texte}}
-  <p class="texte-note">{{.Texte}}</p>
-  {{- else}}
-  <div class="ligne-vide"></div>
-  {{- end}}
-  {{- end}}
+  <div class="contenu-note">{{.HTML}}</div>
   <form class="ajout-element" method="post" action="/notes/{{$id}}/element" hx-post="/notes/{{$id}}/element" hx-target="#cases-note" hx-swap="outerHTML">
     {{template "jeton" .CSRF}}
     <input name="element" maxlength="200" placeholder="＋ Ajouter un élément" aria-label="Ajouter un élément" required autocomplete="off">

@@ -3,11 +3,11 @@
 package notes
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
 
 	"familycocon/internal/donnees"
+	"familycocon/internal/riche"
 )
 
 // Photos dans le texte d'une note : une ligne « [photo 12] » (12 : le
@@ -18,17 +18,8 @@ import (
 //     effacé sans le ✕ de la photo) ;
 //   - la note reste du texte : recherche et export marchent comme avant.
 
-var reMarque = regexp.MustCompile(`^\[photo (\d+)\]$`)
-
-// marque : le numéro de la photo si la ligne est un repère, sinon 0.
-func marque(ligne string) int64 {
-	m := reMarque.FindStringSubmatch(strings.TrimSpace(ligne))
-	if m == nil {
-		return 0
-	}
-	id, _ := strconv.ParseInt(m[1], 10, 64)
-	return id
-}
+// marque : voir riche.Marque.
+var marque = riche.Marque
 
 // placees : les photos placées dans le texte.
 func placees(texte string) map[int64]bool {

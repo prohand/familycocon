@@ -154,7 +154,7 @@ func (m *Module) ficheGarantie(w http.ResponseWriter, r *http.Request, c *appli.
 		v.Infos = append(v.Infos, "📁 Facture : "+x.Facture)
 	}
 	if x.Notes != "" {
-		v.Infos = append(v.Infos, "📝 "+x.Notes)
+		v.Notes = x.Notes
 	}
 	m.afficherFiche(w, r, c, modGaranties, x.ID, v)
 }

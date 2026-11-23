@@ -4,6 +4,7 @@ package appli
 
 import (
 	"errors"
+	"familycocon/internal/riche"
 	"fmt"
 	"html/template"
 	"strconv"
@@ -76,7 +77,13 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		// {{montantSaisie 1250}} → 12,50 (pour un champ de formulaire)
 		"montantSaisie": func(c int64) string { return fmt.Sprintf("%d,%02d", c/100, c%100) },
 		"milliers":      Milliers,
-		"couleurs":      func() []int { return []int{1, 2, 3, 4, 5, 6, 7, 8} },
+		// Textes longs mis en forme (notes des fiches, descriptions : voir
+		// internal/riche) : {{riche .Notes}} pour les lire,
+		// {{richeEdition .Notes}} pour l'éditeur, {{simple .Idees}} sans les signes.
+		"riche":        func(s string) template.HTML { return riche.HTML(s, riche.Options{}) },
+		"richeEdition": func(s string) template.HTML { return riche.HTML(s, riche.Options{Mode: riche.Edition}) },
+		"simple":       func(s string) string { return strings.Join(strings.Fields(riche.Simple(s)), " ") },
+		"couleurs":     func() []int { return []int{1, 2, 3, 4, 5, 6, 7, 8} },
 		// {{etoiles 3}} → ⭐⭐⭐
 		"etoiles": func(n int) string { return strings.Repeat("⭐", n) },
 		// Initiales des jours, index 1 (lundi) à 7 (dimanche).

@@ -20,7 +20,7 @@
     <label class="interrupteur etroit"><span class="nom">Année inconnue</span>
       <input type="checkbox" name="sans_annee" value="1"{{if .SansAnnee}} checked{{end}}><span class="glissiere"></span></label>
   </div>
-  <label class="champ"><span>Idées de cadeaux</span><textarea name="idees" rows="2" maxlength="1000">{{.Contact.Idees}}</textarea></label>
+  <label class="champ"><span>Idées de cadeaux</span><textarea name="idees" rows="2" maxlength="1000" data-riche>{{.Contact.Idees}}</textarea><template data-editeur-contenu>{{richeEdition .Contact.Idees}}</template></label>
   {{if .Anniv}}
   <details class="plus-champs"><summary class="lien-ajout">＋ Téléphone, adresse…</summary>
   {{end}}
@@ -42,7 +42,7 @@
   <datalist id="metiers">{{range .Metiers}}<option value="{{.}}">{{end}}</datalist>
   <label class="champ"><span>Site web</span><input name="site" value="{{.Contact.Site}}" maxlength="300" inputmode="url" placeholder="https://…"></label>
   <label class="champ"><span>Groupes (séparés par des virgules)</span><input name="groupes" value="{{.Contact.Groupes}}" maxlength="400" placeholder="Ex. : Foot de Léo, Parents de la classe"></label>
-  <label class="champ"><span>Notes</span><textarea name="notes" rows="3" maxlength="2000">{{.Contact.Notes}}</textarea></label>
+  <label class="champ"><span>Notes</span><textarea name="notes" rows="3" maxlength="2000" data-riche>{{.Contact.Notes}}</textarea><template data-editeur-contenu>{{richeEdition .Contact.Notes}}</template></label>
   {{if .Anniv}}</details>{{end}}
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>

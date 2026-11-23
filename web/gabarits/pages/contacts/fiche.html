@@ -19,8 +19,8 @@
   {{if .Contact.Email}}<div class="ligne"><span class="p-emoji">✉️</span><span class="quoi">{{.Contact.Email}}</span></div>{{end}}
   {{if .Contact.Adresse}}<div class="ligne"><span class="p-emoji">🏠</span><span class="quoi texte-long">{{.Contact.Adresse}}</span></div>{{end}}
   {{if .Naissance}}<div class="ligne"><span class="p-emoji">🎂</span><span class="quoi">{{.Naissance}}</span></div>{{end}}
-  {{if .Contact.Idees}}<div class="ligne"><span class="p-emoji">🎁</span><span class="quoi texte-long">{{.Contact.Idees}}</span></div>{{end}}
-  {{if .Contact.Notes}}<div class="ligne"><span class="p-emoji">📝</span><span class="quoi texte-long">{{.Contact.Notes}}</span></div>{{end}}
+  {{if .Contact.Idees}}<div class="ligne"><span class="p-emoji">🎁</span><div class="quoi contenu-note">{{riche .Contact.Idees}}</div></div>{{end}}
+  {{if .Contact.Notes}}<div class="ligne"><span class="p-emoji">📝</span><div class="quoi contenu-note">{{riche .Contact.Notes}}</div></div>{{end}}
   {{if .Groupes}}<div class="ligne"><span class="p-emoji">🏷️</span><span class="quoi">{{range .Groupes}}<a class="pastille ctous" href="/contacts?filtre={{.}}">{{.}}</a> {{end}}</span></div>{{end}}
 </section>
 {{if .Prestataire}}<a class="lien-recurrences bloc" href="/prestataires/{{.Contact.ID}}">🧰 Rendez-vous et interventions <span class="fleche-droite">›</span></a>{{end}}

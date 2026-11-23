@@ -1623,3 +1623,32 @@ figure.photo-texte .retirer-photo { position: absolute; top: 6px; right: 6px; wi
 .piece .placer[hidden] { display: none; }
 .cases-note .texte-note { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cases-note .ligne-vide { height: .6em; }
+
+/* Notes : barre d'outils de l'éditeur (fixe sous l'en-tête) et mise en
+   forme (titres, listes, citations, liens, cases). */
+.barre-note { position: sticky; top: 64px; z-index: 5; display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 2px; align-items: center;
+  padding: 4px; margin-bottom: 8px; background: var(--carte); border: 1.5px solid var(--bordure); border-radius: var(--rayon-petit); box-shadow: var(--ombre); }
+.barre-note button { flex: none; min-width: 36px; height: 36px; padding: 0 6px; border: 0; border-radius: 10px; background: none; color: var(--texte);
+  font-size: .95rem; font-weight: 700; cursor: pointer; }
+.barre-note button:hover, .barre-note button:focus-visible { background: var(--fond); }
+.barre-note .sep { width: 1px; height: 22px; background: var(--bordure); margin: 0 2px; }
+.editeur-note h1, .contenu-note h1 { font-size: 1.35rem; margin: 10px 0 4px; }
+.editeur-note h2, .contenu-note h2 { font-size: 1.15rem; margin: 8px 0 4px; }
+.editeur-note h3, .contenu-note h3 { font-size: 1rem; margin: 6px 0 2px; }
+.editeur-note ul, .editeur-note ol, .contenu-note ul, .contenu-note ol { margin: 4px 0; padding-left: 1.4em; }
+.editeur-note blockquote, .contenu-note blockquote { margin: 6px 0; padding: 2px 12px; border-left: 4px solid var(--corail); color: var(--texte-doux); }
+.editeur-note hr, .contenu-note hr { border: 0; border-top: 2px solid var(--bordure); margin: 12px 0; }
+.editeur-note a, .contenu-note a, .note-texte a { color: var(--corail-fonce); text-decoration: underline; overflow-wrap: anywhere; }
+.editeur-note code, .contenu-note code { background: var(--bordure); border-radius: 6px; padding: 0 4px; font-size: .9em; }
+.editeur-note .case-note { position: relative; padding-left: 30px; margin: 4px 0; min-height: 1.5em; }
+.editeur-note .case-note::before { content: ""; position: absolute; left: 2px; top: .2em; width: 18px; height: 18px; box-sizing: border-box;
+  border: 2px solid var(--corail); border-radius: 5px; background: var(--carte); cursor: pointer; }
+.editeur-note .case-note[data-cochee="1"]::before { content: "✓"; background: var(--corail); color: #fff; font-size: 13px; line-height: 14px; text-align: center; font-weight: 900; }
+.editeur-note .case-note[data-cochee="1"] { color: var(--texte-doux); text-decoration: line-through; }
+.bulle-lien { display: inline-block; margin: 0 6px; padding: 2px 10px; border-radius: 99px; background: var(--texte); font-size: .85rem; }
+.bulle-lien a { color: var(--carte); text-decoration: none; font-weight: 800; }
+.contenu-note .case-a-cocher { font-size: 1rem; color: var(--texte); }
+.contenu-note p.texte-note { margin: 4px 0; }
+.editeur-note.court { min-height: 5em; }
+.contenu-note { overflow-wrap: anywhere; }
+.contenu-note > :first-child { margin-top: 0; }

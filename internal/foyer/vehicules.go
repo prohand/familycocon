@@ -149,7 +149,7 @@ func (m *Module) ficheVehicule(w http.ResponseWriter, r *http.Request, c *appli.
 	}
 	v.Kilometrage = x.Kilometrage // dans le résumé, en haut de la fiche
 	if x.Notes != "" {
-		v.Infos = append(v.Infos, "📝 "+x.Notes)
+		v.Notes = x.Notes
 	}
 	if ct, ok := m.citer(r.Context(), c, "🔧 Garage", x.GarageID); ok {
 		v.Contacts = append(v.Contacts, ct)

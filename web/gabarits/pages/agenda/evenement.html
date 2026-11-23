@@ -66,7 +66,7 @@
     <input type="checkbox" name="rappel" value="1"{{if eq .Evt.Rappel 1}} checked{{end}}><span class="glissiere"></span>
   </label>
   <label class="champ"><span>Où ? (facultatif)</span><input name="lieu" value="{{.Evt.Lieu}}" maxlength="80"></label>
-  <label class="champ"><span>Note (facultatif)</span><textarea name="note" rows="3" maxlength="500">{{.Evt.Note}}</textarea></label>
+  <label class="champ"><span>Note (facultatif)</span><textarea name="note" rows="3" maxlength="500" data-riche>{{.Evt.Note}}</textarea><template data-editeur-contenu>{{richeEdition .Evt.Note}}</template></label>
   {{if .Modifiable}}<div class="boutons"><button class="bouton">{{if .Nouveau}}Ajouter{{else}}Enregistrer{{end}}</button></div>{{end}}
   </fieldset>
 </form>
