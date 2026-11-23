@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"familycocon/internal/appli"
@@ -65,6 +66,9 @@ type Navigateur struct {
 	C     *http.Client
 	Jeton string // jeton CSRF lu dans la dernière page
 	Htmx  bool   // envoie les en-têtes de htmx (HX-Request, X-Jeton)
+	// EnTetes : en-têtes de la dernière réponse (HX-Trigger…).
+	EnTetes http.Header
+	mu      sync.Mutex // un test peut envoyer plusieurs requêtes à la fois
 }
 
 // NouveauNavigateur : navigateur sans cookie.
@@ -82,6 +86,9 @@ func (n *Navigateur) lire(rep *http.Response, err error) (int, string) {
 	}
 	defer rep.Body.Close()
 	b, _ := io.ReadAll(rep.Body)
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.EnTetes = rep.Header
 	if m := reJeton.FindSubmatch(b); m != nil {
 		n.Jeton = string(m[1]) + string(m[2])
 	}
@@ -105,6 +112,13 @@ func (n *Navigateur) Post(chemin string, champs map[string]string) (int, string)
 	for k, x := range champs {
 		v.Set(k, x)
 	}
+	return n.PostValeurs(chemin, v)
+}
+
+// PostValeurs : comme Post, avec plusieurs valeurs possibles par champ
+// (cases à cocher du même nom).
+func (n *Navigateur) PostValeurs(chemin string, v url.Values) (int, string) {
+	n.t.Helper()
 	req, _ := http.NewRequest("POST", n.srv.URL+chemin, strings.NewReader(v.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if n.Jeton != "" {

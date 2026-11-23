@@ -28,6 +28,14 @@ type AbonnementsPush struct {
 	CreeLe   int64
 }
 
+type AgendaIcal struct {
+	MembreID  int64
+	FamilleID int64
+	Empreinte []byte
+	CreeLe    int64
+	LuLe      int64
+}
+
 type Animal struct {
 	ID            int64
 	FamilleID     int64
@@ -49,18 +57,26 @@ type Appareil struct {
 	VueLe     int64
 }
 
-type Carnet struct {
-	ID        int64
+type BudgetPlafond struct {
 	FamilleID int64
-	Module    string
-	ObjetID   int64
-	Jour      string
-	Libelle   string
+	Categorie string
 	Montant   int64
-	Km        int64
-	Note      string
-	CreePar   sql.NullInt64
-	CreeLe    int64
+}
+
+type Carnet struct {
+	ID          int64
+	FamilleID   int64
+	Module      string
+	ObjetID     int64
+	Jour        string
+	Libelle     string
+	Montant     int64
+	Km          int64
+	Note        string
+	CreePar     sql.NullInt64
+	CreeLe      int64
+	OperationID sql.NullInt64
+	Litres      int64
 }
 
 type Carte struct {
@@ -128,6 +144,16 @@ type Echeance struct {
 	CreeLe         int64
 }
 
+type EtoilesBonus struct {
+	ID        int64
+	FamilleID int64
+	EnfantID  int64
+	Etoiles   int64
+	Motif     string
+	Par       sql.NullInt64
+	Le        int64
+}
+
 type Evenement struct {
 	ID            int64
 	FamilleID     int64
@@ -141,11 +167,17 @@ type Evenement struct {
 	CreePar       sql.NullInt64
 	CreeLe        int64
 	RepetitionFin string
+	Rappel        int64
 }
 
 type EvenementsContact struct {
 	EvenementID int64
 	ContactID   int64
+}
+
+type EvenementsException struct {
+	EvenementID int64
+	Jour        string
 }
 
 type EvenementsMembre struct {
@@ -160,6 +192,21 @@ type Famille struct {
 	Devise  string
 	Modules string
 	CreeLe  int64
+}
+
+type Garantie struct {
+	ID           int64
+	FamilleID    int64
+	Nom          string
+	Marque       string
+	Achat        string
+	Prix         int64
+	GarantieMois int64
+	Magasin      string
+	MagasinID    sql.NullInt64
+	Facture      string
+	Notes        string
+	CreeLe       int64
 }
 
 type Invitation struct {
@@ -382,6 +429,7 @@ type Tache struct {
 	Active     int64
 	CreePar    sql.NullInt64
 	CreeLe     int64
+	Tour       string
 }
 
 type TacheFaite struct {

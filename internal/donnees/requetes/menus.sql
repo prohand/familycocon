@@ -36,3 +36,19 @@ SELECT nom FROM recettes WHERE famille_id = ? ORDER BY compte DESC, vu_le DESC L
 
 -- name: CompterRecettes :one
 SELECT count(*) FROM recettes WHERE famille_id = ?;
+
+-- Page Recettes : toutes les recettes retenues.
+-- name: ToutesRecettes :many
+SELECT * FROM recettes WHERE famille_id = ? ORDER BY nom COLLATE NOCASE;
+
+-- name: ModifierRecette :exec
+UPDATE recettes SET nom = ?, ingredients = ? WHERE famille_id = ? AND cle = ?;
+
+-- name: OublierRecette :exec
+DELETE FROM recettes WHERE famille_id = ? AND cle = ?;
+
+-- Reprendre la semaine derniere : seulement les creneaux encore vides.
+-- name: CopierRepas :execrows
+INSERT INTO repas (famille_id, jour, moment, nom, ingredients, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (famille_id, jour, moment) DO NOTHING;

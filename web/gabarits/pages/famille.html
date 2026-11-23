@@ -64,10 +64,6 @@
 <section class="carte bloc">
   <h2>⭐ Ajouter un enfant</h2>
   <p class="aide">L'enfant se connecte en touchant son prénom puis en tapant son code PIN, sur un appareil où un parent s'est déjà connecté.</p>
-  <form method="post" action="/famille/appareils/oublier" class="bloc" hx-confirm="Oublier tous les appareils de confiance (sauf celui-ci) ? Un parent devra se reconnecter sur chacun pour que les enfants puissent y entrer.">
-    {{template "jeton" $c.CSRF}}
-    <button class="bouton petit secondaire">📵 Oublier les appareils de confiance (tablette perdue…)</button>
-  </form>
   <form method="post" action="/famille/enfants">
     {{template "jeton" $c.CSRF}}
     <div class="rangee">
@@ -77,6 +73,11 @@
     </div>
     {{template "choix-couleur" dict "Nom" "couleur" "Choisie" 0}}
     <button class="bouton">Ajouter l'enfant</button>
+  </form>
+  <form method="post" action="/famille/appareils/oublier" class="bloc" hx-confirm="Oublier tous les appareils de confiance (sauf celui-ci) ? Un parent devra se reconnecter sur chacun pour que les enfants puissent y entrer.">
+    {{template "jeton" $c.CSRF}}
+    <p class="aide">Tablette perdue ou donnée ? Les enfants ne pourront plus s'y connecter.</p>
+    <button class="bouton petit secondaire">📵 Oublier les appareils de confiance</button>
   </form>
 </section>
 
@@ -105,7 +106,7 @@
     {{template "jeton" $c.CSRF}}
     {{- range .Catalogue}}
     <label class="interrupteur">
-      <span class="emoji">{{.Emoji}}</span><span class="nom">{{.Nom}}{{if .Parents}} <small class="etiquette">parents</small>{{end}}</span>
+      <span class="emoji">{{emoji .Emoji}}</span><span class="nom">{{.Nom}}{{if .Parents}} <small class="etiquette">parents</small>{{end}}</span>
       <input type="checkbox" name="module_{{.Cle}}" value="1"{{if $c.Actif .Cle}} checked{{end}}>
       <span class="glissiere"></span>
     </label>
@@ -128,5 +129,21 @@
     <button class="bouton">Enregistrer</button>
   </form>
 </section>
+<section class="carte bloc">
+  <h2>📦 Exporter</h2>
+  <p class="aide">Toutes les données de la famille dans un fichier (JSON), pour les garder ou les emporter ailleurs. Sans mot de passe ni code PIN ; sans les notes privées des autres.</p>
+  <p><a class="bouton secondaire" href="/famille/export.json" download hx-boost="false">⬇️ Télécharger</a></p>
+</section>
+{{with .Serveur}}
+<section class="carte bloc">
+  <h2>🖥️ Serveur</h2>
+  <div class="ligne"><span class="quoi">Dernière sauvegarde</span>
+    <b class="{{if and .Sauvegarde (not .SauvegardeOK)}}alerte{{end}}">{{if .Sauvegarde}}{{if .SauvegardeOK}}✅{{else}}❌{{end}} {{.Sauvegarde}}{{else if .SansAuto}}désactivée{{else}}pas encore{{end}}</b></div>
+  {{if .Erreur}}<p class="aide alerte">{{.Erreur}}</p>{{end}}
+  <div class="ligne"><span class="quoi">Taille de la base</span><b>{{.Base}}</b></div>
+  <div class="ligne"><span class="quoi">Pages ouvertes en ce moment</span><b>{{.Connexions}}</b></div>
+  <div class="ligne"><span class="quoi">Version</span><b>{{.Version}}</b></div>
+</section>
+{{end}}
 {{end}}
 {{end}}

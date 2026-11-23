@@ -1,0 +1,26 @@
+{{define "contenu"}}
+{{$c := .C}}
+<section class="titre-page">
+  <a class="retour" href="/menus">‹ Menus</a>
+  <h1>📖 Recettes</h1>
+  <p>Les plats déjà prévus et leurs ingrédients</p>
+</section>
+{{- range .Donnees}}
+<details class="carte bloc">
+  <summary><b>{{.Nom}}</b> <small class="aide">{{pluriel .NbIngr "ingrédient" "ingrédients"}} · prévu {{pluriel .Compte "fois" "fois"}}</small></summary>
+  <form method="post" action="/menus/recettes/modifier">
+    {{template "jeton" $c.CSRF}}<input type="hidden" name="cle" value="{{.Cle}}">
+    <label class="champ"><span>Nom</span><input name="nom" value="{{.Nom}}" maxlength="80" required></label>
+    <label class="champ"><span>Ingrédients (un par ligne)</span><textarea name="ingredients" rows="6">{{.Ingredients}}</textarea></label>
+    <div class="boutons"><button class="bouton petit">Enregistrer</button></div>
+  </form>
+  {{if $c.EstParent}}
+  <form method="post" action="/menus/recettes/oublier" hx-confirm="Oublier « {{.Nom}} » ? Elle ne sera plus proposée (les repas prévus restent).">
+    {{template "jeton" $c.CSRF}}<input type="hidden" name="cle" value="{{.Cle}}"><button class="bouton petit danger">Oublier</button>
+  </form>
+  {{end}}
+</details>
+{{- else}}
+<div class="carte vide bloc"><span class="emoji">📖</span>Les plats prévus dans les menus seront retenus ici, avec leurs ingrédients.</div>
+{{- end}}
+{{end}}

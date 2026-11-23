@@ -7,7 +7,7 @@
 </section>
 <div class="barre-actions">
   <nav class="pilules" aria-label="Filtrer">
-    <a class="pilule{{if eq .Pour 0}} active{{end}}" href="/taches">Toutes</a>
+    <a class="pilule{{if eq .Pour 0}} active{{end}}" href="/taches?pour=0">Toutes</a>
     {{- range .Membres}}
     <a class="pilule{{if eq .ID $.Donnees.Pour}} active{{end}}" href="/taches?pour={{.ID}}">{{.Nom}}</a>
     {{- end}}
@@ -21,7 +21,7 @@
 {{define "taches"}}
 {{$c := .C}}
 {{with .Donnees}}
-<div id="taches" hx-get="/taches/contenu?pour={{.Pour}}" hx-trigger="maj-taches from:body delay:300ms" hx-swap="outerHTML">
+<div id="taches" hx-get="/taches/contenu?pour={{.Pour}}" hx-trigger="maj-taches from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   <section class="bloc">
     <div class="section-titre"><h2>Aujourd'hui</h2><span class="aide">{{pluriel (len .AFaire) "à faire" "à faire"}}</span></div>
     <div class="carte liste-taches">
@@ -76,11 +76,11 @@
   {{- else if $l.AFaire}}
   <button class="coche" hx-post="/taches/{{$l.ID}}/faire" hx-vals='{"pour": "{{$.Pour}}"}' hx-target="#taches" hx-swap="outerHTML" aria-label="J'ai fait {{$l.Titre}}"></button>
   {{- else}}
-  <span class="coche attente" title="Pas aujourd'hui"></span>
+  <span class="coche attente" role="img" aria-label="Pas aujourd'hui" title="Pas aujourd'hui"></span>
   {{- end}}
   <span class="p-emoji">{{$l.Emoji}}</span>
   <span class="quoi">{{$l.Titre}}
-    <small>{{if $l.Faite}}{{with $l.ParQui}}par {{.Nom}} {{end}}à {{$l.FaiteLe}}{{else}}{{with $l.Assigne}}{{.Nom}}{{else}}Tout le monde{{end}} · {{$l.Regle.Texte}}{{end}}</small></span>
+    <small>{{if $l.Faite}}{{with $l.ParQui}}par {{.Nom}} {{end}}à {{$l.FaiteLe}}{{else}}{{with $l.Assigne}}{{.Nom}}{{else}}Tout le monde{{end}}{{if $l.Tour}} 🔄{{end}} · {{$l.Regle.Texte}}{{end}}</small></span>
   {{template "avatar-petit" $l.Assigne}}
   {{if $l.Modifiable}}<a class="crayon" href="/taches/{{$l.ID}}/modifier" aria-label="Modifier {{$l.Titre}}">✏️</a>{{end}}
 </div>
@@ -91,11 +91,21 @@
 <div class="section-titre"><h2>Tâches du jour</h2><a href="/taches">Tout voir ›</a></div>
 <div class="carte">
   {{- range .Donnees}}
-  <div class="ligne">
-    {{template "avatar-petit" .Assigne}}
+  <div class="ligne tache">
+    <button class="coche" hx-post="/taches/{{.ID}}/faire" hx-vals='{"depuis": "accueil"}' hx-target="closest .ligne" hx-swap="outerHTML" aria-label="J'ai fait {{.Titre}}"></button>
     <span>{{.Emoji}}</span>
     <span class="quoi">{{.Titre}}<small>{{.Regle.Texte}}</small></span>
+    {{template "avatar-petit" .Assigne}}
   </div>
   {{- end}}
+</div>
+{{end}}
+
+{{/* Tâche cochée depuis l'accueil : la ligne seule est remplacée. */}}
+{{define "accueil-tache-faite"}}
+<div class="ligne tache faite">
+  <span class="coche cochee" aria-hidden="true"></span>
+  <span>{{.Donnees.Emoji}}</span>
+  <span class="quoi">{{.Donnees.Titre}}<small>Fait par {{.C.Membre.Nom}}</small></span>
 </div>
 {{end}}

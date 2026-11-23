@@ -6,7 +6,7 @@
 </section>
 <div class="boutons"><a class="bouton" href="/contacts/nouveau?anniv=1">＋ Anniversaire</a></div>
 {{/* Bloc rechargé tout seul quand un autre membre change quelque chose (voir Vue.Adresse). */}}
-<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-contacts from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-contacts from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 {{range .Donnees}}
 <section class="bloc">
   <h2 class="sous-titre">{{.Mois}}</h2>

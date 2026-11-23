@@ -69,3 +69,27 @@ SELECT count(*) FROM produits WHERE liste_id = ?;
 
 -- name: CompterProduitsConnus :one
 SELECT count(*) FROM produits_connus WHERE famille_id = ?;
+
+-- Produits d'une liste dont la cle (nom simplifie) est donnee : un produit
+-- ajoute deux fois ne fait pas deux lignes. La cle est calculee en Go ;
+-- la liste est bornee (2000 produits), lue en entier.
+-- name: ProduitsCles :many
+SELECT id, nom, quantite, pris FROM produits WHERE liste_id = ? ORDER BY pris, id;
+
+-- name: ReprendreProduit :exec
+UPDATE produits SET quantite = ?, pris = 0, pris_par = NULL, pris_le = NULL WHERE id = ?;
+
+-- Souvent achetes : produits connus ajoutes deux fois ou plus. Ceux deja
+-- sur la liste sont retires en Go (la cle des produits est calculee en Go).
+-- name: SouventAchetes :many
+SELECT cle, nom, emoji FROM produits_connus
+WHERE famille_id = ? AND compte >= 2
+ORDER BY compte DESC, vu_le DESC LIMIT 40;
+
+-- name: OublierProduit :exec
+DELETE FROM produits_connus WHERE famille_id = ? AND cle = ?;
+
+-- Produit remis apres une suppression annulee (bouton "Annuler").
+-- name: RemettreProduit :exec
+INSERT INTO produits (liste_id, nom, quantite, rayon, emoji, ajoute_par, pris, pris_par, pris_le, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);

@@ -72,6 +72,18 @@ func ChargerStatique(racine fs.FS) (*Statique, error) {
 	if police, ok := bruts[policeCSS]; ok {
 		bruts["app.css"] = bytes.ReplaceAll(bruts["app.css"], []byte(`"`+policeCSS+`"`), []byte(`"`+policeCSS+"?v="+empreinteCourte(police)+`"`))
 	}
+	// Le service worker et la page hors ligne citent les fichiers avec leur
+	// version, comme les pages : le cache ne garde pas une copie inutile.
+	for _, nom := range []string{"app.css", "img/logo.svg", policeCSS} {
+		if contenu, ok := bruts[nom]; ok {
+			ancien, nouveau := []byte(`"/statique/`+nom+`"`), []byte(`"/statique/`+nom+"?v="+empreinteCourte(contenu)+`"`)
+			for _, cible := range []string{"sw.js", "hors-ligne.html"} {
+				if b, ok := bruts[cible]; ok {
+					bruts[cible] = bytes.ReplaceAll(b, ancien, nouveau)
+				}
+			}
+		}
+	}
 	// Version de l'ensemble : empreinte de toutes les empreintes (sauf sw.js).
 	ensemble := sha256.New()
 	for _, p := range noms {

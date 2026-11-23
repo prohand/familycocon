@@ -29,3 +29,35 @@ FROM operations WHERE famille_id = ? AND jour >= sqlc.arg(du) AND jour <= sqlc.a
 SELECT count(*) FROM operations
 WHERE famille_id = ? AND sens = ? AND montant = ? AND categorie = ? AND libelle = ? AND jour = ?
   AND cree_par = ? AND recurrence_id IS NULL AND cree_le >= ?;
+
+-- Libelles deja tapes (suggestions du formulaire), les plus recents d'abord.
+-- name: LibellesRecents :many
+SELECT libelle FROM operations WHERE famille_id = ? AND libelle <> ''
+GROUP BY libelle ORDER BY max(jour) DESC LIMIT 30;
+
+-- Recherche dans les libelles, sans majuscules ni accents, depuis une date.
+-- name: ChercherOperations :many
+SELECT * FROM operations
+WHERE famille_id = sqlc.arg(famille_id) AND jour >= sqlc.arg(depuis)
+  AND instr(plier(libelle), plier(sqlc.arg(motif))) > 0
+ORDER BY jour DESC, id DESC LIMIT 200;
+
+-- Totaux par mois, sens et categorie (vue de l'annee).
+-- name: TotauxParMois :many
+SELECT CAST(substr(jour, 1, 7) AS TEXT) AS mois, sens, categorie, CAST(sum(montant) AS INTEGER) AS total
+FROM operations WHERE famille_id = ? AND jour >= sqlc.arg(du) AND jour <= sqlc.arg(au)
+GROUP BY 1, 2, 3;
+
+-- name: PlafondsFamille :many
+SELECT categorie, montant FROM budget_plafonds WHERE famille_id = ?;
+
+-- name: PoserPlafond :exec
+INSERT INTO budget_plafonds (famille_id, categorie, montant) VALUES (?, ?, ?)
+ON CONFLICT (famille_id, categorie) DO UPDATE SET montant = excluded.montant;
+
+-- name: RetirerPlafond :exec
+DELETE FROM budget_plafonds WHERE famille_id = ? AND categorie = ?;
+
+-- Depense du carnet modifiee : la ligne du budget suit.
+-- name: ModifierOperationCarnet :exec
+UPDATE operations SET montant = ?, libelle = ?, jour = ? WHERE id = ? AND famille_id = ?;

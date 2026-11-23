@@ -22,3 +22,6 @@ sql:
           repa: Repas
           missions_faite: MissionFaite
           animaux: Animal
+          garanty: Garantie
+          etoiles_bonu: EtoilesBonus
+          evenements_exception: EvenementsException

@@ -5,6 +5,7 @@ package taches
 import (
 	"database/sql"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"familycocon/internal/donnees"
 	"familycocon/internal/essai"
+	"familycocon/internal/repetition"
 )
 
 func TestTachesDuJour(t *testing.T) {
@@ -52,6 +54,15 @@ func TestTachesDuJour(t *testing.T) {
 	}
 	if _, frag = marie.Post("/taches/"+id+"/defaire", map[string]string{"pour": "0"}); strings.Contains(frag, "par Marie") {
 		t.Fatal("décochage sans effet")
+	}
+	// Cochée depuis l'accueil : la ligne seule revient, cochée.
+	marie.Htmx = false
+	if _, page := marie.Get("/"); !strings.Contains(page, `hx-post="/taches/`+id+`/faire"`) {
+		t.Fatal("pas de case à cocher dans le bloc de l'accueil")
+	}
+	marie.Htmx = true
+	if code, frag := marie.Post("/taches/"+id+"/faire", map[string]string{"depuis": "accueil"}); code != 200 || !strings.Contains(frag, "Fait par Marie") || strings.Contains(frag, "Qui a fait quoi") {
+		t.Fatalf("faite depuis l'accueil : %d\n%s", code, frag)
 	}
 }
 
@@ -164,5 +175,39 @@ func TestRevueTaches(t *testing.T) {
 	var reste int
 	if err := a.DB.QueryRow(`SELECT count(*) FROM taches WHERE assigne_a = 2`).Scan(&reste); err != nil || reste != 0 {
 		t.Fatalf("tâches encore confiées au membre retiré : %d %v", reste, err)
+	}
+}
+
+// À tour de rôle : la tâche du jour revient à un membre, celle du
+// lendemain au suivant.
+func TestTourDeRole(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	essai.Enfant(t, srv, marie, "Léa")
+	ids := map[string]string{}
+	membres, _ := a.Q.MembresDeFamille(t.Context(), 1)
+	for _, m := range membres {
+		ids[m.Nom] = strconv.FormatInt(m.ID, 10)
+	}
+	marie.Get("/taches/nouvelle")
+	if code, _ := marie.PostValeurs("/taches", url.Values{"titre": {"Vaisselle"}, "repetition": {"jour"}, "assigne": {"tour"}, "tour": {ids["Marie"]}}); code != 400 {
+		t.Fatalf("tour de rôle d'une seule personne accepté : %d", code)
+	}
+	if code, _ := marie.PostValeurs("/taches", url.Values{"titre": {"Vaisselle"}, "repetition": {"jour"}, "assigne": {"tour"}, "tour": {ids["Marie"], ids["Léa"]}}); code != 200 {
+		t.Fatalf("création : %d", code)
+	}
+	tache, _ := a.Q.TachesActives(t.Context(), donnees.TachesActivesParams{FamilleID: 1})
+	parID := map[int64]*donnees.Membre{}
+	for i := range membres {
+		parID[membres[i].ID] = &membres[i]
+	}
+	regle := repetition.Lire(tache[0].Repetition)
+	auj := time.Now()
+	a1, a2 := assigneLe(tache[0], regle, auj, parID), assigneLe(tache[0], regle, auj.AddDate(0, 0, 1), parID)
+	if a1 == nil || a2 == nil || a1.ID == a2.ID {
+		t.Fatalf("pas de relais d'un jour à l'autre : %v %v", a1, a2)
+	}
+	if _, page := marie.Get("/taches"); !strings.Contains(page, a1.Nom+" 🔄") {
+		t.Fatalf("personne du jour absente :\n%s", page)
 	}
 }

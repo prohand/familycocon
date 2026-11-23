@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -76,7 +77,8 @@ func (m *Module) faire(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	// Déjà cochée ou déjà validée (double envoi) : rien n'a changé, les
 	// parents ne sont pas notifiés une seconde fois.
 	if n > 0 {
-		m.a.Publier(c, mod, fmt.Sprintf("%s a fini « %s » %s : à valider", c.Membre.Nom, mi.Titre, mi.Emoji))
+		// « À valider » : pour les parents seulement.
+		m.a.PublierPour(c, mod, fmt.Sprintf("%s a fini « %s » %s : à valider", c.Membre.Nom, mi.Titre, mi.Emoji), m.a.Parents(r.Context(), c))
 		appli.Notifier(w, "Super ! Un parent va vérifier 👀", false)
 	}
 	m.renvoyer(w, r, c, mi.EnfantID)
@@ -125,15 +127,110 @@ func (m *Module) decider(w http.ResponseWriter, r *http.Request, c *appli.Contex
 	}
 	if n > 0 {
 		enfant := m.nomEnfant(r, c, f.EnfantID)
+		pour := append(m.a.Parents(ctx, c), f.EnfantID) // l'enfant et les parents
 		if etat == Validee {
-			m.a.Publier(c, mod, fmt.Sprintf("Bravo %s ! +%d ⭐ pour « %s »", enfant, f.Etoiles, f.Titre))
+			m.a.PublierPour(c, mod, fmt.Sprintf("Bravo %s ! +%d ⭐ pour « %s »", enfant, f.Etoiles, f.Titre), pour)
 			appli.Notifier(w, fmt.Sprintf("+%d ⭐ pour %s", f.Etoiles, enfant), false)
 		} else {
-			m.a.Publier(c, mod, fmt.Sprintf("%s : « %s » est à refaire 💪", enfant, f.Titre))
+			m.a.PublierPour(c, mod, fmt.Sprintf("%s : « %s » est à refaire 💪", enfant, f.Titre), pour)
 			appli.Notifier(w, "Mission à refaire", false)
 		}
 	}
 	m.renvoyer(w, r, c, f.EnfantID)
+}
+
+// toutValider : un parent valide d'un coup toutes les missions en attente.
+func (m *Module) toutValider(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	missions, err := m.a.Q.MissionsEnAttente(ctx, c.Famille.ID)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	n, etoiles := 0, int64(0)
+	parEnfant := map[int64]int64{}
+	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		for _, mi := range missions {
+			k, err := q.DeciderMission(ctx, donnees.DeciderMissionParams{Etat: Validee, DecidePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true},
+				DecideLe: sql.NullInt64{Int64: time.Now().Unix(), Valid: true}, ID: mi.ID, FamilleID: c.Famille.ID})
+			if err != nil {
+				return err
+			}
+			if k > 0 {
+				n++
+				etoiles += mi.Etoiles
+				parEnfant[mi.EnfantID] += mi.Etoiles
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	// Chaque enfant apprend ce qu'il a gagné (les parents aussi).
+	parents := m.a.Parents(ctx, c)
+	for enfant, e := range parEnfant {
+		m.a.PublierPour(c, mod, fmt.Sprintf("Bravo %s ! +%d ⭐", m.nomEnfant(r, c, enfant), e), append(slices.Clone(parents), enfant))
+	}
+	if n == 0 {
+		m.a.Publier(c, mod, "")
+	}
+	appli.Notifier(w, fmt.Sprintf("%s validées (+%d ⭐)", appli.Pluriel(n, "mission", "missions"), etoiles), false)
+	m.renvoyer(w, r, c, 0)
+}
+
+// bonusMax : étoiles données ou retirées d'un coup, au plus.
+const bonusMax = 20
+
+// bonus : un parent donne (ou retire) des étoiles, avec un motif.
+func (m *Module) bonus(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	e, ok := m.enfantCible(r, c)
+	if !ok {
+		m.a.Echec(w, r, http.StatusNotFound, "Enfant introuvable.")
+		return
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(r.PostFormValue("etoiles")), 10, 64)
+	if err != nil || n == 0 || n < -bonusMax || n > bonusMax {
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("De −%d à +%d étoiles (pas 0).", bonusMax, bonusMax))
+		return
+	}
+	motif := strings.TrimSpace(r.PostFormValue("motif"))
+	if l := utf8.RuneCountInString(motif); l < 1 || l > 80 {
+		m.a.Echec(w, r, http.StatusBadRequest, "Écrivez pourquoi (80 caractères au plus).")
+		return
+	}
+	if n < 0 {
+		sol, err := m.solde(ctx, e.ID)
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		if sol.Disponible+n < 0 {
+			m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("%s n'a que %d ⭐.", e.Nom, sol.Disponible))
+			return
+		}
+	}
+	// Double envoi : le même bonus à l'instant n'est pas répété.
+	deja, err := m.a.Q.BonusIdentiqueRecent(ctx, donnees.BonusIdentiqueRecentParams{EnfantID: e.ID, Etoiles: n, Motif: motif, Le: time.Now().Unix() - 10})
+	if err == nil && deja == 0 {
+		err = m.a.Q.AjouterBonus(ctx, donnees.AjouterBonusParams{FamilleID: c.Famille.ID, EnfantID: e.ID, Etoiles: n, Motif: motif,
+			Par: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Le: time.Now().Unix()})
+	}
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if deja == 0 {
+		texte := fmt.Sprintf("+%d ⭐ pour %s : %s", n, e.Nom, motif)
+		if n < 0 {
+			texte = fmt.Sprintf("%d ⭐ pour %s : %s", n, e.Nom, motif)
+		}
+		m.a.PublierPour(c, mod, texte, append(m.a.Parents(ctx, c), e.ID))
+	}
+	m.a.Flash(w, "Étoiles enregistrées ⭐")
+	m.a.Rediriger(w, r, fmt.Sprintf("/enfants/enfant/%d", e.ID))
 }
 
 // nomEnfant : le prénom pour les notifications (« l'enfant » si la lecture
@@ -206,7 +303,7 @@ func (m *Module) demander(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.renvoyer(w, r, c, c.Membre.ID)
 		return
 	}
-	m.a.Publier(c, mod, fmt.Sprintf("%s voudrait « %s » %s (%d ⭐)", c.Membre.Nom, rec.Titre, rec.Emoji, rec.Prix))
+	m.a.PublierPour(c, mod, fmt.Sprintf("%s voudrait « %s » %s (%d ⭐)", c.Membre.Nom, rec.Titre, rec.Emoji, rec.Prix), m.a.Parents(r.Context(), c))
 	appli.Notifier(w, "Demande envoyée aux parents 🎁", false)
 	m.renvoyer(w, r, c, c.Membre.ID)
 }
@@ -235,10 +332,11 @@ func (m *Module) deciderEchange(w http.ResponseWriter, r *http.Request, c *appli
 	}
 	if n > 0 {
 		enfant := m.nomEnfant(r, c, e.EnfantID)
+		pour := append(m.a.Parents(ctx, c), e.EnfantID) // l'enfant et les parents
 		if etat == "confirme" {
-			m.a.Publier(c, mod, fmt.Sprintf("🎉 %s a gagné « %s » %s !", enfant, e.Titre, e.Emoji))
+			m.a.PublierPour(c, mod, fmt.Sprintf("🎉 %s a gagné « %s » %s !", enfant, e.Titre, e.Emoji), pour)
 		} else {
-			m.a.Publier(c, mod, fmt.Sprintf("%s : « %s » sera pour une autre fois", enfant, e.Titre))
+			m.a.PublierPour(c, mod, fmt.Sprintf("%s : « %s » sera pour une autre fois", enfant, e.Titre), pour)
 		}
 	}
 	m.renvoyer(w, r, c, e.EnfantID)
@@ -295,6 +393,7 @@ var categoriesMission = map[string]string{"menage": "🧹", "devoirs": "📚", "
 
 type saisieMission struct {
 	enfant       int64
+	enfants      []int64 // nouvelle mission : un ou plusieurs enfants
 	titre, emoji string
 	etoiles      int64
 	categorie    string
@@ -307,10 +406,24 @@ func (m *Module) lireMission(r *http.Request, c *appli.Contexte) (saisieMission,
 		return s, "Formulaire invalide."
 	}
 	f := r.PostForm
-	s.enfant, _ = strconv.ParseInt(f.Get("enfant"), 10, 64)
-	if mb, err := m.a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: s.enfant, FamilleID: c.Famille.ID}); err != nil || mb.Role != appli.RoleEnfant {
+	// Une nouvelle mission peut être donnée à plusieurs enfants (une
+	// mission chacun) ; une mission existante reste à un seul enfant.
+	if len(f["enfant"]) > 10 {
 		return s, "Choisissez un enfant."
 	}
+	for _, v := range f["enfant"] {
+		id, _ := strconv.ParseInt(v, 10, 64)
+		if mb, err := m.a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: id, FamilleID: c.Famille.ID}); err != nil || mb.Role != appli.RoleEnfant {
+			return s, "Choisissez un enfant."
+		}
+		if !slices.Contains(s.enfants, id) {
+			s.enfants = append(s.enfants, id)
+		}
+	}
+	if len(s.enfants) == 0 {
+		return s, "Choisissez un enfant."
+	}
+	s.enfant = s.enfants[0]
 	s.titre = strings.TrimSpace(f.Get("titre"))
 	if n := utf8.RuneCountInString(s.titre); n < 1 || n > 80 {
 		return s, "Le titre doit faire entre 1 et 80 caractères."
@@ -336,20 +449,36 @@ func (m *Module) lireMission(r *http.Request, c *appli.Contexte) (saisieMission,
 }
 
 func (m *Module) creerMission(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
 	s, msg := m.lireMission(r, c)
 	if msg != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
-	mi, err := m.a.Q.CreerMission(r.Context(), donnees.CreerMissionParams{
-		FamilleID: c.Famille.ID, EnfantID: s.enfant, Titre: s.titre, Emoji: s.emoji, Etoiles: s.etoiles,
-		Categorie: s.categorie, Repetition: s.regle.String(), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+	var mi donnees.Mission
+	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		for _, enfant := range s.enfants {
+			var err error
+			mi, err = q.CreerMission(ctx, donnees.CreerMissionParams{
+				FamilleID: c.Famille.ID, EnfantID: enfant, Titre: s.titre, Emoji: s.emoji, Etoiles: s.etoiles,
+				Categorie: s.categorie, Repetition: s.regle.String(), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+			})
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	m.a.Publier(c, mod, fmt.Sprintf("Nouvelle mission : « %s » %s (%d ⭐)", mi.Titre, mi.Emoji, mi.Etoiles))
+	m.a.PublierPour(c, mod, fmt.Sprintf("Nouvelle mission : « %s » %s (%d ⭐)", mi.Titre, mi.Emoji, mi.Etoiles), s.enfants)
+	if len(s.enfants) > 1 {
+		m.a.Flash(w, fmt.Sprintf("Mission ajoutée pour %d enfants ⭐", len(s.enfants)))
+		m.a.Rediriger(w, r, "/enfants")
+		return
+	}
 	m.a.Flash(w, "Mission ajoutée ⭐")
 	m.a.Rediriger(w, r, fmt.Sprintf("/enfants/enfant/%d", s.enfant))
 }

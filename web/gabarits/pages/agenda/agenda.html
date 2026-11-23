@@ -12,12 +12,13 @@
   <a class="bouton" href="/agenda/nouveau">＋ Événement</a>
 </div>
 {{template "agenda" $}}
+<p class="centre bloc"><a class="bouton discret" href="/agenda/calendrier">📱 Voir l'agenda dans le calendrier du téléphone</a></p>
 {{end}}
 {{end}}
 
 {{define "agenda"}}
 {{with .Donnees}}
-<div id="agenda" hx-get="/agenda/contenu?vue={{.Vue}}&amp;date={{.Ref}}{{with .Choisi}}&amp;jour={{.Cle}}{{end}}" hx-trigger="maj-agenda from:body delay:300ms" hx-swap="outerHTML">
+<div id="agenda" hx-get="/agenda/contenu?vue={{.Vue}}&amp;date={{.Ref}}{{with .Choisi}}&amp;jour={{.Cle}}{{end}}" hx-trigger="maj-agenda from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   <div class="navigation-periode">
     <a class="fleche" href="/agenda?vue={{.Vue}}&amp;date={{.Precedent}}" aria-label="Période précédente">‹</a>
     <h2>{{.Titre}}</h2>
@@ -51,7 +52,8 @@
     {{- range .NomsJours}}<div class="nom-jour" role="columnheader">{{.}}</div>{{end}}
     {{- range .Jours}}
     <a class="case{{if not .DansMois}} hors-mois{{end}}{{if .Aujourdhui}} aujourdhui{{end}}{{$cle := .Cle}}{{with $.Donnees.Choisi}}{{if eq .Cle $cle}} choisie{{end}}{{end}}"
-       href="/agenda?vue=mois&amp;date={{.Cle}}&amp;jour={{.Cle}}" role="gridcell">
+       href="/agenda?vue=mois&amp;date={{.Cle}}&amp;jour={{.Cle}}" role="gridcell"
+       aria-label="{{.Titre}} {{$.Donnees.Titre}} : {{pluriel (ajouter (len .Occurrences) .Plus) "événement" "événements"}}">
       <span class="num">{{.Date.Day}}</span>
       {{- range .Occurrences}}
       <span class="evt-mini {{if .Membres}}c{{(index .Membres 0).Couleur}}{{else}}ctous{{end}}">{{.Evt.Titre}}</span>
@@ -81,14 +83,14 @@
 {{if .}}
 <ul class="elements-jour">
   {{- range .}}
-  <li class="{{if .Faite}}faite{{end}}"><a href="{{.URL}}"><span class="coche-mini" aria-hidden="true"></span>{{.Emoji}} {{.Titre}}</a>{{with .Membre}}<span class="avatar mini c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}</li>
+  <li class="{{if .Faite}}faite{{end}}"><a href="{{.URL}}">{{if eq .Module "taches"}}<span class="coche-mini" aria-hidden="true"></span>{{end}}{{.Emoji}} {{.Titre}}</a>{{with .Membre}}<span class="avatar mini c{{.Couleur}}" title="{{.Nom}}">{{initiale .Nom}}</span>{{end}}</li>
   {{- end}}
 </ul>
 {{end}}
 {{end}}
 
 {{define "ligne-evt"}}
-<a class="ligne evt" href="/agenda/{{.Evt.ID}}">
+<a class="ligne evt" href="{{.Lien}}">
   <span class="heure">{{.Heure}}{{with .HeureFin}}<small>{{.}}</small>{{end}}</span>
   <span class="quoi">{{.Evt.Titre}}{{if .Evt.Lieu}}<small>📍 {{.Evt.Lieu}}</small>{{end}}{{if .Contacts}}<small>👤 {{range $i, $x := .Contacts}}{{if $i}}, {{end}}{{$x.Nom}}{{end}}</small>{{end}}</span>
   <span class="pastilles">{{template "pastilles" .Membres}}</span>

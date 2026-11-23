@@ -3,7 +3,7 @@
 {{with .Donnees}}
 <section class="titre-page">
   <a class="retour" href="{{if .Nouvelle}}/fidelite{{else}}/fidelite/{{.Carte.ID}}{{end}}">‹ Retour</a>
-  <h1>{{if .Nouvelle}}💳 Nouvelle carte{{else}}✏️ {{.Carte.Enseigne}}{{end}}</h1>
+  <h1>{{if .Nouvelle}}{{emoji "🪪"}} Nouvelle carte{{else}}✏️ {{.Carte.Enseigne}}{{end}}</h1>
 </section>
 <form class="carte" method="post" action="{{if .Nouvelle}}/fidelite{{else}}/fidelite/{{.Carte.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}

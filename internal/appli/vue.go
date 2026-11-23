@@ -17,26 +17,30 @@ type ModuleDef struct {
 	Emoji   string
 	URL     string
 	Parents bool // réservé aux parents (budget)
+	// Notifie : le module envoie des notifications (Publier avec un texte) ;
+	// seuls ceux-là ont un interrupteur dans Moi › Notifications.
+	Notifie bool
 }
 
 // Catalogue : tous les modules, dans l'ordre de l'accueil.
 var Catalogue = []ModuleDef{
-	{Cle: "courses", Nom: "Courses", Emoji: "🛒", URL: "/courses"},
-	{Cle: "agenda", Nom: "Agenda", Emoji: "🗓️", URL: "/agenda"},
-	{Cle: "taches", Nom: "Tâches", Emoji: "✅", URL: "/taches"},
-	{Cle: "menus", Nom: "Menus", Emoji: "🍽️", URL: "/menus"},
+	{Cle: "courses", Nom: "Courses", Emoji: "🛒", URL: "/courses", Notifie: true},
+	{Cle: "agenda", Nom: "Agenda", Emoji: "🗓️", URL: "/agenda", Notifie: true},
+	{Cle: "taches", Nom: "Tâches", Emoji: "✅", URL: "/taches", Notifie: true},
+	{Cle: "menus", Nom: "Menus", Emoji: "🍽️", URL: "/menus", Notifie: true},
 	{Cle: "budget", Nom: "Budget", Emoji: "💶", URL: "/budget", Parents: true},
 	{Cle: "abonnements", Nom: "Abonnements", Emoji: "📺", URL: "/abonnements", Parents: true},
-	{Cle: "enfants", Nom: "Espace enfants", Emoji: "⭐", URL: "/enfants"},
-	{Cle: "notes", Nom: "Notes", Emoji: "📝", URL: "/notes"},
+	{Cle: "enfants", Nom: "Espace enfants", Emoji: "⭐", URL: "/enfants", Notifie: true},
+	{Cle: "notes", Nom: "Notes", Emoji: "📝", URL: "/notes", Notifie: true},
 	{Cle: "contacts", Nom: "Contacts", Emoji: "👥", URL: "/contacts"},
 	{Cle: "anniversaires", Nom: "Anniversaires", Emoji: "🎂", URL: "/anniversaires"},
 	{Cle: "adresses", Nom: "Adresses", Emoji: "📇", URL: "/adresses"},
-	{Cle: "fidelite", Nom: "Cartes de fidélité", Emoji: "💳", URL: "/fidelite"},
+	{Cle: "fidelite", Nom: "Cartes de fidélité", Emoji: EmojiFidelite, URL: "/fidelite"},
 	{Cle: "vehicules", Nom: "Véhicules", Emoji: "🚗", URL: "/vehicules"},
 	{Cle: "animaux", Nom: "Animaux", Emoji: "🐾", URL: "/animaux"},
 	{Cle: "prestataires", Nom: "Prestataires", Emoji: "🧰", URL: "/prestataires"},
-	{Cle: "projets", Nom: "Projets", Emoji: "🎯", URL: "/projets"},
+	{Cle: "garanties", Nom: "Garanties", Emoji: "🧾", URL: "/garanties"},
+	{Cle: "projets", Nom: "Projets", Emoji: "🎯", URL: "/projets", Notifie: true},
 }
 
 // ModulesParDefaut : modules activés pour une nouvelle famille (tous).
@@ -71,6 +75,7 @@ var raccourcisFixes = []Raccourci{
 	{Cle: "accueil", Nom: "Accueil", Emoji: "🏠", URL: "/"},
 	{Cle: "moi", Nom: "Moi", Emoji: "👤", URL: "/moi"},
 	{Cle: "famille", Nom: "Famille", Emoji: "🏡", URL: "/famille"},
+	{Cle: "chercher", Nom: "Chercher", Emoji: "🔎", URL: "/chercher"},
 }
 
 // RaccourcisParDefaut : la barre d'un nouveau membre.
@@ -87,6 +92,7 @@ func RaccourcisPossibles(c *Contexte) []Raccourci {
 	if c.EstParent() {
 		out = append(out, raccourcisFixes[2])
 	}
+	out = append(out, raccourcisFixes[3])
 	for _, m := range ModulesVisibles(c) {
 		out = append(out, Raccourci{Cle: m.Cle, Nom: m.Nom, Emoji: m.Emoji, URL: m.URL})
 	}
@@ -144,6 +150,9 @@ type Vue struct {
 	// lui-même quand un autre membre change quelque chose (hx-get + hx-select).
 	Adresse string
 	Donnees any
+	// Theme : « clair » ou « sombre » choisi dans Moi ; vide : celui du
+	// téléphone (attribut data-theme de la page).
+	Theme string
 }
 
 // Gauche, Droite : les deux moitiés de la barre du bas.
@@ -163,7 +172,7 @@ func (v *Vue) Actif(r Raccourci) bool {
 // NouvelleVue prépare la mise en page. w peut être nil (fragment : pas de
 // notification « flash » à lire).
 func (a *App) NouvelleVue(w http.ResponseWriter, r *http.Request, c *Contexte, titre, module string) *Vue {
-	v := &Vue{Titre: titre, Module: module, C: c, Chemin: r.URL.Path, Adresse: r.URL.RequestURI()}
+	v := &Vue{Titre: titre, Module: module, C: c, Chemin: r.URL.Path, Adresse: r.URL.RequestURI(), Theme: a.theme(r)}
 	if w == nil {
 		return v // fragment : ni en-tête ni barre
 	}
@@ -173,4 +182,18 @@ func (a *App) NouvelleVue(w http.ResponseWriter, r *http.Request, c *Contexte, t
 		v.Membres, _ = a.Membres(context.WithoutCancel(r.Context()), c)
 	}
 	return v
+}
+
+// Themes : choix possibles (vide : automatique).
+var Themes = []string{"clair", "sombre"}
+
+// theme : le thème choisi sur cet appareil (cookie), vide : automatique.
+func (a *App) theme(r *http.Request) string {
+	t := a.LirePreference(r, "theme")
+	for _, x := range Themes {
+		if t == x {
+			return t
+		}
+	}
+	return ""
 }

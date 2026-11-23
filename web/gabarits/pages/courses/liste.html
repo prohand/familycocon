@@ -44,6 +44,11 @@
     <label class="champ"><span>Nom</span><input name="nom" value="{{.Liste.Nom}}" maxlength="40" required></label>
     <button class="bouton petit secondaire">Renommer</button>
   </form>
+  <form class="rangee" method="post" action="/courses/oublier">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Ne plus proposer (faute de frappe…)</span><input name="nom" list="suggestions-produits" maxlength="100" autocomplete="off" required></label>
+    <button class="bouton petit secondaire">Oublier</button>
+  </form>
   <form method="post" action="/courses/liste/{{.Liste.ID}}/supprimer" hx-confirm="Supprimer la liste « {{.Liste.Nom}} » et tous ses produits ?">
     {{template "jeton" $c.CSRF}}
     <button class="bouton petit danger">Supprimer la liste</button>
@@ -58,7 +63,7 @@
 {{$c := .C}}
 {{with .Donnees}}
 <div id="liste-courses"
-  {{- if .Rafraichir}} hx-get="/courses/liste/{{.Liste.ID}}/contenu" hx-trigger="maj-courses from:body delay:300ms" hx-swap="outerHTML"{{end}}>
+  {{- if .Rafraichir}} hx-get="/courses/liste/{{.Liste.ID}}/contenu" hx-trigger="maj-courses from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML"{{end}}>
   {{if .Total}}
   <p class="avancement">{{.Pris}} pris sur {{.Total}}</p>
   <progress class="progres" max="{{.Total}}" value="{{.Pris}}">{{.Pris}} / {{.Total}}</progress>
@@ -95,6 +100,19 @@
   {{end}}
   {{else}}
   <div class="carte vide"><span class="emoji">🧺</span>La liste est vide. Ajoutez le premier produit !</div>
+  {{end}}
+  {{if .Souvent}}
+  <section class="souvent bloc" aria-label="Souvent achetés">
+    <p class="sous-titre">Souvent achetés</p>
+    <div class="pilules-souvent">
+      {{- range .Souvent}}
+      <form hx-post="/courses/liste/{{$.Donnees.Liste.ID}}/produits" hx-target="#liste-courses" hx-swap="outerHTML">
+        <input type="hidden" name="produit" value="{{.Nom}}">
+        <button class="pilule" aria-label="Ajouter {{.Nom}}">{{.Emoji}} {{.Nom}}</button>
+      </form>
+      {{- end}}
+    </div>
+  </section>
   {{end}}
 </div>
 {{end}}

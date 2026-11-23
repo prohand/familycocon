@@ -16,6 +16,7 @@ import (
 
 	"familycocon/internal/appli"
 	"familycocon/internal/donnees"
+	"familycocon/internal/texte"
 )
 
 // --- Groupes (étiquettes libres) ----------------------------------------------
@@ -86,29 +87,26 @@ func premierTel(ct donnees.Contact) string {
 // initialeTri : la lettre de rangement (« É » → « E », chiffre ou symbole → « # »).
 func initialeTri(nom string) string {
 	r, _ := utf8.DecodeRuneInString(strings.TrimSpace(nom))
-	r = unicode.ToUpper(r)
-	if s := sansAccent(string(r)); s != "" {
+	if s := texte.Plier(string(r)); s != "" {
 		r, _ = utf8.DecodeRuneInString(s)
 	}
+	r = unicode.ToUpper(r)
 	if r < 'A' || r > 'Z' {
 		return "#"
 	}
 	return string(r)
 }
 
-func sansAccent(s string) string {
-	return strings.NewReplacer("É", "E", "È", "E", "Ê", "E", "Ë", "E", "À", "A", "Â", "A", "Ä", "A", "Î", "I", "Ï", "I",
-		"Ô", "O", "Ö", "O", "Ù", "U", "Û", "U", "Ü", "U", "Ç", "C").Replace(s)
-}
-
-// correspond : recherche dans le nom, les téléphones, l'e-mail, la société, le métier, les groupes.
+// correspond : recherche dans le nom, les téléphones, l'e-mail, la société,
+// le métier, les groupes, sans tenir compte des majuscules ni des accents
+// (« helene » trouve « Hélène »).
 func correspond(ct donnees.Contact, q string) bool {
 	if q == "" {
 		return true
 	}
-	texte := strings.ToLower(strings.Join([]string{ct.Nom, ct.Telephone, ct.TelFixe, ct.TelTravail, ct.Email, ct.Adresse,
-		ct.Societe, ct.Metier, ct.Groupes}, " "))
-	return strings.Contains(texte, q) ||
+	tout := strings.Join([]string{ct.Nom, ct.Telephone, ct.TelFixe, ct.TelTravail, ct.Email, ct.Adresse,
+		ct.Societe, ct.Metier, ct.Groupes}, " ")
+	return texte.Contient(tout, q) ||
 		(LienTel(q) != "" && len(LienTel(q)) >= 4 && strings.Contains(LienTel(ct.Telephone+ct.TelFixe+ct.TelTravail), LienTel(q)))
 }
 
@@ -169,7 +167,7 @@ func (m *Module) pageContacts(w http.ResponseWriter, r *http.Request, c *appli.C
 		if a != b {
 			return a < b
 		}
-		return strings.ToLower(sansAccent(liste[i].Nom)) < strings.ToLower(sansAccent(liste[j].Nom))
+		return texte.Plier(liste[i].Nom) < texte.Plier(liste[j].Nom)
 	})
 	for _, ct := range liste {
 		l := initialeTri(ct.Nom)
@@ -212,7 +210,7 @@ func (m *Module) pageAdresses(w http.ResponseWriter, r *http.Request, c *appli.C
 			}
 			g.Contacts = append(g.Contacts, ct)
 		}
-		sort.SliceStable(g.Contacts, func(i, j int) bool { return strings.ToLower(g.Contacts[i].Nom) < strings.ToLower(g.Contacts[j].Nom) })
+		sort.SliceStable(g.Contacts, func(i, j int) bool { return texte.Plier(g.Contacts[i].Nom) < texte.Plier(g.Contacts[j].Nom) })
 		if len(g.Contacts) > 0 {
 			groupes = append(groupes, g)
 		}
@@ -258,7 +256,9 @@ type vueFiche struct {
 	Groupes     []string
 	Retour      string // page d'où l'on vient
 	TitreRetour string
-	Prestataire bool // lien vers les interventions
+	Prestataire bool              // lien vers les interventions
+	Cites       []Citation        // ce qui cite ce contact (vétérinaire de Rex…)
+	Doublons    []donnees.Contact // même nom ou même numéro : à fusionner ?
 }
 
 // retour : la page par laquelle on revient (le premier module activé).
@@ -312,6 +312,15 @@ func (m *Module) fiche(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 			}
 			v.Naissance += fmt.Sprintf(" %d (%d ans)", n.Annee, age)
 		}
+	}
+	var err error
+	if v.Cites, err = m.citations(r.Context(), c, ct.ID); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if v.Doublons, err = m.doublons(r.Context(), c, ct); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
 	}
 	module := modContacts
 	if !c.Actif(modContacts) {
@@ -491,6 +500,13 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	m.a.Publier(c, modContacts, "")
 	m.a.Flash(w, "Contact enregistré ✓")
+	// Même nom ou même numéro qu'une autre fiche : on le dit (la fiche
+	// propose de fusionner).
+	if d, err := m.doublons(r.Context(), c, ct); err == nil && len(d) > 0 {
+		m.a.Flash(w, "Contact enregistré. ⚠️ « "+d[0].Nom+" » existe déjà : voir « Doublon possible »")
+		m.a.Rediriger(w, r, fmt.Sprintf("/contacts/%d", ct.ID))
+		return
+	}
 	if s.naissance != "" && r.PostFormValue("anniv") == "1" {
 		m.a.Rediriger(w, r, "/anniversaires")
 		return
@@ -560,4 +576,22 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 	m.a.Flash(w, ct.Nom+" supprimé(e)")
 	dest, _ := retour(c, ct)
 	m.a.Rediriger(w, r, dest)
+}
+
+// chercher : recherche globale (nom, téléphones, e-mail, adresse, métier…).
+func (m *Module) chercher(ctx context.Context, c *appli.Contexte, q string) ([]appli.Resultat, error) {
+	tous, err := m.a.Q.ContactsFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return nil, err
+	}
+	var out []appli.Resultat
+	for _, ct := range tous {
+		if correspond(ct, q) {
+			out = append(out, appli.Resultat{Emoji: "👤", Titre: ct.Nom, Detail: ligne(ct).Detail, URL: "/contacts/" + strconv.FormatInt(ct.ID, 10)})
+			if len(out) == 8 {
+				break
+			}
+		}
+	}
+	return out, nil
 }

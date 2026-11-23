@@ -24,6 +24,27 @@
   {{if .Groupes}}<div class="ligne"><span class="p-emoji">🏷️</span><span class="quoi">{{range .Groupes}}<a class="pastille ctous" href="/contacts?filtre={{.}}">{{.}}</a> {{end}}</span></div>{{end}}
 </section>
 {{if .Prestataire}}<a class="lien-recurrences bloc" href="/prestataires/{{.Contact.ID}}">🧰 Rendez-vous et interventions <span class="fleche-droite">›</span></a>{{end}}
+{{if .Cites}}
+<section class="carte bloc">
+  <h2>🔗 Cité par</h2>
+  {{- range .Cites}}
+  {{if .URL}}<a class="ligne" href="{{.URL}}"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Texte}}</span><span class="fleche-droite">›</span></a>
+  {{else}}<div class="ligne"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Texte}}</span></div>{{end}}
+  {{- end}}
+</section>
+{{end}}
+{{if .Doublons}}
+<section class="carte bloc">
+  <h2>👯 Doublon possible</h2>
+  <p class="aide">Même nom ou même numéro.{{if $c.EstParent}} Fusionner garde cette fiche, la complète avec l'autre et reprend ses liens.{{end}}</p>
+  {{- range .Doublons}}
+  <div class="ligne"><a class="quoi" href="/contacts/{{.ID}}">👤 {{.Nom}}</a>
+    {{if $c.EstParent}}<form method="post" action="/contacts/{{$.Donnees.Contact.ID}}/fusionner" hx-confirm="Fusionner « {{.Nom}} » dans cette fiche ? L'autre fiche sera supprimée.">
+      {{template "jeton" $c.CSRF}}<input type="hidden" name="autre" value="{{.ID}}"><button class="bouton petit secondaire">Fusionner</button></form>{{end}}
+  </div>
+  {{- end}}
+</section>
+{{end}}
 <div class="boutons">
   <a class="bouton" href="/contacts/{{.Contact.ID}}/modifier">✏️ Modifier</a>
   <form method="post" action="/contacts/{{.Contact.ID}}/favori">
@@ -31,7 +52,7 @@
     <button class="bouton secondaire">{{if .Contact.Favori}}☆ Retirer des favoris{{else}}⭐ Favori{{end}}</button>
   </form>
   {{if $c.EstParent}}
-  <form method="post" action="/contacts/{{.Contact.ID}}/supprimer" hx-confirm="Supprimer {{.Contact.Nom}} ?">
+  <form method="post" action="/contacts/{{.Contact.ID}}/supprimer" hx-confirm="Supprimer {{.Contact.Nom}} ?{{if .Cites}} Il est cité par {{len .Cites}} élément(s) : le lien disparaîtra, ces fiches restent.{{end}}">
     {{template "jeton" $c.CSRF}}<button class="bouton danger">Supprimer</button>
   </form>
   {{end}}

@@ -27,7 +27,7 @@ func (m *Module) brancherPrestataires() {
 	a.Route("GET /prestataires/{id}", modPrestataires, appli.Membre, m.fichePrestataire)
 
 	m.s.Enregistrer(suivi.Objet{
-		Module: modPrestataires, Emoji: "🧰",
+		Module: modPrestataires, Emoji: "🧰", Categorie: "logement",
 		Modeles: []suivi.Modele{{Libelle: "Entretien de la chaudière", Mois: 12}, {Libelle: "Ramonage", Mois: 12},
 			{Libelle: "Visite", Mois: 0}, {Libelle: "Rendez-vous", Mois: 0}, {Libelle: "Intervention", Mois: 0}, {Libelle: "Devis", Mois: 0}},
 		Nom: func(ctx context.Context, famille, id int64) (string, bool) {

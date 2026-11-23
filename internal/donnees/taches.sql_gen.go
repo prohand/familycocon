@@ -46,8 +46,8 @@ func (q *Queries) CompterTachesActives(ctx context.Context, arg CompterTachesAct
 }
 
 const creerTache = `-- name: CreerTache :one
-INSERT INTO taches (famille_id, titre, emoji, assigne_a, repetition, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le
+INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour
 `
 
 type CreerTacheParams struct {
@@ -55,6 +55,7 @@ type CreerTacheParams struct {
 	Titre      string
 	Emoji      string
 	AssigneA   sql.NullInt64
+	Tour       string
 	Repetition string
 	CreePar    sql.NullInt64
 	CreeLe     int64
@@ -66,6 +67,7 @@ func (q *Queries) CreerTache(ctx context.Context, arg CreerTacheParams) (Tache, 
 		arg.Titre,
 		arg.Emoji,
 		arg.AssigneA,
+		arg.Tour,
 		arg.Repetition,
 		arg.CreePar,
 		arg.CreeLe,
@@ -81,6 +83,7 @@ func (q *Queries) CreerTache(ctx context.Context, arg CreerTacheParams) (Tache, 
 		&i.Active,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.Tour,
 	)
 	return i, err
 }
@@ -196,13 +199,14 @@ func (q *Queries) MarquerFaite(ctx context.Context, arg MarquerFaiteParams) (int
 }
 
 const modifierTache = `-- name: ModifierTache :exec
-UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, repetition = ? WHERE id = ? AND famille_id = ?
+UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ? WHERE id = ? AND famille_id = ?
 `
 
 type ModifierTacheParams struct {
 	Titre      string
 	Emoji      string
 	AssigneA   sql.NullInt64
+	Tour       string
 	Repetition string
 	ID         int64
 	FamilleID  int64
@@ -213,6 +217,7 @@ func (q *Queries) ModifierTache(ctx context.Context, arg ModifierTacheParams) er
 		arg.Titre,
 		arg.Emoji,
 		arg.AssigneA,
+		arg.Tour,
 		arg.Repetition,
 		arg.ID,
 		arg.FamilleID,
@@ -276,7 +281,7 @@ func (q *Queries) ScoresTaches(ctx context.Context, arg ScoresTachesParams) ([]S
 }
 
 const tacheParID = `-- name: TacheParID :one
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le FROM taches WHERE id = ? AND famille_id = ? AND active = 1
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour FROM taches WHERE id = ? AND famille_id = ? AND active = 1
 `
 
 type TacheParIDParams struct {
@@ -297,13 +302,14 @@ func (q *Queries) TacheParID(ctx context.Context, arg TacheParIDParams) (Tache, 
 		&i.Active,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.Tour,
 	)
 	return i, err
 }
 
 const tachesActives = `-- name: TachesActives :many
 
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le FROM taches
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour FROM taches
 WHERE taches.famille_id = ?1 AND taches.active = 1
   AND NOT (taches.repetition = '' AND EXISTS (
     SELECT 1 FROM taches_faites f
@@ -338,6 +344,7 @@ func (q *Queries) TachesActives(ctx context.Context, arg TachesActivesParams) ([
 			&i.Active,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.Tour,
 		); err != nil {
 			return nil, err
 		}

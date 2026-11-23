@@ -50,6 +50,10 @@ var Categories = []Categorie{
 	{"abonnements", "Abonnements", "📱", "depense"},
 	{"cadeaux", "Cadeaux", "🎁", "depense"},
 	{"animaux", "Animaux", "🐾", "depense"},
+	{"impots", "Impôts", "🧾", "depense"},
+	{"assurances", "Assurances", "🛡️", "depense"},
+	{"credit", "Crédit", "🏦", "depense"},
+	{"epargne", "Épargne", "🐷", "depense"},
 	{"autre", "Autre dépense", "💸", "depense"},
 	{"salaire", "Salaire", "💼", "revenu"},
 	{"aides", "Aides, allocations", "🏛️", "revenu"},
@@ -73,6 +77,10 @@ func Brancher(a *appli.App) {
 	a.Route("GET /budget/nouvelle", mod, appli.Parent, m.formulaire)
 	a.Route("POST /budget", mod, appli.Parent, m.creer)
 	a.Route("GET /budget/recurrences", mod, appli.Parent, m.pageRecurrences)
+	a.Route("GET /budget/chercher", mod, appli.Parent, m.chercher)
+	a.Route("GET /budget/annee", mod, appli.Parent, m.annee)
+	a.Route("GET /budget/plafonds", mod, appli.Parent, m.pagePlafonds)
+	a.Route("POST /budget/plafonds", mod, appli.Parent, m.enregistrerPlafonds)
 	a.Route("GET /recurrences/{id}", mod, appli.Parent, m.formRecurrence)
 	a.Route("POST /recurrences/{id}", mod, appli.Parent, m.modifierRecurrence)
 	a.Route("POST /recurrences/{id}/arreter", mod, appli.Parent, m.arreterRecurrence)
@@ -82,6 +90,7 @@ func Brancher(a *appli.App) {
 	a.Route("POST /budget/{id}/supprimer", mod, appli.Parent, m.supprimer)
 
 	a.AjouterResume(mod, m.resume)
+	a.AjouterRecherche(mod, m.chercherGlobal)
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "💶", Texte: "Une dépense", URL: "/budget/nouvelle"})
 }
 
@@ -105,6 +114,16 @@ type jourOps struct {
 type parCategorie struct {
 	Cat     Categorie
 	Montant int64
+	Plafond int64 // 0 : pas de plafond
+	Max     int64 // échelle de la jauge : le plafond, ou la plus grosse catégorie
+	Alerte  bool  // 90 % du plafond atteints
+	Pour100 int64 // part du plafond dépensée
+}
+
+// payePar : dépenses du mois payées par un parent (« qui a payé quoi »).
+type payePar struct {
+	Membre  *donnees.Membre
+	Montant int64
 }
 
 type vueBudget struct {
@@ -119,6 +138,9 @@ type vueBudget struct {
 	Courbe    template.HTML
 	ParCat    []parCategorie
 	MaxCat    int64
+	PayePar   []payePar // au moins deux parents ont payé ce mois-ci
+	Ecart     int64     // différence entre le premier et le second
+	Plafonds  bool      // la famille a fixé au moins un plafond
 	Jours     []jourOps
 	Pilules   []Categorie
 	Prevues   []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
@@ -195,12 +217,16 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 	}
 	totaux := map[string]int64{}
 	presentes := map[string]bool{}
+	parMembre := map[int64]int64{}
 	for _, o := range ops {
 		if o.Sens == "revenu" {
 			v.Revenus += o.Montant
 		} else {
 			v.Depenses += o.Montant
 			totaux[o.Categorie] += o.Montant
+			if o.MembreID.Valid {
+				parMembre[o.MembreID.Int64] += o.Montant
+			}
 		}
 		presentes[o.Categorie] = true
 		if v.Filtre != "" && o.Categorie != v.Filtre {
@@ -222,16 +248,38 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time, filt
 		v.Jours[len(v.Jours)-1].Ops = append(v.Jours[len(v.Jours)-1].Ops, l)
 	}
 	v.Reste = v.Revenus - v.Depenses
+	plafonds, err := m.plafonds(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	v.Plafonds = len(plafonds) > 0
 	for _, cat := range Categories {
 		if presentes[cat.Cle] {
 			v.Pilules = append(v.Pilules, cat)
 		}
-		if n := totaux[cat.Cle]; n > 0 {
-			v.ParCat = append(v.ParCat, parCategorie{Cat: cat, Montant: n})
+		if n := totaux[cat.Cle]; n > 0 || plafonds[cat.Cle] > 0 {
+			v.ParCat = append(v.ParCat, jauge(cat, n, plafonds[cat.Cle]))
 			v.MaxCat = max(v.MaxCat, n)
 		}
 	}
+	for i := range v.ParCat {
+		if v.ParCat[i].Plafond == 0 {
+			v.ParCat[i].Max = v.MaxCat
+		}
+	}
 	sort.SliceStable(v.ParCat, func(i, j int) bool { return v.ParCat[i].Montant > v.ParCat[j].Montant })
+	// Qui a payé : utile quand deux parents partagent les dépenses.
+	for _, mb := range membres {
+		if n := parMembre[mb.ID]; n > 0 {
+			v.PayePar = append(v.PayePar, payePar{Membre: parID[mb.ID], Montant: n})
+		}
+	}
+	if len(v.PayePar) < 2 {
+		v.PayePar = nil
+	} else {
+		sort.SliceStable(v.PayePar, func(i, j int) bool { return v.PayePar[i].Montant > v.PayePar[j].Montant })
+		v.Ecart = v.PayePar[0].Montant - v.PayePar[1].Montant
+	}
 
 	// Courbe : jusqu'à aujourd'hui pour le mois en cours, le mois entier sinon.
 	jours := dernier.Day()
@@ -284,6 +332,7 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 }
 
 type formOp struct {
+	Libelles   []string // déjà tapés (suggestions)
 	Nouvelle   bool
 	Op         donnees.Operation
 	Montant    string
@@ -309,11 +358,23 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	if f.Libelles, err = m.a.Q.LibellesRecents(r.Context(), c.Famille.ID); err != nil {
+		m.a.Journal.Warn("budget : libellés illisibles", "erreur", err) // le formulaire marche sans
+	}
 	if f.Nouvelle {
 		f.Op = donnees.Operation{Sens: "depense", Categorie: "courses", Jour: repetition.CleJour(c.Maintenant()),
 			MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}}
 		if r.URL.Query().Get("sens") == "revenu" {
 			f.Op.Sens, f.Op.Categorie = "revenu", "salaire"
+		}
+		// Nouvelle opération : seulement les catégories du sens choisi (une
+		// tuile de dépense touchée sur « Nouveau revenu » le changeait en
+		// dépense sans le dire).
+		f.Categories = nil
+		for _, cat := range Categories {
+			if cat.Sens == f.Op.Sens {
+				f.Categories = append(f.Categories, cat)
+			}
 		}
 	} else {
 		if f.Op, err = m.operation(r, c); err != nil {
@@ -477,6 +538,10 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	t, err := m.a.Q.TotauxPeriode(ctx, donnees.TotauxPeriodeParams{FamilleID: c.Famille.ID, Du: repetition.CleJour(premier), Au: repetition.CleJour(dernier)})
 	if err != nil || t.Revenus+t.Depenses == 0 {
 		return appli.Resume{Info: "Rien ce mois-ci"}
+	}
+	// Un plafond presque atteint passe avant le reste à vivre.
+	if alerte := m.alertePlafond(ctx, c, premier, dernier); alerte != "" {
+		return appli.Resume{Info: alerte, Badge: 1}
 	}
 	return appli.Resume{Info: "Reste " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise)}
 }

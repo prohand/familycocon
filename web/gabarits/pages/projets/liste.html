@@ -5,6 +5,7 @@
   <h1>🎯 Projets</h1>
   <p>Vacances, travaux, fêtes… on avance ensemble</p>
 </section>
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-projets from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 <div class="boutons"><a class="bouton" href="/projets/nouveau">＋ Projet</a></div>
 {{if .EnCours}}
 <div class="liste-projets bloc">
@@ -13,6 +14,7 @@
     <span class="grand-emoji">{{.Emoji}}</span>
     <span class="quoi">{{.Nom}}
       <small>{{if .NbEtapes}}{{.NbFaites}} / {{.NbEtapes}} étapes{{else}}Pas encore d'étape{{end}}{{if .Objectif}} · {{end}}<span class="{{if .Retard}}alerte{{end}}">{{.Objectif}}</span></small>
+      {{if and $.C.EstParent (or .Budget .Depense)}}<small class="{{if and .Budget (gt .Depense .Budget)}}alerte{{end}}">💶 {{montant .Depense $.C.Famille.Devise}}{{if .Budget}} sur {{montant .Budget $.C.Famille.Devise}}{{end}}</small>{{end}}
       {{if .NbEtapes}}<progress class="progres projets" max="{{.NbEtapes}}" value="{{.NbFaites}}"></progress>{{end}}
     </span>
   </a>
@@ -31,5 +33,6 @@
   </div>
 </details>
 {{end}}
+</div>
 {{end}}
 {{end}}

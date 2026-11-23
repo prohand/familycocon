@@ -10,6 +10,56 @@ import (
 	"database/sql"
 )
 
+const chercherOperations = `-- name: ChercherOperations :many
+SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id FROM operations
+WHERE famille_id = ?1 AND jour >= ?2
+  AND instr(plier(libelle), plier(?3)) > 0
+ORDER BY jour DESC, id DESC LIMIT 200
+`
+
+type ChercherOperationsParams struct {
+	FamilleID int64
+	Depuis    string
+	Motif     interface{}
+}
+
+// Recherche dans les libelles, sans majuscules ni accents, depuis une date.
+func (q *Queries) ChercherOperations(ctx context.Context, arg ChercherOperationsParams) ([]Operation, error) {
+	rows, err := q.db.QueryContext(ctx, chercherOperations, arg.FamilleID, arg.Depuis, arg.Motif)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Operation{}
+	for rows.Next() {
+		var i Operation
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Sens,
+			&i.Montant,
+			&i.Categorie,
+			&i.Libelle,
+			&i.Jour,
+			&i.MembreID,
+			&i.Fixe,
+			&i.CreePar,
+			&i.CreeLe,
+			&i.RecurrenceID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const creerOperation = `-- name: CreerOperation :one
 INSERT INTO operations (famille_id, sens, montant, categorie, libelle, jour, membre_id, cree_par, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id
@@ -57,6 +107,35 @@ func (q *Queries) CreerOperation(ctx context.Context, arg CreerOperationParams) 
 	return i, err
 }
 
+const libellesRecents = `-- name: LibellesRecents :many
+SELECT libelle FROM operations WHERE famille_id = ? AND libelle <> ''
+GROUP BY libelle ORDER BY max(jour) DESC LIMIT 30
+`
+
+// Libelles deja tapes (suggestions du formulaire), les plus recents d'abord.
+func (q *Queries) LibellesRecents(ctx context.Context, familleID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, libellesRecents, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var libelle string
+		if err := rows.Scan(&libelle); err != nil {
+			return nil, err
+		}
+		items = append(items, libelle)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const modifierOperation = `-- name: ModifierOperation :exec
 UPDATE operations SET sens = ?, montant = ?, categorie = ?, libelle = ?, jour = ?, membre_id = ?
 WHERE id = ? AND famille_id = ?
@@ -81,6 +160,30 @@ func (q *Queries) ModifierOperation(ctx context.Context, arg ModifierOperationPa
 		arg.Libelle,
 		arg.Jour,
 		arg.MembreID,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
+}
+
+const modifierOperationCarnet = `-- name: ModifierOperationCarnet :exec
+UPDATE operations SET montant = ?, libelle = ?, jour = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierOperationCarnetParams struct {
+	Montant   int64
+	Libelle   string
+	Jour      string
+	ID        int64
+	FamilleID int64
+}
+
+// Depense du carnet modifiee : la ligne du budget suit.
+func (q *Queries) ModifierOperationCarnet(ctx context.Context, arg ModifierOperationCarnetParams) error {
+	_, err := q.db.ExecContext(ctx, modifierOperationCarnet,
+		arg.Montant,
+		arg.Libelle,
+		arg.Jour,
 		arg.ID,
 		arg.FamilleID,
 	)
@@ -199,6 +302,68 @@ func (q *Queries) OperationsPeriode(ctx context.Context, arg OperationsPeriodePa
 	return items, nil
 }
 
+const plafondsFamille = `-- name: PlafondsFamille :many
+SELECT categorie, montant FROM budget_plafonds WHERE famille_id = ?
+`
+
+type PlafondsFamilleRow struct {
+	Categorie string
+	Montant   int64
+}
+
+func (q *Queries) PlafondsFamille(ctx context.Context, familleID int64) ([]PlafondsFamilleRow, error) {
+	rows, err := q.db.QueryContext(ctx, plafondsFamille, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PlafondsFamilleRow{}
+	for rows.Next() {
+		var i PlafondsFamilleRow
+		if err := rows.Scan(&i.Categorie, &i.Montant); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const poserPlafond = `-- name: PoserPlafond :exec
+INSERT INTO budget_plafonds (famille_id, categorie, montant) VALUES (?, ?, ?)
+ON CONFLICT (famille_id, categorie) DO UPDATE SET montant = excluded.montant
+`
+
+type PoserPlafondParams struct {
+	FamilleID int64
+	Categorie string
+	Montant   int64
+}
+
+func (q *Queries) PoserPlafond(ctx context.Context, arg PoserPlafondParams) error {
+	_, err := q.db.ExecContext(ctx, poserPlafond, arg.FamilleID, arg.Categorie, arg.Montant)
+	return err
+}
+
+const retirerPlafond = `-- name: RetirerPlafond :exec
+DELETE FROM budget_plafonds WHERE famille_id = ? AND categorie = ?
+`
+
+type RetirerPlafondParams struct {
+	FamilleID int64
+	Categorie string
+}
+
+func (q *Queries) RetirerPlafond(ctx context.Context, arg RetirerPlafondParams) error {
+	_, err := q.db.ExecContext(ctx, retirerPlafond, arg.FamilleID, arg.Categorie)
+	return err
+}
+
 const supprimerOperation = `-- name: SupprimerOperation :exec
 DELETE FROM operations WHERE id = ? AND famille_id = ?
 `
@@ -211,6 +376,54 @@ type SupprimerOperationParams struct {
 func (q *Queries) SupprimerOperation(ctx context.Context, arg SupprimerOperationParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerOperation, arg.ID, arg.FamilleID)
 	return err
+}
+
+const totauxParMois = `-- name: TotauxParMois :many
+SELECT CAST(substr(jour, 1, 7) AS TEXT) AS mois, sens, categorie, CAST(sum(montant) AS INTEGER) AS total
+FROM operations WHERE famille_id = ? AND jour >= ?2 AND jour <= ?3
+GROUP BY 1, 2, 3
+`
+
+type TotauxParMoisParams struct {
+	FamilleID int64
+	Du        string
+	Au        string
+}
+
+type TotauxParMoisRow struct {
+	Mois      string
+	Sens      string
+	Categorie string
+	Total     int64
+}
+
+// Totaux par mois, sens et categorie (vue de l'annee).
+func (q *Queries) TotauxParMois(ctx context.Context, arg TotauxParMoisParams) ([]TotauxParMoisRow, error) {
+	rows, err := q.db.QueryContext(ctx, totauxParMois, arg.FamilleID, arg.Du, arg.Au)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TotauxParMoisRow{}
+	for rows.Next() {
+		var i TotauxParMoisRow
+		if err := rows.Scan(
+			&i.Mois,
+			&i.Sens,
+			&i.Categorie,
+			&i.Total,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const totauxPeriode = `-- name: TotauxPeriode :one

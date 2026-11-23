@@ -49,3 +49,28 @@ SELECT count(*) FROM vehicules WHERE famille_id = ?;
 
 -- name: CompterAnimaux :one
 SELECT count(*) FROM animaux WHERE famille_id = ?;
+
+-- Garanties : appareils.
+
+-- name: GarantiesFamille :many
+SELECT * FROM garanties WHERE famille_id = ? ORDER BY nom COLLATE NOCASE;
+
+-- name: GarantieParID :one
+SELECT * FROM garanties WHERE id = ? AND famille_id = ?;
+
+-- name: CreerGarantie :one
+INSERT INTO garanties (famille_id, nom, marque, achat, prix, garantie_mois, magasin, magasin_id, facture, notes, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+
+-- name: ModifierGarantie :exec
+UPDATE garanties SET nom = ?, marque = ?, achat = ?, prix = ?, garantie_mois = ?, magasin = ?, magasin_id = ?, facture = ?, notes = ?
+WHERE id = ? AND famille_id = ?;
+
+-- name: SupprimerGarantie :exec
+DELETE FROM garanties WHERE id = ? AND famille_id = ?;
+
+-- name: NomsGaranties :many
+SELECT id, nom FROM garanties WHERE famille_id = ?;
+
+-- name: CompterGaranties :one
+SELECT count(*) FROM garanties WHERE famille_id = ?;

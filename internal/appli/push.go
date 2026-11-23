@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -41,7 +42,10 @@ type Pousseur struct {
 type annonce struct {
 	famille, auteur int64
 	module, texte   string
-	parents         bool // aux parents seulement
+	parents         bool    // aux parents seulement
+	sansParents     bool    // à tous sauf les parents (rappels : les parents ont leur propre texte)
+	url             string  // page ouverte au toucher (sinon celle du module)
+	pour            []int64 // membres visés (vide : toute la famille)
 }
 
 // tailleFile : au-delà, les annonces sont perdues (elles restent visibles
@@ -95,8 +99,12 @@ func (a *App) cleVAPID(ctx context.Context) (*ecdsa.PrivateKey, error) {
 
 // Annoncer met une notification dans la file (sans attendre).
 func (p *Pousseur) Annoncer(famille, auteur int64, module, texte string) {
+	p.annoncer(annonce{famille: famille, auteur: auteur, module: module, texte: texte})
+}
+
+func (p *Pousseur) annoncer(an annonce) {
 	select {
-	case p.file <- annonce{famille: famille, auteur: auteur, module: module, texte: texte}:
+	case p.file <- an:
 	default:
 		p.a.Journal.Warn("file des notifications pleine : notification perdue")
 	}
@@ -137,6 +145,9 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		url = m.URL
 		an.parents = an.parents || m.Parents
 	}
+	if an.url != "" {
+		url = an.url
+	}
 	corps, _ := json.Marshal(map[string]string{"titre": "FamilyCocon", "texte": an.texte, "url": url, "groupe": an.module})
 	// Quelques envois à la fois : un service de push lent (20 s de délai)
 	// ne retarde pas les autres appareils ni les annonces suivantes.
@@ -146,7 +157,9 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		// Un rappel du matin ne s'affiche nulle part ailleurs : il part même si
 		// le membre a une page ouverte (un onglet oublié sur l'ordinateur).
 		enLigne := an.module != moduleRappels && p.a.Direct.EnLigne(an.famille, ab.MembreID)
-		if !contient(strings.Split(ab.PushModules, ","), an.module) || enLigne || (an.parents && ab.Role != RoleParent) {
+		if !contient(strings.Split(ab.PushModules, ","), an.module) || enLigne ||
+			(an.parents && ab.Role != RoleParent) || (an.sansParents && ab.Role == RoleParent) ||
+			(len(an.pour) > 0 && !slices.Contains(an.pour, ab.MembreID)) {
 			continue
 		}
 		places <- struct{}{}

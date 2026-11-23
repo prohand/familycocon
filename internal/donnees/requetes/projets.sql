@@ -3,7 +3,8 @@
 -- name: ProjetsFamille :many
 SELECT p.id, p.nom, p.emoji, p.couleur, p.objectif, p.budget, p.termine_le,
   (SELECT COUNT(*) FROM projet_etapes e WHERE e.projet_id = p.id) AS nb_etapes,
-  (SELECT COUNT(*) FROM projet_etapes e WHERE e.projet_id = p.id AND e.faite_le > 0) AS nb_faites
+  (SELECT COUNT(*) FROM projet_etapes e WHERE e.projet_id = p.id AND e.faite_le > 0) AS nb_faites,
+  CAST((SELECT coalesce(sum(k.montant), 0) FROM carnet k WHERE k.famille_id = p.famille_id AND k.module = 'projets' AND k.objet_id = p.id) AS INTEGER) AS depense
 FROM projets p WHERE p.famille_id = ?
 ORDER BY p.termine_le > 0, p.termine_le DESC, p.objectif = '', p.objectif, p.nom COLLATE NOCASE;
 

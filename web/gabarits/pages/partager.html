@@ -1,0 +1,32 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>📤 Partager</h1>
+  <p>Où envoyer ce texte ?</p>
+</section>
+<section class="carte bloc">
+  {{if .Titre}}<p><b>{{.Titre}}</b></p>{{end}}
+  {{if .Texte}}<p class="texte-long">{{.Texte}}</p>{{end}}
+</section>
+{{if .Actions}}
+<div class="actions">
+  {{- range .Actions}}
+  {{- if .Poster}}
+  <form method="post" action="{{.URL}}">
+    {{template "jeton" $c.CSRF}}
+    <input type="hidden" name="titre" value="{{$.Donnees.Titre}}">
+    <input type="hidden" name="texte" value="{{$.Donnees.Texte}}">
+    <button class="action"><span class="emoji">{{emoji .Emoji}}</span>{{.Texte}}</button>
+  </form>
+  {{- else}}
+  <a class="action" href="{{.Lien}}"><span class="emoji">{{emoji .Emoji}}</span>{{.Texte}}</a>
+  {{- end}}
+  {{- end}}
+</div>
+{{else}}
+<div class="carte vide"><span class="emoji">🧺</span>Aucun module ne peut recevoir ce texte.</div>
+{{end}}
+{{end}}
+{{end}}

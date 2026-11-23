@@ -112,6 +112,13 @@ func TestNotificationsPush(t *testing.T) {
 		t.Fatalf("envois : %v", l)
 	}
 
+	// Notification pour Marie seulement : rien pour Thomas.
+	a.PublierPour(cMarie, "agenda", "Pour Marie seulement", []int64{membreID(t, a, "marie")})
+	time.Sleep(100 * time.Millisecond)
+	if l := attendre(1); len(l) != 1 {
+		t.Fatalf("notification ciblée envoyée à un autre membre : %v", l)
+	}
+
 	// Thomas a une page ouverte : pas de push.
 	ch := a.Direct.abonner(1, membreID(t, a, "thomas"))
 	a.Publier(cMarie, "agenda", "Marie a ajouté « Dentiste »")
@@ -215,19 +222,86 @@ func TestRappelsDuMatin(t *testing.T) {
 		mu.Lock()
 		l := len(recus)
 		mu.Unlock()
-		if l >= 2 {
+		if l >= 1 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	time.Sleep(20 * time.Millisecond) // une éventuelle deuxième notification
 	mu.Lock()
 	defer mu.Unlock()
 	tout := strings.Join(recus, "\n")
-	if len(recus) != 2 || !strings.Contains(tout, "Aujourd'hui : Échéance J+0") || !strings.Contains(tout, "Dans 7 jours : Échéance J+7") {
+	// Une seule notification pour les deux rappels (sinon la seconde
+	// remplace la première à l'écran).
+	if len(recus) != 1 || !strings.Contains(tout, "Aujourd'hui : Échéance J+0") || !strings.Contains(tout, "Dans 7 jours : Échéance J+7") {
 		t.Fatalf("rappels reçus : %v", recus)
 	}
 	// Le bloc « À venir » de l'accueil les montre (30 jours).
 	if _, page := marie.get("/"); !strings.Contains(page, "À venir") || !strings.Contains(page, "Échéance J&#43;3") {
 		t.Fatal("bloc À venir")
+	}
+}
+
+// Moi › Notifications : seuls les modules qui envoient des notifications
+// ont un interrupteur (les autres ne servaient à rien).
+func TestChoixNotificationsUtiles(t *testing.T) {
+	_, _, marie := familleTest(t)
+	_, page := marie.get("/moi")
+	if !strings.Contains(page, `name="push_courses"`) || !strings.Contains(page, `name="push_rappels"`) {
+		t.Fatal("interrupteurs des modules qui notifient absents")
+	}
+	if strings.Contains(page, `name="push_budget"`) || strings.Contains(page, `name="push_contacts"`) {
+		t.Fatal("interrupteur d'un module qui ne notifie jamais")
+	}
+}
+
+// Rappels : un seul rappel ouvre sa page ; plusieurs ouvrent l'accueil.
+func TestTexteRappels(t *testing.T) {
+	e := Echeance{Titre: "Vaccin", URL: "/animaux/3"}
+	if texte, url := texteRappels([]Echeance{e}, []string{"💉 Aujourd'hui : Vaccin"}); url != "/animaux/3" || texte != "💉 Aujourd'hui : Vaccin" {
+		t.Fatalf("un rappel : %q %q", texte, url)
+	}
+	if texte, url := texteRappels([]Echeance{e, e}, []string{"a", "b"}); url != "/" || texte != "a\nb" {
+		t.Fatalf("deux rappels : %q %q", texte, url)
+	}
+}
+
+// Temps réel : le texte d'une notification ciblée ne s'affiche que chez les
+// membres visés ; les autres pages se mettent quand même à jour.
+func TestDirectCible(t *testing.T) {
+	d := nouveauDirect()
+	vise, autre := d.abonner(1, 10), d.abonner(1, 20)
+	d.PublierPour(1, Message{Module: "enfants", Texte: "à valider"}, []int64{10})
+	if m := string(<-vise); !strings.Contains(m, "à valider") {
+		t.Fatalf("membre visé : %s", m)
+	}
+	if m := string(<-autre); strings.Contains(m, "à valider") || !strings.Contains(m, `"module":"enfants"`) {
+		t.Fatalf("autre membre : %s", m)
+	}
+}
+
+// Carte « Serveur » : la dernière sauvegarde (réussie ou non) est montrée
+// aux parents d'un serveur d'une seule famille, et à la supervision.
+func TestCarteServeur(t *testing.T) {
+	a, srv, marie := familleTest(t)
+	if _, page := marie.get("/famille"); !strings.Contains(page, "🖥️ Serveur") || !strings.Contains(page, "pas encore") {
+		t.Fatal("carte Serveur absente")
+	}
+	a.noterSauvegarde(context.Background(), EtatSauvegarde{Le: time.Now().Unix(), Erreur: "la sauvegarde a échoué"})
+	if _, page := marie.get("/famille"); !strings.Contains(page, "❌") || !strings.Contains(page, "la sauvegarde a échoué") {
+		t.Fatal("échec de la sauvegarde non montré")
+	}
+	rep, err := http.Get(srv.URL + "/health")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rep.Body.Close()
+	var s Sante
+	_ = json.NewDecoder(rep.Body).Decode(&s)
+	if s.Sauvegarde == "" || s.SauvegardeOK == nil || *s.SauvegardeOK {
+		t.Fatalf("/health : %+v", s)
+	}
+	if Octets(2516582) != "2,4 Mo" || Octets(2048) != "2 Ko" {
+		t.Fatal(Octets(2516582))
 	}
 }

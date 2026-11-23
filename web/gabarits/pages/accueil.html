@@ -13,12 +13,15 @@
 </a>
 {{end}}
 
+{{/* Tuiles et blocs rechargés quand un autre membre change quelque chose
+     (événement « maj » envoyé par app.js à chaque message temps réel). */}}
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj from:body delay:1s, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 {{if .Donnees.Tuiles}}
 <div class="tuiles">
   {{- range .Donnees.Tuiles}}
   <a class="tuile {{.Cle}}" href="{{.URL}}">
     {{- if .Badge}}<span class="badge">{{.Badge}}</span>{{end}}
-    <span class="emoji">{{.Emoji}}</span>
+    <span class="emoji">{{emoji .Emoji}}</span>
     <span><span class="nom">{{.Nom}}</span>{{if .Info}}<br><span class="info">{{.Info}}</span>{{end}}</span>
   </a>
   {{- end}}
@@ -30,6 +33,7 @@
 <div class="carte vide"><span class="emoji">🧺</span>Aucun module n'est activé.
   {{if .C.EstParent}}<p><a class="bouton" href="/famille">Activer des modules</a></p>{{end}}</div>
 {{end}}
+</div>
 {{end}}
 
 {{/* Bloc « À venir » : anniversaires, échéances (rappels). */}}
@@ -38,7 +42,7 @@
 <div class="carte">
   {{- range .Donnees}}
   <a class="ligne{{if .Proche}} proche{{end}}" href="{{.URL}}">
-    <span class="p-emoji">{{.Emoji}}</span>
+    <span class="p-emoji">{{emoji .Emoji}}</span>
     <span class="quoi">{{.Titre}}<small>{{.Quand}}</small></span>
   </a>
   {{- end}}

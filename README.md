@@ -1,7 +1,9 @@
 # FamilyCocon 🪺
 
 L'organisation de la famille, **auto-hébergée** et **très légère** : courses, agenda,
-tâches ménagères, menus, budget et espace enfants, sur le téléphone de chacun.
+tâches ménagères, menus, budget, abonnements, espace enfants, notes, contacts et
+anniversaires, cartes de fidélité, véhicules, animaux, prestataires et projets,
+sur le téléphone de chacun.
 
 - Un seul binaire Go, image Docker `scratch` d'environ **16 Mo** (6,8 Mo à télécharger).
 - **~8 Mo de RAM** au repos, ~20 Mo au plus fort d'un test de charge.
@@ -36,38 +38,49 @@ tâches ménagères, menus, budget et espace enfants, sur le téléphone de chac
 - **Connexion enfant par code PIN** : sur un appareil où un parent s'est déjà connecté, l'enfant touche son prénom puis tape son code.
 - **Courses** :
   - listes partagées en temps réel, produits rangés par rayon, avec un emoji ;
-  - « 2 baguettes » et « 1 kg de pommes » sont compris tout seuls ;
-  - le rayon choisi pour un produit est retenu.
+  - « 2 baguettes » et « 1 kg de pommes » sont compris tout seuls ; un produit ajouté deux fois ne fait qu'une ligne ;
+  - le rayon choisi pour un produit est retenu ; « Souvent achetés » : un toucher pour les remettre ;
+  - « Annuler » après une suppression ; la dernière liste reste lisible sans réseau (au magasin).
 - **Agenda** : vue semaine et vue mois, couleur par personne ; répétitions : chaque jour, certains jours,
   chaque semaine, toutes les 2 semaines, chaque mois (même date ou « le 2e mardi »), tous les 2 mois,
   trimestriel, semestriel, chaque année, avec date de fin ;
   les tâches ménagères du jour y apparaissent en petit (toutes, les miennes, ou masquées) ;
-  un événement peut citer des contacts (rendez-vous chez le dentiste, goûter chez Léo).
-- **Tâches ménagères** : à qui, quand (une fois, chaque jour, certains jours, chaque semaine), qui a fait quoi.
-- **Menus de la semaine** : midi et soir ; un clic envoie les ingrédients dans la liste de courses.
+  un événement peut citer des contacts (rendez-vous chez le dentiste, goûter chez Léo) ;
+  « Me le rappeler », « Annuler cette fois seulement », échéances des autres modules en petit ;
+  lien secret pour voir l'agenda dans le calendrier du téléphone (iCalendar, lecture seule).
+- **Tâches ménagères** : à qui (ou à tour de rôle), quand (une fois, chaque jour, certains jours, chaque semaine,
+  toutes les 2 semaines, chaque mois), qui a fait quoi ; cochées depuis l'accueil.
+- **Menus de la semaine** : midi et soir ; les ingrédients d'une recette connue reviennent tout seuls ; un clic
+  envoie les ingrédients aux courses (sauf ceux déjà à la maison) ; « Reprendre la semaine dernière » ; page Recettes.
 - **Budget** (parents) :
   - « reste à vivre » du mois et courbe des dépenses ;
   - catégories et filtres ;
   - opérations qui reviennent (chaque semaine, mois, 2 mois, trimestre, semestre ou année), ajoutées toutes seules ;
-  - « à venir ce mois-ci » et reste prévu en fin de mois.
+  - « à venir ce mois-ci » et reste prévu en fin de mois ;
+  - plafonds par catégorie (alerte à 90 %), « Payé par » (écart entre parents), recherche sur 12 mois, vue de l'année.
 - **Abonnements** (parents) : box, téléphone, musique, assurance… prélevés tout seuls dans le budget ;
   coût par mois et par an, fin d'engagement, rappel avant un renouvellement annuel.
 - **Espace enfants** :
   - missions à étoiles (1 à 5) ; l'enfant coche, un parent valide ou refuse ;
+  - mission pour plusieurs enfants d'un coup, « Valider les N missions », étoiles bonus (ou retirées) avec un motif ;
   - récompenses échangées contre des étoiles ;
   - progrès par semaine.
-- **Notes** : partagées avec la famille ou privées, couleurs, épinglées, recherche.
+- **Notes** : partagées avec la famille ou privées, couleurs, épinglées, recherche, listes à cocher.
 - **Contacts** : le carnet central de la famille :
   - mobile, fixe, travail, e-mail, adresse, société, métier, site ; favoris en haut, groupes libres (« Foot de Léo ») ;
   - recherche par nom, numéro ou métier ; appel direct depuis la liste ;
-  - import et export vCard (.vcf) pour récupérer les contacts du téléphone (parents).
+  - import et export vCard (.vcf) pour récupérer les contacts du téléphone (parents) ;
+  - « Cité par » (vétérinaire de Rex, garage de la Clio…), doublons signalés et fusion de deux fiches.
 - **Anniversaires et Adresses** : deux vues du carnet (les dates à venir avec l'âge et les idées de cadeaux ; les adresses avec le plan).
 - **Cartes de fidélité** : le code-barres (EAN-13, Code 128) ou le QR code est redessiné à l'écran, à montrer en caisse.
 - **Véhicules, Animaux, Prestataires** :
   - échéances qui reviennent (contrôle technique, assurance, vaccin, vermifuge, ramonage…) ;
   - « C'est fait » : la ligne va dans le carnet (date, coût, kilométrage) et l'échéance est reportée ;
   - prestataires : les contacts « pro » du carnet (plombier, nounou, médecin…), avec leurs interventions ;
-  - vétérinaire d'un animal, garage et assurance d'un véhicule choisis dans le carnet (appel direct).
+  - vétérinaire d'un animal, garage et assurance d'un véhicule choisis dans le carnet (appel direct) ;
+  - échéance modifiable ou reportée d'un mois ; dépense du carnet ajoutée aussi au budget ;
+  - véhicule : coût pour 100 km et consommation (pleins notés).
+- **Garanties** : appareils achetés, fin de garantie rappelée, où est rangée la facture, réparations.
 - **Projets** : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
 - **Rappels** : bloc « À venir » sur l'accueil (30 jours) et notification chaque matin à 9 h
   (anniversaires, échéances, étapes de projet : aujourd'hui et dans 7 jours).
@@ -75,7 +88,12 @@ tâches ménagères, menus, budget et espace enfants, sur le téléphone de chac
   - modules activables ou désactivables par un parent ;
   - barre du bas personnalisable par chacun ;
   - fuseau horaire et monnaie réglables dans l'interface.
-- **Notifications** : petites notifications en bas de l'écran en temps réel, et notifications Web Push sur le téléphone.
+- **Notifications** : petites notifications en bas de l'écran en temps réel, et notifications Web Push sur le téléphone,
+  seulement pour les personnes concernées (participants, enfant de la mission, parents pour une validation…).
+- **Recherche** dans toute l'application (loupe de l'en-tête), sans se soucier des accents.
+- **Partager vers FamilyCocon** depuis une autre appli (Android) : aux courses, en note, à l'agenda.
+- **Thème** clair, sombre ou comme le téléphone ; **export** de toutes les données de la famille (JSON, sans secret) ;
+  carte « Serveur » (dernière sauvegarde, taille de la base) sur un serveur d'une seule famille.
 
 ## Installation
 

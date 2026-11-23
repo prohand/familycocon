@@ -39,10 +39,13 @@ func Brancher(a *appli.App) {
 	a.Route("GET /notes/{id}", mod, appli.Membre, m.formulaire)
 	a.Route("POST /notes/{id}", mod, appli.Membre, m.modifier)
 	a.Route("POST /notes/{id}/epingler", mod, appli.Membre, m.epingler)
-	a.Route("POST /notes/{id}/supprimer", mod, appli.Parent, m.supprimer)
+	a.Route("POST /notes/{id}/cocher", mod, appli.Membre, m.cocher)
+	a.Route("POST /notes/{id}/supprimer", mod, appli.Membre, m.supprimer)
 
 	a.AjouterResume(mod, m.resume)
+	a.AjouterRecherche(mod, m.chercher)
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "📝", Texte: "Une note", URL: "/notes/nouvelle"})
+	a.AjouterPartage(appli.Partage{Module: mod, Emoji: "📝", Texte: "En note", URL: "/notes/nouvelle"})
 }
 
 // Filtres de la liste.
@@ -92,6 +95,17 @@ func lireFiltre(r *http.Request) (filtre, recherche string) {
 func modifiable(c *appli.Contexte, n donnees.Note) bool {
 	auteur := n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID
 	return auteur || (c.EstParent() && n.Privee == 0)
+}
+
+// supprimable : un parent supprime les notes partagées et les siennes ;
+// chacun (même un enfant) supprime ses propres notes privées, que personne
+// d'autre ne voit.
+func supprimable(c *appli.Contexte, n donnees.Note) bool {
+	auteur := n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID
+	if n.Privee == 1 {
+		return auteur
+	}
+	return c.EstParent()
 }
 
 // visible : une note privée n'est vue que par son auteur.
@@ -191,6 +205,7 @@ type formNote struct {
 	Note        donnees.Note
 	Modifiable  bool
 	Supprimable bool
+	Cases       []CaseNote // liste à cocher dans le texte
 	// PeutPriver : la case « Privée » est proposée (toujours à la création
 	// et pour une note déjà privée ; pour une note partagée, seulement à un
 	// parent qui en est l'auteur).
@@ -209,6 +224,8 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	f := formNote{Nouvelle: r.PathValue("id") == "", Modifiable: true, PeutPriver: true}
 	if f.Nouvelle {
 		f.Note = donnees.Note{Couleur: 1}
+		// Venue de « Partager » : titre et texte préremplis.
+		f.Note.Titre, f.Note.Texte = appli.LirePrerempli(r, 80, 10000)
 		if r.URL.Query().Get("voir") == privees {
 			f.Note.Privee = 1
 		}
@@ -219,7 +236,8 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Note, f.Modifiable, f.PeutPriver = n, modifiable(c, n), peutPriver(c, n)
-		f.Supprimable = c.EstParent() && (n.Privee == 0 || n.AuteurID.Int64 == c.Membre.ID)
+		f.Supprimable = supprimable(c, n)
+		f.Cases = Cases(n.Texte)
 	}
 	titre := "Nouvelle note"
 	if !f.Nouvelle {
@@ -324,11 +342,20 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	if !(n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID) || (s.privee == 1 && !peutPriver(c, n)) {
 		s.privee = n.Privee
 	}
-	if err := m.a.Q.ModifierNote(r.Context(), donnees.ModifierNoteParams{
+	// version : la note telle qu'elle était à l'ouverture du formulaire. Si
+	// quelqu'un l'a changée entre-temps, rien n'est écrasé : on prévient
+	// (la saisie reste à l'écran).
+	avant, _ := strconv.ParseInt(r.PostFormValue("version"), 10, 64)
+	k, err := m.a.Q.ModifierNote(r.Context(), donnees.ModifierNoteParams{
 		Titre: s.titre, Texte: s.texte, Couleur: s.couleur, Epinglee: s.epinglee, Privee: s.privee,
-		ModifieLe: time.Now().Unix(), ID: n.ID, FamilleID: c.Famille.ID,
-	}); err != nil {
+		ModifieLe: max(time.Now().Unix(), n.ModifieLe+1), ID: n.ID, FamilleID: c.Famille.ID, Avant: avant,
+	})
+	if err != nil {
 		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	if k == 0 {
+		m.a.Echec(w, r, http.StatusConflict, "Quelqu'un vient de modifier cette note : copiez votre texte, puis rechargez la page.")
 		return
 	}
 	m.a.Publier(c, mod, "")
@@ -362,8 +389,12 @@ func (m *Module) epingler(w http.ResponseWriter, r *http.Request, c *appli.Conte
 
 func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	n, ok := m.note(r, c)
-	if !ok || (n.Privee == 1 && n.AuteurID.Int64 != c.Membre.ID) {
+	if !ok {
 		m.a.Echec(w, r, http.StatusNotFound, "Note introuvable.")
+		return
+	}
+	if !supprimable(c, n) {
+		m.a.Echec(w, r, http.StatusForbidden, "Seul un parent peut supprimer une note partagée.")
 		return
 	}
 	if err := m.a.Q.SupprimerNote(r.Context(), donnees.SupprimerNoteParams{ID: n.ID, FamilleID: c.Famille.ID}); err != nil {

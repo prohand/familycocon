@@ -59,3 +59,8 @@ UPDATE abonnements SET emoji = ?, engagement_fin = ?, site = ?, notes = ? WHERE 
 
 -- name: SupprimerOccurrences :execrows
 DELETE FROM operations WHERE recurrence_id = ? AND famille_id = ?;
+
+-- Abonnement : paye depuis le debut (operations ecrites par la recurrence).
+-- name: TotalRecurrence :one
+SELECT count(*) AS nombre, CAST(coalesce(sum(montant), 0) AS INTEGER) AS total
+FROM operations WHERE famille_id = ? AND recurrence_id = ?;

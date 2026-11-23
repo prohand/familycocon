@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -31,12 +32,18 @@ func (a *App) routesMoi() {
 	a.Route("GET /moi", "", Membre, a.pageMoi)
 	a.Route("POST /moi/profil", "", Membre, a.profilMoi)
 	a.Route("POST /moi/raccourcis", "", Membre, a.raccourcisMoi)
+	a.Route("POST /moi/theme", "", Membre, a.themeMoi)
 	a.Route("POST /moi/mdp", "", Membre, a.mdpMoi)
 }
 
 func (a *App) pageMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	d := donneesMoi{Possibles: RaccourcisPossibles(c), Couleurs: []int{1, 2, 3, 4, 5, 6, 7, 8}, AMotDePasse: c.Membre.Mdp.Valid,
-		Modules: ModulesVisibles(c), Push: strings.Split(c.Membre.PushModules, ",")}
+		Push: strings.Split(c.Membre.PushModules, ",")}
+	for _, m := range ModulesVisibles(c) {
+		if m.Notifie {
+			d.Modules = append(d.Modules, m)
+		}
+	}
 	d.Appareils, _ = a.Q.CompterAbonnements(r.Context(), c.Membre.ID)
 	d.TOTP = c.Membre.Totp != ""
 	d.NbPasskeys, _ = a.Q.CompterPasskeys(r.Context(), c.Membre.ID)
@@ -71,6 +78,19 @@ func (a *App) profilMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	}
 	a.Flash(w, "Profil enregistré ✓")
 	a.Rediriger(w, r, "/moi")
+}
+
+// themeMoi : clair, sombre ou automatique, gardé par cet appareil (un
+// téléphone partagé peut avoir un autre réglage qu'un ordinateur).
+func (a *App) themeMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
+	t := r.PostFormValue("theme")
+	if t != "" && !slices.Contains(Themes, t) {
+		a.Echec(w, r, http.StatusBadRequest, "Thème inconnu.")
+		return
+	}
+	a.PoserPreference(w, "theme", t)
+	a.Flash(w, "Thème enregistré ✓")
+	a.RedirigerComplet(w, r, "/moi") // toute la page change de couleurs
 }
 
 func (a *App) raccourcisMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {

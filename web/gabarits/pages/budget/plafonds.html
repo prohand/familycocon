@@ -1,0 +1,19 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/budget">‹ Budget</a>
+  <h1>🎯 Plafonds du mois</h1>
+  <p>Une enveloppe par catégorie : la jauge s'y compare, et l'accueil prévient à 90 %.</p>
+</section>
+<form class="carte" method="post" action="/budget/plafonds">
+  {{template "jeton" $c.CSRF}}
+  {{- range .Lignes}}
+  <label class="champ ligne-plafond"><span>{{.Cat.Emoji}} {{.Cat.Nom}}</span>
+    <input name="plafond_{{.Cat.Cle}}" value="{{.Montant}}" inputmode="decimal" placeholder="Pas de plafond" autocomplete="off" aria-label="Plafond {{.Cat.Nom}} ({{$.Donnees.Devise}})"></label>
+  {{- end}}
+  <p class="aide">Laissez vide pour ne pas fixer de plafond. Montants en {{.Devise}}, par mois.</p>
+  <div class="boutons"><button class="bouton">Enregistrer</button></div>
+</form>
+{{end}}
+{{end}}

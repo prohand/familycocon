@@ -7,6 +7,7 @@ package donnees
 
 import (
 	"context"
+	"database/sql"
 )
 
 const ajouterContactEvenement = `-- name: AjouterContactEvenement :exec
@@ -21,6 +22,139 @@ type AjouterContactEvenementParams struct {
 func (q *Queries) AjouterContactEvenement(ctx context.Context, arg AjouterContactEvenementParams) error {
 	_, err := q.db.ExecContext(ctx, ajouterContactEvenement, arg.EvenementID, arg.ContactID)
 	return err
+}
+
+const citesAnimaux = `-- name: CitesAnimaux :many
+
+SELECT id, nom FROM animaux WHERE famille_id = ? AND veterinaire_id = ? ORDER BY nom
+`
+
+type CitesAnimauxParams struct {
+	FamilleID     int64
+	VeterinaireID sql.NullInt64
+}
+
+type CitesAnimauxRow struct {
+	ID  int64
+	Nom string
+}
+
+// Fiche d'un contact : qui le cite (veterinaire de Rex, garage de la Clio...).
+func (q *Queries) CitesAnimaux(ctx context.Context, arg CitesAnimauxParams) ([]CitesAnimauxRow, error) {
+	rows, err := q.db.QueryContext(ctx, citesAnimaux, arg.FamilleID, arg.VeterinaireID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CitesAnimauxRow{}
+	for rows.Next() {
+		var i CitesAnimauxRow
+		if err := rows.Scan(&i.ID, &i.Nom); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const citesEvenements = `-- name: CitesEvenements :one
+SELECT count(*) FROM evenements_contacts
+JOIN evenements ON evenements.id = evenements_contacts.evenement_id
+WHERE evenements.famille_id = ? AND evenements_contacts.contact_id = ?
+`
+
+type CitesEvenementsParams struct {
+	FamilleID int64
+	ContactID int64
+}
+
+func (q *Queries) CitesEvenements(ctx context.Context, arg CitesEvenementsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, citesEvenements, arg.FamilleID, arg.ContactID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const citesGaranties = `-- name: CitesGaranties :many
+SELECT id, nom FROM garanties WHERE famille_id = ? AND magasin_id = ? ORDER BY nom
+`
+
+type CitesGarantiesParams struct {
+	FamilleID int64
+	MagasinID sql.NullInt64
+}
+
+type CitesGarantiesRow struct {
+	ID  int64
+	Nom string
+}
+
+func (q *Queries) CitesGaranties(ctx context.Context, arg CitesGarantiesParams) ([]CitesGarantiesRow, error) {
+	rows, err := q.db.QueryContext(ctx, citesGaranties, arg.FamilleID, arg.MagasinID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CitesGarantiesRow{}
+	for rows.Next() {
+		var i CitesGarantiesRow
+		if err := rows.Scan(&i.ID, &i.Nom); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const citesVehicules = `-- name: CitesVehicules :many
+SELECT id, nom, CAST(garage_id = ?1 AS INTEGER) AS garage FROM vehicules
+WHERE famille_id = ?2 AND (garage_id = ?1 OR assureur_id = ?1) ORDER BY nom
+`
+
+type CitesVehiculesParams struct {
+	Contact   sql.NullInt64
+	FamilleID int64
+}
+
+type CitesVehiculesRow struct {
+	ID     int64
+	Nom    string
+	Garage int64
+}
+
+func (q *Queries) CitesVehicules(ctx context.Context, arg CitesVehiculesParams) ([]CitesVehiculesRow, error) {
+	rows, err := q.db.QueryContext(ctx, citesVehicules, arg.Contact, arg.FamilleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CitesVehiculesRow{}
+	for rows.Next() {
+		var i CitesVehiculesRow
+		if err := rows.Scan(&i.ID, &i.Nom, &i.Garage); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const clesContacts = `-- name: ClesContacts :many
@@ -402,6 +536,115 @@ type DefinirFavoriParams struct {
 
 func (q *Queries) DefinirFavori(ctx context.Context, arg DefinirFavoriParams) error {
 	_, err := q.db.ExecContext(ctx, definirFavori, arg.Favori, arg.ID, arg.FamilleID)
+	return err
+}
+
+const fusionAnimaux = `-- name: FusionAnimaux :exec
+
+UPDATE animaux SET veterinaire_id = ?1 WHERE famille_id = ?2 AND veterinaire_id = ?3
+`
+
+type FusionAnimauxParams struct {
+	Garde     sql.NullInt64
+	FamilleID int64
+	Ancien    sql.NullInt64
+}
+
+// Fusion de deux fiches : les liens de "ancien" passent a "garde".
+func (q *Queries) FusionAnimaux(ctx context.Context, arg FusionAnimauxParams) error {
+	_, err := q.db.ExecContext(ctx, fusionAnimaux, arg.Garde, arg.FamilleID, arg.Ancien)
+	return err
+}
+
+const fusionAssureurs = `-- name: FusionAssureurs :exec
+UPDATE vehicules SET assureur_id = ?1 WHERE famille_id = ?2 AND assureur_id = ?3
+`
+
+type FusionAssureursParams struct {
+	Garde     sql.NullInt64
+	FamilleID int64
+	Ancien    sql.NullInt64
+}
+
+func (q *Queries) FusionAssureurs(ctx context.Context, arg FusionAssureursParams) error {
+	_, err := q.db.ExecContext(ctx, fusionAssureurs, arg.Garde, arg.FamilleID, arg.Ancien)
+	return err
+}
+
+const fusionCarnet = `-- name: FusionCarnet :exec
+UPDATE carnet SET objet_id = ?1
+WHERE famille_id = ?2 AND module = 'prestataires' AND objet_id = ?3
+`
+
+type FusionCarnetParams struct {
+	Garde     int64
+	FamilleID int64
+	Ancien    int64
+}
+
+func (q *Queries) FusionCarnet(ctx context.Context, arg FusionCarnetParams) error {
+	_, err := q.db.ExecContext(ctx, fusionCarnet, arg.Garde, arg.FamilleID, arg.Ancien)
+	return err
+}
+
+const fusionEcheances = `-- name: FusionEcheances :exec
+UPDATE echeances SET objet_id = ?1
+WHERE famille_id = ?2 AND module = 'prestataires' AND objet_id = ?3
+`
+
+type FusionEcheancesParams struct {
+	Garde     int64
+	FamilleID int64
+	Ancien    int64
+}
+
+func (q *Queries) FusionEcheances(ctx context.Context, arg FusionEcheancesParams) error {
+	_, err := q.db.ExecContext(ctx, fusionEcheances, arg.Garde, arg.FamilleID, arg.Ancien)
+	return err
+}
+
+const fusionEvenements = `-- name: FusionEvenements :exec
+INSERT OR IGNORE INTO evenements_contacts (evenement_id, contact_id)
+SELECT ec.evenement_id, ?1 FROM evenements_contacts ec WHERE ec.contact_id = ?2
+`
+
+type FusionEvenementsParams struct {
+	Garde  int64
+	Ancien int64
+}
+
+func (q *Queries) FusionEvenements(ctx context.Context, arg FusionEvenementsParams) error {
+	_, err := q.db.ExecContext(ctx, fusionEvenements, arg.Garde, arg.Ancien)
+	return err
+}
+
+const fusionGarages = `-- name: FusionGarages :exec
+UPDATE vehicules SET garage_id = ?1 WHERE famille_id = ?2 AND garage_id = ?3
+`
+
+type FusionGaragesParams struct {
+	Garde     sql.NullInt64
+	FamilleID int64
+	Ancien    sql.NullInt64
+}
+
+func (q *Queries) FusionGarages(ctx context.Context, arg FusionGaragesParams) error {
+	_, err := q.db.ExecContext(ctx, fusionGarages, arg.Garde, arg.FamilleID, arg.Ancien)
+	return err
+}
+
+const fusionMagasins = `-- name: FusionMagasins :exec
+UPDATE garanties SET magasin_id = ?1 WHERE famille_id = ?2 AND magasin_id = ?3
+`
+
+type FusionMagasinsParams struct {
+	Garde     sql.NullInt64
+	FamilleID int64
+	Ancien    sql.NullInt64
+}
+
+func (q *Queries) FusionMagasins(ctx context.Context, arg FusionMagasinsParams) error {
+	_, err := q.db.ExecContext(ctx, fusionMagasins, arg.Garde, arg.FamilleID, arg.Ancien)
 	return err
 }
 

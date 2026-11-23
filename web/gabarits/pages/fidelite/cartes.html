@@ -1,12 +1,12 @@
 {{define "contenu"}}
 <section class="titre-page">
   <a class="retour" href="/">‹ Accueil</a>
-  <h1>💳 Cartes de fidélité</h1>
+  <h1>{{emoji "🪪"}} Cartes de fidélité</h1>
   <p>Touchez une carte pour la montrer en caisse</p>
 </section>
 <div class="boutons"><a class="bouton" href="/fidelite/nouvelle">＋ Carte</a></div>
 {{/* Bloc rechargé tout seul quand un autre membre change quelque chose (voir Vue.Adresse). */}}
-<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-fidelite from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-fidelite from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 <div class="cartes-fidelite bloc">
   {{- range .Donnees}}
   <a class="carte-fidelite c{{.Couleur}}" href="/fidelite/{{.ID}}">
@@ -14,7 +14,7 @@
     <small>{{if .Titulaire}}{{.Titulaire}} · {{end}}…{{.Fin}}</small>
   </a>
   {{- else}}
-  <div class="carte vide"><span class="emoji">💳</span>Aucune carte. Ajoutez celles du supermarché, de la pharmacie, de la boulangerie…</div>
+  <div class="carte vide"><span class="emoji">{{emoji "🪪"}}</span>Aucune carte. Ajoutez celles du supermarché, de la pharmacie, de la boulangerie…</div>
   {{- end}}
 </div>
 </div>

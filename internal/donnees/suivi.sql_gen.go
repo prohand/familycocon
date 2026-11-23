@@ -11,21 +11,23 @@ import (
 )
 
 const ajouterCarnet = `-- name: AjouterCarnet :one
-INSERT INTO carnet (famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le
+INSERT INTO carnet (famille_id, module, objet_id, jour, libelle, montant, km, litres, note, operation_id, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres
 `
 
 type AjouterCarnetParams struct {
-	FamilleID int64
-	Module    string
-	ObjetID   int64
-	Jour      string
-	Libelle   string
-	Montant   int64
-	Km        int64
-	Note      string
-	CreePar   sql.NullInt64
-	CreeLe    int64
+	FamilleID   int64
+	Module      string
+	ObjetID     int64
+	Jour        string
+	Libelle     string
+	Montant     int64
+	Km          int64
+	Litres      int64
+	Note        string
+	OperationID sql.NullInt64
+	CreePar     sql.NullInt64
+	CreeLe      int64
 }
 
 func (q *Queries) AjouterCarnet(ctx context.Context, arg AjouterCarnetParams) (Carnet, error) {
@@ -37,7 +39,9 @@ func (q *Queries) AjouterCarnet(ctx context.Context, arg AjouterCarnetParams) (C
 		arg.Libelle,
 		arg.Montant,
 		arg.Km,
+		arg.Litres,
 		arg.Note,
+		arg.OperationID,
 		arg.CreePar,
 		arg.CreeLe,
 	)
@@ -54,6 +58,8 @@ func (q *Queries) AjouterCarnet(ctx context.Context, arg AjouterCarnetParams) (C
 		&i.Note,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.OperationID,
+		&i.Litres,
 	)
 	return i, err
 }
@@ -97,7 +103,7 @@ func (q *Queries) CarnetIdentiqueRecent(ctx context.Context, arg CarnetIdentique
 }
 
 const carnetObjet = `-- name: CarnetObjet :many
-SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? ORDER BY jour DESC, id DESC LIMIT 100
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? ORDER BY jour DESC, id DESC LIMIT 100
 `
 
 type CarnetObjetParams struct {
@@ -127,6 +133,8 @@ func (q *Queries) CarnetObjet(ctx context.Context, arg CarnetObjetParams) ([]Car
 			&i.Note,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.OperationID,
+			&i.Litres,
 		); err != nil {
 			return nil, err
 		}
@@ -331,8 +339,32 @@ func (q *Queries) EcheancesPeriode(ctx context.Context, arg EcheancesPeriodePara
 	return items, nil
 }
 
+const kmCarnetObjet = `-- name: KmCarnetObjet :one
+SELECT CAST(coalesce(min(km), 0) AS INTEGER) AS mini, CAST(coalesce(max(km), 0) AS INTEGER) AS maxi
+FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? AND km > 0
+`
+
+type KmCarnetObjetParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+type KmCarnetObjetRow struct {
+	Mini int64
+	Maxi int64
+}
+
+// Kilometrages notes au carnet (cout au kilometre).
+func (q *Queries) KmCarnetObjet(ctx context.Context, arg KmCarnetObjetParams) (KmCarnetObjetRow, error) {
+	row := q.db.QueryRowContext(ctx, kmCarnetObjet, arg.FamilleID, arg.Module, arg.ObjetID)
+	var i KmCarnetObjetRow
+	err := row.Scan(&i.Mini, &i.Maxi)
+	return i, err
+}
+
 const ligneCarnetParID = `-- name: LigneCarnetParID :one
-SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le FROM carnet WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres FROM carnet WHERE id = ? AND famille_id = ?
 `
 
 type LigneCarnetParIDParams struct {
@@ -355,8 +387,102 @@ func (q *Queries) LigneCarnetParID(ctx context.Context, arg LigneCarnetParIDPara
 		&i.Note,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.OperationID,
+		&i.Litres,
 	)
 	return i, err
+}
+
+const modifierCarnet = `-- name: ModifierCarnet :exec
+UPDATE carnet SET jour = ?, libelle = ?, montant = ?, km = ?, litres = ?, note = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierCarnetParams struct {
+	Jour      string
+	Libelle   string
+	Montant   int64
+	Km        int64
+	Litres    int64
+	Note      string
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) ModifierCarnet(ctx context.Context, arg ModifierCarnetParams) error {
+	_, err := q.db.ExecContext(ctx, modifierCarnet,
+		arg.Jour,
+		arg.Libelle,
+		arg.Montant,
+		arg.Km,
+		arg.Litres,
+		arg.Note,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
+}
+
+const modifierEcheance = `-- name: ModifierEcheance :exec
+UPDATE echeances SET libelle = ?, jour = ?, repetition_mois = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierEcheanceParams struct {
+	Libelle        string
+	Jour           string
+	RepetitionMois int64
+	ID             int64
+	FamilleID      int64
+}
+
+func (q *Queries) ModifierEcheance(ctx context.Context, arg ModifierEcheanceParams) error {
+	_, err := q.db.ExecContext(ctx, modifierEcheance,
+		arg.Libelle,
+		arg.Jour,
+		arg.RepetitionMois,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
+}
+
+const pleinsObjet = `-- name: PleinsObjet :many
+SELECT km, litres FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? AND litres > 0 AND km > 0
+ORDER BY km
+`
+
+type PleinsObjetParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+type PleinsObjetRow struct {
+	Km     int64
+	Litres int64
+}
+
+// Pleins notes (litres et kilometrage) : consommation du vehicule.
+func (q *Queries) PleinsObjet(ctx context.Context, arg PleinsObjetParams) ([]PleinsObjetRow, error) {
+	rows, err := q.db.QueryContext(ctx, pleinsObjet, arg.FamilleID, arg.Module, arg.ObjetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []PleinsObjetRow{}
+	for rows.Next() {
+		var i PleinsObjetRow
+		if err := rows.Scan(&i.Km, &i.Litres); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const premieresEcheancesModule = `-- name: PremieresEcheancesModule :many
@@ -450,6 +576,28 @@ type SupprimerEcheanceParams struct {
 
 func (q *Queries) SupprimerEcheance(ctx context.Context, arg SupprimerEcheanceParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerEcheance, arg.ID, arg.FamilleID)
+	return err
+}
+
+const supprimerEcheanceLibelle = `-- name: SupprimerEcheanceLibelle :exec
+DELETE FROM echeances WHERE famille_id = ? AND module = ? AND objet_id = ? AND libelle = ?
+`
+
+type SupprimerEcheanceLibelleParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+	Libelle   string
+}
+
+// Echeance tenue a jour par un module (fin de garantie) : remplacee.
+func (q *Queries) SupprimerEcheanceLibelle(ctx context.Context, arg SupprimerEcheanceLibelleParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerEcheanceLibelle,
+		arg.FamilleID,
+		arg.Module,
+		arg.ObjetID,
+		arg.Libelle,
+	)
 	return err
 }
 

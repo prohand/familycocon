@@ -1,0 +1,44 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/agenda">‹ Agenda</a>
+  <h1>📱 L'agenda dans le téléphone</h1>
+  <p>Le calendrier du téléphone affiche l'agenda de la famille et prévient avant les rendez-vous.</p>
+</section>
+{{if .Lien}}
+<section class="carte bloc">
+  <h2>🔗 Votre lien</h2>
+  <p class="aide">Il n'est montré qu'une fois. Gardez-le pour vous : qui l'a peut lire l'agenda.</p>
+  <div class="ajout">
+    <input id="lien-ical" value="{{.Lien}}" readonly aria-label="Lien de l'agenda">
+    <button class="bouton petit" type="button" data-copier="#lien-ical">Copier</button>
+  </div>
+  <p><a class="bouton" href="{{.Webcal}}">📅 Ouvrir dans le calendrier</a></p>
+  <ul class="aide">
+    <li>iPhone : touchez « Ouvrir dans le calendrier », puis « S'abonner ».</li>
+    <li>Android (Google Agenda) : sur un ordinateur, calendar.google.com › Autres agendas › « + » › À partir de l'URL, collez le lien.</li>
+  </ul>
+</section>
+{{end}}
+<section class="carte bloc">
+  {{if .Existe}}
+  <p>Lien créé le {{.CreeLe}}.{{if .LuLe}} Dernière lecture par le téléphone : {{.LuLe}}.{{else}} Pas encore lu par un téléphone.{{end}}</p>
+  {{else}}
+  <p>Aucun lien pour l'instant.</p>
+  {{end}}
+  {{if not .Securise}}<p class="aide alerte">⚠️ Le site n'est pas en https : le lien circulerait en clair.</p>{{end}}
+  <div class="boutons">
+    <form method="post" action="/agenda/calendrier"{{if .Existe}} hx-confirm="Créer un nouveau lien ? L'ancien ne marchera plus."{{end}}>
+      {{template "jeton" $c.CSRF}}<button class="bouton">{{if .Existe}}🔄 Nouveau lien{{else}}Créer mon lien{{end}}</button>
+    </form>
+    {{if .Existe}}
+    <form method="post" action="/agenda/calendrier/couper" hx-confirm="Couper le lien ? Le téléphone ne recevra plus l'agenda.">
+      {{template "jeton" $c.CSRF}}<button class="bouton danger">Couper le lien</button>
+    </form>
+    {{end}}
+  </div>
+  <p class="aide">Lecture seule : 3 mois en arrière, 1 an en avant, relu toutes les heures environ.</p>
+</section>
+{{end}}
+{{end}}

@@ -60,3 +60,46 @@ INSERT OR IGNORE INTO evenements_contacts (evenement_id, contact_id) VALUES (?, 
 
 -- name: ViderContactsEvenement :exec
 DELETE FROM evenements_contacts WHERE evenement_id = ?;
+
+-- Fiche d'un contact : qui le cite (veterinaire de Rex, garage de la Clio...).
+
+-- name: CitesAnimaux :many
+SELECT id, nom FROM animaux WHERE famille_id = ? AND veterinaire_id = ? ORDER BY nom;
+
+-- name: CitesVehicules :many
+SELECT id, nom, CAST(garage_id = sqlc.arg(contact) AS INTEGER) AS garage FROM vehicules
+WHERE famille_id = sqlc.arg(famille_id) AND (garage_id = sqlc.arg(contact) OR assureur_id = sqlc.arg(contact)) ORDER BY nom;
+
+-- name: CitesGaranties :many
+SELECT id, nom FROM garanties WHERE famille_id = ? AND magasin_id = ? ORDER BY nom;
+
+-- name: CitesEvenements :one
+SELECT count(*) FROM evenements_contacts
+JOIN evenements ON evenements.id = evenements_contacts.evenement_id
+WHERE evenements.famille_id = ? AND evenements_contacts.contact_id = ?;
+
+-- Fusion de deux fiches : les liens de "ancien" passent a "garde".
+
+-- name: FusionAnimaux :exec
+UPDATE animaux SET veterinaire_id = sqlc.arg(garde) WHERE famille_id = sqlc.arg(famille_id) AND veterinaire_id = sqlc.arg(ancien);
+
+-- name: FusionGarages :exec
+UPDATE vehicules SET garage_id = sqlc.arg(garde) WHERE famille_id = sqlc.arg(famille_id) AND garage_id = sqlc.arg(ancien);
+
+-- name: FusionAssureurs :exec
+UPDATE vehicules SET assureur_id = sqlc.arg(garde) WHERE famille_id = sqlc.arg(famille_id) AND assureur_id = sqlc.arg(ancien);
+
+-- name: FusionMagasins :exec
+UPDATE garanties SET magasin_id = sqlc.arg(garde) WHERE famille_id = sqlc.arg(famille_id) AND magasin_id = sqlc.arg(ancien);
+
+-- name: FusionEvenements :exec
+INSERT OR IGNORE INTO evenements_contacts (evenement_id, contact_id)
+SELECT ec.evenement_id, sqlc.arg(garde) FROM evenements_contacts ec WHERE ec.contact_id = sqlc.arg(ancien);
+
+-- name: FusionEcheances :exec
+UPDATE echeances SET objet_id = sqlc.arg(garde)
+WHERE famille_id = sqlc.arg(famille_id) AND module = 'prestataires' AND objet_id = sqlc.arg(ancien);
+
+-- name: FusionCarnet :exec
+UPDATE carnet SET objet_id = sqlc.arg(garde)
+WHERE famille_id = sqlc.arg(famille_id) AND module = 'prestataires' AND objet_id = sqlc.arg(ancien);

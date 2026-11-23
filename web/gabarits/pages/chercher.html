@@ -1,0 +1,27 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/">‹ Accueil</a>
+  <h1>🔎 Chercher</h1>
+  <p>Dans toute l'application</p>
+</section>
+<form class="ajout" method="get" action="/chercher" role="search">
+  <input type="search" name="q" value="{{.Q}}" placeholder="Ex. : dentiste, pain, Léo…" maxlength="60" aria-label="Texte à chercher" autofocus>
+  <button class="bouton">Chercher</button>
+</form>
+{{if .Q}}
+{{- range .Groupes}}
+<section class="bloc">
+  <div class="section-titre"><h2>{{emoji .Module.Emoji}} {{.Module.Nom}}</h2><a href="{{.Module.URL}}">Ouvrir ›</a></div>
+  <div class="carte">
+    {{- range .Resultats}}
+    <a class="ligne" href="{{.URL}}"><span class="p-emoji">{{emoji .Emoji}}</span><span class="quoi">{{.Titre}}{{if .Detail}}<small>{{.Detail}}</small>{{end}}</span><span class="fleche-droite">›</span></a>
+    {{- end}}
+  </div>
+</section>
+{{- else}}
+<div class="carte vide bloc"><span class="emoji">🔎</span>Rien trouvé pour « {{.Q}} ».</div>
+{{- end}}
+{{end}}
+{{end}}
+{{end}}

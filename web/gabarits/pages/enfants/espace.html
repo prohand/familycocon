@@ -11,7 +11,7 @@
 {{$c := .C}}
 {{with .Donnees}}
 <div id="espace" class="espace-enfant"
-     hx-get="{{if .ParParent}}/enfants/enfant/{{.Enfant.ID}}/contenu{{else}}/enfants/contenu{{end}}" hx-trigger="maj-enfants from:body delay:300ms" hx-swap="outerHTML">
+     hx-get="{{if .ParParent}}/enfants/enfant/{{.Enfant.ID}}/contenu{{else}}/enfants/contenu{{end}}" hx-trigger="maj-enfants from:body delay:300ms, maj-tout from:body delay:300ms" hx-swap="outerHTML">
   <section class="tete-enfant c{{.Enfant.Couleur}}">
     <span class="avatar grand c{{.Enfant.Couleur}}">{{initiale .Enfant.Nom}}</span>
     <div>
@@ -104,10 +104,28 @@
     </div>
   </section>
 
-  {{if or .Recents .Echanges}}
+  {{if .ParParent}}
+  <details class="carte bloc">
+    <summary>⭐ Donner ou retirer des étoiles</summary>
+    <form method="post" action="/enfants/enfant/{{.Enfant.ID}}/bonus">
+      {{template "jeton" $c.CSRF}}
+      <div class="rangee">
+        <label class="champ etroit"><span>Étoiles</span><input name="etoiles" type="number" min="-20" max="20" value="1" required></label>
+        <label class="champ"><span>Pourquoi ?</span><input name="motif" maxlength="80" placeholder="Ex. : a aidé sa sœur" required></label>
+      </div>
+      <p class="aide">Un nombre négatif retire des étoiles (−2).</p>
+      <button class="bouton petit">Enregistrer</button>
+    </form>
+  </details>
+  {{end}}
+
+  {{if or .Recents .Echanges .Bonus}}
   <section class="bloc">
     <div class="section-titre"><h2>📜 Historique</h2></div>
     <div class="carte">
+      {{- range .Bonus}}
+      <div class="ligne"><span class="p-emoji">{{if gt .Etoiles 0}}🌟{{else}}⚠️{{end}}</span><span class="quoi">{{.Motif}}<small>Donné par un parent</small></span><b class="{{if gt .Etoiles 0}}gain{{else}}perte{{end}}">{{if gt .Etoiles 0}}+{{end}}{{.Etoiles}} ⭐</b></div>
+      {{- end}}
       {{- range .Recents}}
       <div class="ligne"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Titre}}</span><b class="gain">+{{.Etoiles}} ⭐</b></div>
       {{- end}}

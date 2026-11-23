@@ -8,10 +8,10 @@
 <form class="carte" method="post" action="{{if .Nouvelle}}/enfants/missions{{else}}/enfants/missions/{{.Mission.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
   <fieldset class="qui">
-    <legend>Pour qui ?</legend>
+    <legend>Pour qui ?{{if .Nouvelle}} <small>(un ou plusieurs)</small>{{end}}</legend>
     <div class="choix-membres">
       {{- range .Enfants}}
-      <label><input type="radio" name="enfant" value="{{.ID}}"{{if eq .ID $.Donnees.Mission.EnfantID}} checked{{end}} required>
+      <label><input type="{{if $.Donnees.Nouvelle}}checkbox{{else}}radio{{end}}" name="enfant" value="{{.ID}}"{{if eq .ID $.Donnees.Mission.EnfantID}} checked{{end}}{{if not $.Donnees.Nouvelle}} required{{end}}>
         <span class="pastille c{{.Couleur}}">{{.Nom}}</span></label>
       {{- end}}
     </div>

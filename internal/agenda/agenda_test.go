@@ -90,7 +90,7 @@ func TestAgenda(t *testing.T) {
 		t.Fatal("répétition absente 5 semaines plus tard")
 	}
 	// Léa ne modifie ni ne supprime l'événement de Marie.
-	id := essai.Trouver(t, page, `href="/agenda/(\d+)"`)
+	id := essai.Trouver(t, page, `href="/agenda/(\d+)[?"]`)
 	if _, page := lea.Get("/agenda/" + id); !strings.Contains(page, "disabled") {
 		t.Fatal("formulaire modifiable par un enfant")
 	}

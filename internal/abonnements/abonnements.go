@@ -57,6 +57,7 @@ func Brancher(a *appli.App) {
 	a.Route("GET /abonnements/{id}", mod, appli.Parent, m.formulaire)
 	a.Route("POST /abonnements/{id}", mod, appli.Parent, m.enregistrer)
 	a.Route("POST /abonnements/{id}/resilier", mod, appli.Parent, m.resilier)
+	a.Route("POST /abonnements/{id}/reprendre", mod, appli.Parent, m.reprendre)
 	a.Route("POST /abonnements/{id}/supprimer", mod, appli.Parent, m.supprimer)
 
 	a.AjouterResume(mod, m.resume)
@@ -135,6 +136,9 @@ func (m *Module) liste(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		v.ParMois += x.ParMois
 		v.ParAn += x.ParAn
 	}
+	// Total du mois tiré du total de l'année : arrondir chaque ligne
+	// (division entière) faisait perdre quelques centimes.
+	v.ParMois = v.ParAn / 12
 	// Les plus chers en haut.
 	sort.SliceStable(v.Actifs, func(i, j int) bool { return v.Actifs[i].ParMois > v.Actifs[j].ParMois })
 	m.a.Afficher(w, r, c, "abonnements/liste", "Abonnements", mod, v)
@@ -155,6 +159,8 @@ type form struct {
 	Categories []budget.Categorie
 	Membres    []donnees.Membre
 	Devise     string
+	Paye       int64 // payé depuis le début (prélèvements écrits au budget)
+	NbPaye     int64
 }
 
 func (m *Module) abonnement(r *http.Request, c *appli.Contexte) (donnees.Abonnement, donnees.Recurrence, bool) {
@@ -182,6 +188,9 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.A, f.R, f.Lien = ab, rec, contacts.SiteSur(ab.Site)
+		if t, err := m.a.Q.TotalRecurrence(r.Context(), donnees.TotalRecurrenceParams{FamilleID: c.Famille.ID, RecurrenceID: sql.NullInt64{Int64: rec.ID, Valid: true}}); err == nil {
+			f.Paye, f.NbPaye = t.Total, t.Nombre
+		}
 		f.Montant = budget.MontantSaisie(rec.Montant)
 		if j, ok := budget.Prochaine(rec); ok {
 			f.Prochain = repetition.CleJour(j)
@@ -340,6 +349,44 @@ func (m *Module) resilier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	m.a.Publier(c, mod, "")
 	m.a.Publier(c, "budget", "")
 	m.a.Flash(w, "« "+rec.Libelle+" » résilié : plus de prélèvement prévu")
+	m.a.Rediriger(w, r, "/abonnements")
+}
+
+// reprendre : un abonnement résilié repart (on s'est réabonné) à partir de
+// la date donnée ; les prélèvements passés ne sont pas réécrits.
+func (m *Module) reprendre(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	_, rec, ok := m.abonnement(r, c)
+	if !ok {
+		m.a.Echec(w, r, http.StatusNotFound, "Abonnement introuvable.")
+		return
+	}
+	if _, actif := budget.Prochaine(rec); actif {
+		m.a.Echec(w, r, http.StatusBadRequest, "Cet abonnement n'est pas résilié.")
+		return
+	}
+	prochain := r.PostFormValue("prochain")
+	if msg := budget.ValiderProchaine(prochain, &rec, c.Maintenant()); msg != "" {
+		m.a.Echec(w, r, http.StatusBadRequest, msg)
+		return
+	}
+	ctx := r.Context()
+	n, err := m.a.Q.ModifierRecurrence(ctx, donnees.ModifierRecurrenceParams{Sens: rec.Sens, Montant: rec.Montant, Categorie: rec.Categorie,
+		Libelle: rec.Libelle, MembreID: rec.MembreID, Frequence: rec.Frequence, Debut: prochain, Fin: "", Faites: 0,
+		ID: rec.ID, FamilleID: c.Famille.ID, FaitesAvant: rec.Faites})
+	if err == nil && n == 0 {
+		m.a.Echec(w, r, http.StatusConflict, budget.MessageModifiee)
+		return
+	}
+	if err == nil {
+		err = budget.Generer(ctx, m.a, c.Famille.ID, c.Maintenant())
+	}
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Publier(c, mod, "")
+	m.a.Publier(c, "budget", "")
+	m.a.Flash(w, "« "+rec.Libelle+" » repris ✓")
 	m.a.Rediriger(w, r, "/abonnements")
 }
 

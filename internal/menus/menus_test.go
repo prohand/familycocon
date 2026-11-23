@@ -4,6 +4,7 @@ package menus
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -119,5 +120,71 @@ func TestIngredientsLongsEtDoubleEnvoi(t *testing.T) {
 	marie.Htmx = false
 	if code, _ := marie.Get("/menus/9999-01-01/soir"); code != http.StatusNotFound {
 		t.Fatalf("année 9999 acceptée : %d", code)
+	}
+}
+
+// Recette connue : ses ingrédients reviennent ; cases « déjà à la maison » ;
+// semaine reprise ; page Recettes.
+func TestRecettesEtSemaine(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		Brancher(a)
+		courses.Brancher(a)
+	})
+	marie := essai.Famille(t, srv)
+	marie.Get("/menus/2026-11-16/soir")
+	marie.Post("/menus/2026-11-16/soir", map[string]string{"nom": "Gratin", "ingredients": "1 kg de pommes de terre\n50 cl de crème\nGruyère"})
+	marie.Htmx = true
+	if _, frag := marie.Get("/menus/ingredients?nom=gratin&ingredients="); !strings.Contains(frag, "50 cl de crème") {
+		t.Fatalf("ingrédients de la recette non remplis :\n%s", frag)
+	}
+	marie.Htmx = false
+	// Seulement la crème aux courses.
+	marie.PostValeurs("/menus/2026-11-16/soir/courses", url.Values{"choix": {"1"}, "ingr": {"50 cl de crème"}})
+	if _, page := marie.Get("/courses"); !strings.Contains(page, "Crème") || strings.Contains(page, "Pommes de terre") {
+		t.Fatalf("ingrédients choisis :\n%s", page)
+	}
+	// Semaine suivante : reprise de la semaine dernière.
+	marie.Post("/menus/semaine/reprendre", map[string]string{"date": "2026-11-23"})
+	if _, page := marie.Get("/menus?date=2026-11-23"); !strings.Contains(page, "Gratin") {
+		t.Fatal("semaine dernière non reprise")
+	}
+	if _, page := marie.Get("/menus/recettes"); !strings.Contains(page, "Gratin") || !strings.Contains(page, "3 ingrédients") {
+		t.Fatalf("page Recettes :\n%s", page)
+	}
+	marie.Post("/menus/recettes/oublier", map[string]string{"cle": essai.Trouver(t, mustPage(marie, "/menus/recettes"), `name="cle" value="([^"]+)"`)})
+	if _, page := marie.Get("/menus/recettes"); strings.Contains(page, "Gratin") {
+		t.Fatal("recette non oubliée")
+	}
+}
+
+func mustPage(n *essai.Navigateur, chemin string) string {
+	_, p := n.Get(chemin)
+	return p
+}
+
+// Ingrédients envoyés dans la liste choisie (et retenue pour la suite).
+func TestListeChoisie(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		Brancher(a)
+		courses.Brancher(a)
+	})
+	marie := essai.Famille(t, srv)
+	marie.Get("/courses")
+	marie.Post("/courses/listes", map[string]string{"nom": "Drive"})
+	var drive string
+	if err := a.DB.QueryRow(`SELECT id FROM listes WHERE nom = 'Drive'`).Scan(&drive); err != nil {
+		t.Fatal(err)
+	}
+	marie.Post("/menus/2026-11-16/midi", map[string]string{"nom": "Crêpes", "ingredients": "Farine\nLait"})
+	if _, page := marie.Get("/menus/2026-11-16/midi"); !strings.Contains(page, `<option value="`+drive+`"`) {
+		t.Fatal("choix de la liste absent")
+	}
+	marie.PostValeurs("/menus/2026-11-16/midi/courses", url.Values{"choix": {"1"}, "ingr": {"Farine", "Lait"}, "liste": {drive}})
+	if _, page := marie.Get("/courses/liste/" + drive); !strings.Contains(page, "Farine") {
+		t.Fatal("ingrédients absents de la liste choisie")
+	}
+	marie.Post("/menus/2026-11-17/soir", map[string]string{"nom": "Soupe", "ingredients": "Poireaux"})
+	if _, page := marie.Get("/menus/2026-11-17/soir"); !strings.Contains(page, `<option value="`+drive+`" selected>`) {
+		t.Fatal("liste choisie non retenue")
 	}
 }

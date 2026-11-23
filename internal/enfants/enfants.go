@@ -43,6 +43,8 @@ func Brancher(a *appli.App) {
 	a.Route("POST /enfants/missions/{id}/faire", mod, appli.Membre, m.faire)
 	a.Route("POST /enfants/missions/{id}/annuler", mod, appli.Membre, m.annuler)
 	a.Route("POST /enfants/validations/{id}/{decision}", mod, appli.Parent, m.decider)
+	a.Route("POST /enfants/validations/tout", mod, appli.Parent, m.toutValider)
+	a.Route("POST /enfants/enfant/{id}/bonus", mod, appli.Parent, m.bonus)
 
 	a.Route("GET /enfants/recompenses/nouvelle", mod, appli.Parent, m.formRecompense)
 	a.Route("POST /enfants/recompenses", mod, appli.Parent, m.creerRecompense)
@@ -155,6 +157,12 @@ func (m *Module) solde(ctx context.Context, enfant int64) (Solde, error) {
 	if err != nil {
 		return Solde{}, err
 	}
+	// Étoiles données ou retirées par un parent (bonus).
+	b, err := m.a.Q.EtoilesBonus(ctx, enfant)
+	if err != nil {
+		return Solde{}, err
+	}
+	g += b
 	return Solde{Gagnees: g, Depensees: e.Depensees, Reservees: e.Reservees, Disponible: g - e.Depensees - e.Reservees}, nil
 }
 
@@ -183,6 +191,7 @@ type vueEnfant struct {
 	MaxSemaine  int64
 	Echanges    []donnees.EchangesEnfantRow
 	Recents     []donnees.MissionsValideesDepuisRow
+	Bonus       []donnees.BonusRecentsRow
 	ParParent   bool // un parent regarde
 	Faites      int
 	Total       int
@@ -259,6 +268,9 @@ func (m *Module) vueEnfant(ctx context.Context, c *appli.Contexte, enfant donnee
 		valides = valides[:8]
 	}
 	v.Recents = valides
+	if v.Bonus, err = m.a.Q.BonusRecents(ctx, enfant.ID); err != nil {
+		return nil, err
+	}
 	return v, nil
 }
 
@@ -281,6 +293,7 @@ type resumeEnfant struct {
 
 type vueParent struct {
 	AValider    []ligneAValider
+	NbMissions  int // missions à valider (bouton « Tout valider »)
 	Enfants     []resumeEnfant
 	Recompenses []donnees.Recompense
 }
@@ -302,6 +315,7 @@ func (m *Module) vueParent(ctx context.Context, c *appli.Contexte) (*vueParent, 
 	for _, mi := range missions {
 		v.AValider = append(v.AValider, ligneAValider{ID: mi.ID, Emoji: mi.Emoji, Titre: mi.Titre, Etoiles: mi.Etoiles, Enfant: parID[mi.EnfantID]})
 	}
+	v.NbMissions = len(missions)
 	echanges, err := m.a.Q.EchangesEnAttente(ctx, c.Famille.ID)
 	if err != nil {
 		return nil, err
@@ -324,7 +338,8 @@ func (m *Module) vueParent(ctx context.Context, c *appli.Contexte) (*vueParent, 
 		for _, ca := range cartes {
 			if ca.EnfantID == mb.ID && ca.Etat != PasAujourdhui && ca.Etat != "finie" {
 				r.Total++
-				if ca.Etat == Validee {
+				// Comme sur la page de l'enfant : faites = validées ou à valider.
+				if ca.Etat == Validee || ca.Etat == Attente {
 					r.Faites++
 				}
 			}

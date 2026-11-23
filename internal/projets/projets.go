@@ -46,6 +46,7 @@ type Module struct {
 func Brancher(a *appli.App, s *suivi.Suivi) {
 	m := &Module{a: a, s: s}
 	a.Route("GET /projets", mod, appli.Membre, m.liste)
+	a.AjouterRecherche(mod, m.chercher)
 	a.Route("GET /projets/nouveau", mod, appli.Membre, m.formulaire)
 	a.Route("POST /projets", mod, appli.Membre, m.enregistrer)
 	a.Route("GET /projets/{id}", mod, appli.Membre, m.fiche)
@@ -59,7 +60,7 @@ func Brancher(a *appli.App, s *suivi.Suivi) {
 
 	// Dépenses : le carnet commun, sans échéances (les étapes en tiennent lieu).
 	s.Enregistrer(suivi.Objet{
-		Module: mod, Emoji: "🎯", SansEcheances: true,
+		Module: mod, Emoji: "🎯", SansEcheances: true, Categorie: "autre",
 		Nom: func(ctx context.Context, famille, id int64) (string, bool) {
 			p, err := a.Q.ProjetParID(ctx, donnees.ProjetParIDParams{ID: id, FamilleID: famille})
 			return p.Nom, err == nil
@@ -247,9 +248,9 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		m.a.Echec(w, r, http.StatusBadRequest, "Date d'objectif invalide.")
 		return
 	}
-	// Vide ou « 0 » : pas de budget.
+	// Vide ou « 0 » : pas de budget (réservé aux parents).
 	var montant int64
-	if b := strings.TrimSpace(r.PostFormValue("budget")); b != "" {
+	if b := strings.TrimSpace(r.PostFormValue("budget")); b != "" && c.EstParent() {
 		v, err := budget.LireMontantOuZero(b)
 		if err != nil {
 			m.a.Echec(w, r, http.StatusBadRequest, "Budget invalide.")
@@ -283,6 +284,13 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		if _, ok := m.projet(r, c, id); !ok {
 			m.a.Echec(w, r, http.StatusNotFound, "Projet introuvable.")
 			return
+		}
+		// Le budget n'est montré qu'aux parents : un enfant qui modifie le
+		// projet ne l'efface pas.
+		if !c.EstParent() {
+			if p, ok := m.projet(r, c, id); ok {
+				montant = p.Budget
+			}
 		}
 		if err := m.a.Q.ModifierProjet(ctx, donnees.ModifierProjetParams{Nom: nom, Emoji: emoji, Couleur: couleur, Description: desc,
 			Objectif: objectif, Budget: montant, ID: id, FamilleID: c.Famille.ID}); err != nil {

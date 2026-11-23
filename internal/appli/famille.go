@@ -18,10 +18,15 @@ import (
 // Réglages de la famille (parents) : nom, fuseau, monnaie, modules activés,
 // membres (enfants avec code PIN, invitations des adultes).
 
-// Fuseaux proposés (les plus courants pour une famille francophone).
+// ModuleFamille : message temps réel « les réglages de la famille ont changé ».
+const ModuleFamille = "famille"
+
+// Fuseaux proposés (les plus courants pour une famille francophone, et ceux
+// des pays voisins).
 var Fuseaux = []string{
 	"Europe/Paris", "Europe/Brussels", "Europe/Luxembourg", "Europe/Zurich", "Europe/Monaco",
-	"Europe/London", "America/Montreal", "America/Guadeloupe", "America/Martinique",
+	"Europe/London", "Europe/Dublin", "Europe/Lisbon", "Europe/Madrid", "Europe/Berlin", "Europe/Amsterdam",
+	"Europe/Rome", "Europe/Andorra", "America/Montreal", "America/Toronto", "America/New_York", "America/Guadeloupe", "America/Martinique",
 	"America/Cayenne", "America/Miquelon", "Indian/Reunion", "Indian/Mayotte",
 	"Pacific/Noumea", "Pacific/Tahiti", "Africa/Casablanca", "Africa/Algiers", "Africa/Tunis",
 	"Africa/Dakar", "Africa/Abidjan", "UTC",
@@ -38,6 +43,7 @@ type donneesFamille struct {
 	Invitations int
 	Lien        string // lien d'invitation qui vient d'être créé (affiché une fois)
 	Erreur      string
+	Serveur     *carteServeur // serveur d'une seule famille : état du serveur
 }
 
 func (a *App) routesFamille() {
@@ -51,6 +57,7 @@ func (a *App) routesFamille() {
 	a.Route("POST /famille/membres/{id}/pin", "", Parent, a.changerPin)
 	a.Route("POST /famille/membres/{id}/retirer", "", Parent, a.retirerMembre)
 	a.Route("POST /famille/appareils/oublier", "", Parent, a.oublierAppareils)
+	a.Route("GET /famille/export.json", "", Parent, a.exporter)
 }
 
 func (a *App) afficherFamille(w http.ResponseWriter, r *http.Request, c *Contexte, d donneesFamille) {
@@ -62,6 +69,7 @@ func (a *App) afficherFamille(w http.ResponseWriter, r *http.Request, c *Context
 	inv, _ := a.Q.InvitationsEnCours(r.Context(), donnees.InvitationsEnCoursParams{FamilleID: c.Famille.ID, ExpireLe: time.Now().Unix()})
 	d.Invitations = len(inv)
 	d.Fuseaux, d.Devises, d.Catalogue = Fuseaux, Devises, Catalogue
+	d.Serveur = a.etatServeur(r.Context(), c)
 	a.Afficher(w, r, c, "famille", "Ma famille", "", d)
 }
 
@@ -109,6 +117,9 @@ func (a *App) modulesFamille(w http.ResponseWriter, r *http.Request, c *Contexte
 		return
 	}
 	a.Journal.Info("modules modifiés", "famille", c.Famille.ID, "modules", strings.Join(actifs, ","))
+	// Les autres membres connectés rechargent leur page : tuiles, barre du
+	// bas et pages changent avec les modules.
+	a.Publier(c, ModuleFamille, "")
 	a.Flash(w, "Modules enregistrés ✓")
 	a.Rediriger(w, r, "/famille")
 }
@@ -289,6 +300,10 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 			return err
 		}
 		if err := q.EffacerCodesSecours(ctx, m.ID); err != nil {
+			return err
+		}
+		// Son lien secret vers l'agenda ne marche plus.
+		if err := q.SupprimerIcal(ctx, m.ID); err != nil {
 			return err
 		}
 		// Un parent retiré : ses appareils de confiance ne doivent plus

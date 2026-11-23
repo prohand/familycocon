@@ -726,7 +726,7 @@ func (a *App) reinitialiserSecurite(w http.ResponseWriter, r *http.Request, c *C
 	}
 	err = a.Transaction(ctx, func(q *donnees.Queries) error {
 		for _, f := range []func(context.Context, int64) error{q.DesactiverTOTP, q.EffacerCodesSecours, q.SupprimerPasskeysMembre, q.SupprimerSessionsMembre,
-			q.SupprimerAbonnementsPushMembre} {
+			q.SupprimerAbonnementsPushMembre, q.SupprimerIcal} {
 			if err := f(ctx, m.ID); err != nil {
 				return err
 			}

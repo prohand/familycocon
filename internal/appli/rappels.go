@@ -8,6 +8,7 @@ import (
 	"html/template"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"familycocon/internal/donnees"
@@ -206,6 +207,11 @@ func (a *App) envoyerRappelsA(ctx context.Context, maintenant time.Time, seule9h
 				continue // plutôt aucun rappel que le même à chaque heure
 			}
 		}
+		// Une seule notification par matin (sinon chacune remplace la
+		// précédente à l'écran) : les parents ont tout, les autres membres
+		// n'ont pas ce qui est réservé aux parents (abonnements…).
+		var tous, parents []Echeance
+		var lignesTous, lignesParents []string
 		for _, decalage := range []int{0, 7} {
 			jour := auj.AddDate(0, 0, decalage)
 			for _, e := range a.Echeances(ctx, f, jour, jour.AddDate(0, 0, 1)) {
@@ -213,15 +219,39 @@ func (a *App) envoyerRappelsA(ctx context.Context, maintenant time.Time, seule9h
 				if decalage == 7 {
 					quand = "Dans 7 jours"
 				}
-				texte := fmt.Sprintf("%s %s : %s", e.Emoji, quand, e.Titre)
-				// En attendant une place dans la file : aucun rappel perdu.
-				a.Push.annoncerEnAttendant(ctx, annonce{famille: f.ID, module: moduleRappels, texte: texte, parents: e.Parents})
+				ligne := fmt.Sprintf("%s %s : %s", e.Emoji, quand, e.Titre)
+				parents, lignesParents = append(parents, e), append(lignesParents, ligne)
+				if !e.Parents {
+					tous, lignesTous = append(tous, e), append(lignesTous, ligne)
+				}
 				n++
 			}
+		}
+		if len(parents) > 0 {
+			texte, url := texteRappels(parents, lignesParents)
+			a.Push.annoncerEnAttendant(ctx, annonce{famille: f.ID, module: moduleRappels, texte: texte, url: url, parents: true})
+		}
+		if len(tous) > 0 {
+			texte, url := texteRappels(tous, lignesTous)
+			a.Push.annoncerEnAttendant(ctx, annonce{famille: f.ID, module: moduleRappels, texte: texte, url: url, sansParents: true})
 		}
 	}
 	if n > 0 {
 		a.Journal.Info("rappels envoyés", "nombre", n)
 	}
 	return n
+}
+
+// texteRappels : le texte de la notification du matin (une ligne par
+// rappel) et la page ouverte au toucher : celle de l'échéance s'il n'y en a
+// qu'une, l'accueil (« À venir ») sinon.
+func texteRappels(ech []Echeance, lignes []string) (string, string) {
+	if len(ech) == 1 {
+		url := ech[0].URL
+		if url == "" {
+			url = "/"
+		}
+		return lignes[0], url
+	}
+	return strings.Join(lignes, "\n"), "/"
 }

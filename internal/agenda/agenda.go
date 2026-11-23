@@ -54,14 +54,24 @@ func Brancher(a *appli.App) {
 	a.Route("GET /agenda", mod, appli.Membre, m.page)
 	a.Route("GET /agenda/contenu", mod, appli.Membre, m.contenu)
 	a.Route("GET /agenda/nouveau", mod, appli.Membre, m.formulaire)
+	a.Route("GET /agenda/calendrier", mod, appli.Membre, m.pageCalendrier)
+	a.Route("POST /agenda/calendrier", mod, appli.Membre, m.creerLien)
+	a.Route("POST /agenda/calendrier/couper", mod, appli.Membre, m.couperLien)
+	// Flux iCalendar : sans session, le lien secret suffit.
+	a.Mux.HandleFunc("GET /ical/{jeton}", m.flux)
 	a.Route("POST /agenda", mod, appli.Membre, m.creer)
 	a.Route("GET /agenda/{id}", mod, appli.Membre, m.formulaire)
 	a.Route("POST /agenda/{id}", mod, appli.Membre, m.modifier)
 	a.Route("POST /agenda/{id}/supprimer", mod, appli.Parent, m.supprimer)
+	a.Route("POST /agenda/{id}/sauter", mod, appli.Membre, m.sauter)
+	a.Route("POST /agenda/{id}/retablir", mod, appli.Membre, m.retablir)
 
 	a.AjouterResume(mod, m.resume)
+	a.AjouterEcheances(mod, m.echeances)
+	a.AjouterRecherche(mod, m.chercher)
 	a.AjouterBloc(appli.BlocAccueil{Module: mod, Ordre: 1, Rendre: m.blocAccueil})
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "🗓️", Texte: "Un événement", URL: "/agenda/nouveau"})
+	a.AjouterPartage(appli.Partage{Module: mod, Emoji: "🗓️", Texte: "À l'agenda", URL: "/agenda/nouveau"})
 }
 
 // Occurrence : un événement à une date (un événement répété en a plusieurs).
@@ -77,6 +87,16 @@ type Occurrence struct {
 type ContactEvt struct {
 	ID       int64
 	Nom, Tel string
+}
+
+// Lien : la fiche de l'événement ; pour un événement qui revient, avec la
+// date de cette fois-ci (retour à la bonne semaine, « annuler cette fois »).
+func (o Occurrence) Lien() string {
+	u := "/agenda/" + strconv.FormatInt(o.Evt.ID, 10)
+	if o.Evt.Repetition != "" {
+		u += "?jour=" + repetition.CleJour(o.Debut)
+	}
+	return u
 }
 
 // Heure : « 10:00 », « Journée ».
@@ -178,9 +198,13 @@ func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin 
 			return nil, err
 		}
 	}
+	annulees, err := m.exceptions(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	var out []Occurrence
 	for _, e := range evts {
-		for _, dates := range deplier(e, c.Lieu, debut, fin) {
+		for _, dates := range deplierSans(e, c.Lieu, debut, fin, annulees[e.ID]) {
 			out = append(out, Occurrence{Evt: e, Debut: dates[0], Fin: dates[1], Membres: parEvt[e.ID], Contacts: cites[e.ID]})
 		}
 	}
@@ -361,6 +385,15 @@ type formEvt struct {
 	Contacts   []donnees.ContactsChoixAgendaRow // carnet (liste de choix : nom et métier)
 	Cites      map[int64]bool                   // contacts cités par l'événement
 	ContactsEv []ContactEvt
+	Jour       string // événement qui revient, ouvert depuis une de ses dates (2026-12-01)
+	JourTitre  string // « Mardi 1er décembre »
+	Retour     string // date de la semaine où revenir
+	Annulees   []jourAnnule
+}
+
+// jourAnnule : une fois annulée d'un événement qui revient.
+type jourAnnule struct {
+	Cle, Titre string
 }
 
 // caseJour : une case « lun … dim » de la répétition « certains jours ».
@@ -401,6 +434,8 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			jour = d
 		}
 		f.Date, f.DateFin, f.HeureDebut, f.HeureFin = repetition.CleJour(jour), repetition.CleJour(jour), "", ""
+		// Venu de « Partager » : titre et note préremplis.
+		f.Evt.Titre, f.Evt.Note = appli.LirePrerempli(r, 80, 500)
 	} else {
 		e, err := m.evenement(r, c)
 		if err != nil {
@@ -433,6 +468,25 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		for _, p := range parts {
 			f.Choisis[p.MembreID] = true
 		}
+		if e.Repetition != "" {
+			jours, err := m.a.Q.ExceptionsEvenement(ctx, e.ID)
+			if err != nil {
+				m.a.ErreurInterne(w, r, err)
+				return
+			}
+			for _, j := range jours {
+				if d, err := time.ParseInLocation("2006-01-02", j, c.Lieu); err == nil && !d.Before(minuit(c.Maintenant())) {
+					f.Annulees = append(f.Annulees, jourAnnule{Cle: j, Titre: appli.DateLongue(d)})
+				}
+			}
+			if j, err := time.ParseInLocation("2006-01-02", r.URL.Query().Get("jour"), c.Lieu); err == nil {
+				f.Jour, f.JourTitre = repetition.CleJour(j), appli.DateLongue(j)
+			}
+		}
+	}
+	f.Retour = f.Date
+	if f.Jour != "" {
+		f.Retour = f.Jour
 	}
 	for i := 1; i <= 7; i++ {
 		f.Semaine = append(f.Semaine, caseJour{N: i, Nom: repetition.NomsJours[i], Coche: f.Regle.Jours[i]})
@@ -450,6 +504,7 @@ type saisie struct {
 	repetitionFin                 string
 	debut, fin                    time.Time
 	journee                       bool
+	rappel                        bool
 	membres                       []int64
 	contacts                      []int64
 	// carnet : le formulaire proposait-il les contacts ? Sinon (carnet
@@ -466,6 +521,7 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 	s.titre = strings.TrimSpace(f.Get("titre"))
 	s.lieu = strings.TrimSpace(f.Get("lieu"))
 	s.note = strings.TrimSpace(f.Get("note"))
+	s.rappel = f.Get("rappel") == "1"
 	if n := utf8.RuneCountInString(s.titre); n < 1 || n > 80 {
 		return s, "Le titre doit faire entre 1 et 80 caractères."
 	}
@@ -612,7 +668,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		}
 		e, err = q.CreerEvenement(ctx, donnees.CreerEvenementParams{
 			FamilleID: c.Famille.ID, Titre: s.titre, Lieu: s.lieu, Note: s.note, Debut: s.debut.Unix(), Fin: s.fin.Unix(),
-			Journee: bool01(s.journee), Repetition: s.repetition, RepetitionFin: s.repetitionFin, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+			Journee: bool01(s.journee), Repetition: s.repetition, RepetitionFin: s.repetitionFin, Rappel: bool01(s.rappel), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 		})
 		if err != nil {
 			return err
@@ -631,7 +687,8 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		return
 	}
 	quand := strings.ToLower(appli.TitreJour(s.debut))
-	m.a.Publier(c, mod, fmt.Sprintf("%s a ajouté « %s » (%s) 🗓️", c.Membre.Nom, e.Titre, quand))
+	// Pour certains membres seulement : eux seuls sont notifiés.
+	m.a.PublierPour(c, mod, fmt.Sprintf("%s a ajouté « %s » (%s) 🗓️", c.Membre.Nom, e.Titre, quand), s.membres)
 	m.a.Flash(w, "Événement ajouté ✓")
 	m.a.Rediriger(w, r, "/agenda?date="+repetition.CleJour(s.debut))
 }
@@ -655,7 +712,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
 		if err := q.ModifierEvenement(ctx, donnees.ModifierEvenementParams{
 			Titre: s.titre, Lieu: s.lieu, Note: s.note, Debut: s.debut.Unix(), Fin: s.fin.Unix(),
-			Journee: bool01(s.journee), Repetition: s.repetition, RepetitionFin: s.repetitionFin, ID: e.ID, FamilleID: c.Famille.ID,
+			Journee: bool01(s.journee), Repetition: s.repetition, RepetitionFin: s.repetitionFin, Rappel: bool01(s.rappel), ID: e.ID, FamilleID: c.Famille.ID,
 		}); err != nil {
 			return err
 		}
@@ -673,7 +730,11 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	}
 	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Événement enregistré ✓")
-	m.a.Rediriger(w, r, "/agenda?date="+repetition.CleJour(s.debut))
+	retour := repetition.CleJour(s.debut)
+	if j, err := time.ParseInLocation("2006-01-02", r.PostFormValue("retour"), c.Lieu); err == nil && s.repetition != "" {
+		retour = repetition.CleJour(j) // ouvert depuis une de ses dates : on y revient
+	}
+	m.a.Rediriger(w, r, "/agenda?date="+retour)
 }
 
 func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -735,4 +796,43 @@ func dureeMax(t string) time.Duration {
 		return 181 * jour
 	}
 	return 365 * jour
+}
+
+// echeances : les événements « à rappeler » (case cochée), pour le bloc
+// « À venir » de l'accueil et la notification du matin. Seul le premier
+// jour d'un événement de plusieurs jours est rappelé.
+func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin time.Time) ([]appli.Echeance, error) {
+	evts, err := m.a.Q.EvenementsPeriode(ctx, donnees.EvenementsPeriodeParams{FamilleID: f.ID, FinPeriode: fin.Unix(),
+		DebutPeriode: debut.Unix(), JourMin: repetition.CleJour(debut.AddDate(-1, 0, -1))})
+	if err != nil {
+		return nil, err
+	}
+	var ids []int64
+	for _, e := range evts {
+		if e.Rappel == 1 {
+			ids = append(ids, e.ID)
+		}
+	}
+	annulees, err := m.exceptions(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	var out []appli.Echeance
+	for _, e := range evts {
+		if e.Rappel == 0 {
+			continue
+		}
+		for _, dates := range deplierSans(e, debut.Location(), debut, fin, annulees[e.ID]) {
+			if dates[0].Before(debut) {
+				continue
+			}
+			o := Occurrence{Evt: e, Debut: dates[0], Fin: dates[1]}
+			titre := e.Titre
+			if e.Journee == 0 {
+				titre += " à " + strings.Replace(o.Heure(), ":", " h ", 1)
+			}
+			out = append(out, appli.Echeance{Jour: minuit(dates[0]), Titre: titre, Emoji: "🗓️", URL: o.Lien(), Module: mod})
+		}
+	}
+	return out, nil
 }

@@ -4,7 +4,8 @@
 // échéances et carnet via le paquet suivi) :
 //   - Véhicules : contrôle technique, assurance, vidange, kilométrage ;
 //   - Animaux : vaccins, vermifuge, vétérinaire ;
-//   - Prestataires : plombier, nounou, ramonage… et leurs interventions.
+//   - Prestataires : plombier, nounou, ramonage… et leurs interventions ;
+//   - Garanties : appareils achetés, fin de garantie, facture.
 //
 // Droits : tout le monde consulte, ajoute et corrige ; seuls les parents
 // suppriment.
@@ -40,6 +41,7 @@ func Brancher(a *appli.App, s *suivi.Suivi) {
 	m.brancherVehicules()
 	m.brancherAnimaux()
 	m.brancherPrestataires()
+	m.brancherGaranties()
 }
 
 // Element : une ligne de la liste d'un module.

@@ -4,6 +4,7 @@ package appli
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"runtime/debug"
 	"time"
@@ -96,8 +97,15 @@ func (a *App) sauvegardesAuto(ctx context.Context) {
 			chemin, err := base.SauvegardeAuto(ctx, a.DB, dossier, a.Config.SauvegardeNb)
 			if err != nil {
 				a.Journal.Error("sauvegarde automatique ratée", "erreur", err)
+				// Montrée aux parents et à la supervision (sans le chemin).
+				a.noterSauvegarde(ctx, EtatSauvegarde{Le: time.Now().Unix(), Erreur: "la sauvegarde a échoué : voir le journal du serveur"})
 				return
 			}
+			etat := EtatSauvegarde{Le: time.Now().Unix(), OK: true}
+			if fi, err := os.Stat(chemin); err == nil {
+				etat.Taille = fi.Size()
+			}
+			a.noterSauvegarde(ctx, etat)
 			a.Journal.Info("sauvegarde automatique faite", "fichier", chemin, "duree_ms", time.Since(debut).Milliseconds())
 		}()
 	}

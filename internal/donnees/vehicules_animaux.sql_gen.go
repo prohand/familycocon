@@ -88,6 +88,17 @@ func (q *Queries) CompterAnimaux(ctx context.Context, familleID int64) (int64, e
 	return count, err
 }
 
+const compterGaranties = `-- name: CompterGaranties :one
+SELECT count(*) FROM garanties WHERE famille_id = ?
+`
+
+func (q *Queries) CompterGaranties(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterGaranties, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const compterVehicules = `-- name: CompterVehicules :one
 SELECT count(*) FROM vehicules WHERE famille_id = ?
 `
@@ -147,6 +158,57 @@ func (q *Queries) CreerAnimal(ctx context.Context, arg CreerAnimalParams) (Anima
 	return i, err
 }
 
+const creerGarantie = `-- name: CreerGarantie :one
+INSERT INTO garanties (famille_id, nom, marque, achat, prix, garantie_mois, magasin, magasin_id, facture, notes, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, marque, achat, prix, garantie_mois, magasin, magasin_id, facture, notes, cree_le
+`
+
+type CreerGarantieParams struct {
+	FamilleID    int64
+	Nom          string
+	Marque       string
+	Achat        string
+	Prix         int64
+	GarantieMois int64
+	Magasin      string
+	MagasinID    sql.NullInt64
+	Facture      string
+	Notes        string
+	CreeLe       int64
+}
+
+func (q *Queries) CreerGarantie(ctx context.Context, arg CreerGarantieParams) (Garantie, error) {
+	row := q.db.QueryRowContext(ctx, creerGarantie,
+		arg.FamilleID,
+		arg.Nom,
+		arg.Marque,
+		arg.Achat,
+		arg.Prix,
+		arg.GarantieMois,
+		arg.Magasin,
+		arg.MagasinID,
+		arg.Facture,
+		arg.Notes,
+		arg.CreeLe,
+	)
+	var i Garantie
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.Nom,
+		&i.Marque,
+		&i.Achat,
+		&i.Prix,
+		&i.GarantieMois,
+		&i.Magasin,
+		&i.MagasinID,
+		&i.Facture,
+		&i.Notes,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
 const creerVehicule = `-- name: CreerVehicule :one
 INSERT INTO vehicules (famille_id, nom, genre, immatriculation, modele, kilometrage, notes, garage_id, assureur_id, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id
@@ -195,6 +257,77 @@ func (q *Queries) CreerVehicule(ctx context.Context, arg CreerVehiculeParams) (V
 	return i, err
 }
 
+const garantieParID = `-- name: GarantieParID :one
+SELECT id, famille_id, nom, marque, achat, prix, garantie_mois, magasin, magasin_id, facture, notes, cree_le FROM garanties WHERE id = ? AND famille_id = ?
+`
+
+type GarantieParIDParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) GarantieParID(ctx context.Context, arg GarantieParIDParams) (Garantie, error) {
+	row := q.db.QueryRowContext(ctx, garantieParID, arg.ID, arg.FamilleID)
+	var i Garantie
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.Nom,
+		&i.Marque,
+		&i.Achat,
+		&i.Prix,
+		&i.GarantieMois,
+		&i.Magasin,
+		&i.MagasinID,
+		&i.Facture,
+		&i.Notes,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
+const garantiesFamille = `-- name: GarantiesFamille :many
+
+SELECT id, famille_id, nom, marque, achat, prix, garantie_mois, magasin, magasin_id, facture, notes, cree_le FROM garanties WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
+`
+
+// Garanties : appareils.
+func (q *Queries) GarantiesFamille(ctx context.Context, familleID int64) ([]Garantie, error) {
+	rows, err := q.db.QueryContext(ctx, garantiesFamille, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Garantie{}
+	for rows.Next() {
+		var i Garantie
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Nom,
+			&i.Marque,
+			&i.Achat,
+			&i.Prix,
+			&i.GarantieMois,
+			&i.Magasin,
+			&i.MagasinID,
+			&i.Facture,
+			&i.Notes,
+			&i.CreeLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const modifierAnimal = `-- name: ModifierAnimal :exec
 UPDATE animaux SET nom = ?, espece = ?, race = ?, naissance = ?, puce = ?, veterinaire = ?, veterinaire_id = ?, notes = ?
 WHERE id = ? AND famille_id = ?
@@ -222,6 +355,42 @@ func (q *Queries) ModifierAnimal(ctx context.Context, arg ModifierAnimalParams) 
 		arg.Puce,
 		arg.Veterinaire,
 		arg.VeterinaireID,
+		arg.Notes,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
+}
+
+const modifierGarantie = `-- name: ModifierGarantie :exec
+UPDATE garanties SET nom = ?, marque = ?, achat = ?, prix = ?, garantie_mois = ?, magasin = ?, magasin_id = ?, facture = ?, notes = ?
+WHERE id = ? AND famille_id = ?
+`
+
+type ModifierGarantieParams struct {
+	Nom          string
+	Marque       string
+	Achat        string
+	Prix         int64
+	GarantieMois int64
+	Magasin      string
+	MagasinID    sql.NullInt64
+	Facture      string
+	Notes        string
+	ID           int64
+	FamilleID    int64
+}
+
+func (q *Queries) ModifierGarantie(ctx context.Context, arg ModifierGarantieParams) error {
+	_, err := q.db.ExecContext(ctx, modifierGarantie,
+		arg.Nom,
+		arg.Marque,
+		arg.Achat,
+		arg.Prix,
+		arg.GarantieMois,
+		arg.Magasin,
+		arg.MagasinID,
+		arg.Facture,
 		arg.Notes,
 		arg.ID,
 		arg.FamilleID,
@@ -281,6 +450,38 @@ func (q *Queries) NomsAnimaux(ctx context.Context, familleID int64) ([]NomsAnima
 	items := []NomsAnimauxRow{}
 	for rows.Next() {
 		var i NomsAnimauxRow
+		if err := rows.Scan(&i.ID, &i.Nom); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const nomsGaranties = `-- name: NomsGaranties :many
+SELECT id, nom FROM garanties WHERE famille_id = ?
+`
+
+type NomsGarantiesRow struct {
+	ID  int64
+	Nom string
+}
+
+func (q *Queries) NomsGaranties(ctx context.Context, familleID int64) ([]NomsGarantiesRow, error) {
+	rows, err := q.db.QueryContext(ctx, nomsGaranties, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NomsGarantiesRow{}
+	for rows.Next() {
+		var i NomsGarantiesRow
 		if err := rows.Scan(&i.ID, &i.Nom); err != nil {
 			return nil, err
 		}
@@ -360,6 +561,20 @@ type SupprimerAnimalParams struct {
 
 func (q *Queries) SupprimerAnimal(ctx context.Context, arg SupprimerAnimalParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerAnimal, arg.ID, arg.FamilleID)
+	return err
+}
+
+const supprimerGarantie = `-- name: SupprimerGarantie :exec
+DELETE FROM garanties WHERE id = ? AND famille_id = ?
+`
+
+type SupprimerGarantieParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) SupprimerGarantie(ctx context.Context, arg SupprimerGarantieParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerGarantie, arg.ID, arg.FamilleID)
 	return err
 }
 

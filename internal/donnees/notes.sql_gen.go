@@ -10,6 +10,34 @@ import (
 	"database/sql"
 )
 
+const cocherNote = `-- name: CocherNote :execrows
+UPDATE notes SET texte = ?1, modifie_le = ?2
+WHERE id = ?3 AND famille_id = ?4 AND texte = ?5
+`
+
+type CocherNoteParams struct {
+	Texte     string
+	ModifieLe int64
+	ID        int64
+	FamilleID int64
+	Ancien    string
+}
+
+// Case d'une liste cochee : seulement le texte change.
+func (q *Queries) CocherNote(ctx context.Context, arg CocherNoteParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cocherNote,
+		arg.Texte,
+		arg.ModifieLe,
+		arg.ID,
+		arg.FamilleID,
+		arg.Ancien,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const compterNotes = `-- name: CompterNotes :one
 SELECT count(*) FROM notes WHERE famille_id = ?1 AND (privee = 0 OR auteur_id = ?2)
 `
@@ -97,9 +125,10 @@ func (q *Queries) EpinglerNote(ctx context.Context, arg EpinglerNoteParams) erro
 	return err
 }
 
-const modifierNote = `-- name: ModifierNote :exec
-UPDATE notes SET titre = ?, texte = ?, couleur = ?, epinglee = ?, privee = ?, modifie_le = ?
-WHERE id = ? AND famille_id = ?
+const modifierNote = `-- name: ModifierNote :execrows
+UPDATE notes SET titre = ?1, texte = ?2, couleur = ?3, epinglee = ?4,
+  privee = ?5, modifie_le = ?6
+WHERE id = ?7 AND famille_id = ?8 AND (?9 = 0 OR modifie_le = ?9)
 `
 
 type ModifierNoteParams struct {
@@ -111,10 +140,13 @@ type ModifierNoteParams struct {
 	ModifieLe int64
 	ID        int64
 	FamilleID int64
+	Avant     interface{}
 }
 
-func (q *Queries) ModifierNote(ctx context.Context, arg ModifierNoteParams) error {
-	_, err := q.db.ExecContext(ctx, modifierNote,
+// Rien n'est ecrit si la note a change depuis son ouverture (avant : 0 =
+// pas de controle) : deux membres ne s'effacent pas l'un l'autre.
+func (q *Queries) ModifierNote(ctx context.Context, arg ModifierNoteParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, modifierNote,
 		arg.Titre,
 		arg.Texte,
 		arg.Couleur,
@@ -123,8 +155,12 @@ func (q *Queries) ModifierNote(ctx context.Context, arg ModifierNoteParams) erro
 		arg.ModifieLe,
 		arg.ID,
 		arg.FamilleID,
+		arg.Avant,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const noteParID = `-- name: NoteParID :one
@@ -160,7 +196,7 @@ SELECT id, auteur_id, titre, CAST(substr(texte, 1, 300) AS TEXT) AS debut, coule
 FROM notes
 WHERE famille_id = ?1 AND (privee = 0 OR auteur_id = ?2)
   AND (?3 = '' OR (?3 = 'privees' AND privee = 1) OR (?3 = 'partagees' AND privee = 0))
-  AND (?4 = '' OR instr(lower(titre), lower(?4)) > 0 OR instr(lower(texte), lower(?4)) > 0)
+  AND (?4 = '' OR instr(plier(titre), plier(?4)) > 0 OR instr(plier(texte), plier(?4)) > 0)
 ORDER BY epinglee DESC, modifie_le DESC LIMIT ?5
 `
 

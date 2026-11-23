@@ -34,6 +34,20 @@
 </section>
 
 <section class="carte bloc">
+  <h2>🌗 Thème</h2>
+  <form method="post" action="/moi/theme">
+    {{template "jeton" $c.CSRF}}
+    <div class="pilules-choix">
+      <label><input type="radio" name="theme" value=""{{if eq $.Theme ""}} checked{{end}}><span>📱 Comme le téléphone</span></label>
+      <label><input type="radio" name="theme" value="clair"{{if eq $.Theme "clair"}} checked{{end}}><span>☀️ Clair</span></label>
+      <label><input type="radio" name="theme" value="sombre"{{if eq $.Theme "sombre"}} checked{{end}}><span>🌙 Sombre</span></label>
+    </div>
+    <p class="aide">Gardé sur cet appareil.</p>
+    <button class="bouton">Enregistrer</button>
+  </form>
+</section>
+
+<section class="carte bloc">
   <h2>📌 Ma barre du bas</h2>
   <p class="aide">Les 4 raccourcis autour du bouton « + ».</p>
   <form method="post" action="/moi/raccourcis">
@@ -64,7 +78,7 @@
     </label>
     {{- range .Modules}}
     <label class="interrupteur">
-      <span class="emoji">{{.Emoji}}</span><span class="nom">{{.Nom}}</span>
+      <span class="emoji">{{emoji .Emoji}}</span><span class="nom">{{.Nom}}</span>
       <input type="checkbox" name="push_{{.Cle}}" value="1"{{if contient $.Donnees.Push .Cle}} checked{{end}}>
       <span class="glissiere"></span>
     </label>
@@ -78,9 +92,9 @@
   <h2>🔑 Mot de passe</h2>
   <form method="post" action="/moi/mdp">
     {{template "jeton" $c.CSRF}}
-    <label class="champ"><span>Mot de passe actuel</span><input type="password" name="actuel" autocomplete="current-password" required></label>
-    <label class="champ"><span>Nouveau (10 caractères ou plus)</span><input type="password" name="nouveau" autocomplete="new-password" minlength="10" required></label>
-    <label class="champ"><span>Le même, encore une fois</span><input type="password" name="nouveau2" autocomplete="new-password" minlength="10" required></label>
+    <label class="champ"><span>Mot de passe actuel</span><input type="password" maxlength="128" name="actuel" autocomplete="current-password" required></label>
+    <label class="champ"><span>Nouveau (10 caractères ou plus)</span><input type="password" maxlength="128" name="nouveau" autocomplete="new-password" minlength="10" required></label>
+    <label class="champ"><span>Le même, encore une fois</span><input type="password" maxlength="128" name="nouveau2" autocomplete="new-password" minlength="10" required></label>
     <button class="bouton">Changer le mot de passe</button>
   </form>
 </section>
