@@ -256,7 +256,7 @@ type vueFiche struct {
 	Groupes     []string
 	Retour      string // page d'où l'on vient
 	TitreRetour string
-	Prestataire bool // lien vers les interventions
+	Prestataire bool              // lien vers les interventions
 	Cites       []Citation        // ce qui cite ce contact (vétérinaire de Rex…)
 	Doublons    []donnees.Contact // même nom ou même numéro : à fusionner ?
 }
