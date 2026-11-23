@@ -69,6 +69,8 @@ type Photo struct {
 // Vehicule : un véhicule de la sauvegarde.
 type Vehicule struct {
 	Nom    string
+	Plaque string // immatriculation (« Plate »)
+	Modele string // marque, modèle et année (« Ford Focus 2017 »)
 	Lignes []Ligne
 	Photos []Photo
 	Ecart  Ecart // lignes de la sauvegarde laissées de côté (et pourquoi)
@@ -360,6 +362,12 @@ func LireCSV(r io.Reader) (Vehicule, error) {
 	enMiles, gallon := false, 0.0
 	if vp := parties["vehicle"]; vp != nil && len(vp.lignes) > 0 {
 		v.Nom = vp.col(vp.lignes[0], "Name")
+		v.Plaque = couper(vp.col(vp.lignes[0], "Plate"), 20)
+		annee := vp.col(vp.lignes[0], "Year")
+		if annee == "0" {
+			annee = ""
+		}
+		v.Modele = couper(strings.Join(strings.Fields(vp.col(vp.lignes[0], "Make")+" "+vp.col(vp.lignes[0], "Model")+" "+annee), " "), 80)
 		// DistUnit : 0 km, 1 miles. FuelUnit : 0 litres, 1 gallon US, 2 gallon UK.
 		enMiles = vp.col(vp.lignes[0], "DistUnit") == "1"
 		switch vp.col(vp.lignes[0], "FuelUnit") {

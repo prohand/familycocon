@@ -1102,7 +1102,7 @@ func (q *Queries) ExportTachesFaites(ctx context.Context, familleID int64) ([]Ta
 }
 
 const exportVehicules = `-- name: ExportVehicules :many
-SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id FROM vehicules WHERE famille_id = ?
+SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id, vendu_le FROM vehicules WHERE famille_id = ?
 `
 
 func (q *Queries) ExportVehicules(ctx context.Context, familleID int64) ([]Vehicule, error) {
@@ -1126,6 +1126,7 @@ func (q *Queries) ExportVehicules(ctx context.Context, familleID int64) ([]Vehic
 			&i.CreeLe,
 			&i.GarageID,
 			&i.AssureurID,
+			&i.VenduLe,
 		); err != nil {
 			return nil, err
 		}

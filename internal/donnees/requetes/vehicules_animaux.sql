@@ -38,8 +38,12 @@ WHERE id = ? AND famille_id = ?;
 DELETE FROM animaux WHERE id = ? AND famille_id = ?;
 
 -- Noms seuls (rappels : pas une requete par echeance).
+-- Les vehicules encore a la famille (rappels : pas ceux qui sont partis).
 -- name: NomsVehicules :many
-SELECT id, nom FROM vehicules WHERE famille_id = ?;
+SELECT id, nom FROM vehicules WHERE famille_id = ? AND vendu_le = '';
+
+-- name: ChangerVenduVehicule :exec
+UPDATE vehicules SET vendu_le = sqlc.arg(vendu_le) WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id);
 
 -- name: NomsAnimaux :many
 SELECT id, nom FROM animaux WHERE famille_id = ?;

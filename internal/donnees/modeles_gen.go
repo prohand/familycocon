@@ -483,4 +483,5 @@ type Vehicule struct {
 	CreeLe          int64
 	GarageID        sql.NullInt64
 	AssureurID      sql.NullInt64
+	VenduLe         string
 }

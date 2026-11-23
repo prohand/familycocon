@@ -609,3 +609,21 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   (`App.AjouterMinute`) envoie la notification une seule fois, même aux
   membres qui ont l'appli ouverte (`App.Rappeler`) ; note privée : son
   auteur seul. Montré sur la carte (⏰ 28/11 18:00).
+
+## 23. Anciens véhicules, import Fuelio de tous les véhicules (v0.9.3)
+- **Ancien véhicule** (migration 0035, `vehicules.vendu_le`, date ; vide :
+  toujours là) : case « Je ne l'ai plus » et date dans le formulaire.
+  Historique complet gardé (pleins, entretien, chiffres). Liste : partie
+  « 🏁 Anciens véhicules » en bas, grisée, sans alerte. Fiche : bandeau.
+  Plus de rappels ni d'échéances dans « À venir », le calendrier et la
+  notification du matin (`NomsVehicules` ne renvoie que les véhicules
+  encore là : les échéances des autres sont écartées) ; pas proposé dans
+  « Ajouter un plein » (raccourci, autres véhicules) ; pas compté sur
+  l'accueil.
+- **Import de tous les véhicules** (`POST /vehicules/fuelio`, parents,
+  depuis la liste) : chaque véhicule de la sauvegarde va dans celui du
+  même nom (accents et majuscules à part), créé s'il manque avec
+  l'immatriculation, la marque, le modèle et l'année de Fuelio. Un véhicule
+  créé dont le dernier plein a plus d'un an est rangé dans les anciens,
+  depuis la date de ce plein. Même reprise que sur une fiche (sans
+  doublon, photos, compteur) ; bilan par véhicule.

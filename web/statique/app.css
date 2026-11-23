@@ -1711,3 +1711,4 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .rappel-note .champ { margin: 0; flex: 1; min-width: 180px; }
 .note-rappel { font-weight: 800; color: var(--corail-fonce); }
 .rangee-element.cochee input[name=texte] { text-decoration: line-through; color: var(--texte-doux); }
+.liste-objets.anciens .objet { opacity: .7; filter: grayscale(.6); }

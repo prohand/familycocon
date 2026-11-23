@@ -21,6 +21,23 @@
 {{else}}
 <div class="carte vide bloc"><span class="emoji">{{.Emoji}}</span>{{.Vide}}</div>
 {{end}}
+{{if .Fuelio}}
+<details class="bloc carte fuelio">
+  <summary class="lien-ajout">📥 Reprendre tous mes véhicules depuis Fuelio</summary>
+  <p class="aide">La sauvegarde complète de Fuelio (.fuelio) contient tous vos véhicules : chacun va dans le véhicule du même nom, créé s'il manque (immatriculation, marque, modèle). Un véhicule ajouté dont le dernier plein a plus d'un an est rangé dans les anciens. Rien n'est ajouté deux fois.</p>
+  <label class="bouton secondaire petit ajout-fuelio">Choisir le fichier
+    <input type="file" data-fuelio="{{.Fuelio}}" accept=".fuelio,.zip,.csv,application/zip,text/csv" hidden>
+  </label>
+</details>
+{{end}}
+{{if .Anciens}}
+<h2 class="sous-titre">🏁 Anciens véhicules</h2>
+<div class="liste-objets bloc anciens">
+  {{- range .Anciens}}
+  <a class="objet" href="{{.URL}}"><span class="grand-emoji">{{.Emoji}}</span><b>{{.Nom}}</b>{{if .Detail}}<small>{{.Detail}}</small>{{end}}</a>
+  {{- end}}
+</div>
+{{end}}
 </div>
 {{end}}
 {{end}}
