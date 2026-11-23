@@ -82,7 +82,8 @@ sur le téléphone de chacun.
   - échéance modifiable ou reportée d'un mois ; dépense du carnet ajoutée aussi au budget ;
   - véhicule : onglets « Entretien » et « Pleins » ; pour les pleins, consommation, prix du litre, coût pour 100 km et 4 graphiques (consommation, prix du litre, dépenses par mois, kilomètres par mois), sur 12 mois ou depuis le début ;
   - photo du ticket ou de la facture sur une ligne du carnet (parents) ;
-  - véhicule : reprise d'une sauvegarde Fuelio (pleins, dépenses et leurs photos).
+  - véhicule : reprise d'une sauvegarde Fuelio (pleins, dépenses et leurs photos) ;
+  - plein : scan du ticket avec le téléphone (date, litres, prix remplis tout seuls ; lecture dans le téléphone, rien n'est envoyé ailleurs).
 - **Garanties** : appareils achetés, fin de garantie rappelée, où est rangée la facture, réparations.
 - **Projets** : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
 - **Rappels** : bloc « À venir » sur l'accueil (30 jours) et notification chaque matin à 9 h

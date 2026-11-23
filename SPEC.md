@@ -430,3 +430,36 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   Contrôle central : `Contexte.Voit(module)` (activé et permis à ce
   membre), appliqué par `App.Route` à toutes les pages d'un module réservé
   et par les routes communes du suivi (`/suivi/...`).
+
+## 18. Scan du ticket de carburant (v0.7.0)
+- **Bouton « 📷 Scanner le ticket »** dans « Ajouter un plein » (parents) :
+  photo (appareil du téléphone), lecture du texte **dans le téléphone**
+  par Tesseract.js 7 (Apache-2.0, WebAssembly, modèle français
+  « best_int »). Rien ne part chez un tiers ; le serveur ne fait pas
+  l'OCR.
+- **Fichiers** : `web/ocr/v7/` (~1,8 Mo compressés : moteur SIMD seul,
+  modèle 0,7 Mo), gardés en .gz dans le binaire et servis par
+  `GET /ocr/v7/…` (Content-Encoding gzip, cache « immutable ») ; lus à la
+  demande, jamais chargés en mémoire au démarrage. Téléchargés au premier
+  scan seulement. Navigateur sans SIMD WebAssembly (téléphones d'avant
+  2021 environ) : « Lecture impossible », on remplit à la main.
+- **CSP** : `'wasm-unsafe-eval'` ajouté seulement aux réponses de
+  `/ocr/v7/` (le lecteur tourne dans un worker, qui suit la politique de
+  sa propre réponse). Le reste du site garde la politique stricte.
+- **Lecture** : photo en largeur → essai d'un quart de tour d'abord (puis
+  l'autre sens, puis droite) ; image à 1 600 px ; si la date ou un nombre
+  manque, seconde lecture à 2 400 px, et les deux textes sont analysés
+  ensemble. Pas de retouche de contraste (elle abîme les tickets
+  thermiques à points). Essai sur un vrai ticket : ~5 s, tout est lu.
+- **Analyse** en Go (`suivi.LireTicket`, testée sur le texte réellement
+  lu) : POST `/suivi/ticket` (JSON). Les trois nombres qui vont ensemble
+  (litres × prix au litre = prix payé, au centime près) ; les mots de la
+  ligne et de la ligne d'avant départagent (« Quantité », « Prix unit. »,
+  « Montant ») ; lignes de TVA et en francs écartées ; deux sur trois : le
+  troisième se calcule. Date : la première valide, ni future ni de plus
+  d'un an. Carburant (SP95, SP98 même lu « SPsB », E10, E85, gazole…) et
+  station (première ligne faite de mots) vont dans la note.
+- Les champs remplis sont **surlignés** ; le kilométrage reste à taper.
+  La **photo** (réduite à 1 200 px par le téléphone) part avec le plein
+  (champ caché, base64, 900 Kio au plus) et lui est jointe ; si elle
+  n'a pas pu l'être, le plein est gardé et on le dit.

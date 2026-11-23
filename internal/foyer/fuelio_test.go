@@ -5,9 +5,12 @@ package foyer
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/jpeg"
+	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -169,5 +172,103 @@ func TestPleinsPlusAnciens(t *testing.T) {
 	}
 	if code, _ := marie.Get("/suivi/vehicules/9999/pleins?depuis=100"); code != 404 {
 		t.Fatalf("véhicule inconnu : %d", code)
+	}
+}
+
+// Scan du ticket : les fichiers du lecteur (servis compressés, WebAssembly
+// permis sur ces seules réponses), la lecture du texte (parents) et la
+// photo jointe au plein.
+func TestScanTicket(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+	})
+	// Fichiers du lecteur.
+	get := func(adr string, gz bool) *http.Response {
+		req, _ := http.NewRequest("GET", srv.URL+adr, nil)
+		if gz {
+			req.Header.Set("Accept-Encoding", "gzip")
+		}
+		rep, err := http.DefaultTransport.RoundTrip(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return rep
+	}
+	rep := get("/ocr/v7/tesseract-core-simd-lstm.wasm", true)
+	if rep.StatusCode != 200 || rep.Header.Get("Content-Encoding") != "gzip" || rep.Header.Get("Content-Type") != "application/wasm" ||
+		!strings.Contains(rep.Header.Get("Content-Security-Policy"), "'wasm-unsafe-eval'") || !strings.Contains(rep.Header.Get("Cache-Control"), "immutable") {
+		t.Fatalf("wasm : %d %v", rep.StatusCode, rep.Header)
+	}
+	rep.Body.Close()
+	rep = get("/ocr/v7/tesseract.min.js", false)
+	corps, _ := io.ReadAll(rep.Body)
+	rep.Body.Close()
+	if rep.StatusCode != 200 || rep.Header.Get("Content-Encoding") != "" || len(corps) < 10000 {
+		t.Fatalf("js sans gzip : %d, %d octets", rep.StatusCode, len(corps))
+	}
+	if rep = get("/ocr/v7/fra.traineddata.gz", true); rep.StatusCode != 200 || rep.Header.Get("Content-Encoding") != "" {
+		t.Fatalf("modèle : %d %v", rep.StatusCode, rep.Header)
+	}
+	rep.Body.Close()
+	for _, adr := range []string{"/ocr/v7/inconnu.js", "/ocr/LICENCE-tesseract.js.txt", "/ocr/v7/", "/ocr/v7/tesseract.min.js.gz"} {
+		if rep = get(adr, true); rep.StatusCode != 404 {
+			t.Errorf("%s : %d", adr, rep.StatusCode)
+		}
+		rep.Body.Close()
+	}
+	// Le reste du site garde la politique stricte.
+	if rep = get("/connexion", false); strings.Contains(rep.Header.Get("Content-Security-Policy"), "wasm") {
+		t.Error("WebAssembly permis hors du lecteur")
+	}
+	rep.Body.Close()
+
+	// Lecture du texte : parents seulement.
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	lire := func(n *essai.Navigateur, texte string) (int, string) {
+		b, _ := json.Marshal(map[string]string{"texte": texte})
+		req, _ := http.NewRequest("POST", srv.URL+"/suivi/ticket", bytes.NewReader(b))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Jeton", n.Jeton)
+		rep, err := n.C.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer rep.Body.Close()
+		c, _ := io.ReadAll(rep.Body)
+		return rep.StatusCode, string(c)
+	}
+	texte := "STATION TEST\nle 03/11/26\nQuantite = 30,00 L\nPrix unit. = 1,750 EUR\nMONTANT 52,50 EUR"
+	if code, c := lire(marie, texte); code != 200 || !strings.Contains(c, `"litres":"30,00"`) || !strings.Contains(c, `"montant":"52,50"`) {
+		t.Fatalf("lecture : %d %s", code, c)
+	}
+	lea.Get("/")
+	if code, _ := lire(lea, texte); code != http.StatusForbidden {
+		t.Fatalf("lecture par un enfant : %d", code)
+	}
+
+	// La photo du ticket part avec le plein.
+	_, page := marie.Post("/vehicules", map[string]string{"nom": "Clio", "genre": "voiture"})
+	id := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	_, page = marie.Get("/vehicules/" + id + "?onglet=pleins")
+	if !strings.Contains(page, "data-scanner-ticket") || !strings.Contains(page, `name="ticket"`) {
+		t.Fatal("pas de bouton « Scanner le ticket »")
+	}
+	var img bytes.Buffer
+	_ = jpeg.Encode(&img, image.NewRGBA(image.Rect(0, 0, 900, 1200)), nil)
+	_, page = marie.Post("/suivi/vehicules/"+id+"/carnet", map[string]string{"libelle": "Plein", "jour": "2026-11-03", "km": "1000",
+		"litres": "30", "montant": "52,50", "ticket": base64.StdEncoding.EncodeToString(img.Bytes())})
+	if !strings.Contains(page, "/suivi/pieces/") {
+		t.Fatal("photo du ticket non jointe au plein")
+	}
+	if l, _ := filepath.Glob(filepath.Join(a.DossierPieces(), "*", "*.jpg")); len(l) != 1 {
+		t.Fatalf("%d photos sur le disque", len(l))
+	}
+	// Photo abîmée : le plein est gardé, on le dit.
+	_, page = marie.Post("/suivi/vehicules/"+id+"/carnet", map[string]string{"libelle": "Plein", "jour": "2026-11-10", "km": "1500",
+		"litres": "20", "ticket": "pas du base64 !"})
+	if !strings.Contains(page, "photo du ticket non jointe") || !strings.Contains(page, "1 500 km") {
+		t.Fatal("plein avec une photo abîmée")
 	}
 }

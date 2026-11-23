@@ -34,6 +34,7 @@ COPY --from=construction /src/LICENSE /licences/
 COPY --from=construction /src/web/statique/fonts/OFL.txt /licences/nunito-OFL.txt
 # Mentions des bibliothèques embarquées (BSD, MIT).
 COPY --from=construction /src/THIRD-PARTY.md /licences/
+COPY --from=construction /src/web/ocr/LICENCE-tesseract.js.txt /src/web/ocr/LICENCE-tesseract-core.txt /src/web/ocr/LICENCE-composants.txt /licences/
 # Le volume reprend ce propriétaire à sa création (non root, uid 65532).
 COPY --from=construction --chown=65532:65532 /out/donnees /donnees
 ARG VERSION=dev

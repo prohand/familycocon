@@ -179,8 +179,18 @@
   <h2>📒 Les pleins</h2>
   <details class="ajout-echeance"{{if not $v.Pleins}} open{{end}}>
     <summary class="lien-ajout">＋ Ajouter un plein</summary>
-    <form method="post" action="/suivi/{{$s.Module}}/{{$s.ObjetID}}/carnet">
+    <form method="post" action="/suivi/{{$s.Module}}/{{$s.ObjetID}}/carnet"{{if $p}} data-ticket{{end}}>
       {{template "jeton" $j}}
+      {{if $p}}
+      {{/* Scan du ticket : lu dans le téléphone (Tesseract.js), les champs se remplissent ; la photo est jointe au plein. */}}
+      <div class="scan-ticket">
+        <button type="button" class="bouton secondaire petit" data-scanner-ticket>📷 Scanner le ticket</button>
+        <input type="file" accept="image/*" capture="environment" hidden data-photo-ticket>
+        <input type="hidden" name="ticket">
+        <img class="apercu-ticket" alt="Ticket scanné" hidden data-apercu-ticket>
+        <p class="aide" data-etat-ticket>Les champs se remplissent tout seuls ; le kilométrage reste à taper.</p>
+      </div>
+      {{end}}
       <div class="choix-plein">
         <label class="case-a-cocher"><input type="radio" name="libelle" value="Plein" checked> Plein complet</label>
         <label class="case-a-cocher"><input type="radio" name="libelle" value="Plein partiel"> Plein partiel</label>

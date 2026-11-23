@@ -125,6 +125,7 @@ func (a *App) Handler() http.Handler { return a.Envelopper(a.Mux) }
 
 func (a *App) routesDeBase() {
 	a.Mux.HandleFunc("GET /health", a.sante)
+	a.Mux.HandleFunc("GET /ocr/{fichier...}", a.servirOCR)
 	a.Mux.HandleFunc("GET /statique/{fichier...}", func(w http.ResponseWriter, r *http.Request) {
 		a.Statique.Servir(w, r, r.PathValue("fichier"), true)
 	})

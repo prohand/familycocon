@@ -80,6 +80,7 @@ func Brancher(a *appli.App) *Suivi {
 	a.Route("POST /suivi/echeances/{id}", "", appli.Membre, s.modifierEcheance)
 	a.Route("POST /suivi/echeances/{id}/reporter", "", appli.Membre, s.reporter)
 	a.Route("GET /suivi/{module}/{objet}/pleins", "", appli.Membre, s.suitePleins)
+	a.Route("POST /suivi/ticket", "", appli.Parent, s.lireTicketHTTP)
 	a.Route("POST /suivi/carnet/{id}/pieces", "", appli.Parent, s.ajouterPiece)
 	a.Route("GET /suivi/pieces/{id}", "", appli.Parent, s.piece)
 	a.Route("POST /suivi/pieces/{id}/supprimer", "", appli.Parent, s.supprimerPiece)
@@ -424,7 +425,7 @@ func lireCarnet(r *http.Request, c *appli.Contexte) (jour, libelle, note string,
 
 // ecrireCarnet : la ligne du carnet et, si demandé (parent, budget activé,
 // montant non nul), la dépense au budget, liée à la ligne.
-func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.Contexte, o Objet, objet int64, x saisieCarnet) error {
+func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.Contexte, o Objet, objet int64, x saisieCarnet) (int64, error) {
 	var op sql.NullInt64
 	if x.budget && x.montant > 0 && o.Categorie != "" && c.EstParent() && c.Actif("budget") {
 		libelle := x.libelle
@@ -437,15 +438,15 @@ func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.C
 		ope, err := q.CreerOperation(ctx, donnees.CreerOperationParams{FamilleID: c.Famille.ID, Sens: "depense", Montant: x.montant,
 			Categorie: o.Categorie, Libelle: libelle, Jour: x.jour, MembreID: memberID(c), CreePar: memberID(c), CreeLe: time.Now().Unix()})
 		if err != nil {
-			return err
+			return 0, err
 		}
 		op = sql.NullInt64{Int64: ope.ID, Valid: true}
 	}
-	_, err := q.AjouterCarnet(ctx, donnees.AjouterCarnetParams{
+	l, err := q.AjouterCarnet(ctx, donnees.AjouterCarnetParams{
 		FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet, Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km,
 		Litres: x.litres, Note: x.note, OperationID: op, CreePar: memberID(c), CreeLe: time.Now().Unix(),
 	})
-	return err
+	return l.ID, err
 }
 
 // noterKm : un kilométrage saisi met la fiche à jour (hors transaction).
@@ -497,19 +498,33 @@ func (s *Suivi) ajouterCarnet(w http.ResponseWriter, r *http.Request, c *appli.C
 	// même personne dans les 10 dernières secondes, n'est pas répétée.
 	deja, err := s.a.Q.CarnetIdentiqueRecent(ctx, donnees.CarnetIdentiqueRecentParams{FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet,
 		Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km, Note: x.note, CreePar: memberID(c), CreeLe: time.Now().Unix() - 10})
+	var ligne int64
 	if err == nil && deja == 0 {
-		err = s.a.Transaction(ctx, func(q *donnees.Queries) error { return s.ecrireCarnet(ctx, q, c, o, objet, x) })
+		err = s.a.Transaction(ctx, func(q *donnees.Queries) error {
+			var e error
+			ligne, e = s.ecrireCarnet(ctx, q, c, o, objet, x)
+			return e
+		})
 	}
 	if err != nil {
 		s.a.ErreurInterne(w, r, err)
 		return
+	}
+	// Ticket scanné (onglet Pleins, parents) : sa photo est jointe au plein.
+	ticketJoint := true
+	if t := r.PostFormValue("ticket"); t != "" && ligne > 0 && c.EstParent() {
+		ticketJoint = s.joindreTicket(ctx, c, ligne, t)
 	}
 	s.noterKm(ctx, c, o, objet, x.km)
 	s.publier(c, o)
 	if x.budget {
 		s.a.Publier(c, "budget", "")
 	}
-	s.a.Flash(w, "Ajouté au carnet ✓")
+	if ticketJoint {
+		s.a.Flash(w, "Ajouté au carnet ✓")
+	} else {
+		s.a.Flash(w, "Ajouté au carnet ✓ (photo du ticket non jointe)")
+	}
 	s.a.Rediriger(w, r, urlLigne(o, objet, x.litres))
 }
 
@@ -553,7 +568,8 @@ func (s *Suivi) faite(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		if err != nil || n != 1 {
 			return errors.Join(err, errDejaFaite)
 		}
-		return s.ecrireCarnet(ctx, q, c, o, e.ObjetID, x)
+		_, err = s.ecrireCarnet(ctx, q, c, o, e.ObjetID, x)
+		return err
 	})
 	switch {
 	case errors.Is(err, errDejaFaite):
