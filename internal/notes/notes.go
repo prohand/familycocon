@@ -337,6 +337,10 @@ func apercu(titre, texte string) string {
 }
 
 func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	// Nouvelle liste : un champ par élément → une case par ligne.
+	if r.PostFormValue("liste") == "1" {
+		r.PostForm.Set("texte", texteListe(r.PostForm["element"]))
+	}
 	s, msg := lire(r)
 	if msg != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
@@ -376,6 +380,23 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		return
 	}
 	m.a.Rediriger(w, r, "/notes")
+}
+
+// texteListe : les éléments saisis, une case par élément (texte simple :
+// signes gardés tels quels ; vides ignorés ; 500 au plus).
+func texteListe(elements []string) string {
+	var l []string
+	for _, e := range elements {
+		for _, x := range strings.Split(e, "\n") { // un élément collé sur plusieurs lignes
+			if x = strings.TrimSpace(x); x != "" && len(l) < 500 {
+				if utf8.RuneCountInString(x) > elementMax {
+					x = string([]rune(x)[:elementMax])
+				}
+				l = append(l, "[ ] "+riche.Echapper(x))
+			}
+		}
+	}
+	return strings.Join(l, "\n")
 }
 
 func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
