@@ -22,10 +22,11 @@
     <a class="bouton discret" href="/menus/recettes">📖 Recettes</a>
   </p>
   {{if and .Courses .AjoutPossible}}
-  <p class="centre">
-    <button class="bouton" hx-post="/menus/semaine/courses" hx-vals='{"date": "{{.Ref}}"}' hx-target="#menus" hx-swap="outerHTML">
-      🛒 Tous les ingrédients de la semaine aux courses</button>
-  </p>
+  <form class="centre choix-liste" hx-post="/menus/semaine/courses" hx-target="#menus" hx-swap="outerHTML">
+    <input type="hidden" name="date" value="{{.Ref}}">
+    {{template "choix-liste" .}}
+    <button class="bouton">🛒 Tous les ingrédients de la semaine aux courses</button>
+  </form>
   {{end}}
   <div class="semaine">
     {{- range .Jours}}
@@ -54,4 +55,12 @@
   <a class="plat vide-plat" href="/menus/{{$cr.Jour}}/{{$cr.Moment}}">＋ Prévoir</a>
   {{end}}
 </div>
+{{end}}
+
+{{/* Liste de courses qui reçoit les ingrédients (s'il y en a plusieurs). */}}
+{{define "choix-liste"}}
+{{if .Listes}}{{$choisie := .Liste}}
+<label class="champ"><span>Dans la liste</span>
+  <select name="liste">{{range .Listes}}<option value="{{.ID}}"{{if eq .ID $choisie}} selected{{end}}>{{.Nom}}</option>{{end}}</select></label>
+{{end}}
 {{end}}

@@ -65,5 +65,4 @@ réussis à chaque étape (le build multi-arch passe sans émulation).
 
 - Glisser-déposer pour réordonner les listes ; listes de courses « modèles ».
 - Export du budget (CSV) (l'export JSON de toute la famille existe).
-- Choisir la liste de courses qui reçoit les ingrédients des menus.
 - Sauvegardes distantes (rclone, SFTP) comme dans mirador-stack.

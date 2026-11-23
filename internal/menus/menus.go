@@ -74,8 +74,10 @@ type vueMenus struct {
 	Precedent     string
 	Suivant       string
 	Jours         []jourMenu
-	AjoutPossible int  // plats dont les ingrédients ne sont pas encore dans les courses
-	Courses       bool // module Courses activé
+	AjoutPossible int             // plats dont les ingrédients ne sont pas encore dans les courses
+	Courses       bool            // module Courses activé
+	Listes        []donnees.Liste // listes de courses (s'il y en a plusieurs)
+	Liste         int64           // la dernière choisie sur cet appareil
 }
 
 func lignes(s string) []string {
@@ -149,6 +151,7 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	v.Listes, v.Liste = m.listes(r, c)
 	m.a.Afficher(w, r, c, "menus/semaine", "Menus", mod, v)
 }
 
@@ -162,6 +165,7 @@ func (m *Module) renvoyer(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	v.Listes, v.Liste = m.listes(r, c)
 	m.a.Fragment(w, r, c, "menus/semaine", "menus", v)
 }
 
@@ -183,6 +187,8 @@ type formRepas struct {
 	Courses     bool
 	Lignes      []string // ingrédients, à cocher avant l'envoi aux courses
 	Ingredients string
+	Listes      []donnees.Liste // listes de courses (choix s'il y en a plusieurs)
+	Liste       int64           // la dernière choisie sur cet appareil
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -196,6 +202,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	if rp, err := m.a.Q.RepasDuCreneau(ctx, donnees.RepasDuCreneauParams{FamilleID: c.Famille.ID, Jour: f.Creneau.Jour, Moment: moment}); err == nil {
 		f.Creneau.Repas = &rp
 		f.Lignes, f.Ingredients = lignes(rp.Ingredients), rp.Ingredients
+		f.Listes, f.Liste = m.listes(r, c)
 	}
 	f.Titre = appli.TitreJour(j) + ", " + moment
 	var err error
@@ -279,13 +286,14 @@ func (m *Module) vider(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 // courses, une seule fois. Le repas est d'abord marqué « aux courses » : si
 // aucune ligne ne change (double clic, deux membres en même temps), rien
 // n'est ajouté. q : les requêtes d'une transaction (tout ou rien).
-// choisis : les ingrédients à ajouter (nil : tous).
-func ajouterAuxCourses(ctx context.Context, q *donnees.Queries, c *appli.Contexte, rp donnees.Repas, choisis []string) (int, error) {
+// choisis : les ingrédients à ajouter (nil : tous) ; liste : la liste de
+// courses choisie (0 : la première).
+func ajouterAuxCourses(ctx context.Context, q *donnees.Queries, c *appli.Contexte, rp donnees.Repas, choisis []string, liste int64) (int, error) {
 	marques, err := q.MarquerDansCourses(ctx, donnees.MarquerDansCoursesParams{ID: rp.ID, FamilleID: c.Famille.ID})
 	if err != nil || marques == 0 {
 		return 0, err
 	}
-	return courses.AjouterProduits(ctx, q, c, lignesChoisies(rp.Ingredients, choisis))
+	return courses.AjouterProduitsDans(ctx, q, c, liste, lignesChoisies(rp.Ingredients, choisis))
 }
 
 func (m *Module) auxCourses(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -312,7 +320,7 @@ func (m *Module) auxCourses(w http.ResponseWriter, r *http.Request, c *appli.Con
 	}
 	var n int
 	err = m.a.Transaction(ctx, func(q *donnees.Queries) (err error) {
-		n, err = ajouterAuxCourses(ctx, q, c, rp, choisis)
+		n, err = ajouterAuxCourses(ctx, q, c, rp, choisis, m.listeChoisie(w, r))
 		return err
 	})
 	if err != nil {
@@ -335,6 +343,7 @@ func (m *Module) semaineAuxCourses(w http.ResponseWriter, r *http.Request, c *ap
 	}
 	ref := reference(r, c)
 	lundi := repetition.Lundi(ref)
+	liste := m.listeChoisie(w, r)
 	// Lecture et ajouts dans une seule transaction : toute la semaine, ou rien.
 	total := 0
 	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
@@ -347,7 +356,7 @@ func (m *Module) semaineAuxCourses(w http.ResponseWriter, r *http.Request, c *ap
 			if rp.DansCourses == 1 || rp.Ingredients == "" {
 				continue
 			}
-			n, err := ajouterAuxCourses(ctx, q, c, rp, nil)
+			n, err := ajouterAuxCourses(ctx, q, c, rp, nil, liste)
 			if err != nil {
 				return err
 			}

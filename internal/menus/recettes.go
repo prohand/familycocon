@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -148,4 +149,31 @@ func (m *Module) oublierRecette(w http.ResponseWriter, r *http.Request, c *appli
 	}
 	m.a.Flash(w, "Recette oubliée")
 	m.a.Rediriger(w, r, "/menus/recettes")
+}
+
+// listes : les listes de courses de la famille (vide s'il n'y en a qu'une :
+// pas de choix à faire) et la dernière choisie sur cet appareil.
+func (m *Module) listes(r *http.Request, c *appli.Contexte) ([]donnees.Liste, int64) {
+	if !c.Actif("courses") {
+		return nil, 0
+	}
+	l, err := m.a.Q.ListesDeFamille(r.Context(), c.Famille.ID)
+	if err != nil || len(l) < 2 {
+		return nil, 0
+	}
+	choisie, _ := strconv.ParseInt(m.a.LirePreference(r, "menus_liste"), 10, 64)
+	return l, choisie
+}
+
+// listeChoisie : la liste de courses demandée (champ « liste »), retenue par
+// l'appareil pour la prochaine fois ; sans champ, la dernière choisie ; 0 :
+// la première liste.
+func (m *Module) listeChoisie(w http.ResponseWriter, r *http.Request) int64 {
+	id, err := strconv.ParseInt(r.PostFormValue("liste"), 10, 64)
+	if err != nil || id <= 0 {
+		n, _ := strconv.ParseInt(m.a.LirePreference(r, "menus_liste"), 10, 64)
+		return n
+	}
+	m.a.PoserPreference(w, "menus_liste", strconv.FormatInt(id, 10))
+	return id
 }

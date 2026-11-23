@@ -12,10 +12,10 @@
 {{if .Q}}
 {{- range .Groupes}}
 <section class="bloc">
-  <div class="section-titre"><h2>{{.Module.Emoji}} {{.Module.Nom}}</h2><a href="{{.Module.URL}}">Ouvrir ›</a></div>
+  <div class="section-titre"><h2>{{emoji .Module.Emoji}} {{.Module.Nom}}</h2><a href="{{.Module.URL}}">Ouvrir ›</a></div>
   <div class="carte">
     {{- range .Resultats}}
-    <a class="ligne" href="{{.URL}}"><span class="p-emoji">{{.Emoji}}</span><span class="quoi">{{.Titre}}{{if .Detail}}<small>{{.Detail}}</small>{{end}}</span><span class="fleche-droite">›</span></a>
+    <a class="ligne" href="{{.URL}}"><span class="p-emoji">{{emoji .Emoji}}</span><span class="quoi">{{.Titre}}{{if .Detail}}<small>{{.Detail}}</small>{{end}}</span><span class="fleche-droite">›</span></a>
     {{- end}}
   </div>
 </section>

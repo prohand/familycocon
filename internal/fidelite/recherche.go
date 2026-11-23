@@ -19,7 +19,7 @@ func (m *Module) chercher(ctx context.Context, c *appli.Contexte, q string) ([]a
 	var out []appli.Resultat
 	for _, x := range l {
 		if texte.Contient(x.Enseigne+" "+x.Titulaire, q) {
-			out = append(out, appli.Resultat{Emoji: "💳", Titre: x.Enseigne, Detail: x.Titulaire, URL: "/fidelite/" + strconv.FormatInt(x.ID, 10)})
+			out = append(out, appli.Resultat{Emoji: appli.EmojiFidelite, Titre: x.Enseigne, Detail: x.Titulaire, URL: "/fidelite/" + strconv.FormatInt(x.ID, 10)})
 		}
 	}
 	return out, nil

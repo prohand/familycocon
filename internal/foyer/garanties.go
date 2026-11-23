@@ -139,7 +139,7 @@ func (m *Module) ficheGarantie(w http.ResponseWriter, r *http.Request, c *appli.
 	}
 	if a, err := time.Parse("2006-01-02", x.Achat); err == nil {
 		info := "🛒 Acheté le " + appli.DateLongue(a) + " " + strconv.Itoa(a.Year())
-		if x.Prix > 0 {
+		if x.Prix > 0 && c.EstParent() {
 			info += " · " + appli.Montant(x.Prix, c.Famille.Devise)
 		}
 		v.Infos = append(v.Infos, info)
@@ -209,6 +209,13 @@ func (m *Module) enregistrerGarantie(w http.ResponseWriter, r *http.Request, c *
 		if prix, err = budget.LireMontantOuZero(p); err != nil {
 			m.a.Echec(w, r, http.StatusBadRequest, err.Error())
 			return
+		}
+	}
+	if !c.EstParent() {
+		// Prix réservé aux parents : celui déjà noté est gardé.
+		prix = 0
+		if x, ok := m.garantie(r, c); ok && r.PathValue("id") != "" {
+			prix = x.Prix
 		}
 	}
 	magasinID := m.lireContact(r, c, "magasin_id")

@@ -58,7 +58,7 @@ func Brancher(a *appli.App) {
 	a.Route("POST /fidelite/{id}/supprimer", mod, appli.Parent, m.supprimer)
 
 	a.AjouterResume(mod, m.resume)
-	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "💳", Texte: "Une carte de fidélité", URL: "/fidelite/nouvelle"})
+	a.AjouterAction(appli.Ajout{Module: mod, Emoji: appli.EmojiFidelite, Texte: "Une carte de fidélité", URL: "/fidelite/nouvelle"})
 }
 
 // CartesMax : cartes par famille (garde-fou).
@@ -231,7 +231,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		return
 	}
 	m.a.Publier(c, mod, "")
-	m.a.Flash(w, "Carte enregistrée 💳")
+	m.a.Flash(w, "Carte enregistrée ✓")
 	m.a.Rediriger(w, r, fmt.Sprintf("/fidelite/%d", ct.ID))
 }
 

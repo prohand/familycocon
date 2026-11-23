@@ -311,6 +311,15 @@ l'interface. Tout ce qui a été trouvé est fait, en quatre lots, avec des test
   champ d'ajout, boutons de 44 px, `prefers-reduced-motion`, noms des
   boutons de validation et des cases du calendrier.
 
-Restent des choix à faire : montants du carnet (projets, véhicules) visibles
-par les enfants alors que le budget leur est fermé ; liste de courses où
-vont les ingrédients des menus (toujours la première).
+Choix validés ensuite :
+- **Montants cachés aux enfants** (le budget leur est fermé) : coûts du
+  carnet, totaux, coût au km, budget et dépensé des projets, prix des
+  garanties. Un enfant ne saisit pas de montant ; s'il corrige une ligne ou
+  un projet, le montant noté par un parent est gardé.
+- **Liste de courses des menus** : choisie quand la famille en a plusieurs,
+  retenue par l'appareil (cookie `fc_pref_menus_liste`) ; sinon la première.
+- **Icônes** : la carte de fidélité est un dessin SVG écrit dans la page
+  (carte à tampons ; emoji de secours 🪪 dans les textes), via la fonction de
+  gabarit `emoji`. Icône d'application : nid crème sur fond corail
+  (`icone.svg`, PNG 180, 192, 512 dont « maskable »), badge de notification
+  monochrome (`badge-96.png`).

@@ -6,7 +6,7 @@
 {{if .Donnees}}
 <div class="actions">
   {{- range .Donnees}}
-  <a class="action" href="{{.URL}}"><span class="emoji">{{.Emoji}}</span>{{.Texte}}</a>
+  <a class="action" href="{{.URL}}"><span class="emoji">{{emoji .Emoji}}</span>{{.Texte}}</a>
   {{- end}}
 </div>
 {{else}}

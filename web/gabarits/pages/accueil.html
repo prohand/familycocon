@@ -21,7 +21,7 @@
   {{- range .Donnees.Tuiles}}
   <a class="tuile {{.Cle}}" href="{{.URL}}">
     {{- if .Badge}}<span class="badge">{{.Badge}}</span>{{end}}
-    <span class="emoji">{{.Emoji}}</span>
+    <span class="emoji">{{emoji .Emoji}}</span>
     <span><span class="nom">{{.Nom}}</span>{{if .Info}}<br><span class="info">{{.Info}}</span>{{end}}</span>
   </a>
   {{- end}}
@@ -42,7 +42,7 @@
 <div class="carte">
   {{- range .Donnees}}
   <a class="ligne{{if .Proche}} proche{{end}}" href="{{.URL}}">
-    <span class="p-emoji">{{.Emoji}}</span>
+    <span class="p-emoji">{{emoji .Emoji}}</span>
     <span class="quoi">{{.Titre}}<small>{{.Quand}}</small></span>
   </a>
   {{- end}}

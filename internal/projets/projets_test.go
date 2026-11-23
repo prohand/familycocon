@@ -69,6 +69,19 @@ func TestProjet(t *testing.T) {
 	if _, liste := marie.Get("/projets"); !strings.Contains(liste, "300,00") || !strings.Contains(liste, "1 200,00") && !strings.Contains(liste, "1\u202f200,00") {
 		t.Fatalf("budget absent de la liste :\n%s", liste)
 	}
+	// Les montants sont cachés aux enfants (le budget leur est fermé) ; s'ils
+	// modifient le projet ou une dépense, rien n'est effacé.
+	if _, page := lea.Get("/projets/" + id); strings.Contains(page, "300,00") || strings.Contains(page, "Budget") || !strings.Contains(page, "Acompte du gîte") {
+		t.Fatalf("montants visibles par un enfant :\n%s", page)
+	}
+	if _, liste := lea.Get("/projets"); strings.Contains(liste, "300,00") {
+		t.Fatal("dépensé visible dans la liste pour un enfant")
+	}
+	ligne := essai.Trouver(t, page, `action="/suivi/carnet/(\d+)"`)
+	lea.Post("/suivi/carnet/"+ligne, map[string]string{"libelle": "Acompte", "jour": time.Now().Format("2006-01-02")})
+	if _, page := marie.Get("/projets/" + id); !strings.Contains(page, "Reste 900,00") || !strings.Contains(page, "Acompte") {
+		t.Fatalf("montant effacé par la correction d'un enfant :\n%s", page)
+	}
 	// Pas d'échéances pour les projets.
 	if strings.Contains(page, "Ajouter une échéance") {
 		t.Fatal("bloc échéances affiché")

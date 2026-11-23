@@ -15,7 +15,7 @@
   <title>{{.Titre}} · FamilyCocon</title>
   <link rel="icon" href="{{statique "img/logo.svg"}}" type="image/svg+xml">
   <link rel="manifest" href="/manifest.webmanifest">
-  <link rel="apple-touch-icon" href="{{statique "img/icone-192.png"}}">
+  <link rel="apple-touch-icon" href="{{statique "img/icone-180.png"}}">
   <link rel="preload" href="{{statique "fonts/nunito.woff2"}}" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="{{statique "app.css"}}">
   <script src="{{statique "js/htmx.min.js"}}" defer></script>
@@ -38,11 +38,11 @@
 </main>
 <nav class="nav-bas" aria-label="Navigation principale">
   {{- range .Gauche}}
-  <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{.Emoji}}</span>{{.Nom}}</a>
+  <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{emoji .Emoji}}</span>{{.Nom}}</a>
   {{- end}}
   <a class="plus" href="/ajouter" aria-label="Ajouter"{{if eq .Chemin "/ajouter"}} aria-current="page"{{end}}>+</a>
   {{- range .Droite}}
-  <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{.Emoji}}</span>{{.Nom}}</a>
+  <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{emoji .Emoji}}</span>{{.Nom}}</a>
   {{- end}}
 </nav>
 {{- else}}

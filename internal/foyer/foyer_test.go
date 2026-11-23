@@ -59,8 +59,12 @@ func TestVehicule(t *testing.T) {
 	if code != 200 || !strings.Contains(page, "86\u202f000 km") || !strings.Contains(page, "tous les 12 mois") {
 		t.Fatalf("faite : %d\n%s", code, page)
 	}
-	if !strings.Contains(page, "420,50") {
-		t.Fatal("coût absent du carnet")
+	// Un enfant ne saisit ni ne voit les montants (le budget lui est fermé).
+	if strings.Contains(page, "420,50") || strings.Contains(page, `name="montant"`) {
+		t.Fatal("coût visible ou saisissable par un enfant")
+	}
+	if _, p := marie.Get("/vehicules/" + id); strings.Contains(p, "420,50") {
+		t.Fatal("coût saisi par un enfant enregistré")
 	}
 	if _, page := marie.Get("/vehicules"); strings.Contains(page, "⏰") {
 		t.Fatal("alerte toujours là après report")

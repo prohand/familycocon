@@ -78,7 +78,7 @@
     </label>
     {{- range .Modules}}
     <label class="interrupteur">
-      <span class="emoji">{{.Emoji}}</span><span class="nom">{{.Nom}}</span>
+      <span class="emoji">{{emoji .Emoji}}</span><span class="nom">{{.Nom}}</span>
       <input type="checkbox" name="push_{{.Cle}}" value="1"{{if contient $.Donnees.Push .Cle}} checked{{end}}>
       <span class="glissiere"></span>
     </label>

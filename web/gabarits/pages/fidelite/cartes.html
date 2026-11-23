@@ -1,7 +1,7 @@
 {{define "contenu"}}
 <section class="titre-page">
   <a class="retour" href="/">‹ Accueil</a>
-  <h1>💳 Cartes de fidélité</h1>
+  <h1>{{emoji "🪪"}} Cartes de fidélité</h1>
   <p>Touchez une carte pour la montrer en caisse</p>
 </section>
 <div class="boutons"><a class="bouton" href="/fidelite/nouvelle">＋ Carte</a></div>
@@ -14,7 +14,7 @@
     <small>{{if .Titulaire}}{{.Titulaire}} · {{end}}…{{.Fin}}</small>
   </a>
   {{- else}}
-  <div class="carte vide"><span class="emoji">💳</span>Aucune carte. Ajoutez celles du supermarché, de la pharmacie, de la boulangerie…</div>
+  <div class="carte vide"><span class="emoji">{{emoji "🪪"}}</span>Aucune carte. Ajoutez celles du supermarché, de la pharmacie, de la boulangerie…</div>
   {{- end}}
 </div>
 </div>

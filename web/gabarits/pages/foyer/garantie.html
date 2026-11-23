@@ -13,7 +13,7 @@
   </div>
   <div class="rangee">
     <label class="champ"><span>Acheté le</span><input type="date" name="achat" value="{{.G.Achat}}"></label>
-    <label class="champ"><span>Prix (facultatif)</span><input name="prix" value="{{.Prix}}" inputmode="decimal" placeholder="0,00"></label>
+    {{if $c.EstParent}}<label class="champ"><span>Prix (facultatif)</span><input name="prix" value="{{.Prix}}" inputmode="decimal" placeholder="0,00"></label>{{end}}
   </div>
   <label class="champ"><span>Garantie</span>
     <select name="garantie_mois">{{$g := .G.GarantieMois}}

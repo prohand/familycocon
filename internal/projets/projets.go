@@ -248,9 +248,9 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		m.a.Echec(w, r, http.StatusBadRequest, "Date d'objectif invalide.")
 		return
 	}
-	// Vide ou « 0 » : pas de budget.
+	// Vide ou « 0 » : pas de budget (réservé aux parents).
 	var montant int64
-	if b := strings.TrimSpace(r.PostFormValue("budget")); b != "" {
+	if b := strings.TrimSpace(r.PostFormValue("budget")); b != "" && c.EstParent() {
 		v, err := budget.LireMontantOuZero(b)
 		if err != nil {
 			m.a.Echec(w, r, http.StatusBadRequest, "Budget invalide.")
@@ -284,6 +284,13 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		if _, ok := m.projet(r, c, id); !ok {
 			m.a.Echec(w, r, http.StatusNotFound, "Projet introuvable.")
 			return
+		}
+		// Le budget n'est montré qu'aux parents : un enfant qui modifie le
+		// projet ne l'efface pas.
+		if !c.EstParent() {
+			if p, ok := m.projet(r, c, id); ok {
+				montant = p.Budget
+			}
 		}
 		if err := m.a.Q.ModifierProjet(ctx, donnees.ModifierProjetParams{Nom: nom, Emoji: emoji, Couleur: couleur, Description: desc,
 			Objectif: objectif, Budget: montant, ID: id, FamilleID: c.Famille.ID}); err != nil {

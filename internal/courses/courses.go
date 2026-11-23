@@ -72,9 +72,17 @@ func SaisieValide(saisie string) bool {
 // ligne qui ne peut pas devenir un produit (trop longue) est ignorée, et
 // l'ajout s'arrête sans erreur quand la liste est pleine.
 func AjouterProduits(ctx context.Context, q *donnees.Queries, c *appli.Contexte, saisies []string) (int, error) {
-	liste, err := listeParDefaut(ctx, q, c)
-	if err != nil {
-		return 0, err
+	return AjouterProduitsDans(ctx, q, c, 0, saisies)
+}
+
+// AjouterProduitsDans : comme AjouterProduits, dans la liste choisie (0, ou
+// une liste qui n'est pas à la famille : la première liste).
+func AjouterProduitsDans(ctx context.Context, q *donnees.Queries, c *appli.Contexte, listeID int64, saisies []string) (int, error) {
+	liste, err := q.ListeParID(ctx, donnees.ListeParIDParams{ID: listeID, FamilleID: c.Famille.ID})
+	if listeID == 0 || err != nil {
+		if liste, err = listeParDefaut(ctx, q, c); err != nil {
+			return 0, err
+		}
 	}
 	deja, err := q.CompterProduitsListe(ctx, liste.ID)
 	if err != nil {

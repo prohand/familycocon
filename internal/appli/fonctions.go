@@ -31,6 +31,8 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		},
 		// {{montant 123456 "EUR"}} → 1 234,56 €
 		"montant": Montant,
+		// {{emoji .Emoji}} : l'emoji, ou son dessin (carte de fidélité).
+		"emoji": Icone,
 		// {{template "avatar" dict "Nom" .Nom "Couleur" .Couleur}}
 		"dict": func(kv ...any) (map[string]any, error) {
 			if len(kv)%2 != 0 {

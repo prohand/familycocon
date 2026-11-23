@@ -35,7 +35,7 @@ var Catalogue = []ModuleDef{
 	{Cle: "contacts", Nom: "Contacts", Emoji: "👥", URL: "/contacts"},
 	{Cle: "anniversaires", Nom: "Anniversaires", Emoji: "🎂", URL: "/anniversaires"},
 	{Cle: "adresses", Nom: "Adresses", Emoji: "📇", URL: "/adresses"},
-	{Cle: "fidelite", Nom: "Cartes de fidélité", Emoji: "💳", URL: "/fidelite"},
+	{Cle: "fidelite", Nom: "Cartes de fidélité", Emoji: EmojiFidelite, URL: "/fidelite"},
 	{Cle: "vehicules", Nom: "Véhicules", Emoji: "🚗", URL: "/vehicules"},
 	{Cle: "animaux", Nom: "Animaux", Emoji: "🐾", URL: "/animaux"},
 	{Cle: "prestataires", Nom: "Prestataires", Emoji: "🧰", URL: "/prestataires"},

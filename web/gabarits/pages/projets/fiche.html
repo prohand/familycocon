@@ -41,7 +41,7 @@
   </details>
 </section>
 
-{{if .P.Budget}}
+{{if and .P.Budget $c.EstParent}}
 <section class="carte bloc budget-projet">
   <h2>💶 Budget</h2>
   <p>Prévu : <b>{{montant .P.Budget .Devise}}</b> · Dépensé : <b>{{montant .Depense .Devise}}</b></p>

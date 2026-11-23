@@ -106,7 +106,7 @@
     {{template "jeton" $c.CSRF}}
     {{- range .Catalogue}}
     <label class="interrupteur">
-      <span class="emoji">{{.Emoji}}</span><span class="nom">{{.Nom}}{{if .Parents}} <small class="etiquette">parents</small>{{end}}</span>
+      <span class="emoji">{{emoji .Emoji}}</span><span class="nom">{{.Nom}}{{if .Parents}} <small class="etiquette">parents</small>{{end}}</span>
       <input type="checkbox" name="module_{{.Cle}}" value="1"{{if $c.Actif .Cle}} checked{{end}}>
       <span class="glissiere"></span>
     </label>

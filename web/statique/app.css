@@ -1477,3 +1477,9 @@ details.corriger > summary { font-size: .85rem; padding-left: 64px; }
 /* Notes : liste à cocher. */
 .cases-note .case-a-cocher { font-size: 1rem; color: var(--texte); min-height: 40px; margin: 0; }
 .cases-note .case-a-cocher.cochee { text-decoration: line-through; color: var(--texte-doux); }
+
+/* Icône dessinée à la place d'un emoji (même taille que le texte). */
+svg.icone { width: 1.15em; height: 1.15em; vertical-align: -0.2em; display: inline-block; }
+
+/* Menus : liste de courses choisie, au-dessus du bouton. */
+.choix-liste .champ { max-width: 280px; margin: 0 auto 8px; text-align: left; }

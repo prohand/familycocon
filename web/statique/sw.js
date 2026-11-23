@@ -70,7 +70,8 @@ self.addEventListener("push", function (e) {
   e.waitUntil(self.registration.showNotification(d.titre || "FamilyCocon", {
     body: d.texte || "",
     icon: "/statique/img/icone-192.png",
-    badge: "/statique/img/icone-192.png",
+    // Badge : silhouette blanche sur fond transparent (barre d'état Android).
+    badge: "/statique/img/badge-96.png",
     tag: d.groupe || "familycocon",
     renotify: true,
     data: { url: d.url || "/" }

@@ -325,6 +325,11 @@ func lireCarnetComplet(r *http.Request, c *appli.Contexte) (saisieCarnet, string
 		x.litres = v
 	}
 	x.budget = r.PostFormValue("budget") == "1"
+	// Les montants sont réservés aux parents (le budget est fermé aux
+	// enfants) : un enfant n'en saisit pas.
+	if !c.EstParent() {
+		x.montant, x.budget = 0, false
+	}
 	return x, ""
 }
 
@@ -577,6 +582,9 @@ func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.
 		return
 	}
 	x.nom, _ = o.Nom(ctx, c.Famille.ID, l.ObjetID) // avant la transaction
+	if !c.EstParent() {
+		x.montant = l.Montant // un enfant corrige la ligne sans voir ni effacer son coût
+	}
 	err = s.a.Transaction(ctx, func(q *donnees.Queries) error {
 		if err := q.ModifierCarnet(ctx, donnees.ModifierCarnetParams{Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km,
 			Litres: x.litres, Note: x.note, ID: l.ID, FamilleID: c.Famille.ID}); err != nil {

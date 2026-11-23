@@ -14,7 +14,7 @@
     <span class="grand-emoji">{{.Emoji}}</span>
     <span class="quoi">{{.Nom}}
       <small>{{if .NbEtapes}}{{.NbFaites}} / {{.NbEtapes}} étapes{{else}}Pas encore d'étape{{end}}{{if .Objectif}} · {{end}}<span class="{{if .Retard}}alerte{{end}}">{{.Objectif}}</span></small>
-      {{if or .Budget .Depense}}<small class="{{if and .Budget (gt .Depense .Budget)}}alerte{{end}}">💶 {{montant .Depense $.C.Famille.Devise}}{{if .Budget}} sur {{montant .Budget $.C.Famille.Devise}}{{end}}</small>{{end}}
+      {{if and $.C.EstParent (or .Budget .Depense)}}<small class="{{if and .Budget (gt .Depense .Budget)}}alerte{{end}}">💶 {{montant .Depense $.C.Famille.Devise}}{{if .Budget}} sur {{montant .Budget $.C.Famille.Devise}}{{end}}</small>{{end}}
       {{if .NbEtapes}}<progress class="progres projets" max="{{.NbEtapes}}" value="{{.NbFaites}}"></progress>{{end}}
     </span>
   </a>

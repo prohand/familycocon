@@ -161,3 +161,30 @@ func mustPage(n *essai.Navigateur, chemin string) string {
 	_, p := n.Get(chemin)
 	return p
 }
+
+// Ingrédients envoyés dans la liste choisie (et retenue pour la suite).
+func TestListeChoisie(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		Brancher(a)
+		courses.Brancher(a)
+	})
+	marie := essai.Famille(t, srv)
+	marie.Get("/courses")
+	marie.Post("/courses/listes", map[string]string{"nom": "Drive"})
+	var drive string
+	if err := a.DB.QueryRow(`SELECT id FROM listes WHERE nom = 'Drive'`).Scan(&drive); err != nil {
+		t.Fatal(err)
+	}
+	marie.Post("/menus/2026-11-16/midi", map[string]string{"nom": "Crêpes", "ingredients": "Farine\nLait"})
+	if _, page := marie.Get("/menus/2026-11-16/midi"); !strings.Contains(page, `<option value="`+drive+`"`) {
+		t.Fatal("choix de la liste absent")
+	}
+	marie.PostValeurs("/menus/2026-11-16/midi/courses", url.Values{"choix": {"1"}, "ingr": {"Farine", "Lait"}, "liste": {drive}})
+	if _, page := marie.Get("/courses/liste/" + drive); !strings.Contains(page, "Farine") {
+		t.Fatal("ingrédients absents de la liste choisie")
+	}
+	marie.Post("/menus/2026-11-17/soir", map[string]string{"nom": "Soupe", "ingredients": "Poireaux"})
+	if _, page := marie.Get("/menus/2026-11-17/soir"); !strings.Contains(page, `<option value="`+drive+`" selected>`) {
+		t.Fatal("liste choisie non retenue")
+	}
+}
