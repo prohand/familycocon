@@ -4,9 +4,10 @@
 #     de la branche choisie (main) ;
 #   - ou en poussant un tag « vX.Y.Z ».
 # Publie :
-#   - l'image ghcr.io/<propriétaire>/familycocon:X.Y.Z (+ :latest pour une
-#     version finale, pas pour une préversion « -rc1 »), amd64 et arm64 ;
-#   - une Release GitHub avec les binaires linux/amd64 et linux/arm64.
+#   - l'image ghcr.io/<propriétaire>/familycocon:X.Y.Z, amd64 et arm64 ;
+#   - une Release GitHub avec les binaires linux/amd64 et linux/arm64 ;
+#   - puis seulement l'étiquette :latest (version finale, pas une
+#     préversion « -rc1 »).
 name: Release
 
 on:
@@ -107,17 +108,14 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Étiquettes (X.Y.Z, et latest pour une version finale)
+      - name: Étiquette X.Y.Z (« latest » vient après la Release, dernier job)
         id: etiquettes
         env:
           VERSION: ${{ needs.preparation.outputs.version }}
         run: |
           set -eu
           proprio=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
-          base="ghcr.io/$proprio/familycocon"
-          tags="$base:$VERSION"
-          if [ "${VERSION#*-}" = "$VERSION" ]; then tags="$tags,$base:latest"; fi
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          echo "tags=ghcr.io/$proprio/familycocon:$VERSION" >> "$GITHUB_OUTPUT"
       - name: Construction et publication
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         env:
@@ -166,3 +164,32 @@ jobs:
           if [ "${TAG#*-}" != "$TAG" ]; then pre="--prerelease"; fi
           gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
             --title "FamilyCocon $TAG" --generate-notes $pre
+
+  # « latest » n'est posé qu'une fois la Release GitHub créée : si une étape
+  # échoue avant, ceux qui suivent « latest » restent sur la version d'avant.
+  derniere:
+    name: Étiquette latest
+    needs: [preparation, release]
+    # Version finale seulement (pas une préversion « -rc1 »).
+    if: ${{ !contains(needs.preparation.outputs.version, '-') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Connexion à ghcr.io
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: latest = X.Y.Z (même image, aucune reconstruction)
+        env:
+          VERSION: ${{ needs.preparation.outputs.version }}
+        run: |
+          set -eu
+          proprio=$(echo "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')
+          base="ghcr.io/$proprio/familycocon"
+          docker buildx imagetools create --tag "$base:latest" "$base:$VERSION"

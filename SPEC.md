@@ -223,12 +223,21 @@ Corrigé, avec un test par point quand c'est testable :
   `Replanifier`) à la place des copies ; requêtes par id filtrées aussi par
   famille ; requêtes mortes et dossier `mockup/` supprimés.
 
-Non fait (à décider) :
-- un module se déclare toujours à trois endroits (`Catalogue`,
-  `cmd/familycocon/modules.go`, migration) ;
-- l'image de construction Docker est épinglée par tag, pas par empreinte
-  (Dependabot la suit) ; l'image est publiée avant la Release GitHub ;
-- abonnements, cartes, foyer, suivi et contacts publient leurs changements,
-  mais leurs pages n'ont pas encore de bloc qui se rafraîchit tout seul ;
-- sur l'accueil d'un parent, abonnements et anniversaires sont encore lus
-  deux fois (tuile et « À venir »).
+## 13. Suite de la revue (v0.4.4)
+Les points laissés « à décider » par la revue sont traités :
+- **Pages à jour toutes seules** : abonnements, contacts, adresses,
+  anniversaires, cartes de fidélité, véhicules, animaux et prestataires
+  (listes et fiches) se rechargent quand un autre membre change quelque chose.
+  Pas de route en plus : le bloc redemande sa propre page (`Vue.Adresse`) et
+  n'en garde que lui-même (`hx-select`). Sur une fiche qui contient des
+  formulaires (`data-maj-prudent`), rien n'est rechargé pendant qu'on y écrit
+  ou qu'un formulaire est déplié : la saisie n'est jamais perdue.
+- **Publication** : l'étiquette `:latest` n'est posée qu'après la Release
+  GitHub (dernier job, sans reconstruire l'image).
+- **Modules** : toujours déclarés dans `Catalogue` et branchés dans
+  `cmd/familycocon/modules.go` (l'ordre des tuiles reste lisible à un seul
+  endroit), mais un oubli ne passe plus : une clé absente du `Catalogue` est
+  refusée au démarrage, et un test vérifie que chaque module du `Catalogue` a
+  sa page.
+- **Image de construction** épinglée par empreinte (`golang:1.27.4-bookworm@sha256:…`).
+- **Accueil** : abonnements et anniversaires lus une seule fois par requête.

@@ -35,7 +35,18 @@ const mod = "abonnements"
 var Emojis = []string{"📺", "🎵", "📱", "🌐", "☁️", "🎮", "📰", "🏋️", "🛡️", "💡", "🚗", "📦"}
 
 // Module : les abonnements.
-type Module struct{ a *appli.App }
+type Module struct {
+	a *appli.App
+	// liste : les abonnements lus une seule fois par requête (sur l'accueil,
+	// la tuile et « À venir » demandent la même liste).
+	memoListe appli.MemoRequete[[]donnees.ListeAbonnementsRow]
+}
+
+// abonnements : la liste de la famille. c : contexte de la requête, nil
+// pour les rappels de fond (rien n'est alors gardé).
+func (m *Module) abonnements(ctx context.Context, c *appli.Contexte, famille int64) ([]donnees.ListeAbonnementsRow, error) {
+	return m.memoListe.Lire(c, func() ([]donnees.ListeAbonnementsRow, error) { return m.a.Q.ListeAbonnements(ctx, famille) })
+}
 
 // Brancher ajoute les routes du module.
 func Brancher(a *appli.App) {
@@ -83,7 +94,7 @@ func (m *Module) lignes(ctx context.Context, c *appli.Contexte) ([]Ligne, error)
 	if err := budget.GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		return nil, err
 	}
-	l, err := m.a.Q.ListeAbonnements(ctx, c.Famille.ID)
+	l, err := m.abonnements(ctx, c, c.Famille.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +387,7 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 // echeances : renouvellement des abonnements trimestriels, semestriels ou annuels, et fins
 // d'engagement (le bon moment pour résilier ou renégocier).
 func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin time.Time) ([]appli.Echeance, error) {
-	l, err := m.a.Q.ListeAbonnements(ctx, f.ID)
+	l, err := m.abonnements(ctx, appli.ContexteDe(ctx), f.ID)
 	if err != nil {
 		return nil, err
 	}

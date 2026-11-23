@@ -86,7 +86,7 @@ type Anniversaire struct {
 // pour la page resservent), nil pour les rappels de fond.
 func (m *Module) anniversaires(ctx context.Context, c *appli.Contexte, f donnees.Famille, auj time.Time) ([]Anniversaire, error) {
 	var out []Anniversaire
-	contacts, err := m.a.Q.ContactsAvecNaissance(ctx, f.ID)
+	contacts, err := m.naissances.Lire(c, func() ([]donnees.Contact, error) { return m.a.Q.ContactsAvecNaissance(ctx, f.ID) })
 	if err != nil {
 		return nil, err
 	}

@@ -22,6 +22,8 @@
   {{- end}}
 </nav>
 
+{{/* Bloc rechargé tout seul quand un autre membre change quelque chose (voir Vue.Adresse). */}}
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-contacts from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 {{if .Favoris}}
 <section class="bloc">
   <h2 class="sous-titre">⭐ Favoris</h2>
@@ -55,6 +57,7 @@
 <div class="carte vide bloc"><span class="emoji">👥</span>{{if or .Recherche .Filtre}}Personne ne correspond.{{else}}Le carnet est vide : ajoutez mamie, la nounou, le médecin… ou importez les contacts de votre téléphone.{{end}}</div>
 {{end}}
 
+</div>
 {{if .PeutGerer}}
 <details class="bloc carte vcard">
   <summary class="lien-ajout">📲 Importer / exporter (vCard)</summary>

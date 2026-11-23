@@ -5,6 +5,8 @@
   <h1>📺 Abonnements</h1>
   <p>Prélevés tout seuls dans le budget</p>
 </section>
+{{/* Bloc rechargé tout seul quand un autre membre change quelque chose (voir Vue.Adresse). */}}
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-abonnements from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 <section class="carte reste bloc">
   <p class="reste-titre">Chaque mois</p>
   <p class="reste-montant">{{montant .ParMois .Devise}}</p>
@@ -36,5 +38,6 @@
   </div>
 </details>
 {{end}}
+</div>
 {{end}}
 {{end}}

@@ -41,6 +41,17 @@
     });
   });
 
+  // Bloc « data-maj-prudent » (fiche avec des formulaires) : pas de
+  // rechargement automatique pendant que quelqu'un y écrit ou a déplié un
+  // formulaire, sa saisie serait perdue. Il sera à jour au prochain changement.
+  document.addEventListener("htmx:beforeRequest", function (e) {
+    var b = e.detail && e.detail.elt;
+    if (!b || !b.hasAttribute || !b.hasAttribute("data-maj-prudent")) return;
+    var actif = document.activeElement;
+    var ecrit = actif && b.contains(actif) && /^(INPUT|TEXTAREA|SELECT)$/.test(actif.tagName);
+    if (ecrit || b.querySelector("details[open]")) e.preventDefault();
+  });
+
   // Notification demandée par le serveur (en-tête HX-Trigger : « fc-toast »).
   document.addEventListener("fc-toast", function (e) {
     var d = e.detail || {};

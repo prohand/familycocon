@@ -36,6 +36,12 @@ const (
 // Pour toute requête qui modifie quelque chose (POST…), le jeton CSRF de
 // la session est exigé, en plus du contrôle d'origine global.
 func (a *App) Route(motif, module string, acces Acces, h Gestionnaire) {
+	// Un module se déclare dans le Catalogue (vue.go) ET se branche dans
+	// cmd/familycocon/modules.go : une clé absente du Catalogue donnerait une
+	// page que personne ne peut activer. Erreur au démarrage, pas en service.
+	if _, connu := ModuleParCle(module); module != "" && !connu {
+		panic("route " + motif + " : module « " + module + " » absent du Catalogue")
+	}
 	a.Mux.HandleFunc(motif, func(w http.ResponseWriter, r *http.Request) {
 		c, err := a.lireSession(w, r)
 		if err != nil {

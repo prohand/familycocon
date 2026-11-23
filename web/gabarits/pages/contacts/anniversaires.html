@@ -5,6 +5,8 @@
   <p>Les prochaines dates, membres et proches</p>
 </section>
 <div class="boutons"><a class="bouton" href="/contacts/nouveau?anniv=1">＋ Anniversaire</a></div>
+{{/* Bloc rechargé tout seul quand un autre membre change quelque chose (voir Vue.Adresse). */}}
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-contacts from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML">
 {{range .Donnees}}
 <section class="bloc">
   <h2 class="sous-titre">{{.Mois}}</h2>
@@ -22,4 +24,5 @@
 {{else}}
 <div class="carte vide bloc"><span class="emoji">🎂</span>Aucun anniversaire. Ajoutez ceux de vos proches, et votre date de naissance dans <a href="/moi">Moi</a>.</div>
 {{end}}
+</div>
 {{end}}

@@ -26,6 +26,7 @@
 | Agenda : plus de répétitions + date de fin | **fait** |
 | Contacts (carnet central, vCard, liens avec Prestataires, Animaux, Véhicules, Agenda) | **fait** |
 | Revue sécurité, bugs, design, performance (v0.4.3, SPEC § 12) | **fait** |
+| Suite de la revue : pages à jour toutes seules, `latest` après la Release, garde sur les modules (v0.4.4, SPEC § 13) | **fait** |
 
 ## Mesures
 

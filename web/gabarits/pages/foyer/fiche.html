@@ -6,6 +6,8 @@
   <h1>{{.Emoji}} {{.Nom}}</h1>
   {{if .Sous}}<p>{{.Sous}}</p>{{end}}
 </section>
+{{/* Rechargé tout seul, sauf si quelqu'un y remplit un formulaire (data-maj-prudent, voir app.js). */}}
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-{{$.Module}} from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" data-maj-prudent>
 {{if .Liens}}
 <div class="actions-contact">
   {{- range .Liens}}
@@ -33,6 +35,7 @@
 </form>
 {{end}}
 {{template "bloc-suivi" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Titre" .TitreSuivi "TitreCarnet" .TitreCarnet}}
+</div>
 <div class="boutons">
   <a class="bouton" href="{{.Modifier}}">✏️ Modifier</a>
   {{if $c.EstParent}}

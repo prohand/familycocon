@@ -8,7 +8,9 @@
 # ($TARGETARCH) : pas d'émulation, quelques secondes par architecture.
 
 # --- construction -------------------------------------------------------------
-FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm AS construction
+# Image épinglée par empreinte (un tag peut être déplacé) ; Dependabot propose
+# les mises à jour, tag et empreinte ensemble.
+FROM --platform=$BUILDPLATFORM golang:1.27.4-bookworm@sha256:4fa7c968ba93f1635670522dbb01a2c78150443e1385746924566079f36570ea AS construction
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
