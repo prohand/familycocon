@@ -350,3 +350,24 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   remplace l'initiale dans le rond de couleur du membre (colonne
   `membres.avatar`, migration 0029). Choisi dans Moi, ou par un parent dans
   Ma famille. Pas de photo (base légère).
+- **Photos des tickets et factures** sur les lignes du carnet (parents
+  seulement : elles montrent des prix). Gardées sur le disque, à côté de la
+  base : `<données>/pieces/<famille>/<nom aléatoire>.jpg` ; la base n'a que
+  le nom (table `pieces`, migration 0030). Réduites à 1 600 px et réécrites
+  en JPEG qualité 80 (`internal/photo`, bibliothèque standard) : ~200 Kio
+  par photo, informations cachées du téléphone (lieu GPS) retirées. Une
+  photo décodée à la fois ; 24 Mpx au plus ; 10 par ligne, 5 000 par
+  famille. Effacées avec leur ligne ou leur objet. Copiées par la
+  sauvegarde automatique (`sauvegardes/pieces`, nouveaux fichiers
+  seulement) et par `scripts/sauvegarde.sh`.
+- **Reprise depuis Fuelio** (`internal/fuelio`, fiche du véhicule,
+  parents) : sauvegarde complète `.fuelio` (ZIP), ZIP de synchro ou CSV.
+  Les pleins (date, km, litres, prix, ville et notes) et les dépenses
+  (titre ou catégorie ; modèles et recettes ignorés) vont au carnet, pas au
+  budget. Miles et gallons convertis. Une ligne déjà présente n'est pas
+  reprise deux fois. Le fichier (128 Mio au plus) est écrit sur le disque
+  le temps de la lecture, jamais gardé en mémoire, puis effacé ; une reprise
+  à la fois. Photos : rattachées à la ligne dont le nom de fichier cite
+  l'identifiant (`UniqueId`) ou, à défaut, la date (une seule ligne ce
+  jour-là) ; dans le doute, laissées de côté et comptées dans le bilan.
+  À confirmer sur une vraie sauvegarde (le format interne n'est pas publié).

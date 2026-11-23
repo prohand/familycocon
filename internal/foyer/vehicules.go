@@ -41,6 +41,7 @@ func (m *Module) brancherVehicules() {
 	a.Route("GET /vehicules/{id}/modifier", modVehicules, appli.Membre, m.formVehicule)
 	a.Route("POST /vehicules/{id}", modVehicules, appli.Membre, m.enregistrerVehicule)
 	a.Route("POST /vehicules/{id}/km", modVehicules, appli.Membre, m.kilometrage)
+	a.Route("POST /vehicules/{id}/fuelio", modVehicules, appli.Parent, m.importerFuelio)
 	a.Route("POST /vehicules/{id}/supprimer", modVehicules, appli.Parent, m.supprimerVehicule)
 
 	m.s.Enregistrer(suivi.Objet{
@@ -130,6 +131,9 @@ func (m *Module) ficheVehicule(w http.ResponseWriter, r *http.Request, c *appli.
 		v.Contacts = append(v.Contacts, ct)
 	}
 	v.KmURL = fmt.Sprintf("/vehicules/%d/km", x.ID)
+	if c.EstParent() {
+		v.FuelioURL = fmt.Sprintf("/vehicules/%d/fuelio", x.ID)
+	}
 	m.afficherFiche(w, r, c, modVehicules, x.ID, v)
 }
 

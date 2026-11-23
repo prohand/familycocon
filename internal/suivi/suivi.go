@@ -79,6 +79,9 @@ func Brancher(a *appli.App) *Suivi {
 	a.Route("POST /suivi/carnet/{id}", "", appli.Membre, s.modifierCarnet)
 	a.Route("POST /suivi/echeances/{id}", "", appli.Membre, s.modifierEcheance)
 	a.Route("POST /suivi/echeances/{id}/reporter", "", appli.Membre, s.reporter)
+	a.Route("POST /suivi/carnet/{id}/pieces", "", appli.Parent, s.ajouterPiece)
+	a.Route("GET /suivi/pieces/{id}", "", appli.Parent, s.piece)
+	a.Route("POST /suivi/pieces/{id}/supprimer", "", appli.Parent, s.supprimerPiece)
 	return s
 }
 
@@ -143,9 +146,10 @@ type Bloc struct {
 	AvecKm        bool
 	Devise        string
 	Aujourdhui    string
-	PeutBudget    bool   // case « Ajouter aussi au budget » (parent, budget activé)
-	CoutKm        string // « 0,18 € / km » (véhicules)
-	Conso         string // « 6,4 L / 100 km » (véhicules, avec des pleins notés)
+	PeutBudget    bool                      // case « Ajouter aussi au budget » (parent, budget activé)
+	Pieces        map[int64][]donnees.Piece // photos (tickets) par ligne, parents seulement
+	CoutKm        string                    // « 0,18 € / km » (véhicules)
+	Conso         string                    // « 6,4 L / 100 km » (véhicules, avec des pleins notés)
 }
 
 // Bloc : les échéances et le carnet de l'objet.
@@ -173,6 +177,16 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 	}
 	b.Total, b.TotalAnnee = t.Total, t.Annee
 	b.PeutBudget = o.Categorie != "" && c.EstParent() && c.Actif("budget")
+	if c.EstParent() {
+		pieces, err := s.a.Q.PiecesObjet(ctx, donnees.PiecesObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet})
+		if err != nil {
+			return nil, err
+		}
+		b.Pieces = map[int64][]donnees.Piece{}
+		for _, p := range pieces {
+			b.Pieces[p.CarnetID] = append(b.Pieces[p.CarnetID], p)
+		}
+	}
 	if o.AvecKm {
 		if err := s.statsKm(ctx, c, b); err != nil {
 			return nil, err
@@ -248,12 +262,21 @@ func (s *Suivi) Alertes(ctx context.Context, c *appli.Contexte, module string) (
 	return out, nil
 }
 
-// SupprimerObjet : efface les échéances et le carnet d'un objet supprimé.
+// SupprimerObjet : efface les échéances, le carnet et les photos d'un objet
+// supprimé.
 func (s *Suivi) SupprimerObjet(ctx context.Context, q *donnees.Queries, famille int64, module string, objet int64) error {
 	if err := q.SupprimerSuiviObjet(ctx, donnees.SupprimerSuiviObjetParams{FamilleID: famille, Module: module, ObjetID: objet}); err != nil {
 		return err
 	}
-	return q.SupprimerCarnetObjet(ctx, donnees.SupprimerCarnetObjetParams{FamilleID: famille, Module: module, ObjetID: objet})
+	pieces, err := q.PiecesObjet(ctx, donnees.PiecesObjetParams{FamilleID: famille, Module: module, ObjetID: objet})
+	if err != nil {
+		return err
+	}
+	if err := q.SupprimerCarnetObjet(ctx, donnees.SupprimerCarnetObjetParams{FamilleID: famille, Module: module, ObjetID: objet}); err != nil {
+		return err
+	}
+	s.effacerFichiers(pieces) // les lignes des pièces partent avec le carnet
+	return nil
 }
 
 // cible : l'objet de l'adresse (module activé, objet de la famille).
@@ -538,7 +561,12 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}
-	// La dépense ajoutée au budget en même temps part avec elle.
+	// La dépense ajoutée au budget en même temps part avec elle, et ses photos.
+	pieces, err := s.a.Q.PiecesLigne(r.Context(), donnees.PiecesLigneParams{CarnetID: l.ID, FamilleID: c.Famille.ID})
+	if err != nil {
+		s.a.ErreurInterne(w, r, err)
+		return
+	}
 	err = s.a.Transaction(r.Context(), func(q *donnees.Queries) error {
 		if l.OperationID.Valid {
 			if err := q.SupprimerOperation(r.Context(), donnees.SupprimerOperationParams{ID: l.OperationID.Int64, FamilleID: c.Famille.ID}); err != nil {
@@ -551,6 +579,7 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 		s.a.ErreurInterne(w, r, err)
 		return
 	}
+	s.effacerFichiers(pieces)
 	s.publier(c, o)
 	if l.OperationID.Valid {
 		s.a.Publier(c, "budget", "")

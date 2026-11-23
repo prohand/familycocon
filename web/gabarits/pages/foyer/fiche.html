@@ -36,6 +36,15 @@
 {{end}}
 {{template "bloc-suivi" dict "S" .Suivi "J" $c.CSRF "P" $c.EstParent "Titre" .TitreSuivi "TitreCarnet" .TitreCarnet}}
 </div>
+{{if .FuelioURL}}
+<details class="bloc carte fuelio">
+  <summary class="lien-ajout">📥 Reprendre depuis Fuelio</summary>
+  <p class="aide">Dans Fuelio : Sauvegarde › sauvegarde complète (fichier .fuelio, avec les photos), ou l'export CSV. Envoyez ce fichier ici : les pleins et les dépenses vont dans le carnet, avec les photos des tickets et factures. Rien n'est ajouté deux fois, ni au budget.</p>
+  <label class="bouton secondaire petit ajout-fuelio">Choisir le fichier
+    <input type="file" data-fuelio="{{.FuelioURL}}" accept=".fuelio,.zip,.csv,application/zip,text/csv" hidden>
+  </label>
+</details>
+{{end}}
 <div class="boutons">
   <a class="bouton" href="{{.Modifier}}">✏️ Modifier</a>
   {{if $c.EstParent}}

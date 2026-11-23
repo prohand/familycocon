@@ -238,6 +238,58 @@ document.addEventListener("input", function (e) {
   document.addEventListener("visibilitychange", mettreAJour);
 })();
 
+// Photo réduite dans le navigateur avant l'envoi (cote : plus grand côté),
+// en JPEG : légère sur une connexion mobile, sous la limite d'envoi.
+window.fcReduirePhoto = function (fichier, cote) {
+  return createImageBitmap(fichier).then(function (img) {
+    var r = Math.min(1, cote / Math.max(img.width, img.height));
+    var c = document.createElement("canvas");
+    c.width = Math.round(img.width * r);
+    c.height = Math.round(img.height * r);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    return new Promise(function (ok) { c.toBlob(ok, "image/jpeg", 0.85); });
+  });
+};
+
+// Carnet : photo d'un ticket ou d'une facture jointe à une ligne
+// (input[data-piece] = adresse d'envoi). La page est rechargée ensuite.
+document.addEventListener("change", function (e) {
+  var p = e.target;
+  if (!p.matches || !p.matches("input[data-piece]") || !p.files || !p.files[0]) return;
+  if (!window.createImageBitmap) { window.fcToast("Photo non prise en charge par ce navigateur", true); return; }
+  var jeton = "";
+  try { jeton = JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) {}
+  window.fcToast("Envoi de la photo…");
+  window.fcReduirePhoto(p.files[0], 1600).then(function (blob) {
+    return fetch(p.getAttribute("data-piece"), { method: "POST", credentials: "same-origin",
+      headers: { "X-Jeton": jeton, "Content-Type": "image/jpeg" }, body: blob });
+  }).then(function (rep) {
+    if (!rep.ok) throw new Error("refusée");
+    window.location.reload();
+  }).catch(function () { window.fcToast("Photo non envoyée", true); });
+  p.value = "";
+});
+
+// Véhicule : reprise d'une sauvegarde Fuelio (input[data-fuelio] = adresse
+// d'envoi). Le fichier part tel quel (il peut être gros : photos comprises),
+// puis la fiche est rechargée avec le bilan.
+document.addEventListener("change", function (e) {
+  var p = e.target;
+  if (!p.matches || !p.matches("input[data-fuelio]") || !p.files || !p.files[0]) return;
+  var jeton = "";
+  try { jeton = JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) {}
+  window.fcToast("Reprise en cours… (patientez)");
+  fetch(p.getAttribute("data-fuelio"), { method: "POST", credentials: "same-origin",
+    headers: { "X-Jeton": jeton, "HX-Request": "true", "Content-Type": "application/octet-stream" }, body: p.files[0] })
+    .then(function (rep) {
+      if (rep.ok) { window.location.assign(rep.headers.get("HX-Location") || window.location.href); return; }
+      var msg = "Reprise impossible";
+      try { msg = JSON.parse(rep.headers.get("HX-Trigger"))["fc-toast"].texte || msg; } catch (_) {}
+      window.fcToast(msg, true);
+    }).catch(function () { window.fcToast("Envoi interrompu", true); });
+  p.value = "";
+});
+
 // Carte de fidélité : « Scanner la carte ». Sur Android (Chrome), le
 // navigateur lit le code en direct avec la caméra (BarcodeDetector). Sinon
 // (iPhone…), une photo est prise, réduite à 1 280 px et envoyée au serveur
@@ -264,14 +316,7 @@ document.addEventListener("input", function (e) {
   function envoyer(f, fichier) {
     if (!window.createImageBitmap) { window.fcToast("Photo non prise en charge : tapez le numéro", true); return; }
     window.fcToast("Lecture de la photo…");
-    createImageBitmap(fichier).then(function (img) {
-      var r = Math.min(1, 1280 / Math.max(img.width, img.height));
-      var c = document.createElement("canvas");
-      c.width = Math.round(img.width * r);
-      c.height = Math.round(img.height * r);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      return new Promise(function (ok) { c.toBlob(ok, "image/jpeg", 0.85); });
-    }).then(function (blob) {
+    window.fcReduirePhoto(fichier, 1280).then(function (blob) {
       return fetch("/fidelite/scanner", { method: "POST", credentials: "same-origin",
         headers: { "X-Jeton": jeton(), "Content-Type": "image/jpeg" }, body: blob });
     }).then(function (rep) {

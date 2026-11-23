@@ -84,3 +84,32 @@ FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? AND km > 0;
 -- Echeance tenue a jour par un module (fin de garantie) : remplacee.
 -- name: SupprimerEcheanceLibelle :exec
 DELETE FROM echeances WHERE famille_id = ? AND module = ? AND objet_id = ? AND libelle = ?;
+
+-- Pieces jointes (photos de tickets, factures).
+
+-- name: AjouterPiece :one
+INSERT INTO pieces (famille_id, carnet_id, fichier, taille, cree_par, cree_le) VALUES (?, ?, ?, ?, ?, ?) RETURNING *;
+
+-- name: PieceParID :one
+SELECT * FROM pieces WHERE id = ? AND famille_id = ?;
+
+-- name: PiecesObjet :many
+SELECT pieces.* FROM pieces JOIN carnet ON carnet.id = pieces.carnet_id
+WHERE carnet.famille_id = ? AND carnet.module = ? AND carnet.objet_id = ? ORDER BY pieces.id;
+
+-- name: PiecesLigne :many
+SELECT * FROM pieces WHERE carnet_id = ? AND famille_id = ?;
+
+-- name: CompterPiecesLigne :one
+SELECT count(*) FROM pieces WHERE carnet_id = ?;
+
+-- name: CompterPiecesFamille :one
+SELECT count(*) FROM pieces WHERE famille_id = ?;
+
+-- name: SupprimerPiece :exec
+DELETE FROM pieces WHERE id = ? AND famille_id = ?;
+
+-- Doublon a l'import (Fuelio) : meme jour, libelle, montant et kilometrage.
+-- name: CarnetExiste :one
+SELECT count(*) FROM carnet
+WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = ? AND montant = ? AND km = ?;

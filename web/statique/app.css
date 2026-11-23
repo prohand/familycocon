@@ -1500,3 +1500,11 @@ dialog.scanner video { width: 100%; border-radius: 12px; background: #000; margi
 .choix-avatar input:checked + span { border-color: var(--corail); background: var(--corail-doux); }
 .choix-avatar input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
 details.replie-avatar > summary { cursor: pointer; margin: 4px 0 10px; }
+
+/* Carnet : photos jointes (tickets, factures). */
+.pieces { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 0 8px 64px; }
+.piece { position: relative; }
+.piece img { width: 64px; height: 64px; object-fit: cover; border-radius: 10px; display: block; border: 1px solid var(--bordure); }
+.piece form { position: absolute; top: -10px; right: -10px; }
+.piece .crayon { width: 28px; height: 28px; font-size: .8rem; background: var(--carte); opacity: .9; }
+.ajout-piece span { display: inline-block; padding: 8px 12px; border-radius: 999px; border: 1.5px dashed var(--bordure); font-size: .85rem; font-weight: 700; color: var(--texte-doux); cursor: pointer; min-height: 40px; }

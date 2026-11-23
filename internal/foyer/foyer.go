@@ -72,6 +72,7 @@ type vueFiche struct {
 	TitreCarnet         string
 	Modifier, Supprimer string
 	KmURL               string // formulaire « kilométrage » (véhicules)
+	FuelioURL           string // reprise d'une sauvegarde Fuelio (véhicules, parents)
 	Contacts            []ContactCite
 }
 

@@ -76,6 +76,16 @@
     {{if and $p .Montant}}<b>{{montant .Montant $s.Devise}}{{if .OperationID.Valid}} <span title="Aussi dans le budget">💶</span>{{end}}</b>{{end}}
     {{if $p}}<form method="post" action="/suivi/carnet/{{.ID}}/supprimer" hx-confirm="Supprimer cette ligne{{if .OperationID.Valid}} (et sa dépense du budget){{end}} ?">{{template "jeton" $j}}<button class="crayon" aria-label="Supprimer {{.Libelle}}">🗑️</button></form>{{end}}
   </div>
+  {{if $p}}
+  {{- $id := .ID}}
+  <div class="pieces">
+    {{- range index $s.Pieces .ID}}
+    <span class="piece"><a href="/suivi/pieces/{{.ID}}" target="_blank" rel="noopener"><img src="/suivi/pieces/{{.ID}}" alt="Photo jointe" loading="lazy"></a>
+      <form method="post" action="/suivi/pieces/{{.ID}}/supprimer" hx-confirm="Retirer cette photo ?">{{template "jeton" $j}}<button class="crayon" aria-label="Retirer la photo">✕</button></form></span>
+    {{- end}}
+    <label class="ajout-piece"><input type="file" accept="image/*" data-piece="/suivi/carnet/{{$id}}/pieces" hidden><span>📎 Ticket, facture</span></label>
+  </div>
+  {{end}}
   <details class="corriger">
     <summary class="lien-ajout" aria-label="Corriger {{.Libelle}}">✏️ Corriger</summary>
     <form method="post" action="/suivi/carnet/{{.ID}}">

@@ -310,6 +310,16 @@ type Passkey struct {
 	UtiliseLe   int64
 }
 
+type Piece struct {
+	ID        int64
+	FamilleID int64
+	CarnetID  int64
+	Fichier   string
+	Taille    int64
+	CreePar   sql.NullInt64
+	CreeLe    int64
+}
+
 type Produit struct {
 	ID        int64
 	ListeID   int64

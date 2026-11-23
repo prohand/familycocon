@@ -80,7 +80,9 @@ sur le téléphone de chacun.
   - prestataires : les contacts « pro » du carnet (plombier, nounou, médecin…), avec leurs interventions ;
   - vétérinaire d'un animal, garage et assurance d'un véhicule choisis dans le carnet (appel direct) ;
   - échéance modifiable ou reportée d'un mois ; dépense du carnet ajoutée aussi au budget ;
-  - véhicule : coût pour 100 km et consommation (pleins notés).
+  - véhicule : coût pour 100 km et consommation (pleins notés) ;
+  - photo du ticket ou de la facture sur une ligne du carnet (parents) ;
+  - véhicule : reprise d'une sauvegarde Fuelio (pleins, dépenses et leurs photos).
 - **Garanties** : appareils achetés, fin de garantie rappelée, où est rangée la facture, réparations.
 - **Projets** : étapes à cocher (avec une date et qui s'en occupe), date d'objectif, budget et dépenses.
 - **Rappels** : bloc « À venir » sur l'accueil (30 jours) et notification chaque matin à 9 h
@@ -178,7 +180,7 @@ Au démarrage, la base est migrée toute seule. Avant toute migration, une copie
 
 La base SQLite est copiée **à chaud**, le serveur continue de tourner (`VACUUM INTO`). Chaque copie est vérifiée (`PRAGMA integrity_check`).
 
-**1. Sauvegarde automatique** : chaque jour à `FC_SAUVEGARDE_HEURE`, dans le volume (`/donnees/sauvegardes/auto-….db`), avec rotation.
+**1. Sauvegarde automatique** : chaque jour à `FC_SAUVEGARDE_HEURE`, dans le volume (`/donnees/sauvegardes/auto-….db`), avec rotation. Les photos du carnet (`/donnees/pieces`) sont copiées dans `/donnees/sauvegardes/pieces`.
 
 **2. Sauvegarde vers l'hôte** (recommandée, à mettre dans cron) :
 
@@ -188,6 +190,7 @@ La base SQLite est copiée **à chaud**, le serveur continue de tourner (`VACUUM
 
 - Le script fait une copie `familycocon-AAAAMMJJ-HHMMSS.db` sur l'hôte.
 - Il en garde 30 (variable `GARDER`).
+- Il copie aussi les photos du carnet (tickets, factures) dans `pieces/` (seulement les nouvelles).
 - Exemple de ligne cron : `15 2 * * * /opt/familycocon/scripts/sauvegarde.sh /srv/sauvegardes/familycocon`.
 
 **À la main**, en une commande :
