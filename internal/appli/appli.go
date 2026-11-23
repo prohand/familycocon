@@ -149,6 +149,14 @@ func (a *App) routesDeBase() {
 	a.Mux.HandleFunc("GET /favicon.ico", func(w http.ResponseWriter, r *http.Request) {
 		a.Statique.Servir(w, r, "img/logo.svg", false)
 	})
+	// iPhone : quand l'icône citée par la page ne vient pas, Safari essaie
+	// ces adresses à la racine (sinon : une lettre sur fond gris).
+	for _, nom := range []string{"/apple-touch-icon.png", "/apple-touch-icon-precomposed.png",
+		"/apple-touch-icon-180x180.png", "/apple-touch-icon-180x180-precomposed.png"} {
+		a.Mux.HandleFunc("GET "+nom, func(w http.ResponseWriter, r *http.Request) {
+			a.Statique.Servir(w, r, "img/icone-180.png", false)
+		})
+	}
 }
 
 // Sante : réponse de /health (supervision : Uptime Kuma, Docker, Zabbix…).
