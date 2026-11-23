@@ -160,7 +160,7 @@ SELECT id, auteur_id, titre, CAST(substr(texte, 1, 300) AS TEXT) AS debut, coule
 FROM notes
 WHERE famille_id = ?1 AND (privee = 0 OR auteur_id = ?2)
   AND (?3 = '' OR (?3 = 'privees' AND privee = 1) OR (?3 = 'partagees' AND privee = 0))
-  AND (?4 = '' OR instr(lower(titre), lower(?4)) > 0 OR instr(lower(texte), lower(?4)) > 0)
+  AND (?4 = '' OR instr(plier(titre), plier(?4)) > 0 OR instr(plier(texte), plier(?4)) > 0)
 ORDER BY epinglee DESC, modifie_le DESC LIMIT ?5
 `
 

@@ -7,7 +7,7 @@ SELECT id, auteur_id, titre, CAST(substr(texte, 1, 300) AS TEXT) AS debut, coule
 FROM notes
 WHERE famille_id = sqlc.arg(famille_id) AND (privee = 0 OR auteur_id = sqlc.arg(membre_id))
   AND (sqlc.arg(filtre) = '' OR (sqlc.arg(filtre) = 'privees' AND privee = 1) OR (sqlc.arg(filtre) = 'partagees' AND privee = 0))
-  AND (sqlc.arg(motif) = '' OR instr(lower(titre), lower(sqlc.arg(motif))) > 0 OR instr(lower(texte), lower(sqlc.arg(motif))) > 0)
+  AND (sqlc.arg(motif) = '' OR instr(plier(titre), plier(sqlc.arg(motif))) > 0 OR instr(plier(texte), plier(sqlc.arg(motif))) > 0)
 ORDER BY epinglee DESC, modifie_le DESC LIMIT sqlc.arg(nombre);
 
 -- name: NoteParID :one

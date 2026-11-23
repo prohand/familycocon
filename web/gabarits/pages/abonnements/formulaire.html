@@ -6,6 +6,14 @@
   <h1>{{if .Nouveau}}📺 Nouvel abonnement{{else}}{{.A.Emoji}} {{.R.Libelle}}{{end}}</h1>
   {{if .Resilie}}<p>Résilié : plus de prélèvement prévu</p>{{end}}
 </section>
+{{if .Resilie}}
+<form class="carte bloc" method="post" action="/abonnements/{{.A.ID}}/reprendre">
+  {{template "jeton" $c.CSRF}}
+  <p class="sous-titre">Réabonné ?</p>
+  <label class="champ"><span>Prochain prélèvement</span><input type="date" name="prochain" required></label>
+  <div class="boutons"><button class="bouton">🔄 Reprendre l'abonnement</button></div>
+</form>
+{{end}}
 {{if .Lien}}<a class="lien-recurrences bloc" href="{{.Lien}}" target="_blank" rel="noopener noreferrer">🌐 Gérer ou résilier en ligne <span class="fleche-droite">›</span></a>{{end}}
 <form class="carte" method="post" action="{{if .Nouveau}}/abonnements{{else}}/abonnements/{{.A.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}

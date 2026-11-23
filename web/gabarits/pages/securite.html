@@ -22,12 +22,12 @@
     Codes de secours restants : <b>{{.Restants}}</b>.</p>
   <form method="post" action="/moi/securite/codes" class="rangee">
     {{template "jeton" $c.CSRF}}
-    <label class="champ"><span>Mot de passe</span><input type="password" name="mdp" autocomplete="current-password" required></label>
+    <label class="champ"><span>Mot de passe</span><input type="password" maxlength="128" name="mdp" autocomplete="current-password" required></label>
     <button class="bouton petit secondaire">Nouveaux codes de secours</button>
   </form>
   <form method="post" action="/moi/securite/totp/desactiver" class="rangee" hx-confirm="Désactiver la double authentification ?">
     {{template "jeton" $c.CSRF}}
-    <label class="champ"><span>Mot de passe</span><input type="password" name="mdp" autocomplete="current-password" required></label>
+    <label class="champ"><span>Mot de passe</span><input type="password" maxlength="128" name="mdp" autocomplete="current-password" required></label>
     <button class="bouton petit danger">Désactiver</button>
   </form>
   {{else}}
@@ -37,7 +37,7 @@
   <form method="post" action="/moi/securite/totp/activer" class="rangee">
     {{template "jeton" $c.CSRF}}
     <label class="champ"><span>Code à 6 chiffres</span><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required></label>
-    <label class="champ"><span>Votre mot de passe</span><input type="password" name="mdp" autocomplete="current-password" required></label>
+    <label class="champ"><span>Votre mot de passe</span><input type="password" maxlength="128" name="mdp" autocomplete="current-password" required></label>
     <button class="bouton">Activer</button>
   </form>
   {{end}}
@@ -53,7 +53,7 @@
     <span class="quoi">{{.Nom}}<small>Ajoutée le {{.Cree}}{{with .Utilise}} · utilisée le {{.}}{{end}}</small></span>
     <form method="post" action="/moi/securite/passkeys/{{.ID}}/supprimer" hx-confirm="Supprimer la passkey « {{.Nom}} » ?">
       {{template "jeton" $c.CSRF}}
-      <input class="mdp-court" type="password" name="mdp" autocomplete="current-password" placeholder="Mot de passe" aria-label="Mot de passe" required>
+      <input class="mdp-court" type="password" maxlength="128" name="mdp" autocomplete="current-password" placeholder="Mot de passe" aria-label="Mot de passe" required>
       <button class="bouton petit danger">Supprimer</button>
     </form>
   </div>
@@ -61,7 +61,7 @@
   {{if .PasskeyPossible}}
   <div class="rangee bloc">
     <label class="champ"><span>Nom de la passkey</span><input id="nom-passkey" maxlength="40" placeholder="Ex. : Téléphone de {{$c.Membre.Nom}}"></label>
-    <label class="champ"><span>Votre mot de passe</span><input id="mdp-passkey" type="password" autocomplete="current-password"></label>
+    <label class="champ"><span>Votre mot de passe</span><input id="mdp-passkey" type="password" maxlength="128" autocomplete="current-password"></label>
     <button class="bouton" type="button" data-passkey="ajouter" hidden>＋ Ajouter une passkey</button>
   </div>
   <p class="aide" id="etat-passkey"></p>

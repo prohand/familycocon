@@ -1,7 +1,9 @@
 # FamilyCocon 🪺
 
 L'organisation de la famille, **auto-hébergée** et **très légère** : courses, agenda,
-tâches ménagères, menus, budget et espace enfants, sur le téléphone de chacun.
+tâches ménagères, menus, budget, abonnements, espace enfants, notes, contacts et
+anniversaires, cartes de fidélité, véhicules, animaux, prestataires et projets,
+sur le téléphone de chacun.
 
 - Un seul binaire Go, image Docker `scratch` d'environ **16 Mo** (6,8 Mo à télécharger).
 - **~8 Mo de RAM** au repos, ~20 Mo au plus fort d'un test de charge.

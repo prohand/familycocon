@@ -324,7 +324,8 @@ func (m *Module) vueParent(ctx context.Context, c *appli.Contexte) (*vueParent, 
 		for _, ca := range cartes {
 			if ca.EnfantID == mb.ID && ca.Etat != PasAujourdhui && ca.Etat != "finie" {
 				r.Total++
-				if ca.Etat == Validee {
+				// Comme sur la page de l'enfant : faites = validées ou à valider.
+				if ca.Etat == Validee || ca.Etat == Attente {
 					r.Faites++
 				}
 			}

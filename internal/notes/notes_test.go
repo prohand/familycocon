@@ -52,6 +52,23 @@ func TestNotesPartageesEtPrivees(t *testing.T) {
 	if _, p := marie.Get("/notes"); strings.Contains(p, "Journal secret") {
 		t.Fatal("note privée d'un enfant visible par un parent")
 	}
+	// Recherche sans majuscules ni accents.
+	lea.Post("/notes", map[string]string{"titre": "ÉCOLE", "texte": "Sortie de Noël", "privee": "1"})
+	if _, p := lea.Get("/notes?q=noel"); !strings.Contains(p, "ÉCOLE") {
+		t.Fatal("« noel » ne trouve pas « Noël »")
+	}
+	if _, p := lea.Get("/notes?q=ecole"); !strings.Contains(p, "ÉCOLE") {
+		t.Fatal("« ecole » ne trouve pas « ÉCOLE »")
+	}
+	// Léa peut supprimer sa propre note privée (personne d'autre ne la voit).
+	_, p := lea.Get("/notes?voir=privees&q=journal")
+	idJournal := essai.Trouver(t, p, `href="/notes/(\d+)"`)
+	if _, f := lea.Get("/notes/" + idJournal); !strings.Contains(f, "/supprimer") {
+		t.Fatal("bouton Supprimer absent sur la note privée d'un enfant")
+	}
+	if code, p := lea.Post("/notes/"+idJournal+"/supprimer", nil); code != 200 || strings.Contains(p, "Journal secret") {
+		t.Fatalf("suppression de sa note privée par un enfant : %d", code)
+	}
 	// Épingler / désépingler (htmx).
 	marie.Get("/notes")
 	marie.Htmx = true

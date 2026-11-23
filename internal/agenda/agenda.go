@@ -79,6 +79,16 @@ type ContactEvt struct {
 	Nom, Tel string
 }
 
+// Lien : la fiche de l'événement ; pour un événement qui revient, avec la
+// date de cette fois-ci (retour à la bonne semaine, « annuler cette fois »).
+func (o Occurrence) Lien() string {
+	u := "/agenda/" + strconv.FormatInt(o.Evt.ID, 10)
+	if o.Evt.Repetition != "" {
+		u += "?jour=" + repetition.CleJour(o.Debut)
+	}
+	return u
+}
+
 // Heure : « 10:00 », « Journée ».
 func (o Occurrence) Heure() string {
 	if o.Evt.Journee == 1 {
@@ -361,6 +371,9 @@ type formEvt struct {
 	Contacts   []donnees.ContactsChoixAgendaRow // carnet (liste de choix : nom et métier)
 	Cites      map[int64]bool                   // contacts cités par l'événement
 	ContactsEv []ContactEvt
+	Jour       string // événement qui revient, ouvert depuis une de ses dates (2026-12-01)
+	JourTitre  string // « Mardi 1er décembre »
+	Retour     string // date de la semaine où revenir
 }
 
 // caseJour : une case « lun … dim » de la répétition « certains jours ».
@@ -433,6 +446,15 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		for _, p := range parts {
 			f.Choisis[p.MembreID] = true
 		}
+		if e.Repetition != "" {
+			if j, err := time.ParseInLocation("2006-01-02", r.URL.Query().Get("jour"), c.Lieu); err == nil {
+				f.Jour, f.JourTitre = repetition.CleJour(j), appli.DateLongue(j)
+			}
+		}
+	}
+	f.Retour = f.Date
+	if f.Jour != "" {
+		f.Retour = f.Jour
 	}
 	for i := 1; i <= 7; i++ {
 		f.Semaine = append(f.Semaine, caseJour{N: i, Nom: repetition.NomsJours[i], Coche: f.Regle.Jours[i]})
@@ -673,7 +695,11 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	}
 	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Événement enregistré ✓")
-	m.a.Rediriger(w, r, "/agenda?date="+repetition.CleJour(s.debut))
+	retour := repetition.CleJour(s.debut)
+	if j, err := time.ParseInLocation("2006-01-02", r.PostFormValue("retour"), c.Lieu); err == nil && s.repetition != "" {
+		retour = repetition.CleJour(j) // ouvert depuis une de ses dates : on y revient
+	}
+	m.a.Rediriger(w, r, "/agenda?date="+retour)
 }
 
 func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {

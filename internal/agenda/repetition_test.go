@@ -78,9 +78,16 @@ func TestFormulaireRepetition(t *testing.T) {
 	if strings.Count(page, "Judo") != 2 {
 		t.Fatalf("judo mardi et jeudi : %d fois", strings.Count(page, "Judo"))
 	}
-	id := essai.Trouver(t, page, `href="/agenda/(\d+)"`)
+	id := essai.Trouver(t, page, `href="/agenda/(\d+)[?"]`)
 	if _, page := marie.Get("/agenda/" + id); !strings.Contains(page, "Chaque mar, jeu, jusqu&#39;au 30 juin 2027") {
 		t.Fatalf("texte de la répétition absent :\n%s", page)
+	}
+	// Le lien d'une fois porte sa date : retour à la bonne semaine.
+	if !strings.Contains(page, `href="/agenda/`+id+`?jour=2026-11-19"`) {
+		t.Fatal("lien de l'occurrence du jeudi sans sa date")
+	}
+	if _, page := marie.Get("/agenda/" + id + "?jour=2026-11-19"); !strings.Contains(page, `href="/agenda?date=2026-11-19"`) || !strings.Contains(page, "Cette fois-ci") {
+		t.Fatal("fiche ouverte depuis une occurrence : retour à la première date")
 	}
 	base["repetition_fin"] = "2026-01-01"
 	if code, _ := marie.Post("/agenda", base); code != 400 {

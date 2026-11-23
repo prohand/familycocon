@@ -39,7 +39,7 @@ func Brancher(a *appli.App) {
 	a.Route("GET /notes/{id}", mod, appli.Membre, m.formulaire)
 	a.Route("POST /notes/{id}", mod, appli.Membre, m.modifier)
 	a.Route("POST /notes/{id}/epingler", mod, appli.Membre, m.epingler)
-	a.Route("POST /notes/{id}/supprimer", mod, appli.Parent, m.supprimer)
+	a.Route("POST /notes/{id}/supprimer", mod, appli.Membre, m.supprimer)
 
 	a.AjouterResume(mod, m.resume)
 	a.AjouterAction(appli.Ajout{Module: mod, Emoji: "📝", Texte: "Une note", URL: "/notes/nouvelle"})
@@ -92,6 +92,17 @@ func lireFiltre(r *http.Request) (filtre, recherche string) {
 func modifiable(c *appli.Contexte, n donnees.Note) bool {
 	auteur := n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID
 	return auteur || (c.EstParent() && n.Privee == 0)
+}
+
+// supprimable : un parent supprime les notes partagées et les siennes ;
+// chacun (même un enfant) supprime ses propres notes privées, que personne
+// d'autre ne voit.
+func supprimable(c *appli.Contexte, n donnees.Note) bool {
+	auteur := n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID
+	if n.Privee == 1 {
+		return auteur
+	}
+	return c.EstParent()
 }
 
 // visible : une note privée n'est vue que par son auteur.
@@ -219,7 +230,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Note, f.Modifiable, f.PeutPriver = n, modifiable(c, n), peutPriver(c, n)
-		f.Supprimable = c.EstParent() && (n.Privee == 0 || n.AuteurID.Int64 == c.Membre.ID)
+		f.Supprimable = supprimable(c, n)
 	}
 	titre := "Nouvelle note"
 	if !f.Nouvelle {
@@ -362,8 +373,12 @@ func (m *Module) epingler(w http.ResponseWriter, r *http.Request, c *appli.Conte
 
 func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	n, ok := m.note(r, c)
-	if !ok || (n.Privee == 1 && n.AuteurID.Int64 != c.Membre.ID) {
+	if !ok {
 		m.a.Echec(w, r, http.StatusNotFound, "Note introuvable.")
+		return
+	}
+	if !supprimable(c, n) {
+		m.a.Echec(w, r, http.StatusForbidden, "Seul un parent peut supprimer une note partagée.")
 		return
 	}
 	if err := m.a.Q.SupprimerNote(r.Context(), donnees.SupprimerNoteParams{ID: n.ID, FamilleID: c.Famille.ID}); err != nil {

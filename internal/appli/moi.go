@@ -36,7 +36,12 @@ func (a *App) routesMoi() {
 
 func (a *App) pageMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	d := donneesMoi{Possibles: RaccourcisPossibles(c), Couleurs: []int{1, 2, 3, 4, 5, 6, 7, 8}, AMotDePasse: c.Membre.Mdp.Valid,
-		Modules: ModulesVisibles(c), Push: strings.Split(c.Membre.PushModules, ",")}
+		Push: strings.Split(c.Membre.PushModules, ",")}
+	for _, m := range ModulesVisibles(c) {
+		if m.Notifie {
+			d.Modules = append(d.Modules, m)
+		}
+	}
 	d.Appareils, _ = a.Q.CompterAbonnements(r.Context(), c.Membre.ID)
 	d.TOTP = c.Membre.Totp != ""
 	d.NbPasskeys, _ = a.Q.CompterPasskeys(r.Context(), c.Membre.ID)

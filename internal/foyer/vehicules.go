@@ -216,6 +216,11 @@ func (m *Module) kilometrage(w http.ResponseWriter, r *http.Request, c *appli.Co
 		m.a.Echec(w, r, http.StatusBadRequest, "Kilométrage invalide.")
 		return
 	}
+	// Le compteur ne recule jamais : on le dit au lieu d'afficher « enregistré ».
+	if km < x.Kilometrage {
+		m.a.Echec(w, r, http.StatusBadRequest, "Le compteur indique déjà "+appli.Milliers(x.Kilometrage)+" km.")
+		return
+	}
 	if err := m.a.Q.NoterKilometrage(r.Context(), donnees.NoterKilometrageParams{Kilometrage: km, ID: x.ID, FamilleID: c.Famille.ID, Kilometrage_2: km}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return

@@ -65,7 +65,9 @@ func TestVehicule(t *testing.T) {
 		t.Fatal("alerte toujours là après report")
 	}
 	// Le compteur ne recule pas.
-	marie.Post("/vehicules/"+id+"/km", map[string]string{"km": "1000"})
+	if code, p := marie.Post("/vehicules/"+id+"/km", map[string]string{"km": "1000"}); code != http.StatusBadRequest || !strings.Contains(p, "déjà") {
+		t.Fatalf("kilométrage plus bas annoncé comme enregistré : %d", code)
+	}
 	if _, page := marie.Get("/vehicules/" + id); !strings.Contains(page, "86\u202f000 km") {
 		t.Fatal("le kilométrage a reculé")
 	}

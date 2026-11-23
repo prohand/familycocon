@@ -104,6 +104,17 @@ func TestAbonnementsRevue(t *testing.T) {
 	if len(ops) != 2 {
 		t.Fatalf("%d prélèvements, attendu 2", len(ops))
 	}
+	// Repris (réabonné) : de nouveau actif, à partir de la date donnée.
+	if code, _ := marie.Post("/abonnements/"+id+"/reprendre", map[string]string{"prochain": jour(5)}); code != 200 {
+		t.Fatalf("reprise : %d", code)
+	}
+	if _, page := marie.Get("/abonnements"); strings.Contains(page, "Résiliés") || !strings.Contains(page, "Vidéo") {
+		t.Fatal("abonnement repris toujours résilié")
+	}
+	ops, _ = a.Q.OperationsPeriode(ctx, donnees.OperationsPeriodeParams{FamilleID: f[0].ID, Du: "2000-01-01", Au: "2999-01-01"})
+	if len(ops) != 2 {
+		t.Fatalf("%d prélèvements après la reprise, attendu 2", len(ops))
+	}
 	// Renouvellement annuel aujourd'hui : écrit au budget ET dans « À venir ».
 	marie.Post("/abonnements", map[string]string{"nom": "Assurance", "montant": "240", "frequence": "annee", "prochain": jour(0)})
 	if _, page := marie.Get("/"); !strings.Contains(page, "Renouvellement : Assurance") {
@@ -111,7 +122,7 @@ func TestAbonnementsRevue(t *testing.T) {
 	}
 	// Total annuel exact (100 €/an et non 99,96 €).
 	marie.Post("/abonnements", map[string]string{"nom": "Cent", "montant": "100", "frequence": "annee", "prochain": jour(30)})
-	if _, page := marie.Get("/abonnements"); !strings.Contains(page, "340,00") {
+	if _, page := marie.Get("/abonnements"); !strings.Contains(page, "460,00") { // 240 + 100 + 120 (Vidéo, repris)
 		t.Fatal("total annuel inexact")
 	}
 }

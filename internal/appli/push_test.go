@@ -215,19 +215,46 @@ func TestRappelsDuMatin(t *testing.T) {
 		mu.Lock()
 		l := len(recus)
 		mu.Unlock()
-		if l >= 2 {
+		if l >= 1 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	time.Sleep(20 * time.Millisecond) // une éventuelle deuxième notification
 	mu.Lock()
 	defer mu.Unlock()
 	tout := strings.Join(recus, "\n")
-	if len(recus) != 2 || !strings.Contains(tout, "Aujourd'hui : Échéance J+0") || !strings.Contains(tout, "Dans 7 jours : Échéance J+7") {
+	// Une seule notification pour les deux rappels (sinon la seconde
+	// remplace la première à l'écran).
+	if len(recus) != 1 || !strings.Contains(tout, "Aujourd'hui : Échéance J+0") || !strings.Contains(tout, "Dans 7 jours : Échéance J+7") {
 		t.Fatalf("rappels reçus : %v", recus)
 	}
 	// Le bloc « À venir » de l'accueil les montre (30 jours).
 	if _, page := marie.get("/"); !strings.Contains(page, "À venir") || !strings.Contains(page, "Échéance J&#43;3") {
 		t.Fatal("bloc À venir")
+	}
+}
+
+// Moi › Notifications : seuls les modules qui envoient des notifications
+// ont un interrupteur (les autres ne servaient à rien).
+func TestChoixNotificationsUtiles(t *testing.T) {
+	_, _, marie := familleTest(t)
+	_, page := marie.get("/moi")
+	if !strings.Contains(page, `name="push_courses"`) || !strings.Contains(page, `name="push_rappels"`) {
+		t.Fatal("interrupteurs des modules qui notifient absents")
+	}
+	if strings.Contains(page, `name="push_budget"`) || strings.Contains(page, `name="push_contacts"`) {
+		t.Fatal("interrupteur d'un module qui ne notifie jamais")
+	}
+}
+
+// Rappels : un seul rappel ouvre sa page ; plusieurs ouvrent l'accueil.
+func TestTexteRappels(t *testing.T) {
+	e := Echeance{Titre: "Vaccin", URL: "/animaux/3"}
+	if texte, url := texteRappels([]Echeance{e}, []string{"💉 Aujourd'hui : Vaccin"}); url != "/animaux/3" || texte != "💉 Aujourd'hui : Vaccin" {
+		t.Fatalf("un rappel : %q %q", texte, url)
+	}
+	if texte, url := texteRappels([]Echeance{e, e}, []string{"a", "b"}); url != "/" || texte != "a\nb" {
+		t.Fatalf("deux rappels : %q %q", texte, url)
 	}
 }

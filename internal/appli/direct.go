@@ -162,6 +162,11 @@ func (a *App) Publier(c *Contexte, module, texte string) {
 		Couleur: c.Membre.Couleur, Initiale: Initiale(c.Membre.Nom),
 	})
 	if texte != "" && a.Push != nil {
+		if m, ok := ModuleParCle(module); ok && !m.Notifie {
+			// Oubli à corriger dans le Catalogue : personne ne pourrait régler
+			// cette notification dans Moi › Notifications.
+			a.Journal.Warn("notification d'un module sans « Notifie »", "module", module)
+		}
 		a.Push.Annoncer(c.Famille.ID, c.Membre.ID, module, texte)
 	}
 }

@@ -17,18 +17,21 @@ type ModuleDef struct {
 	Emoji   string
 	URL     string
 	Parents bool // réservé aux parents (budget)
+	// Notifie : le module envoie des notifications (Publier avec un texte) ;
+	// seuls ceux-là ont un interrupteur dans Moi › Notifications.
+	Notifie bool
 }
 
 // Catalogue : tous les modules, dans l'ordre de l'accueil.
 var Catalogue = []ModuleDef{
-	{Cle: "courses", Nom: "Courses", Emoji: "🛒", URL: "/courses"},
-	{Cle: "agenda", Nom: "Agenda", Emoji: "🗓️", URL: "/agenda"},
-	{Cle: "taches", Nom: "Tâches", Emoji: "✅", URL: "/taches"},
-	{Cle: "menus", Nom: "Menus", Emoji: "🍽️", URL: "/menus"},
+	{Cle: "courses", Nom: "Courses", Emoji: "🛒", URL: "/courses", Notifie: true},
+	{Cle: "agenda", Nom: "Agenda", Emoji: "🗓️", URL: "/agenda", Notifie: true},
+	{Cle: "taches", Nom: "Tâches", Emoji: "✅", URL: "/taches", Notifie: true},
+	{Cle: "menus", Nom: "Menus", Emoji: "🍽️", URL: "/menus", Notifie: true},
 	{Cle: "budget", Nom: "Budget", Emoji: "💶", URL: "/budget", Parents: true},
 	{Cle: "abonnements", Nom: "Abonnements", Emoji: "📺", URL: "/abonnements", Parents: true},
-	{Cle: "enfants", Nom: "Espace enfants", Emoji: "⭐", URL: "/enfants"},
-	{Cle: "notes", Nom: "Notes", Emoji: "📝", URL: "/notes"},
+	{Cle: "enfants", Nom: "Espace enfants", Emoji: "⭐", URL: "/enfants", Notifie: true},
+	{Cle: "notes", Nom: "Notes", Emoji: "📝", URL: "/notes", Notifie: true},
 	{Cle: "contacts", Nom: "Contacts", Emoji: "👥", URL: "/contacts"},
 	{Cle: "anniversaires", Nom: "Anniversaires", Emoji: "🎂", URL: "/anniversaires"},
 	{Cle: "adresses", Nom: "Adresses", Emoji: "📇", URL: "/adresses"},
@@ -36,7 +39,7 @@ var Catalogue = []ModuleDef{
 	{Cle: "vehicules", Nom: "Véhicules", Emoji: "🚗", URL: "/vehicules"},
 	{Cle: "animaux", Nom: "Animaux", Emoji: "🐾", URL: "/animaux"},
 	{Cle: "prestataires", Nom: "Prestataires", Emoji: "🧰", URL: "/prestataires"},
-	{Cle: "projets", Nom: "Projets", Emoji: "🎯", URL: "/projets"},
+	{Cle: "projets", Nom: "Projets", Emoji: "🎯", URL: "/projets", Notifie: true},
 }
 
 // ModulesParDefaut : modules activés pour une nouvelle famille (tous).

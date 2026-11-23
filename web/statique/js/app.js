@@ -93,6 +93,10 @@
 (function () {
   "use strict";
   var source = null;
+  function saisieEnCours() {
+    var a = document.activeElement;
+    return !!(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.value);
+  }
   function connecter() {
     var url = document.body && document.body.getAttribute("data-direct");
     if (!url || source || !window.EventSource) return;
@@ -101,6 +105,12 @@
       var m;
       try { m = JSON.parse(e.data); } catch (_) { return; }
       var moi = document.body.getAttribute("data-membre");
+      // Modules de la famille changés par un parent : tuiles, barre du bas et
+      // pages changent ; la page est rechargée (sauf pendant une saisie).
+      if (m.module === "famille" && String(m.auteur) !== moi) {
+        if (!saisieEnCours()) window.location.reload();
+        return;
+      }
       if (m.module && window.htmx) htmx.trigger(document.body, "maj-" + m.module, m);
       if (m.texte && String(m.auteur) !== moi) window.fcToast(m.texte, false, m.couleur, m.initiale);
     });

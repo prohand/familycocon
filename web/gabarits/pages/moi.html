@@ -78,9 +78,9 @@
   <h2>🔑 Mot de passe</h2>
   <form method="post" action="/moi/mdp">
     {{template "jeton" $c.CSRF}}
-    <label class="champ"><span>Mot de passe actuel</span><input type="password" name="actuel" autocomplete="current-password" required></label>
-    <label class="champ"><span>Nouveau (10 caractères ou plus)</span><input type="password" name="nouveau" autocomplete="new-password" minlength="10" required></label>
-    <label class="champ"><span>Le même, encore une fois</span><input type="password" name="nouveau2" autocomplete="new-password" minlength="10" required></label>
+    <label class="champ"><span>Mot de passe actuel</span><input type="password" maxlength="128" name="actuel" autocomplete="current-password" required></label>
+    <label class="champ"><span>Nouveau (10 caractères ou plus)</span><input type="password" maxlength="128" name="nouveau" autocomplete="new-password" minlength="10" required></label>
+    <label class="champ"><span>Le même, encore une fois</span><input type="password" maxlength="128" name="nouveau2" autocomplete="new-password" minlength="10" required></label>
     <button class="bouton">Changer le mot de passe</button>
   </form>
 </section>

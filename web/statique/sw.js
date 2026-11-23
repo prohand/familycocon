@@ -61,8 +61,18 @@ self.addEventListener("notificationclick", function (e) {
   e.notification.close();
   const cible = new URL((e.notification.data && e.notification.data.url) || "/", location.origin).href;
   e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (fenetres) {
+    // Une fenêtre déjà sur la bonne page : on la montre.
     for (const f of fenetres) {
-      if ("focus" in f) { f.navigate(cible); return f.focus(); }
+      if (f.url === cible && "focus" in f) return f.focus();
+    }
+    // Sinon une fenêtre de l'appli suivie par ce service worker change de
+    // page (navigate() échoue sur une fenêtre qu'il ne suit pas) ; à défaut,
+    // une nouvelle fenêtre s'ouvre.
+    for (const f of fenetres) {
+      if ("navigate" in f && "focus" in f) {
+        return f.navigate(cible).then(function (g) { return (g || f).focus(); })
+          .catch(function () { return self.clients.openWindow(cible); });
+      }
     }
     return self.clients.openWindow(cible);
   }));

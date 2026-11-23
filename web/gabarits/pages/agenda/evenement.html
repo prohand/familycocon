@@ -2,7 +2,7 @@
 {{$c := .C}}
 {{with .Donnees}}
 <section class="titre-page">
-  <a class="retour" href="/agenda?date={{.Date}}">‹ Agenda</a>
+  <a class="retour" href="/agenda?date={{.Retour}}">‹ Agenda</a>
   <h1>{{if .Nouveau}}✨ Nouvel événement{{else}}🗓️ {{.Evt.Titre}}{{end}}</h1>
   {{if not .Modifiable}}<p>Seul un parent (ou qui l'a créé) peut le modifier.</p>{{end}}
 </section>
@@ -15,6 +15,8 @@
 {{end}}
 <form class="carte" method="post" action="{{if .Nouveau}}/agenda{{else}}/agenda/{{.Evt.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
+  {{if .Jour}}<input type="hidden" name="retour" value="{{.Jour}}">
+  <p class="aide">🔁 Cette fois-ci : {{.JourTitre}}. Les changements valent pour toutes les fois.</p>{{end}}
   <fieldset class="sans-bord"{{if not .Modifiable}} disabled{{end}}>
   <label class="champ"><span>Quoi ?</span>
     <input name="titre" value="{{.Evt.Titre}}" placeholder="Ex. : Piscine, Dentiste, Anniversaire de Jules" maxlength="80" required{{if .Nouveau}} autofocus{{end}}></label>

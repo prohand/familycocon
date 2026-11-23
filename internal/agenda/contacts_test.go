@@ -40,7 +40,7 @@ func TestContactsDansAgenda(t *testing.T) {
 	if !strings.Contains(page, "👤 Dr Dent") {
 		t.Fatalf("contact absent de l'agenda :\n%s", page)
 	}
-	evt := essai.Trouver(t, page, `href="/agenda/(\d+)"`)
+	evt := essai.Trouver(t, page, `href="/agenda/(\d+)[?"]`)
 	if _, page := marie.Get("/agenda/" + evt); !strings.Contains(page, `href="tel:0123456789"`) {
 		t.Fatal("appel direct absent de l'événement")
 	}
@@ -82,7 +82,7 @@ func TestContactsBornesEtCarnetDesactive(t *testing.T) {
 	}
 	rep.Body.Close()
 	_, page = marie.Get("/agenda?date=2026-11-24")
-	evt := essai.Trouver(t, page, `href="/agenda/(\d+)"`)
+	evt := essai.Trouver(t, page, `href="/agenda/(\d+)[?"]`)
 
 	// Carnet désactivé : modifier l'événement garde le lien vers le contact.
 	if _, err := a.DB.Exec(`UPDATE familles SET modules = 'agenda'`); err != nil {

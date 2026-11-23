@@ -16,6 +16,7 @@ import (
 
 	"familycocon/internal/appli"
 	"familycocon/internal/donnees"
+	"familycocon/internal/texte"
 )
 
 // --- Groupes (étiquettes libres) ----------------------------------------------
@@ -86,29 +87,26 @@ func premierTel(ct donnees.Contact) string {
 // initialeTri : la lettre de rangement (« É » → « E », chiffre ou symbole → « # »).
 func initialeTri(nom string) string {
 	r, _ := utf8.DecodeRuneInString(strings.TrimSpace(nom))
-	r = unicode.ToUpper(r)
-	if s := sansAccent(string(r)); s != "" {
+	if s := texte.Plier(string(r)); s != "" {
 		r, _ = utf8.DecodeRuneInString(s)
 	}
+	r = unicode.ToUpper(r)
 	if r < 'A' || r > 'Z' {
 		return "#"
 	}
 	return string(r)
 }
 
-func sansAccent(s string) string {
-	return strings.NewReplacer("É", "E", "È", "E", "Ê", "E", "Ë", "E", "À", "A", "Â", "A", "Ä", "A", "Î", "I", "Ï", "I",
-		"Ô", "O", "Ö", "O", "Ù", "U", "Û", "U", "Ü", "U", "Ç", "C").Replace(s)
-}
-
-// correspond : recherche dans le nom, les téléphones, l'e-mail, la société, le métier, les groupes.
+// correspond : recherche dans le nom, les téléphones, l'e-mail, la société,
+// le métier, les groupes, sans tenir compte des majuscules ni des accents
+// (« helene » trouve « Hélène »).
 func correspond(ct donnees.Contact, q string) bool {
 	if q == "" {
 		return true
 	}
-	texte := strings.ToLower(strings.Join([]string{ct.Nom, ct.Telephone, ct.TelFixe, ct.TelTravail, ct.Email, ct.Adresse,
-		ct.Societe, ct.Metier, ct.Groupes}, " "))
-	return strings.Contains(texte, q) ||
+	tout := strings.Join([]string{ct.Nom, ct.Telephone, ct.TelFixe, ct.TelTravail, ct.Email, ct.Adresse,
+		ct.Societe, ct.Metier, ct.Groupes}, " ")
+	return texte.Contient(tout, q) ||
 		(LienTel(q) != "" && len(LienTel(q)) >= 4 && strings.Contains(LienTel(ct.Telephone+ct.TelFixe+ct.TelTravail), LienTel(q)))
 }
 
@@ -169,7 +167,7 @@ func (m *Module) pageContacts(w http.ResponseWriter, r *http.Request, c *appli.C
 		if a != b {
 			return a < b
 		}
-		return strings.ToLower(sansAccent(liste[i].Nom)) < strings.ToLower(sansAccent(liste[j].Nom))
+		return texte.Plier(liste[i].Nom) < texte.Plier(liste[j].Nom)
 	})
 	for _, ct := range liste {
 		l := initialeTri(ct.Nom)
@@ -212,7 +210,7 @@ func (m *Module) pageAdresses(w http.ResponseWriter, r *http.Request, c *appli.C
 			}
 			g.Contacts = append(g.Contacts, ct)
 		}
-		sort.SliceStable(g.Contacts, func(i, j int) bool { return strings.ToLower(g.Contacts[i].Nom) < strings.ToLower(g.Contacts[j].Nom) })
+		sort.SliceStable(g.Contacts, func(i, j int) bool { return texte.Plier(g.Contacts[i].Nom) < texte.Plier(g.Contacts[j].Nom) })
 		if len(g.Contacts) > 0 {
 			groupes = append(groupes, g)
 		}
