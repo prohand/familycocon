@@ -509,3 +509,47 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   Crochet `App.AjouterDepart` pour les modules.
 - **Export** : le budget perso, les abonnements et les projets privés des
   autres membres n'y sont pas.
+
+## 20. Fiche véhicule repensée, photos dans le texte des notes (v0.8.0)
+- **Haut de la fiche d'un véhicule** : résumé (compteur, modifiable d'un
+  toucher ; prochaine échéance ; dépensé dans l'année ; coût tout compris
+  au km) et deux boutons, « ⛽ Ajouter un plein » et « 🔧 Entretien », qui
+  ouvrent une fenêtre (`<dialog>`) par-dessus la fiche, quel que soit
+  l'onglet.
+- **Fenêtre « Nouveau plein »** : scan du ticket en premier ; grands champs
+  litres et prix ; prix au litre calculé ; compteur comparé au dernier
+  relevé (alerte si plus petit, ou plus de 3 000 km d'écart) ; carburant
+  et plein complet/partiel en boutons ; stations proposées en un toucher
+  (les 4 plus fréquentes des 30 derniers pleins, notes de 40 caractères
+  au plus) ; date du jour ; budget au choix.
+- **Raccourci** `GET /vehicules/plein` (page « Ajouter », appui long sur
+  l'icône de l'appli : `shortcuts` du manifeste) : fiche du véhicule du
+  dernier plein (ou le premier), fenêtre ouverte (`?ajout=plein`, retiré
+  de l'adresse ensuite) ; les autres véhicules en lien dans la fenêtre.
+- **Trois onglets** : Entretien, Pleins (liste compacte : une ligne par
+  plein avec sa consommation ; touchée, elle s'ouvre : ticket, corriger,
+  supprimer), Chiffres (`?onglet=chiffres`).
+- **Périodes des chiffres** (`&periode=`) : `3m`, `6m`, 12 mois (vide),
+  une année (`2025` : du 1er janvier au 31 décembre, ou à aujourd'hui),
+  `tout`, `dates` (`&du=&au=`, remises dans l'ordre, pas après
+  aujourd'hui). Comparaison avec la période d'avant (carburant, dépensé),
+  seulement si le carnet la couvre en entier.
+- **Fuelio** : `Full = 2` (partiel dont Fuelio estime le niveau) repris
+  comme partiel ; un plein déjà repris sous l'autre libellé est corrigé,
+  pas doublé. Le message de fin dit ce qui n'a pas été repris (aucune
+  dépense dans la sauvegarde, dates illisibles, modèles, recettes) ; dates
+  aussi en JJ/MM/AAAA et JJ.MM.AAAA.
+- **Litres au centilitre** à l'affichage (8,51) : « Corriger » n'arrondit
+  plus.
+- **Photos dans le texte d'une note** : une ligne `[photo N]` (N : photo de
+  cette note) montre la photo à cet endroit. Un éditeur (app.js,
+  `contenteditable`) montre la photo pendant la saisie et écrit le texte
+  dans le textarea caché (sans JavaScript : le textarea tel quel).
+  « 📷 Photo ici » envoie la photo (`POST /notes/{id}/photos?place=1` →
+  `{"id":N}`) et la pose au curseur ; « ☑️ Case » ; Entrée continue une
+  liste ; une image collée devient une photo. Sur une note neuve, la note
+  est d'abord enregistrée. Une photo retirée du texte retourne en bas de
+  la note (rien n'est effacé sans son ✕) ; « ⤴️ Dans le texte » la replace.
+  À l'enregistrement, les repères d'une photo d'une autre note sont
+  retirés. Une note avec des cases se lit en entier (texte, photos,
+  cases à cocher). Carte de la liste : 📷 à la place du repère.

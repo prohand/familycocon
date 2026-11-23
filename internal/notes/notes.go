@@ -258,7 +258,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			m.a.ErreurInterne(w, r, err)
 			return
 		}
-		f.Photos = photos
+		f.Photos = enBas(n.Texte, photos) // celles du texte y sont montrées
 	}
 	titre := "Nouvelle note"
 	if f.Liste {
@@ -310,7 +310,11 @@ func apercu(titre, texte string) string {
 	if titre != "" {
 		return titre
 	}
-	r := []rune(strings.SplitN(texte, "\n", 2)[0])
+	premiere := strings.SplitN(texte, "\n", 2)[0]
+	if marque(premiere) > 0 {
+		premiere = "📷"
+	}
+	r := []rune(premiere)
 	if len(r) > 40 {
 		return string(r[:40]) + "…"
 	}
@@ -330,6 +334,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("%d notes au plus : demandez à un parent d'en supprimer.", notesMax))
 		return
 	}
+	s.texte = garderMarques(s.texte, nil) // pas encore de photo
 	t := time.Now().Unix()
 	n, err := m.a.Q.CreerNote(r.Context(), donnees.CreerNoteParams{
 		FamilleID: c.Famille.ID, AuteurID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Titre: s.titre, Texte: s.texte,
@@ -374,6 +379,13 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	if !(n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID) || (s.privee == 1 && !peutPriver(c, n)) {
 		s.privee = n.Privee
 	}
+	// Repères de photos : seulement celles de cette note.
+	photos, err := m.a.Q.PhotosNote(r.Context(), donnees.PhotosNoteParams{NoteID: n.ID, FamilleID: c.Famille.ID})
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	s.texte = garderMarques(s.texte, photos)
 	// version : la note telle qu'elle était à l'ouverture du formulaire. Si
 	// quelqu'un l'a changée entre-temps, rien n'est écrasé : on prévient
 	// (la saisie reste à l'écran).

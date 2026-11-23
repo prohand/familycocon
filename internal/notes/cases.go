@@ -77,6 +77,10 @@ func basculer(texte string, i int, cochee bool) (string, bool) {
 func apercuCases(texte string) string {
 	lignes := strings.Split(texte, "\n")
 	for i, l := range lignes {
+		if marque(l) > 0 {
+			lignes[i] = "📷"
+			continue
+		}
 		if _, t, cochee, ok := lireCase(strings.TrimRight(l, "\r")); ok {
 			if cochee {
 				lignes[i] = "☑ " + t
@@ -164,7 +168,34 @@ func (m *Module) repondreCases(w http.ResponseWriter, r *http.Request, c *appli.
 	m.a.Fragment(w, r, c, "notes/note", "cases-note", vueCases(c, n))
 }
 
-// vueCases : ce que montre le bloc de la liste à cocher.
+// LigneNote : une ligne de la note telle qu'elle se lit : une case à
+// cocher, une photo ou du texte.
+type LigneNote struct {
+	CaseNote
+	Case  bool
+	Photo int64
+}
+
+// lignesNote : toute la note, ligne par ligne (sans les lignes vides du
+// début et de la fin).
+func lignesNote(texte string) []LigneNote {
+	var out []LigneNote
+	for i, l := range strings.Split(strings.TrimSpace(texte), "\n") {
+		l = strings.TrimRight(l, "\r")
+		switch _, t, cochee, ok := lireCase(l); {
+		case ok:
+			out = append(out, LigneNote{CaseNote: CaseNote{Ligne: i, Texte: t, Cochee: cochee}, Case: true})
+		case marque(l) > 0:
+			out = append(out, LigneNote{CaseNote: CaseNote{Ligne: i}, Photo: marque(l)})
+		default:
+			out = append(out, LigneNote{CaseNote: CaseNote{Ligne: i, Texte: l}})
+		}
+	}
+	return out
+}
+
+// vueCases : ce que montre le bloc de la liste à cocher (toute la note :
+// le texte et les photos autour des cases).
 func vueCases(c *appli.Contexte, n donnees.Note) map[string]any {
 	cases := Cases(n.Texte)
 	cochees := 0
@@ -173,7 +204,7 @@ func vueCases(c *appli.Contexte, n donnees.Note) map[string]any {
 			cochees++
 		}
 	}
-	return map[string]any{"ID": n.ID, "Cases": cases, "Cochees": cochees, "Modifiable": modifiable(c, n), "CSRF": c.CSRF}
+	return map[string]any{"ID": n.ID, "Cases": cases, "Lignes": lignesNote(n.Texte), "Cochees": cochees, "Modifiable": modifiable(c, n), "CSRF": c.CSRF}
 }
 
 // ajouterElement : un élément de plus dans la liste (tous ceux qui voient

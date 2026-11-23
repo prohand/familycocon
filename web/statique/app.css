@@ -1607,3 +1607,19 @@ dialog.fenetre form { padding: 14px 16px 18px; }
 .pilules-choix label.lu span { background: var(--corail-doux); border-color: var(--corail); }
 .stations { margin: -4px 0 10px; }
 .bouton.gros { width: 100%; justify-content: center; font-size: 1.1rem; padding: 15px; margin-top: 8px; }
+
+/* Notes : éditeur qui montre les photos dans le texte. */
+.outils-note { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.editeur-note { min-height: 12em; padding: 12px 14px; border: 1.5px solid var(--bordure); border-radius: var(--rayon-petit);
+  background: var(--fond); color: var(--texte); line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; font-weight: 400; }
+.editeur-note:focus { border-color: var(--corail); }
+.editeur-note[contenteditable="false"] { min-height: 0; }
+figure.photo-texte { position: relative; margin: 8px 0; }
+figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; border-radius: 12px; }
+figure.photo-texte .retirer-photo { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 50%; border: 0;
+  background: rgba(0, 0, 0, .6); color: #fff; font-size: 1rem; cursor: pointer; }
+.photo-attente { color: var(--texte-doux); font-style: italic; }
+.piece .placer { display: block; margin-top: 4px; border: 0; background: none; color: var(--corail-fonce); font: inherit; font-weight: 800; font-size: .8rem; cursor: pointer; }
+.piece .placer[hidden] { display: none; }
+.cases-note .texte-note { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cases-note .ligne-vide { height: .6em; }
