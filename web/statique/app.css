@@ -1652,3 +1652,23 @@ figure.photo-texte .retirer-photo { position: absolute; top: 6px; right: 6px; wi
 .editeur-note.court { min-height: 5em; }
 .contenu-note { overflow-wrap: anywhere; }
 .contenu-note > :first-child { margin-top: 0; }
+
+/* Graphiques interactifs : repère, point choisi, bulle ; dessin animé à
+   l'affichage (la courbe se trace, les barres montent). */
+.graphe { position: relative; }
+.graphique { touch-action: pan-y; cursor: crosshair; }
+.graphique .g-point.cache { display: none; }
+.graphique .g-repere { stroke: var(--texte-doux); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.graphique .g-actif { fill: var(--corail); stroke: var(--carte); stroke-width: 2; pointer-events: none; }
+.graphique .g-barre.choisie rect { opacity: .7; stroke: var(--texte); stroke-width: 1; }
+.bulle-graphique { position: absolute; z-index: 2; padding: 4px 10px; border-radius: 10px; background: var(--texte); color: var(--carte);
+  font-size: .8rem; font-weight: 800; white-space: nowrap; pointer-events: none; box-shadow: var(--ombre); }
+.bulle-graphique[hidden] { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .graphique .g-ligne { stroke-dasharray: 1; stroke-dashoffset: 1; animation: g-trace 1s ease-out forwards; }
+  .graphique .g-barre rect { transform-box: fill-box; transform-origin: bottom; animation: g-monte .6s ease-out both; }
+  .graphique .g-point { animation: g-apparait .4s .6s both; }
+}
+@keyframes g-trace { to { stroke-dashoffset: 0; } }
+@keyframes g-monte { from { transform: scaleY(0); } }
+@keyframes g-apparait { from { opacity: 0; } }

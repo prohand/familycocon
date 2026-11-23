@@ -1356,3 +1356,74 @@ if ("serviceWorker" in navigator) {
   document.addEventListener("DOMContentLoaded", tout);
   document.addEventListener("htmx:afterSettle", tout);
 })();
+
+// Graphiques (svg.graphique, dessinés par le serveur) : un toucher ou la
+// souris montre un repère et une bulle (date et valeur du point le plus
+// proche, ou détail de la barre). Chaque point ou barre porte data-info.
+(function () {
+  "use strict";
+  var NS = "http://www.w3.org/2000/svg";
+  function cibles(svg) {
+    var l = [];
+    svg.querySelectorAll("circle[data-info]").forEach(function (c) {
+      l.push({ x: +c.getAttribute("cx"), y: +c.getAttribute("cy"), info: c.getAttribute("data-info"), el: c });
+    });
+    svg.querySelectorAll("g[data-info]").forEach(function (g) {
+      l.push({ x: +g.getAttribute("data-x"), y: null, info: g.getAttribute("data-info"), el: g });
+    });
+    return l;
+  }
+  function montrer(svg, e) {
+    var l = svg._cibles || (svg._cibles = cibles(svg));
+    if (!l.length) return;
+    var r = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+    var x = (e.clientX - r.left) * vb.width / r.width;
+    var près = l[0];
+    l.forEach(function (c) { if (Math.abs(c.x - x) < Math.abs(près.x - x)) près = c; });
+    var h = vb.height;
+    var rep = svg.querySelector(".g-repere");
+    if (!rep) { rep = document.createElementNS(NS, "line"); rep.setAttribute("class", "g-repere"); svg.appendChild(rep); }
+    rep.setAttribute("x1", près.x); rep.setAttribute("x2", près.x);
+    rep.setAttribute("y1", 10); rep.setAttribute("y2", h - 22);
+    var pt = svg.querySelector(".g-actif");
+    if (près.y !== null) {
+      if (!pt) { pt = document.createElementNS(NS, "circle"); pt.setAttribute("class", "g-actif"); pt.setAttribute("r", 5); svg.appendChild(pt); }
+      pt.setAttribute("cx", près.x); pt.setAttribute("cy", près.y);
+    } else if (pt) pt.remove();
+    svg.querySelectorAll(".g-barre.choisie").forEach(function (g) { g.classList.remove("choisie"); });
+    if (près.y === null) près.el.classList.add("choisie");
+    var cadre = svg.parentNode, bulle = cadre.querySelector(".bulle-graphique");
+    if (!bulle) { bulle = document.createElement("div"); bulle.className = "bulle-graphique"; bulle.setAttribute("aria-live", "polite"); cadre.appendChild(bulle); }
+    bulle.textContent = près.info;
+    bulle.hidden = false;
+    var rc = cadre.getBoundingClientRect();
+    var px = r.left - rc.left + près.x * r.width / vb.width;
+    var w = bulle.offsetWidth, max = cadre.clientWidth - w - 4;
+    bulle.style.left = Math.max(4, Math.min(max, px - w / 2)) + "px";
+    bulle.style.top = Math.max(2, r.top - rc.top - bulle.offsetHeight + 4) + "px"; // juste au-dessus du dessin
+  }
+  function cacher(svg) {
+    var x = svg.querySelector(".g-repere"); if (x) x.remove();
+    var p = svg.querySelector(".g-actif"); if (p) p.remove();
+    svg.querySelectorAll(".g-barre.choisie").forEach(function (g) { g.classList.remove("choisie"); });
+    var b = svg.parentNode.querySelector(".bulle-graphique"); if (b) b.hidden = true;
+  }
+  document.addEventListener("pointermove", function (e) {
+    var svg = e.target.closest && e.target.closest("svg.graphique");
+    if (svg && e.pointerType === "mouse") montrer(svg, e);
+  });
+  document.addEventListener("pointerdown", function (e) {
+    var svg = e.target.closest && e.target.closest("svg.graphique");
+    document.querySelectorAll("svg.graphique").forEach(function (s) { if (s !== svg) cacher(s); });
+    if (svg) montrer(svg, e);
+  });
+  document.addEventListener("pointerout", function (e) {
+    var svg = e.target.closest && e.target.closest("svg.graphique");
+    if (svg && e.pointerType === "mouse" && !svg.contains(e.relatedTarget)) cacher(svg);
+  });
+  // Glisser le doigt le long de la courbe.
+  document.addEventListener("touchmove", function (e) {
+    var svg = e.target.closest && e.target.closest("svg.graphique");
+    if (svg && e.touches[0]) montrer(svg, e.touches[0]);
+  }, { passive: true });
+})();
