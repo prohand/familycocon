@@ -203,6 +203,23 @@
   {{- else}}
   <p class="aide">Aucun plein noté. Ajoutez-en un, ou reprenez vos pleins depuis Fuelio (en bas de la page).</p>
   {{- end}}
-  {{if eq (len $v.Pleins) 100}}<p class="aide">Seuls les 100 derniers pleins sont listés (les graphiques et les chiffres comptent tout).</p>{{end}}
+  {{template "bouton-suite-pleins" dict "S" $s}}
 </section>
+{{end}}
+
+{{/* Bouton « Voir les pleins plus anciens » : remplacé par la page suivante (et son propre bouton). */}}
+{{define "bouton-suite-pleins"}}
+{{- with .S.Pleins.Suite}}
+<button class="bouton secondaire plus-pleins" hx-get="/suivi/{{$.S.Module}}/{{$.S.ObjetID}}/pleins?depuis={{.}}" hx-target="this" hx-swap="outerHTML">⬇️ Voir les pleins plus anciens</button>
+{{- end}}
+{{end}}
+
+{{/* Page suivante de la liste des pleins (fragment htmx) : .Donnees = dict "S" "J" "P". */}}
+{{define "suite-pleins"}}
+{{- with .Donnees}}{{$s := .S}}{{$j := .J}}{{$p := .P}}
+{{- range $s.Pleins.Pleins}}
+{{template "ligne-carnet" dict "L" . "S" $s "J" $j "P" $p "Plein" true}}
+{{- end}}
+{{template "bouton-suite-pleins" dict "S" $s}}
+{{- end}}
 {{end}}

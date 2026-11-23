@@ -5,12 +5,14 @@ package foyer
 import (
 	"archive/zip"
 	"bytes"
+	"fmt"
 	"image"
 	"image/jpeg"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"familycocon/internal/appli"
 	"familycocon/internal/essai"
@@ -119,5 +121,53 @@ func TestRepriseFuelio(t *testing.T) {
 	}
 	if fichiers, _ = filepath.Glob(filepath.Join(a.Config.Donnees, "pieces", "*", "*.jpg")); len(fichiers) != 1 {
 		t.Fatalf("%d photos après la deuxième reprise", len(fichiers))
+	}
+}
+
+// Plus de 100 pleins : « Voir les pleins plus anciens » charge les pages
+// suivantes jusqu'au dernier.
+func TestPleinsPlusAnciens(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+	})
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	_, page := marie.Post("/vehicules", map[string]string{"nom": "Clio", "genre": "voiture"})
+	id := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	var csv strings.Builder
+	csv.WriteString("\"## Log\"\n\"Date\",\"Odo (km)\",\"Fuel (L)\",\"Full\",\"Price\",\"UniqueId\"\n")
+	debut := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 205; i++ {
+		fmt.Fprintf(&csv, "\"%s 10:00\",\"%d\",\"40\",\"1\",\"70\",\"%d\"\n", debut.AddDate(0, 0, 7*i).Format("2006-01-02"), 10000+600*i, i+1)
+	}
+	req, _ := http.NewRequest("POST", srv.URL+"/vehicules/"+id+"/fuelio", strings.NewReader(csv.String()))
+	req.Header.Set("HX-Request", "true")
+	req.Header.Set("X-Jeton", marie.Jeton)
+	rep, err := marie.C.Do(req)
+	if err != nil || rep.StatusCode != 204 {
+		t.Fatalf("reprise : %v %v", err, rep.StatusCode)
+	}
+	rep.Body.Close()
+	_, page = marie.Get("/vehicules/" + id + "?onglet=pleins")
+	suite := "/suivi/vehicules/" + id + "/pleins?depuis="
+	if n := strings.Count(page, `class="heure"`); n != 100 || !strings.Contains(page, suite+"100") {
+		t.Fatalf("première page : %d pleins", n)
+	}
+	_, page = marie.Get(suite + "100")
+	if n := strings.Count(page, `class="heure"`); n != 100 || !strings.Contains(page, suite+"200") || strings.Contains(page, "<html") {
+		t.Fatalf("deuxième page : %d pleins", n)
+	}
+	_, page = marie.Get(suite + "200")
+	if n := strings.Count(page, `class="heure"`); n != 5 || strings.Contains(page, "plus anciens") || !strings.Contains(page, "08/01") {
+		t.Fatalf("dernière page : %d pleins", n)
+	}
+	// Léa voit les pleins plus anciens, sans les prix.
+	lea.Get("/vehicules/" + id)
+	if code, p := lea.Get(suite + "100"); code != 200 || strings.Contains(p, "70,00") || !strings.Contains(p, "40 L") {
+		t.Fatalf("enfant : %d", code)
+	}
+	if code, _ := marie.Get("/suivi/vehicules/9999/pleins?depuis=100"); code != 404 {
+		t.Fatalf("véhicule inconnu : %d", code)
 	}
 }

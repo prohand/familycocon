@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"math"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -32,10 +33,15 @@ const (
 	PeriodeTout     = "tout"
 )
 
+// PleinsParPage : pleins listés d'un coup (« Voir les pleins plus anciens »
+// charge la page suivante).
+const PleinsParPage = 100
+
 // VuePleins : l'onglet « Pleins ».
 type VuePleins struct {
 	Periode   string
-	Pleins    []donnees.Carnet // les 100 derniers
+	Pleins    []donnees.Carnet // les PleinsParPage derniers
+	Suite     int64            // où reprendre la liste (0 : tout est montré)
 	Conso     string           // « 6,4 L / 100 km » sur la période
 	PrixLitre string           // « 1,80 € » en moyenne sur la période
 	Litres    string           // litres achetés sur la période
@@ -61,9 +67,8 @@ func (s *Suivi) ChargerPleins(ctx context.Context, c *appli.Contexte, b *Bloc, p
 	v := &VuePleins{Periode: periode}
 	b.Pleins = v
 	parent := c.EstParent()
-	p := donnees.PleinsListeObjetParams{FamilleID: c.Famille.ID, Module: b.Module, ObjetID: b.ObjetID}
 	var err error
-	if v.Pleins, err = s.a.Q.PleinsListeObjet(ctx, p); err != nil {
+	if v.Pleins, v.Suite, err = s.pagePleins(ctx, c, b.Module, b.ObjetID, 0); err != nil {
 		return err
 	}
 	auj := c.Maintenant()
@@ -232,4 +237,42 @@ func premierMoisKm(l []donnees.KmMoisObjetRow) string {
 		return ""
 	}
 	return l[0].Mois
+}
+
+// pagePleins : une page de la liste des pleins (du plus récent au plus
+// ancien) et où reprendre ensuite (0 : c'était la dernière page).
+func (s *Suivi) pagePleins(ctx context.Context, c *appli.Contexte, module string, objet, depuis int64) ([]donnees.Carnet, int64, error) {
+	l, err := s.a.Q.PleinsListeObjet(ctx, donnees.PleinsListeObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet,
+		Decalage: depuis, Nombre: PleinsParPage + 1}) // un de plus : y a-t-il une suite ?
+	if err != nil || len(l) <= PleinsParPage {
+		return l, 0, err
+	}
+	return l[:PleinsParPage], depuis + PleinsParPage, nil
+}
+
+// suitePleins : les pleins plus anciens (bouton en bas de la liste), ajoutés
+// à la suite par htmx, avec le bouton de la page d'après s'il en reste.
+func (s *Suivi) suitePleins(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	ctx := r.Context()
+	objet, _ := strconv.ParseInt(r.PathValue("objet"), 10, 64)
+	o, ok := s.cible(r, c, r.PathValue("module"), objet)
+	depuis, err := strconv.ParseInt(r.URL.Query().Get("depuis"), 10, 64)
+	if !ok || !o.AvecKm || err != nil || depuis < 0 {
+		s.a.Echec(w, r, http.StatusNotFound, "Introuvable.")
+		return
+	}
+	b := &Bloc{Module: o.Module, ObjetID: objet, AvecKm: true, Onglets: true, Devise: c.Famille.Devise}
+	v := &VuePleins{}
+	b.Pleins = v
+	if v.Pleins, v.Suite, err = s.pagePleins(ctx, c, o.Module, objet, depuis); err != nil {
+		s.a.ErreurInterne(w, r, err)
+		return
+	}
+	if c.EstParent() {
+		if b.Pieces, err = s.piecesParLigne(ctx, c, o.Module, objet); err != nil {
+			s.a.ErreurInterne(w, r, err)
+			return
+		}
+	}
+	s.a.Fragment(w, r, c, "foyer/fiche", "suite-pleins", map[string]any{"S": b, "J": c.CSRF, "P": c.EstParent()})
 }

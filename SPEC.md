@@ -409,7 +409,9 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - **Onglet Pleins** : chiffres (consommation, prix moyen du litre,
   carburant acheté, dépensé en carburant, coût tout compris au km), 4
   graphiques, formulaire « Ajouter un plein » (complet ou partiel, litres
-  obligatoires), liste des 100 derniers pleins (ticket dans « Corriger »).
+  obligatoires), liste des pleins par pages de 100 (« Voir les pleins plus
+  anciens » ajoute la page suivante par htmx, `GET /suivi/{module}/{objet}/pleins?depuis=N`),
+  ticket dans « Corriger ».
   Période : 12 mois (mois en cours compris) ou « Tout » (`&periode=tout`).
 - **Graphiques** : SVG écrit par le serveur (`internal/graphique`, ~200
   lignes, bibliothèque standard), couleurs par classes CSS (thème clair et

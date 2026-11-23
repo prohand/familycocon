@@ -120,9 +120,10 @@ WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = 
 SELECT * FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
   AND litres = 0 ORDER BY jour DESC, id DESC LIMIT 100;
 
+-- Les pleins du plus recent au plus ancien, par pages (decalage, nombre).
 -- name: PleinsListeObjet :many
 SELECT * FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
-  AND litres > 0 ORDER BY jour DESC, km DESC, id DESC LIMIT 100;
+  AND litres > 0 ORDER BY jour DESC, km DESC, id DESC LIMIT sqlc.arg(nombre) OFFSET sqlc.arg(decalage);
 
 -- Pleins d'une periode (du : AAAA-MM-JJ ; '0000' : tout), dans l'ordre.
 -- name: PleinsPeriodeObjet :many

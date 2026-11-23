@@ -79,6 +79,7 @@ func Brancher(a *appli.App) *Suivi {
 	a.Route("POST /suivi/carnet/{id}", "", appli.Membre, s.modifierCarnet)
 	a.Route("POST /suivi/echeances/{id}", "", appli.Membre, s.modifierEcheance)
 	a.Route("POST /suivi/echeances/{id}/reporter", "", appli.Membre, s.reporter)
+	a.Route("GET /suivi/{module}/{objet}/pleins", "", appli.Membre, s.suitePleins)
 	a.Route("POST /suivi/carnet/{id}/pieces", "", appli.Parent, s.ajouterPiece)
 	a.Route("GET /suivi/pieces/{id}", "", appli.Parent, s.piece)
 	a.Route("POST /suivi/pieces/{id}/supprimer", "", appli.Parent, s.supprimerPiece)
@@ -198,13 +199,8 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 	b.Total, b.TotalAnnee = t.Total, t.Annee
 	b.PeutBudget = o.Categorie != "" && c.EstParent() && c.Actif("budget")
 	if c.EstParent() {
-		pieces, err := s.a.Q.PiecesObjet(ctx, donnees.PiecesObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet})
-		if err != nil {
+		if b.Pieces, err = s.piecesParLigne(ctx, c, module, objet); err != nil {
 			return nil, err
-		}
-		b.Pieces = map[int64][]donnees.Piece{}
-		for _, p := range pieces {
-			b.Pieces[p.CarnetID] = append(b.Pieces[p.CarnetID], p)
 		}
 	}
 	if o.AvecKm {
@@ -213,6 +209,19 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 		}
 	}
 	return b, nil
+}
+
+// piecesParLigne : les photos de l'objet, rangées par ligne du carnet.
+func (s *Suivi) piecesParLigne(ctx context.Context, c *appli.Contexte, module string, objet int64) (map[int64][]donnees.Piece, error) {
+	pieces, err := s.a.Q.PiecesObjet(ctx, donnees.PiecesObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet})
+	if err != nil {
+		return nil, err
+	}
+	m := map[int64][]donnees.Piece{}
+	for _, p := range pieces {
+		m[p.CarnetID] = append(m[p.CarnetID], p)
+	}
+	return m, nil
 }
 
 // statsKm : coût au kilomètre (tout le carnet, sur les kilomètres notés) et

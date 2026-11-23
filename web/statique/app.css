@@ -1549,3 +1549,4 @@ button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer
 .legende .pastille { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
 .legende .pastille + * { margin-right: 10px; }
 .choix-plein { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 4px; }
+.plus-pleins { display: block; margin: 12px auto 0; }

@@ -784,17 +784,26 @@ func (q *Queries) PiecesObjet(ctx context.Context, arg PiecesObjetParams) ([]Pie
 
 const pleinsListeObjet = `-- name: PleinsListeObjet :many
 SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres FROM carnet WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
-  AND litres > 0 ORDER BY jour DESC, km DESC, id DESC LIMIT 100
+  AND litres > 0 ORDER BY jour DESC, km DESC, id DESC LIMIT ?5 OFFSET ?4
 `
 
 type PleinsListeObjetParams struct {
 	FamilleID int64
 	Module    string
 	ObjetID   int64
+	Decalage  int64
+	Nombre    int64
 }
 
+// Les pleins du plus recent au plus ancien, par pages (decalage, nombre).
 func (q *Queries) PleinsListeObjet(ctx context.Context, arg PleinsListeObjetParams) ([]Carnet, error) {
-	rows, err := q.db.QueryContext(ctx, pleinsListeObjet, arg.FamilleID, arg.Module, arg.ObjetID)
+	rows, err := q.db.QueryContext(ctx, pleinsListeObjet,
+		arg.FamilleID,
+		arg.Module,
+		arg.ObjetID,
+		arg.Decalage,
+		arg.Nombre,
+	)
 	if err != nil {
 		return nil, err
 	}
