@@ -161,9 +161,9 @@ type vueListe struct {
 	Pris, Total int
 	TousRayons  []Rayon
 	Suggestions []string
-	Edition     int64 // produit en cours de modification
-	Ajout       bool  // venu du bouton « + » : curseur dans le champ
-	Rafraichir  bool  // le bloc se recharge sur un changement venu d'ailleurs
+	Edition     int64                       // produit en cours de modification
+	Ajout       bool                        // venu du bouton « + » : curseur dans le champ
+	Rafraichir  bool                        // le bloc se recharge sur un changement venu d'ailleurs
 	Souvent     []donnees.SouventAchetesRow // souvent achetés, pas sur la liste
 }
 
