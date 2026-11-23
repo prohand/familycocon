@@ -398,7 +398,7 @@ document.addEventListener("change", function (e) {
   }
   function remplir(f, res) {
     var n = 0;
-    [["jour", res.jour], ["litres", res.litres], ["montant", res.montant], ["note", res.note]].forEach(function (x) {
+    [["jour", res.jour], ["litres", res.litres], ["montant", res.montant], ["carburant", res.carburant], ["note", res.note]].forEach(function (x) {
       var champ = f.querySelector("[name=" + x[0] + "]");
       if (!champ || !x[1] || (x[0] === "note" && champ.value)) return;
       champ.value = x[1];
@@ -413,8 +413,10 @@ document.addEventListener("change", function (e) {
     var photo = b.parentNode.querySelector("[data-photo-ticket]");
     if (photo) photo.click();
   });
-  document.addEventListener("input", function (e) {
-    if (e.target.classList && e.target.classList.contains("lu")) e.target.classList.remove("lu");
+  ["input", "change"].forEach(function (type) {
+    document.addEventListener(type, function (e) {
+      if (e.target.classList && e.target.classList.contains("lu")) e.target.classList.remove("lu");
+    });
   });
   document.addEventListener("change", function (e) {
     var p = e.target;

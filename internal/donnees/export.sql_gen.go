@@ -113,7 +113,7 @@ func (q *Queries) ExportBudgetPlafonds(ctx context.Context, familleID int64) ([]
 }
 
 const exportCarnet = `-- name: ExportCarnet :many
-SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres FROM carnet WHERE famille_id = ?
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres, carburant FROM carnet WHERE famille_id = ?
 `
 
 func (q *Queries) ExportCarnet(ctx context.Context, familleID int64) ([]Carnet, error) {
@@ -139,6 +139,7 @@ func (q *Queries) ExportCarnet(ctx context.Context, familleID int64) ([]Carnet, 
 			&i.CreeLe,
 			&i.OperationID,
 			&i.Litres,
+			&i.Carburant,
 		); err != nil {
 			return nil, err
 		}

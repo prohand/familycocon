@@ -1554,5 +1554,5 @@ button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer
 .scan-ticket { margin-bottom: 8px; }
 .scan-ticket .aide { margin: 6px 0 0; }
 .apercu-ticket { display: block; max-width: 96px; max-height: 128px; margin-top: 8px; border-radius: 8px; border: 1px solid var(--bordure); }
-input.lu { background: var(--corail-doux); border-color: var(--corail); }
+input.lu, select.lu { background: var(--corail-doux); border-color: var(--corail); }
 .apercu-ticket[hidden] { display: none; }

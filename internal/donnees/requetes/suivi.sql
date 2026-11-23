@@ -47,8 +47,8 @@ WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = 
   AND cree_par = ? AND cree_le >= ?;
 
 -- name: AjouterCarnet :one
-INSERT INTO carnet (famille_id, module, objet_id, jour, libelle, montant, km, litres, note, operation_id, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO carnet (famille_id, module, objet_id, jour, libelle, montant, km, litres, carburant, note, operation_id, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: LigneCarnetParID :one
 SELECT * FROM carnet WHERE id = ? AND famille_id = ?;
@@ -66,7 +66,7 @@ UPDATE echeances SET jour = sqlc.arg(nouveau) WHERE id = sqlc.arg(id) AND famill
 DELETE FROM echeances WHERE id = ? AND famille_id = ? AND jour = ?;
 
 -- name: ModifierCarnet :exec
-UPDATE carnet SET jour = ?, libelle = ?, montant = ?, km = ?, litres = ?, note = ? WHERE id = ? AND famille_id = ?;
+UPDATE carnet SET jour = ?, libelle = ?, montant = ?, km = ?, litres = ?, carburant = ?, note = ? WHERE id = ? AND famille_id = ?;
 
 -- name: ModifierEcheance :exec
 UPDATE echeances SET libelle = ?, jour = ?, repetition_mois = ? WHERE id = ? AND famille_id = ?;
@@ -152,3 +152,8 @@ SELECT CAST(count(CASE WHEN litres > 0 THEN 1 END) AS INTEGER) AS pleins,
   CAST(coalesce(sum(CASE WHEN litres > 0 AND jour >= sqlc.arg(debut_annee) AND jour < sqlc.arg(fin_annee) THEN montant ELSE 0 END), 0) AS INTEGER) AS carburant_annee,
   CAST(coalesce(sum(CASE WHEN litres = 0 AND jour >= sqlc.arg(debut_annee) AND jour < sqlc.arg(fin_annee) THEN montant ELSE 0 END), 0) AS INTEGER) AS entretien_annee
 FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id);
+
+-- Carburant du dernier plein (propose pour le suivant).
+-- name: DernierCarburant :one
+SELECT carburant FROM carnet WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id)
+  AND litres > 0 AND carburant != '' ORDER BY jour DESC, id DESC LIMIT 1;

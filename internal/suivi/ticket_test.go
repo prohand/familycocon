@@ -53,8 +53,8 @@ func TestLireTicket(t *testing.T) {
 	if x.Litres != "27,19" || x.PrixLitre != "2,289" || x.Montant != "62,24" || !x.Complet {
 		t.Fatalf("nombres : %+v", x)
 	}
-	if x.Note != "SP98 · Auchan St Genis Laval" {
-		t.Errorf("note : %q", x.Note)
+	if x.Carburant != "SP98" || x.Note != "Auchan St Genis Laval" {
+		t.Errorf("carburant, note : %q, %q", x.Carburant, x.Note)
 	}
 	if x.Jour != "" {
 		t.Errorf("date inventée : %q", x.Jour)
@@ -74,18 +74,21 @@ func TestLireTicket(t *testing.T) {
 func TestLireTicketAutres(t *testing.T) {
 	auj := time.Date(2026, 11, 23, 10, 0, 0, 0, time.UTC)
 	cas := []struct {
-		texte                          string
-		jour, litres, montant, prix, n string
+		texte                                 string
+		jour, litres, montant, prix, carbu, n string
 	}{
-		{"TOTAL ENERGIES RENNES\n12.11.2026 08:15\nGAZOLE\nVOLUME 41,52 L\nPU 1,689 EUR/L\nTOTAL TTC 70,13 EUR", "2026-11-12", "41,52", "70,13", "1,689", "Gazole · Total Energies Rennes"},
+		{"TOTAL ENERGIES RENNES\n12.11.2026 08:15\nGAZOLE\nVOLUME 41,52 L\nPU 1,689 EUR/L\nTOTAL TTC 70,13 EUR", "2026-11-12", "41,52", "70,13", "1,689", "Gazole", "Total Energies Rennes"},
 		// Deux sur trois : les litres se calculent.
-		{"le 03/11/26\nSP95-E10\nPrix unit. 1,750\nMontant 52,50 EUR", "2026-11-03", "30,00", "52,50", "1,750", "SP95-E10"},
+		{"le 03/11/26\nSP95-E10\nPrix unit. 1,750\nMontant 52,50 EUR", "2026-11-03", "30,00", "52,50", "1,750", "SP95-E10", ""},
 		// Date dans le futur ou trop ancienne : ignorée.
-		{"31/12/2027\n01/01/2020\nQuantite 10,00 L\nPrix 2,000\nTotal 20,00", "", "10,00", "20,00", "2,000", ""},
+		{"31/12/2027\n01/01/2020\nQuantite 10,00 L\nPrix 2,000\nTotal 20,00", "", "10,00", "20,00", "2,000", "", ""},
+		// « E10 » seul, « SANS PLOMB 98 ».
+		{"CARBU E10\nQuantite 10,00 L\nPrix 2,000\nTotal 20,00", "", "10,00", "20,00", "2,000", "SP95-E10", ""},
+		{"SANS PLOMB 98\nQuantite 10,00 L\nPrix 2,000\nTotal 20,00", "", "10,00", "20,00", "2,000", "SP98", ""},
 	}
 	for _, c := range cas {
 		x := LireTicket(c.texte, auj)
-		if x.Jour != c.jour || x.Litres != c.litres || x.Montant != c.montant || x.PrixLitre != c.prix || x.Note != c.n {
+		if x.Jour != c.jour || x.Litres != c.litres || x.Montant != c.montant || x.PrixLitre != c.prix || x.Carburant != c.carbu || x.Note != c.n {
 			t.Errorf("%q :\n%+v", c.texte, x)
 		}
 	}

@@ -105,7 +105,7 @@
 {{- with $l}}
   <div class="ligne">
     <span class="heure">{{slice .Jour 8 10}}/{{slice .Jour 5 7}}<small>{{slice .Jour 0 4}}</small></span>
-    <span class="quoi">{{.Libelle}}<small>{{if .Km}}{{milliers .Km}} km{{end}}{{if .Litres}} · {{litres .Litres}} L{{end}}{{if and .Km .Note}} · {{end}}{{.Note}}</small></span>
+    <span class="quoi">{{.Libelle}}<small>{{if .Km}}{{milliers .Km}} km{{end}}{{if .Litres}} · {{litres .Litres}} L{{end}}{{if .Carburant}} · {{.Carburant}}{{end}}{{if and .Km .Note}} · {{end}}{{.Note}}</small></span>
     {{if and $p .Montant}}<b>{{montant .Montant $s.Devise}}{{if .OperationID.Valid}} <span title="Aussi dans le budget">💶</span>{{end}}</b>{{end}}
     {{if $p}}<form method="post" action="/suivi/carnet/{{.ID}}/supprimer" hx-confirm="Supprimer cette ligne{{if .OperationID.Valid}} (et sa dépense du budget){{end}} ?">{{template "jeton" $j}}<button class="crayon" aria-label="Supprimer {{.Libelle}}">🗑️</button></form>{{end}}
   </div>
@@ -135,6 +135,11 @@
         {{if $s.AvecKm}}<label class="champ"><span>Kilométrage</span><input name="km" value="{{if .Km}}{{.Km}}{{end}}" inputmode="numeric"></label>
         {{if or $.Plein (not $s.Onglets)}}<label class="champ"><span>Litres (plein)</span><input name="litres" value="{{if .Litres}}{{litres .Litres}}{{end}}" inputmode="decimal"{{if $.Plein}} required{{end}}></label>{{end}}{{end}}
       </div>
+      {{if $.Plein}}<label class="champ"><span>Carburant</span>
+        <select name="carburant">{{$cb := .Carburant}}
+          <option value="">Non précisé</option>
+          {{- range $s.Pleins.Carburants}}<option{{if eq . $cb}} selected{{end}}>{{.}}</option>{{end}}
+        </select></label>{{end}}
       <label class="champ"><span>Note</span><input name="note" value="{{.Note}}" maxlength="500"></label>
       <button class="bouton petit">Enregistrer</button>
     </form>
@@ -203,6 +208,11 @@
         <label class="champ"><span>Litres</span><input name="litres" inputmode="decimal" placeholder="0,0" required></label>
         {{if $p}}<label class="champ"><span>Prix payé</span><input name="montant" inputmode="decimal" placeholder="0,00"></label>{{end}}
       </div>
+      <label class="champ"><span>Carburant</span>
+        <select name="carburant">{{$d := $v.DernierCarburant}}
+          <option value="">Non précisé</option>
+          {{- range $v.Carburants}}<option{{if eq . $d}} selected{{end}}>{{.}}</option>{{end}}
+        </select></label>
       <label class="champ"><span>Note (station…)</span><input name="note" maxlength="500"></label>
       {{if $s.PeutBudget}}<label class="case-a-cocher"><input type="checkbox" name="budget" value="1"> 💶 Ajouter aussi au budget</label>{{end}}
       <button class="bouton petit">Ajouter</button>

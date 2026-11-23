@@ -77,6 +77,7 @@ type Carnet struct {
 	CreeLe      int64
 	OperationID sql.NullInt64
 	Litres      int64
+	Carburant   string
 }
 
 type Carte struct {

@@ -34,7 +34,8 @@ type Ticket struct {
 	Litres    string `json:"litres"`    // « 27,19 »
 	Montant   string `json:"montant"`   // « 62,24 »
 	PrixLitre string `json:"prixLitre"` // « 2,289 »
-	Note      string `json:"note"`      // « SP98 · Auchan St Genis Laval »
+	Carburant string `json:"carburant"` // « SP98 » (un de Carburants)
+	Note      string `json:"note"`      // la station : « Auchan St Genis Laval »
 	Complet   bool   `json:"complet"`   // litres, prix et montant vont ensemble
 }
 
@@ -174,12 +175,12 @@ func LireTicket(texte string, aujourdhui time.Time) Ticket {
 		}
 	}
 
-	// Le carburant et la station (première ligne faite seulement de mots).
-	var note []string
+	// Le carburant, et la station (première ligne faite seulement de mots).
 	for _, l := range lignes {
 		if m := reCarbu.FindString(l); m != "" {
-			note = append(note, nomCarburant(m))
-			break
+			if t.Carburant = carburantValide(nomCarburant(m)); t.Carburant != "" {
+				break
+			}
 		}
 	}
 	for i, l := range lignes {
@@ -187,11 +188,10 @@ func LireTicket(texte string, aujourdhui time.Time) Ticket {
 			break
 		}
 		if s := station(l); s != "" {
-			note = append(note, s)
+			t.Note = s
 			break
 		}
 	}
-	t.Note = strings.Join(note, " · ")
 	return t
 }
 
@@ -232,6 +232,8 @@ func nomCarburant(m string) string {
 		return n
 	case strings.HasPrefix(m, "SANSPLOMB"):
 		return "SP" + m[len(m)-2:]
+	case m == "E10":
+		return "SP95-E10"
 	case m == "GAZOLE" || m == "GASOIL" || m == "DIESEL" || m == "B7":
 		return "Gazole"
 	case m == "SUPERETHANOL" || m == "E85":

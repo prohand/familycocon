@@ -457,9 +457,14 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   ligne et de la ligne d'avant départagent (« Quantité », « Prix unit. »,
   « Montant ») ; lignes de TVA et en francs écartées ; deux sur trois : le
   troisième se calcule. Date : la première valide, ni future ni de plus
-  d'un an. Carburant (SP95, SP98 même lu « SPsB », E10, E85, gazole…) et
-  station (première ligne faite de mots) vont dans la note.
+  d'un an. Carburant (SP95, SP98 même lu « SPsB », E10, E85, gazole…) :
+  champ « Carburant » ; station (première ligne faite de mots) : note.
 - Les champs remplis sont **surlignés** ; le kilométrage reste à taper.
   La **photo** (réduite à 1 200 px par le téléphone) part avec le plein
   (champ caché, base64, 900 Kio au plus) et lui est jointe ; si elle
   n'a pas pu l'être, le plein est gardé et on le dit.
+- **Type de carburant** d'un plein (colonne `carnet.carburant`, migration
+  0032) : SP95-E10, SP95, SP98, Gazole, E85, GPL, ou non précisé. Proposé
+  d'après le dernier plein ; affiché dans la liste ; rempli par le scan ;
+  ignoré pour une ligne d'entretien ou une valeur hors liste. La reprise
+  Fuelio ne le remplit pas (codes de carburant de Fuelio non publiés).

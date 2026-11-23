@@ -11,8 +11,8 @@ import (
 )
 
 const ajouterCarnet = `-- name: AjouterCarnet :one
-INSERT INTO carnet (famille_id, module, objet_id, jour, libelle, montant, km, litres, note, operation_id, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres
+INSERT INTO carnet (famille_id, module, objet_id, jour, libelle, montant, km, litres, carburant, note, operation_id, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres, carburant
 `
 
 type AjouterCarnetParams struct {
@@ -24,6 +24,7 @@ type AjouterCarnetParams struct {
 	Montant     int64
 	Km          int64
 	Litres      int64
+	Carburant   string
 	Note        string
 	OperationID sql.NullInt64
 	CreePar     sql.NullInt64
@@ -40,6 +41,7 @@ func (q *Queries) AjouterCarnet(ctx context.Context, arg AjouterCarnetParams) (C
 		arg.Montant,
 		arg.Km,
 		arg.Litres,
+		arg.Carburant,
 		arg.Note,
 		arg.OperationID,
 		arg.CreePar,
@@ -60,6 +62,7 @@ func (q *Queries) AjouterCarnet(ctx context.Context, arg AjouterCarnetParams) (C
 		&i.CreeLe,
 		&i.OperationID,
 		&i.Litres,
+		&i.Carburant,
 	)
 	return i, err
 }
@@ -171,7 +174,7 @@ func (q *Queries) CarnetIdentiqueRecent(ctx context.Context, arg CarnetIdentique
 }
 
 const carnetObjet = `-- name: CarnetObjet :many
-SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? ORDER BY jour DESC, id DESC LIMIT 100
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres, carburant FROM carnet WHERE famille_id = ? AND module = ? AND objet_id = ? ORDER BY jour DESC, id DESC LIMIT 100
 `
 
 type CarnetObjetParams struct {
@@ -203,6 +206,7 @@ func (q *Queries) CarnetObjet(ctx context.Context, arg CarnetObjetParams) ([]Car
 			&i.CreeLe,
 			&i.OperationID,
 			&i.Litres,
+			&i.Carburant,
 		); err != nil {
 			return nil, err
 		}
@@ -362,6 +366,25 @@ func (q *Queries) DepensesMoisObjet(ctx context.Context, arg DepensesMoisObjetPa
 	return items, nil
 }
 
+const dernierCarburant = `-- name: DernierCarburant :one
+SELECT carburant FROM carnet WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
+  AND litres > 0 AND carburant != '' ORDER BY jour DESC, id DESC LIMIT 1
+`
+
+type DernierCarburantParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+// Carburant du dernier plein (propose pour le suivant).
+func (q *Queries) DernierCarburant(ctx context.Context, arg DernierCarburantParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, dernierCarburant, arg.FamilleID, arg.Module, arg.ObjetID)
+	var carburant string
+	err := row.Scan(&carburant)
+	return carburant, err
+}
+
 const echeanceParID = `-- name: EcheanceParID :one
 SELECT id, famille_id, module, objet_id, libelle, jour, repetition_mois, cree_le FROM echeances WHERE id = ? AND famille_id = ?
 `
@@ -481,7 +504,7 @@ func (q *Queries) EcheancesPeriode(ctx context.Context, arg EcheancesPeriodePara
 
 const entretienObjet = `-- name: EntretienObjet :many
 
-SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres FROM carnet WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres, carburant FROM carnet WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
   AND litres = 0 ORDER BY jour DESC, id DESC LIMIT 100
 `
 
@@ -515,6 +538,7 @@ func (q *Queries) EntretienObjet(ctx context.Context, arg EntretienObjetParams) 
 			&i.CreeLe,
 			&i.OperationID,
 			&i.Litres,
+			&i.Carburant,
 		); err != nil {
 			return nil, err
 		}
@@ -595,7 +619,7 @@ func (q *Queries) KmMoisObjet(ctx context.Context, arg KmMoisObjetParams) ([]KmM
 }
 
 const ligneCarnetParID = `-- name: LigneCarnetParID :one
-SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres FROM carnet WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres, carburant FROM carnet WHERE id = ? AND famille_id = ?
 `
 
 type LigneCarnetParIDParams struct {
@@ -620,12 +644,13 @@ func (q *Queries) LigneCarnetParID(ctx context.Context, arg LigneCarnetParIDPara
 		&i.CreeLe,
 		&i.OperationID,
 		&i.Litres,
+		&i.Carburant,
 	)
 	return i, err
 }
 
 const modifierCarnet = `-- name: ModifierCarnet :exec
-UPDATE carnet SET jour = ?, libelle = ?, montant = ?, km = ?, litres = ?, note = ? WHERE id = ? AND famille_id = ?
+UPDATE carnet SET jour = ?, libelle = ?, montant = ?, km = ?, litres = ?, carburant = ?, note = ? WHERE id = ? AND famille_id = ?
 `
 
 type ModifierCarnetParams struct {
@@ -634,6 +659,7 @@ type ModifierCarnetParams struct {
 	Montant   int64
 	Km        int64
 	Litres    int64
+	Carburant string
 	Note      string
 	ID        int64
 	FamilleID int64
@@ -646,6 +672,7 @@ func (q *Queries) ModifierCarnet(ctx context.Context, arg ModifierCarnetParams) 
 		arg.Montant,
 		arg.Km,
 		arg.Litres,
+		arg.Carburant,
 		arg.Note,
 		arg.ID,
 		arg.FamilleID,
@@ -783,7 +810,7 @@ func (q *Queries) PiecesObjet(ctx context.Context, arg PiecesObjetParams) ([]Pie
 }
 
 const pleinsListeObjet = `-- name: PleinsListeObjet :many
-SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres FROM carnet WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres, carburant FROM carnet WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
   AND litres > 0 ORDER BY jour DESC, km DESC, id DESC LIMIT ?5 OFFSET ?4
 `
 
@@ -825,6 +852,7 @@ func (q *Queries) PleinsListeObjet(ctx context.Context, arg PleinsListeObjetPara
 			&i.CreeLe,
 			&i.OperationID,
 			&i.Litres,
+			&i.Carburant,
 		); err != nil {
 			return nil, err
 		}

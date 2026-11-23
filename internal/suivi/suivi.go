@@ -362,9 +362,23 @@ func (s *Suivi) ajouterEcheance(w http.ResponseWriter, r *http.Request, c *appli
 	s.a.Rediriger(w, r, o.URL(objet))
 }
 
+// Carburants : les types proposés pour un plein (« » : non précisé).
+var Carburants = []string{"SP95-E10", "SP95", "SP98", "Gazole", "E85", "GPL"}
+
+// carburantValide : un type de la liste (sinon « »).
+func carburantValide(c string) string {
+	for _, x := range Carburants {
+		if x == c {
+			return c
+		}
+	}
+	return ""
+}
+
 // saisieCarnet : une ligne du carnet lue dans le formulaire.
 type saisieCarnet struct {
 	jour, libelle, note string
+	carburant           string // plein seulement
 	montant, km, litres int64
 	budget              bool   // ajouter aussi au budget
 	nom                 string // nom de l'objet (libellé de la dépense au budget)
@@ -384,6 +398,9 @@ func lireCarnetComplet(r *http.Request, c *appli.Contexte) (saisieCarnet, string
 			return x, "Litres invalides."
 		}
 		x.litres = v
+	}
+	if x.litres > 0 {
+		x.carburant = carburantValide(r.PostFormValue("carburant"))
 	}
 	x.budget = r.PostFormValue("budget") == "1"
 	// Les montants sont réservés aux parents (le budget est fermé aux
@@ -444,7 +461,7 @@ func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.C
 	}
 	l, err := q.AjouterCarnet(ctx, donnees.AjouterCarnetParams{
 		FamilleID: c.Famille.ID, Module: o.Module, ObjetID: objet, Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km,
-		Litres: x.litres, Note: x.note, OperationID: op, CreePar: memberID(c), CreeLe: time.Now().Unix(),
+		Litres: x.litres, Carburant: x.carburant, Note: x.note, OperationID: op, CreePar: memberID(c), CreeLe: time.Now().Unix(),
 	})
 	return l.ID, err
 }
@@ -669,7 +686,7 @@ func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.
 	}
 	err = s.a.Transaction(ctx, func(q *donnees.Queries) error {
 		if err := q.ModifierCarnet(ctx, donnees.ModifierCarnetParams{Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km,
-			Litres: x.litres, Note: x.note, ID: l.ID, FamilleID: c.Famille.ID}); err != nil {
+			Litres: x.litres, Carburant: x.carburant, Note: x.note, ID: l.ID, FamilleID: c.Famille.ID}); err != nil {
 			return err
 		}
 		if l.OperationID.Valid && x.montant > 0 {

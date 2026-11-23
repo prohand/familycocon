@@ -4,6 +4,8 @@ package suivi
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"math"
@@ -39,14 +41,16 @@ const PleinsParPage = 100
 
 // VuePleins : l'onglet « Pleins ».
 type VuePleins struct {
-	Periode   string
-	Pleins    []donnees.Carnet // les PleinsParPage derniers
-	Suite     int64            // où reprendre la liste (0 : tout est montré)
-	Conso     string           // « 6,4 L / 100 km » sur la période
-	PrixLitre string           // « 1,80 € » en moyenne sur la période
-	Litres    string           // litres achetés sur la période
-	Carburant int64            // dépensé en carburant sur la période
-	ParAn     bool             // barres par année (période longue)
+	Periode          string
+	Pleins           []donnees.Carnet // les PleinsParPage derniers
+	Suite            int64            // où reprendre la liste (0 : tout est montré)
+	DernierCarburant string           // carburant du dernier plein (proposé pour le suivant)
+	Carburants       []string         // les types proposés
+	Conso            string           // « 6,4 L / 100 km » sur la période
+	PrixLitre        string           // « 1,80 € » en moyenne sur la période
+	Litres           string           // litres achetés sur la période
+	Carburant        int64            // dépensé en carburant sur la période
+	ParAn            bool             // barres par année (période longue)
 	// Graphiques (vides s'il n'y a rien à dessiner).
 	GConso, GPrix, GDepenses, GKm template.HTML
 }
@@ -69,6 +73,11 @@ func (s *Suivi) ChargerPleins(ctx context.Context, c *appli.Contexte, b *Bloc, p
 	parent := c.EstParent()
 	var err error
 	if v.Pleins, v.Suite, err = s.pagePleins(ctx, c, b.Module, b.ObjetID, 0); err != nil {
+		return err
+	}
+	v.Carburants = Carburants
+	v.DernierCarburant, err = s.a.Q.DernierCarburant(ctx, donnees.DernierCarburantParams{FamilleID: c.Famille.ID, Module: b.Module, ObjetID: b.ObjetID})
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
 	}
 	auj := c.Maintenant()
@@ -262,7 +271,7 @@ func (s *Suivi) suitePleins(w http.ResponseWriter, r *http.Request, c *appli.Con
 		return
 	}
 	b := &Bloc{Module: o.Module, ObjetID: objet, AvecKm: true, Onglets: true, Devise: c.Famille.Devise}
-	v := &VuePleins{}
+	v := &VuePleins{Carburants: Carburants}
 	b.Pleins = v
 	if v.Pleins, v.Suite, err = s.pagePleins(ctx, c, o.Module, objet, depuis); err != nil {
 		s.a.ErreurInterne(w, r, err)

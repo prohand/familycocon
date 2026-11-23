@@ -344,3 +344,35 @@ func TestOngletPleins(t *testing.T) {
 		t.Errorf("onglet pleins ouvert par un enfant : %d", code)
 	}
 }
+
+// Carburant d'un plein : enregistré, affiché, proposé pour le suivant ;
+// une valeur hors liste est ignorée.
+func TestCarburantPlein(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+	})
+	marie := essai.Famille(t, srv)
+	_, page := marie.Post("/vehicules", map[string]string{"nom": "Clio", "genre": "voiture"})
+	id := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	carnet := "/suivi/vehicules/" + id + "/carnet"
+	_, page = marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2026-11-01", "km": "1000", "litres": "40", "carburant": "SP98"})
+	if !strings.Contains(page, "40 L · SP98") || !strings.Contains(page, "<option selected>SP98</option>") {
+		t.Fatalf("carburant non enregistré ou non proposé :\n%s", page)
+	}
+	_, page = marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2026-11-08", "km": "1500", "litres": "30", "carburant": "Kérosène"})
+	if strings.Contains(page, "Kérosène") || !strings.Contains(page, "30 L</small>") {
+		t.Fatal("carburant hors liste accepté")
+	}
+	// Corrigé en Gazole.
+	ligne := essai.Trouver(t, page, `action="/suivi/carnet/(\d+)"`)
+	_, page = marie.Post("/suivi/carnet/"+ligne, map[string]string{"libelle": "Plein", "jour": "2026-11-08", "km": "1500", "litres": "30", "carburant": "Gazole"})
+	if !strings.Contains(page, "30 L · Gazole") {
+		t.Fatal("carburant non corrigé")
+	}
+	// Une ligne d'entretien n'a pas de carburant.
+	_, page = marie.Post(carnet, map[string]string{"libelle": "Vidange", "jour": "2026-11-09", "carburant": "SP98"})
+	if strings.Contains(page, "Vidange<small>") && strings.Contains(page, "· SP98</small>") {
+		t.Fatal("carburant sur une ligne d'entretien")
+	}
+}
