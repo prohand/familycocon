@@ -83,7 +83,7 @@ func (s *Suivi) ajouterPiece(w http.ResponseWriter, r *http.Request, c *appli.Co
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := s.a.Q.LigneCarnetParID(ctx, donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok || !c.Actif(l.Module) {
+	if err != nil || !ok || !c.Voit(l.Module) {
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}

@@ -59,16 +59,24 @@ func TestVehicule(t *testing.T) {
 	_, page = marie.Get("/vehicules/" + id)
 	ech := essai.Trouver(t, page, `action="/suivi/echeances/(\d+)/faite"`)
 	aujourdhui := time.Now().Format("2006-01-02")
-	code, page = lea.Post("/suivi/echeances/"+ech+"/faite", map[string]string{"jour": aujourdhui, "montant": "420,50", "km": "86000"})
+	// Les véhicules sont réservés aux parents : Léa (enfant) n'y a pas accès.
+	if code, _ := lea.Post("/suivi/echeances/"+ech+"/faite", map[string]string{"jour": aujourdhui, "km": "86000"}); code != http.StatusNotFound {
+		t.Fatalf("échéance d'un véhicule cochée par un enfant : %d", code)
+	}
+	for _, adr := range []string{"/vehicules", "/vehicules/" + id, "/vehicules/" + id + "?onglet=pleins", "/suivi/vehicules/" + id + "/pleins?depuis=0"} {
+		if code, _ := lea.Get(adr); code != http.StatusForbidden && code != http.StatusNotFound {
+			t.Fatalf("%s ouvert par un enfant : %d", adr, code)
+		}
+	}
+	if _, p := lea.Get("/"); strings.Contains(p, "La Clio") || strings.Contains(p, `href="/vehicules"`) || strings.Contains(p, "Assurance") {
+		t.Fatal("véhicule visible sur l'accueil d'un enfant")
+	}
+	if _, p := lea.Get("/chercher?q=clio"); strings.Contains(p, "La Clio") {
+		t.Fatal("véhicule trouvé par la recherche d'un enfant")
+	}
+	code, page = marie.Post("/suivi/echeances/"+ech+"/faite", map[string]string{"jour": aujourdhui, "montant": "420,50", "km": "86000"})
 	if code != 200 || !strings.Contains(page, "86\u202f000 km") || !strings.Contains(page, "tous les 12 mois") {
 		t.Fatalf("faite : %d\n%s", code, page)
-	}
-	// Un enfant ne saisit ni ne voit les montants (le budget lui est fermé).
-	if strings.Contains(page, "420,50") || strings.Contains(page, `name="montant"`) {
-		t.Fatal("coût visible ou saisissable par un enfant")
-	}
-	if _, p := marie.Get("/vehicules/" + id); strings.Contains(p, "420,50") {
-		t.Fatal("coût saisi par un enfant enregistré")
 	}
 	if _, page := marie.Get("/vehicules"); strings.Contains(page, "⏰") {
 		t.Fatal("alerte toujours là après report")
@@ -331,10 +339,8 @@ func TestOngletPleins(t *testing.T) {
 	if !strings.Contains(page, "Vidange") || strings.Contains(page, "Plein partiel") {
 		t.Error("onglet entretien")
 	}
-	// Léa voit la consommation et les kilomètres, pas les prix.
-	_, page = lea.Get("/vehicules/" + id + "?onglet=pleins&periode=tout")
-	if !strings.Contains(page, "Consommation à chaque plein") || !strings.Contains(page, "Kilomètres parcourus") ||
-		strings.Contains(page, "Prix du litre") || strings.Contains(page, "Dépenses par") || strings.Contains(page, "37,00") {
-		t.Error("montants montrés à un enfant")
+	// Léa (enfant) : les véhicules lui sont fermés.
+	if code, _ := lea.Get("/vehicules/" + id + "?onglet=pleins&periode=tout"); code != http.StatusForbidden {
+		t.Errorf("onglet pleins ouvert par un enfant : %d", code)
 	}
 }

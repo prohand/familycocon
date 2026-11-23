@@ -41,6 +41,13 @@ func (c *Contexte) EstParent() bool { return c.Membre.Role == RoleParent }
 // Actif : le module est-il activé pour la famille ?
 func (c *Contexte) Actif(module string) bool { return c.Actifs[module] }
 
+// Voit : le module est activé ET ce membre peut l'ouvrir (un module réservé
+// aux parents, comme le budget ou les véhicules, est fermé aux enfants).
+func (c *Contexte) Voit(module string) bool {
+	def, ok := ModuleParCle(module)
+	return c.Actif(module) && (!ok || !def.Parents || c.EstParent())
+}
+
 // Maintenant : l'heure dans le fuseau de la famille.
 func (c *Contexte) Maintenant() time.Time { return time.Now().In(c.Lieu) }
 

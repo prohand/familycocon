@@ -26,7 +26,7 @@ type Citation struct {
 func (m *Module) citations(ctx context.Context, c *appli.Contexte, id int64) ([]Citation, error) {
 	var out []Citation
 	nid := sql.NullInt64{Int64: id, Valid: true}
-	if c.Actif("animaux") {
+	if c.Voit("animaux") {
 		l, err := m.a.Q.CitesAnimaux(ctx, donnees.CitesAnimauxParams{FamilleID: c.Famille.ID, VeterinaireID: nid})
 		if err != nil {
 			return nil, err
@@ -35,7 +35,7 @@ func (m *Module) citations(ctx context.Context, c *appli.Contexte, id int64) ([]
 			out = append(out, Citation{"🐾", x.Nom + " · vétérinaire", "/animaux/" + strconv.FormatInt(x.ID, 10)})
 		}
 	}
-	if c.Actif("vehicules") {
+	if c.Voit("vehicules") {
 		l, err := m.a.Q.CitesVehicules(ctx, donnees.CitesVehiculesParams{Contact: nid, FamilleID: c.Famille.ID})
 		if err != nil {
 			return nil, err
@@ -48,7 +48,7 @@ func (m *Module) citations(ctx context.Context, c *appli.Contexte, id int64) ([]
 			out = append(out, Citation{"🚗", x.Nom + " · " + role, "/vehicules/" + strconv.FormatInt(x.ID, 10)})
 		}
 	}
-	if c.Actif("garanties") {
+	if c.Voit("garanties") {
 		l, err := m.a.Q.CitesGaranties(ctx, donnees.CitesGarantiesParams{FamilleID: c.Famille.ID, MagasinID: nid})
 		if err != nil {
 			return nil, err
@@ -57,7 +57,7 @@ func (m *Module) citations(ctx context.Context, c *appli.Contexte, id int64) ([]
 			out = append(out, Citation{"🧾", x.Nom + " · magasin", "/garanties/" + strconv.FormatInt(x.ID, 10)})
 		}
 	}
-	if c.Actif("agenda") {
+	if c.Voit("agenda") {
 		n, err := m.a.Q.CitesEvenements(ctx, donnees.CitesEvenementsParams{FamilleID: c.Famille.ID, ContactID: id})
 		if err != nil {
 			return nil, err

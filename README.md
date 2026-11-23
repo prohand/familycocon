@@ -74,7 +74,7 @@ sur le téléphone de chacun.
 - **Anniversaires et Adresses** : deux vues du carnet (les dates à venir avec l'âge et les idées de cadeaux ; les adresses avec le plan).
 - **Cartes de fidélité** : le code-barres (EAN-13, UPC-A, EAN-8, Code 128) ou le QR code est redessiné à l'écran, à montrer en caisse ;
   le type de code est détecté tout seul, et la carte se scanne avec le téléphone (caméra sur Android, photo sur iPhone).
-- **Véhicules, Animaux, Prestataires** :
+- **Véhicules (parents), Animaux, Prestataires** :
   - échéances qui reviennent (contrôle technique, assurance, vaccin, vermifuge, ramonage…) ;
   - « C'est fait » : la ligne va dans le carnet (date, coût, kilométrage) et l'échéance est reportée ;
   - prestataires : les contacts « pro » du carnet (plombier, nounou, médecin…), avec leurs interventions ;

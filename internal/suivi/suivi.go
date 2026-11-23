@@ -311,7 +311,7 @@ func (s *Suivi) SupprimerObjet(ctx context.Context, q *donnees.Queries, famille 
 // cible : l'objet de l'adresse (module activé, objet de la famille).
 func (s *Suivi) cible(r *http.Request, c *appli.Contexte, module string, objet int64) (Objet, bool) {
 	o, ok := s.objets[module]
-	if !ok || !c.Actif(module) {
+	if !ok || !c.Voit(module) {
 		return o, false
 	}
 	_, existe := o.Nom(r.Context(), c.Famille.ID, objet)
@@ -577,7 +577,7 @@ func (s *Suivi) supprimerEcheance(w http.ResponseWriter, r *http.Request, c *app
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	e, err := s.a.Q.EcheanceParID(r.Context(), donnees.EcheanceParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[e.Module]
-	if err != nil || !ok || !c.Actif(e.Module) {
+	if err != nil || !ok || !c.Voit(e.Module) {
 		s.a.Echec(w, r, http.StatusNotFound, "Échéance introuvable.")
 		return
 	}
@@ -594,7 +594,7 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := s.a.Q.LigneCarnetParID(r.Context(), donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok || !c.Actif(l.Module) {
+	if err != nil || !ok || !c.Voit(l.Module) {
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}
@@ -635,7 +635,7 @@ func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := s.a.Q.LigneCarnetParID(ctx, donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[l.Module]
-	if err != nil || !ok || !c.Actif(l.Module) {
+	if err != nil || !ok || !c.Voit(l.Module) {
 		s.a.Echec(w, r, http.StatusNotFound, "Ligne introuvable.")
 		return
 	}
@@ -687,7 +687,7 @@ func (s *Suivi) echeance(r *http.Request, c *appli.Contexte) (donnees.Echeance, 
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	e, err := s.a.Q.EcheanceParID(r.Context(), donnees.EcheanceParIDParams{ID: id, FamilleID: c.Famille.ID})
 	o, ok := s.objets[e.Module]
-	return e, o, err == nil && ok && c.Actif(e.Module)
+	return e, o, err == nil && ok && c.Voit(e.Module)
 }
 
 // modifierEcheance : quoi, quand, fréquence (tout le monde).

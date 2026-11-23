@@ -424,4 +424,9 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   - kilomètres par mois (compteur le plus haut du mois moins le plus haut
     d'avant).
   Au-delà de 36 mois (« Tout »), les barres passent par année.
-- **Enfants** : consommation et kilomètres seulement (ni prix ni dépenses).
+- **Véhicules réservés aux parents** (`Parents: true` au Catalogue, comme
+  Budget et Abonnements) : ni tuile, ni recherche, ni échéances dans « À
+  venir », ni rappels, ni mention sur la fiche d'un contact pour un enfant.
+  Contrôle central : `Contexte.Voit(module)` (activé et permis à ce
+  membre), appliqué par `App.Route` à toutes les pages d'un module réservé
+  et par les routes communes du suivi (`/suivi/...`).

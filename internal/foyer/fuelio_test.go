@@ -162,9 +162,9 @@ func TestPleinsPlusAnciens(t *testing.T) {
 	if n := strings.Count(page, `class="heure"`); n != 5 || strings.Contains(page, "plus anciens") || !strings.Contains(page, "08/01") {
 		t.Fatalf("dernière page : %d pleins", n)
 	}
-	// Léa voit les pleins plus anciens, sans les prix.
-	lea.Get("/vehicules/" + id)
-	if code, p := lea.Get(suite + "100"); code != 200 || strings.Contains(p, "70,00") || !strings.Contains(p, "40 L") {
+	// Léa (enfant) : les véhicules lui sont fermés.
+	lea.Get("/")
+	if code, _ := lea.Get(suite + "100"); code != http.StatusNotFound {
 		t.Fatalf("enfant : %d", code)
 	}
 	if code, _ := marie.Get("/suivi/vehicules/9999/pleins?depuis=100"); code != 404 {
