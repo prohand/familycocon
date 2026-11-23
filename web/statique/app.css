@@ -1296,6 +1296,8 @@ details.termines > summary { cursor: pointer; }
   border-radius: var(--rayon); background: var(--carte); box-shadow: var(--ombre); font-weight: 800; color: var(--budget-t); }
 .ligne.prevue { opacity: .6; }
 .ligne.terminee { opacity: .5; }
+.case-a-cocher { display: flex; align-items: center; gap: 8px; font-size: .85rem; font-weight: 700; color: var(--texte-doux); margin-bottom: 8px; }
+.case-a-cocher input { width: 18px; height: 18px; accent-color: var(--corail); }
 .negatif { color: var(--rouge); }
 .pastille-abo { font-size: .7rem; font-weight: 800; padding: 1px 8px; border-radius: 10px; background: var(--abonnements); color: var(--abonnements-t); vertical-align: middle; }
 

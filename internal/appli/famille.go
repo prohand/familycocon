@@ -50,6 +50,7 @@ func (a *App) routesFamille() {
 	a.Route("POST /famille/membres/{id}", "", Parent, a.modifierMembre)
 	a.Route("POST /famille/membres/{id}/pin", "", Parent, a.changerPin)
 	a.Route("POST /famille/membres/{id}/retirer", "", Parent, a.retirerMembre)
+	a.Route("POST /famille/appareils/oublier", "", Parent, a.oublierAppareils)
 }
 
 func (a *App) afficherFamille(w http.ResponseWriter, r *http.Request, c *Contexte, d donneesFamille) {
@@ -232,6 +233,10 @@ func (a *App) changerPin(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		a.Echec(w, r, http.StatusNotFound, "Enfant introuvable.")
 		return
 	}
+	if m.Mdp.Valid {
+		a.Echec(w, r, http.StatusBadRequest, m.Nom+" a son propre compte avec mot de passe : pas de code PIN.")
+		return
+	}
 	pin, err := EmpreintePin(r.PostFormValue("pin"))
 	if err != nil {
 		a.Echec(w, r, http.StatusBadRequest, err.Error())
@@ -266,6 +271,17 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 		if err := q.RetirerMembre(ctx, donnees.RetirerMembreParams{ID: m.ID, FamilleID: c.Famille.ID}); err != nil {
 			return err
 		}
+		if err := q.SupprimerAbonnementsPushMembre(ctx, m.ID); err != nil {
+			return err
+		}
+		// Un parent retiré : ses appareils de confiance ne doivent plus
+		// proposer les enfants. On les oublie tous (les autres parents les
+		// retrouvent à leur prochaine connexion).
+		if m.Role == RoleParent {
+			if err := q.SupprimerAppareilsFamille(ctx, c.Famille.ID); err != nil {
+				return err
+			}
+		}
 		return q.SupprimerSessionsMembre(ctx, m.ID)
 	})
 	if errors.Is(err, errDernierParent) {
@@ -277,7 +293,25 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 		return
 	}
 	a.Journal.Info("membre retiré", "famille", c.Famille.ID, "membre", m.ID, "par", c.Membre.ID)
+	a.Direct.FermerMembre(c.Famille.ID, m.ID)
+	if m.Role == RoleParent {
+		_ = a.MarquerAppareil(ctx, w, r, c.Famille.ID) // cet appareil reste de confiance
+	}
 	a.Flash(w, m.Nom+" a été retiré(e) de la famille")
+	a.Rediriger(w, r, "/famille")
+}
+
+// oublierAppareils : plus aucun appareil de confiance (tablette perdue,
+// téléphone vendu) ; celui-ci le redevient aussitôt.
+func (a *App) oublierAppareils(w http.ResponseWriter, r *http.Request, c *Contexte) {
+	ctx := r.Context()
+	if err := a.Q.SupprimerAppareilsFamille(ctx, c.Famille.ID); err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
+	_ = a.MarquerAppareil(ctx, w, r, c.Famille.ID)
+	a.Journal.Info("appareils de confiance oubliés", "famille", c.Famille.ID, "par", c.Membre.ID)
+	a.Flash(w, "Appareils de confiance oubliés ✓ (sauf celui-ci)")
 	a.Rediriger(w, r, "/famille")
 }
 

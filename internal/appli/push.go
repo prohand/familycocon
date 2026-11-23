@@ -58,7 +58,7 @@ func (a *App) DemarrerPush(ctx context.Context) error {
 		return err
 	}
 	p := &Pousseur{a: a, cle: cle, public: public, file: make(chan annonce, tailleFile),
-		client: &http.Client{Timeout: 15 * time.Second}}
+		client: webpush.ClientSur(15 * time.Second)}
 	p.envoyer = func(ctx context.Context, ab *webpush.Abonnement, corps []byte, o webpush.Options) error {
 		return webpush.Envoyer(ctx, p.client, ab, corps, o)
 	}
@@ -191,6 +191,12 @@ func (a *App) abonnerPush(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		return
 	}
 	if err := a.Q.Abonner(r.Context(), donnees.AbonnerParams{MembreID: c.Membre.ID, Adresse: ab.Adresse, P256dh: p256, Auth: auth, CreeLe: time.Now().Unix()}); err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
+	// 10 appareils au plus par membre : les plus anciens sont oubliés
+	// (des milliers d'adresses ralentiraient les envois de tout le monde).
+	if err := a.Q.GarderDerniersAbonnements(r.Context(), donnees.GarderDerniersAbonnementsParams{Membre: c.Membre.ID, Garder: 10}); err != nil {
 		a.ErreurInterne(w, r, err)
 		return
 	}

@@ -251,7 +251,7 @@ func (m *Module) contact(r *http.Request, c *appli.Contexte) (donnees.Contact, b
 		return donnees.Contact{}, false
 	}
 	ct, err := m.a.Q.ContactParID(r.Context(), donnees.ContactParIDParams{ID: id, FamilleID: c.Famille.ID})
-	return ct, err == nil
+	return ct, err == nil && peutVoir(c, ct)
 }
 
 // Telephone : un numéro de la fiche.
@@ -490,6 +490,9 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		return
 	}
 	s, msg := lire(r)
+	if !carnetActif(c) {
+		s.pro = 1 // seul Prestataires est activé : un contact « pro »
+	}
 	if msg != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
@@ -526,6 +529,9 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	if msg != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
+	}
+	if !carnetActif(c) {
+		s.pro = 1
 	}
 	if err := m.a.Q.ModifierContact(r.Context(), donnees.ModifierContactParams{
 		Nom: s.nom, Relation: s.relation, Naissance: s.naissance, Telephone: s.tel, TelFixe: s.fixe, TelTravail: s.travail,

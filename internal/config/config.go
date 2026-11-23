@@ -32,11 +32,12 @@ type Config struct {
 	Proxys       []netip.Prefix // reverse proxys de confiance (X-Forwarded-For lu seulement venant d'eux)
 	Inscriptions string         // premiere | ouverte | fermee
 	NiveauLogs   slog.Level
-	FormatLogs   string // json | texte
-	SauvegardeA  string // heure de la sauvegarde automatique (« 03:30 »), vide = aucune
-	SauvegardeNb int    // nombre de sauvegardes automatiques gardées
-	DureeSession time.Duration
-	ContactPush  string // adresse « mailto: » ou « https: » transmise aux services de push (VAPID)
+	FormatLogs   string        // json | texte
+	SauvegardeA  string        // heure de la sauvegarde automatique (« 03:30 »), vide = aucune
+	SauvegardeNb int           // nombre de sauvegardes automatiques gardées
+	DureeSession time.Duration // sans visite pendant ce temps, la session expire
+	SessionMax   time.Duration // durée maximale d'une session, même utilisée chaque jour
+	ContactPush  string        // adresse « mailto: » ou « https: » transmise aux services de push (VAPID)
 }
 
 // CookieSecurise : cookies « Secure » dès que l'adresse publique est en https.
@@ -116,6 +117,12 @@ func LireDepuis(env func(string) string) (*Config, error) {
 		errs = append(errs, errors.New("FC_DUREE_SESSION_JOURS : nombre entre 1 et 400"))
 	}
 	c.DureeSession = time.Duration(j) * 24 * time.Hour
+
+	jm, err := strconv.Atoi(val("FC_SESSION_MAX_JOURS", "365"))
+	if err != nil || jm < 1 || jm > 3650 || jm < j {
+		errs = append(errs, errors.New("FC_SESSION_MAX_JOURS : nombre entre FC_DUREE_SESSION_JOURS et 3650"))
+	}
+	c.SessionMax = time.Duration(jm) * 24 * time.Hour
 
 	if c.ContactPush == "" {
 		c.ContactPush = "mailto:admin@" + u.Hostname()

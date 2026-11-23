@@ -15,7 +15,7 @@
   {{- range .Etapes}}
   <div class="ligne etape{{if .FaiteLe}} faite{{end}}">
     <form method="post" action="/projets/etapes/{{.ID}}/cocher">
-      {{template "jeton" $c.CSRF}}
+      {{template "jeton" $c.CSRF}}<input type="hidden" name="faite" value="{{if .FaiteLe}}0{{else}}1{{end}}">
       <button class="coche{{if .FaiteLe}} cochee{{end}}" aria-label="{{if .FaiteLe}}À refaire : {{else}}Fait : {{end}}{{.Texte}}"></button>
     </form>
     <span class="quoi">{{.Texte}}{{if .Quand}}<small class="{{if .Retard}}alerte{{end}}">{{.Quand}}</small>{{end}}</span>

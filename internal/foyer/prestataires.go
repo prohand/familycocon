@@ -32,7 +32,7 @@ func (m *Module) brancherPrestataires() {
 			{Libelle: "Visite", Mois: 0}, {Libelle: "Rendez-vous", Mois: 0}, {Libelle: "Intervention", Mois: 0}, {Libelle: "Devis", Mois: 0}},
 		Nom: func(ctx context.Context, famille, id int64) (string, bool) {
 			x, err := a.Q.ContactParID(ctx, donnees.ContactParIDParams{ID: id, FamilleID: famille})
-			return x.Nom, err == nil
+			return x.Nom, err == nil && x.Pro == 1
 		},
 		URL: func(id int64) string { return fmt.Sprintf("/prestataires/%d", id) },
 	})
@@ -101,7 +101,7 @@ func liensContact(x donnees.Contact) ([]Lien, []string) {
 
 func (m *Module) fichePrestataire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	x, err := m.a.Q.ContactParID(r.Context(), donnees.ContactParIDParams{ID: idDe(r), FamilleID: c.Famille.ID})
-	if err != nil {
+	if err != nil || x.Pro != 1 {
 		m.a.PageErreur(w, r, c, http.StatusNotFound, "Prestataire introuvable", "Ce prestataire n'existe plus.")
 		return
 	}

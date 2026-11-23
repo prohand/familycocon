@@ -16,6 +16,7 @@ package contacts
 
 import (
 	"familycocon/internal/appli"
+	"familycocon/internal/donnees"
 )
 
 // Module : Contacts, Adresses et Anniversaires.
@@ -76,6 +77,17 @@ func Brancher(a *appli.App) {
 // actif : l'un des modules qui montrent des contacts est-il activé ?
 func actif(c *appli.Contexte) bool {
 	return c.Actif(modContacts) || c.Actif(modAdresses) || c.Actif(modAnniv) || c.Actif(modPrestataires)
+}
+
+// peutVoir : ce contact peut-il être ouvert, selon les modules activés ?
+// Prestataires seul ne montre que les contacts « pro ».
+func peutVoir(c *appli.Contexte, ct donnees.Contact) bool {
+	return carnetActif(c) || (ct.Pro == 1 && c.Actif(modPrestataires))
+}
+
+// carnetActif : un module qui montre tout le carnet (ou ses fiches) est activé.
+func carnetActif(c *appli.Contexte) bool {
+	return c.Actif(modContacts) || c.Actif(modAdresses) || c.Actif(modAnniv)
 }
 
 // LienTel : « 06 12 34 56 78 » → « 0612345678 » (chiffres et + au début).

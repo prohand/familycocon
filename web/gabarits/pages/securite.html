@@ -37,6 +37,7 @@
   <form method="post" action="/moi/securite/totp/activer" class="rangee">
     {{template "jeton" $c.CSRF}}
     <label class="champ"><span>Code à 6 chiffres</span><input name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9 ]{6,7}" maxlength="7" required></label>
+    <label class="champ"><span>Votre mot de passe</span><input type="password" name="mdp" autocomplete="current-password" required></label>
     <button class="bouton">Activer</button>
   </form>
   {{end}}
@@ -59,6 +60,7 @@
   {{if .PasskeyPossible}}
   <div class="rangee bloc">
     <label class="champ"><span>Nom de la passkey</span><input id="nom-passkey" maxlength="40" placeholder="Ex. : Téléphone de {{$c.Membre.Nom}}"></label>
+    <label class="champ"><span>Votre mot de passe</span><input id="mdp-passkey" type="password" autocomplete="current-password"></label>
     <button class="bouton" type="button" data-passkey="ajouter" hidden>＋ Ajouter une passkey</button>
   </div>
   <p class="aide" id="etat-passkey"></p>

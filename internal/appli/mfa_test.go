@@ -71,7 +71,10 @@ func TestDoubleAuthentificationTOTP(t *testing.T) {
 	}
 	maintenant := time.Now()
 	code, _ := mfa.CodeTOTP(secret[1], maintenant)
-	_, page = marie.post("/moi/securite/totp/activer", map[string]string{"code": code})
+	if c, _ := marie.post("/moi/securite/totp/activer", map[string]string{"code": code, "mdp": "faux"}); c != 400 {
+		t.Fatalf("activation sans mot de passe : %d", c)
+	}
+	_, page = marie.post("/moi/securite/totp/activer", map[string]string{"code": code, "mdp": "un grand nid douillet"})
 	codes := regexp.MustCompile(`<code>([A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4})</code>`).FindAllStringSubmatch(page, -1)
 	if len(codes) != 10 || !strings.Contains(page, "Activée") {
 		t.Fatalf("activation : %d codes", len(codes))
@@ -135,7 +138,7 @@ func TestDoubleAuthentificationTOTP(t *testing.T) {
 func b64t(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 
 // ajouterPasskeyTest enregistre une fausse passkey pour le navigateur connecté.
-func ajouterPasskeyTest(t *testing.T, n *navigateur) *fauxcle.Cle {
+func ajouterPasskeyTest(t *testing.T, n *navigateur, mdp string) *fauxcle.Cle {
 	t.Helper()
 	_, page := n.get("/moi/securite")
 	n.jetonHtmx(page)
@@ -145,7 +148,13 @@ func ajouterPasskeyTest(t *testing.T, n *navigateur) *fauxcle.Cle {
 	}
 	cle := fauxcle.Nouvelle(-7, domaineTest, origineTest)
 	client, att := cle.Creer(opts["challenge"])
-	if c, v := n.json("POST", "/moi/securite/passkeys", map[string]string{"clientDataJSON": client, "attestationObject": att, "nom": "Téléphone"}); c != http.StatusNoContent {
+	// Sans le bon mot de passe : refusé (une session volée ne suffit pas).
+	if c, _ := n.json("POST", "/moi/securite/passkeys", map[string]string{"clientDataJSON": client, "attestationObject": att, "nom": "Téléphone", "mdp": "faux"}); c != http.StatusBadRequest {
+		t.Fatalf("passkey sans mot de passe acceptée : %d", c)
+	}
+	_, opts = n.json("GET", "/moi/securite/passkeys/defi", nil)
+	client, att = cle.Creer(opts["challenge"])
+	if c, v := n.json("POST", "/moi/securite/passkeys", map[string]string{"clientDataJSON": client, "attestationObject": att, "nom": "Téléphone", "mdp": mdp}); c != http.StatusNoContent {
 		t.Fatalf("enregistrement : %d %v", c, v)
 	}
 	return cle
@@ -160,7 +169,7 @@ func TestPasskeys(t *testing.T) {
 	if _, page := marie.get("/moi"); !strings.Contains(page, `class="carte bloc carte-securite"`) {
 		t.Fatal("carte Sécurité absente de la page Moi")
 	}
-	cle := ajouterPasskeyTest(t, marie)
+	cle := ajouterPasskeyTest(t, marie, "un grand nid douillet")
 	if _, page := marie.get("/moi/securite"); !strings.Contains(page, "Téléphone") {
 		t.Fatal("passkey absente de la liste")
 	}
@@ -221,7 +230,7 @@ func TestReinitialisationParUnParent(t *testing.T) {
 	lien := regexp.MustCompile(`/invitation/[A-Za-z0-9_-]{43}`).FindString(page)
 	thomas := nouveauNavigateur(t, srv)
 	thomas.post(lien, map[string]string{"prenom": "Thomas", "identifiant": "thomas", "mdp": "le papa du nid", "mdp2": "le papa du nid"})
-	ajouterPasskeyTest(t, thomas)
+	ajouterPasskeyTest(t, thomas, "le papa du nid")
 	x := nouveauNavigateur(t, srv)
 	if p := connexionMotDePasse(t, x, "thomas", "le papa du nid"); !strings.Contains(p, "Vérification") {
 		t.Fatal("second facteur attendu")

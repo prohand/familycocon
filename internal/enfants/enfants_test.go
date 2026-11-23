@@ -149,3 +149,39 @@ func TestMissionDUnAutreEnfant(t *testing.T) {
 		t.Fatalf("Hugo coche la mission de Léa : %d", code)
 	}
 }
+
+// Réattribuer une mission déjà validée à un autre enfant : les étoiles
+// gagnées restent au premier (avant : elles partaient avec la mission).
+func TestReattribuerMission(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	essai.Enfant(t, srv, marie, "Tom")
+	ids := map[string]string{}
+	membres, _ := a.Q.MembresDeFamille(t.Context(), 1)
+	for _, m := range membres {
+		ids[m.Nom] = strconv.FormatInt(m.ID, 10)
+	}
+	marie.Get("/enfants/missions/nouvelle")
+	marie.Post("/enfants/missions", map[string]string{"enfant": ids["Léa"], "titre": "Vaisselle", "etoiles": "5", "categorie": "menage", "repetition": "jour"})
+	_, page := lea.Get("/enfants")
+	idMission := essai.Trouver(t, page, `/enfants/missions/(\d+)/faire`)
+	lea.Htmx = true
+	lea.Post("/enfants/missions/"+idMission+"/faire", nil)
+	lea.Htmx = false
+	_, page = marie.Get("/enfants")
+	marie.Post("/enfants/validations/"+essai.Trouver(t, page, `/enfants/validations/(\d+)/valider`)+"/valider", nil)
+
+	marie.Get("/enfants/missions/" + idMission + "/modifier")
+	marie.Post("/enfants/missions/"+idMission, map[string]string{"enfant": ids["Tom"], "titre": "Vaisselle", "etoiles": "5", "categorie": "menage", "repetition": "jour"})
+	idL, _ := strconv.ParseInt(ids["Léa"], 10, 64)
+	idT, _ := strconv.ParseInt(ids["Tom"], 10, 64)
+	gL, _ := a.Q.EtoilesGagnees(t.Context(), idL)
+	gT, _ := a.Q.EtoilesGagnees(t.Context(), idT)
+	if gL != 5 || gT != 0 {
+		t.Fatalf("étoiles : Léa %d (attendu 5), Tom %d (attendu 0)", gL, gT)
+	}
+	if _, page := marie.Get("/enfants/enfant/" + ids["Tom"]); !strings.Contains(page, "Vaisselle") {
+		t.Fatal("mission absente chez Tom")
+	}
+}

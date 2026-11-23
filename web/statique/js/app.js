@@ -152,6 +152,37 @@ if ("serviceWorker" in navigator) {
     var e = document.getElementById("etat-push");
     if (e) e.textContent = texte;
   }
+  // Appareil partagé : l'abonnement de ce navigateur suit la personne
+  // connectée (une fois par session), pour qu'un enfant ne reçoive pas les
+  // notifications d'un parent sur la tablette familiale.
+  function rattacher() {
+    var membre = document.body.getAttribute("data-membre");
+    if (!membre || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    var cle = "fc-push-membre";
+    try { if (sessionStorage.getItem(cle) === membre) return; } catch (_) { return; }
+    navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (ab) {
+      if (!ab) return;
+      return envoyer("/push/abonnement", ab.toJSON()).then(function () {
+        try { sessionStorage.setItem(cle, membre); } catch (_) {}
+      });
+    }).catch(function () {});
+  }
+  document.addEventListener("DOMContentLoaded", rattacher);
+  // Déconnexion : cet appareil arrête d'abord de recevoir les notifications.
+  document.addEventListener("submit", function (e) {
+    var f = e.target;
+    if (!f.matches || !f.matches("form[data-deconnexion]") || f.getAttribute("data-fait")) return;
+    e.preventDefault();
+    var finir = function () { f.setAttribute("data-fait", "1"); f.submit(); };
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) { finir(); return; }
+    navigator.serviceWorker.ready.then(function (reg) { return reg.pushManager.getSubscription(); }).then(function (ab) {
+      if (!ab) return;
+      return envoyer("/push/desabonnement", ab.toJSON()).finally(function () { return ab.unsubscribe(); });
+    }).catch(function () {}).finally(function () {
+      try { sessionStorage.removeItem("fc-push-membre"); } catch (_) {}
+      finir();
+    });
+  }, true);
   function verifier() {
     var b = document.querySelector("[data-push]");
     if (!b) return;
@@ -241,6 +272,8 @@ if ("serviceWorker" in navigator) {
   }
   function ajouter() {
     var nom = document.getElementById("nom-passkey");
+    var mdp = document.getElementById("mdp-passkey");
+    if (mdp && !mdp.value) return Promise.reject(new Error("Tapez votre mot de passe."));
     return fetch("/moi/securite/passkeys/defi", { credentials: "same-origin" }).then(lire).then(function (o) {
       o.challenge = enOctets(o.challenge);
       o.user.id = enOctets(o.user.id);
@@ -250,7 +283,8 @@ if ("serviceWorker" in navigator) {
       return poster("/moi/securite/passkeys", {
         clientDataJSON: enB64(cred.response.clientDataJSON),
         attestationObject: enB64(cred.response.attestationObject),
-        nom: nom ? nom.value : ""
+        nom: nom ? nom.value : "",
+        mdp: mdp ? mdp.value : ""
       });
     }).then(function (r) {
       if (!r.ok) return lire(r);

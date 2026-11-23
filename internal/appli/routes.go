@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // Gestionnaire : une page ou une action pour un membre connecté.
@@ -36,7 +37,7 @@ const (
 // la session est exigé, en plus du contrôle d'origine global.
 func (a *App) Route(motif, module string, acces Acces, h Gestionnaire) {
 	a.Mux.HandleFunc(motif, func(w http.ResponseWriter, r *http.Request) {
-		c, err := a.lireSession(r)
+		c, err := a.lireSession(w, r)
 		if err != nil {
 			a.ErreurInterne(w, r, err)
 			return
@@ -133,7 +134,11 @@ func (a *App) lireFlash(w http.ResponseWriter, r *http.Request) string {
 		HttpOnly: true, Secure: a.Config.CookieSecurise(), SameSite: http.SameSiteLaxMode})
 	t, _ := url.QueryUnescape(ck.Value)
 	if len(t) > 200 {
-		t = t[:200]
+		n := 200
+		for n > 0 && !utf8.RuneStart(t[n]) { // sans couper un caractère
+			n--
+		}
+		t = t[:n]
 	}
 	return t
 }

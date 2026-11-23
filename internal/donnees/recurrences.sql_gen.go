@@ -428,6 +428,23 @@ func (q *Queries) RecurrencesFamille(ctx context.Context, familleID int64) ([]Re
 	return items, nil
 }
 
+const supprimerOccurrences = `-- name: SupprimerOccurrences :execrows
+DELETE FROM operations WHERE recurrence_id = ? AND famille_id = ?
+`
+
+type SupprimerOccurrencesParams struct {
+	RecurrenceID sql.NullInt64
+	FamilleID    int64
+}
+
+func (q *Queries) SupprimerOccurrences(ctx context.Context, arg SupprimerOccurrencesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, supprimerOccurrences, arg.RecurrenceID, arg.FamilleID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const supprimerRecurrence = `-- name: SupprimerRecurrence :exec
 DELETE FROM recurrences WHERE id = ? AND famille_id = ?
 `

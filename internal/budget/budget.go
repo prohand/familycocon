@@ -385,6 +385,14 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	ctx := r.Context()
 	auteur := sql.NullInt64{Int64: c.Membre.ID, Valid: true}
 	if s.frequence != "" {
+		if msg := ValiderProchaine(s.jour, nil, c.Maintenant()); msg != "" {
+			m.a.Echec(w, r, http.StatusBadRequest, msg)
+			return
+		}
+		if recs, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID); err != nil || len(recs) >= RecurrencesMax {
+			m.a.Echec(w, r, http.StatusBadRequest, "Trop d'opérations qui reviennent : arrêtez-en d'abord.")
+			return
+		}
 		// Opération qui revient : la récurrence écrit elle-même les occurrences
 		// passées ou du jour ; les suivantes viendront à leur date.
 		if _, err := m.a.Q.CreerRecurrence(ctx, donnees.CreerRecurrenceParams{

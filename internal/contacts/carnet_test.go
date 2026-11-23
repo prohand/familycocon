@@ -4,13 +4,16 @@ package contacts
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	"familycocon/internal/donnees"
 	"familycocon/internal/essai"
 )
 
@@ -104,7 +107,7 @@ const vcfAndroid = "BEGIN:VCARD\r\nVERSION:2.1\r\nN;CHARSET=UTF-8;ENCODING=QUOTE
 	"BEGIN:VCARD\nVERSION:3.0\nFN:Tata Zoé\nBDAY:1604-12-25\nX-SOCIALPROFILE:ignoré\nEND:VCARD\n"
 
 func TestVCard(t *testing.T) {
-	cartes, err := lireVCards(strings.NewReader(vcfAndroid))
+	cartes, err := lireVCards(context.Background(), strings.NewReader(vcfAndroid))
 	if err != nil || len(cartes) != 4 {
 		t.Fatalf("%d cartes, %v", len(cartes), err)
 	}
@@ -137,7 +140,7 @@ func TestVCard(t *testing.T) {
 			t.Fatalf("ligne non pliée (%d octets) : %q", len(l), l)
 		}
 	}
-	relu, _ := lireVCards(strings.NewReader(vcf))
+	relu, _ := lireVCards(context.Background(), strings.NewReader(vcf))
 	if len(relu) != 1 || relu[0].nom != "Paul, l'ami; de Léo" || relu[0].adresse != "3 rue X\n75000 Paris" || !strings.HasPrefix(relu[0].notes, "très long texte très") {
 		t.Fatalf("aller-retour : %+v", relu)
 	}
@@ -156,5 +159,34 @@ func TestVCard(t *testing.T) {
 	}
 	if code, _ := envoyerFichier(t, marie, srv.URL+"/contacts/import", "pas un vcard"); code != http.StatusBadRequest {
 		t.Fatalf("fichier invalide : %d", code)
+	}
+}
+
+// Fichier piégé : 200 000 lignes de suite (avant : plusieurs secondes,
+// croissance quadratique) ; un retour chariot seul n'injecte rien à l'export.
+func TestVCardPiege(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("BEGIN:VCARD\nFN:X\nNOTE:x\n")
+	for range 200000 {
+		b.WriteString(" a\n")
+	}
+	b.WriteString("END:VCARD\n")
+	debut := time.Now()
+	cartes, err := lireVCards(context.Background(), strings.NewReader(b.String()))
+	if err != nil || len(cartes) != 1 || time.Since(debut) > 2*time.Second {
+		t.Fatalf("%v, %d cartes, %v", err, len(cartes), time.Since(debut))
+	}
+	v := VCard(donnees.Contact{Nom: "Mamie\rTEL:+33 6 66 66 66 66\rEND:VCARD"})
+	fins, tels := 0, 0
+	for _, l := range strings.Split(v, "\r\n") {
+		if l == "END:VCARD" {
+			fins++
+		}
+		if strings.HasPrefix(l, "TEL") {
+			tels++
+		}
+	}
+	if fins != 1 || tels != 0 || strings.Contains(v, "\rTEL") {
+		t.Fatalf("injection :\n%q", v)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"familycocon/internal/donnees"
@@ -42,7 +43,23 @@ const (
 type attenteConnexion struct {
 	Membre int64
 	Suite  string
-	Defi   string // défi de passkey en cours
+	mu     sync.Mutex // protège Defi (requêtes simultanées du même navigateur)
+	Defi   string     // défi de passkey en cours
+}
+
+// prendreDefi : le défi en cours, une seule fois.
+func (at *attenteConnexion) prendreDefi() string {
+	at.mu.Lock()
+	defer at.mu.Unlock()
+	d := at.Defi
+	at.Defi = ""
+	return d
+}
+
+func (at *attenteConnexion) poserDefi(d string) {
+	at.mu.Lock()
+	at.Defi = d
+	at.mu.Unlock()
 }
 
 // domaineWebAuthn : domaine (rpId) et origine, tirés de FC_URL_PUBLIQUE.
@@ -248,7 +265,7 @@ func (a *App) defiVerification(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defi, _ := mfa.NouveauDefiPasskey()
-	at.Defi = defi
+	at.poserDefi(defi)
 	ecrireJSON(w, http.StatusOK, optionsConnexion(defi, domaine, "preferred", cles))
 }
 
@@ -290,7 +307,7 @@ func lireReponse(w http.ResponseWriter, r *http.Request, v any) bool {
 // verifierPasskeyAttente : passkey en second facteur, après le mot de passe.
 func (a *App) verifierPasskeyAttente(w http.ResponseWriter, r *http.Request) {
 	at, m, ok := a.attenteDe(r)
-	if !ok || at.Defi == "" {
+	if !ok {
 		erreurJSON(w, http.StatusBadRequest, "Connexion expirée : recommencez.")
 		return
 	}
@@ -298,8 +315,11 @@ func (a *App) verifierPasskeyAttente(w http.ResponseWriter, r *http.Request) {
 	if !lireReponse(w, r, &rep) {
 		return
 	}
-	defi := at.Defi
-	at.Defi = "" // usage unique
+	defi := at.prendreDefi() // usage unique
+	if defi == "" {
+		erreurJSON(w, http.StatusBadRequest, "Connexion expirée : recommencez.")
+		return
+	}
 	ip := a.IPClient(r)
 	p, err := a.verifierAssertion(r.Context(), rep, defi, false)
 	if err != nil || p.MembreID != m.ID {
@@ -323,9 +343,17 @@ func (a *App) defiSansMotDePasse(w http.ResponseWriter, r *http.Request) {
 		erreurJSON(w, http.StatusBadRequest, "Passkeys indisponibles sur une adresse IP : utilisez un nom de domaine.")
 		return
 	}
+	// Sans connexion : 30 défis par quart d'heure et par adresse, rangés à
+	// part (une avalanche de défis ne bloque pas les autres connexions).
+	fin, _, ok := a.Limiteur.Essayer(time.Now(), Limite{"defi|" + CleIP(a.IPClient(r)), seuilDefis})
+	if !ok {
+		erreurJSON(w, http.StatusTooManyRequests, "Trop de tentatives : réessayez plus tard.")
+		return
+	}
+	fin(true)
 	defi, _ := mfa.NouveauDefiPasskey()
 	jeton, _ := jetonAleatoire()
-	if err := a.Memoire.Mettre(cleMemoire("defi", jeton), defi, dureeAttente); err != nil {
+	if err := a.MemoireDefis.Mettre(cleMemoire("defi", jeton), defi, dureeAttente); err != nil {
 		erreurJSON(w, http.StatusServiceUnavailable, err.Error())
 		return
 	}
@@ -340,7 +368,7 @@ func (a *App) connexionPasskey(w http.ResponseWriter, r *http.Request) {
 		erreurJSON(w, http.StatusBadRequest, "Connexion expirée : recommencez.")
 		return
 	}
-	v, ok := a.Memoire.Prendre(cleMemoire("defi", ck.Value))
+	v, ok := a.MemoireDefis.Prendre(cleMemoire("defi", ck.Value))
 	a.effacerCookie(w, "fc_defi")
 	if !ok {
 		erreurJSON(w, http.StatusBadRequest, "Connexion expirée : recommencez.")
@@ -468,6 +496,11 @@ func (a *App) activerTOTP(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		a.Echec(w, r, http.StatusBadRequest, "Double authentification déjà active.")
 		return
 	}
+	// Mot de passe redemandé : une session volée ne suffit pas à poser son
+	// propre second facteur sur le compte.
+	if !a.motDePasseConfirme(w, r, c) {
+		return
+	}
 	v, ok := a.Memoire.Lire(cleMemoire("totp", string(c.jeton)))
 	if !ok {
 		a.Echec(w, r, http.StatusBadRequest, "Trop tard : rechargez la page et scannez le nouveau QR code.")
@@ -495,15 +528,33 @@ func (a *App) activerTOTP(w http.ResponseWriter, r *http.Request, c *Contexte) {
 
 // motDePasseConfirme : le mot de passe actuel, redemandé avant une action sensible.
 func (a *App) motDePasseConfirme(w http.ResponseWriter, r *http.Request, c *Contexte) bool {
-	bon, occupe := ComparerOccupe(c.Membre.Mdp.String, r.PostFormValue("mdp"))
+	statut, msg := a.verifierMotDePasse(r, c, r.PostFormValue("mdp"))
+	if msg != "" {
+		a.Echec(w, r, statut, msg)
+	}
+	return msg == ""
+}
+
+// verifierMotDePasse : « » si le mot de passe est le bon, sinon le statut et
+// le message. 5 erreurs par quart d'heure au plus (session volée : pas de
+// devinette en ligne).
+func (a *App) verifierMotDePasse(r *http.Request, c *Contexte, mdp string) (int, string) {
+	fin, attente, ok := a.Limiteur.Essayer(time.Now(), Limite{"confirmation|" + strconv.FormatInt(c.Membre.ID, 10), seuilConfirmation})
+	if !ok {
+		return http.StatusTooManyRequests, "Trop d'essais. Réessayez dans " + attenteLisible(attente) + "."
+	}
+	bon, occupe := ComparerOccupe(c.Membre.Mdp.String, mdp)
 	switch {
 	case occupe:
-		a.Echec(w, r, http.StatusServiceUnavailable, "Serveur occupé : réessayez dans un instant.")
+		fin(false)
+		return http.StatusServiceUnavailable, "Serveur occupé : réessayez dans un instant."
 	case !bon:
+		fin(true)
 		a.Journal.Warn("confirmation par mot de passe ratée", "membre", c.Membre.ID, "ip", a.IPClient(r).String())
-		a.Echec(w, r, http.StatusBadRequest, "Mot de passe incorrect.")
+		return http.StatusBadRequest, "Mot de passe incorrect."
 	}
-	return bon && !occupe
+	fin(false)
+	return 0, ""
 }
 
 func (a *App) desactiverTOTP(w http.ResponseWriter, r *http.Request, c *Contexte) {
@@ -594,8 +645,15 @@ func (a *App) ajouterPasskey(w http.ResponseWriter, r *http.Request, c *Contexte
 		ClientDataJSON    string `json:"clientDataJSON"`
 		AttestationObject string `json:"attestationObject"`
 		Nom               string `json:"nom"`
+		Mdp               string `json:"mdp"`
 	}
 	if !lireReponse(w, r, &rep) {
+		return
+	}
+	// Mot de passe redemandé : une session volée ne suffit pas à ajouter
+	// une passkey (un accès durable sans mot de passe).
+	if statut, msg := a.verifierMotDePasse(r, c, rep.Mdp); msg != "" {
+		erreurJSON(w, statut, msg)
 		return
 	}
 	v, ok := a.Memoire.Prendre(cleMemoire("inscription", string(c.jeton)))
@@ -662,7 +720,8 @@ func (a *App) reinitialiserSecurite(w http.ResponseWriter, r *http.Request, c *C
 		return
 	}
 	err = a.Transaction(ctx, func(q *donnees.Queries) error {
-		for _, f := range []func(context.Context, int64) error{q.DesactiverTOTP, q.EffacerCodesSecours, q.SupprimerPasskeysMembre, q.SupprimerSessionsMembre} {
+		for _, f := range []func(context.Context, int64) error{q.DesactiverTOTP, q.EffacerCodesSecours, q.SupprimerPasskeysMembre, q.SupprimerSessionsMembre,
+			q.SupprimerAbonnementsPushMembre} {
 			if err := f(ctx, m.ID); err != nil {
 				return err
 			}
@@ -674,6 +733,7 @@ func (a *App) reinitialiserSecurite(w http.ResponseWriter, r *http.Request, c *C
 		return
 	}
 	a.Journal.Warn("sécurité réinitialisée par un parent", "membre", m.ID, "par", c.Membre.ID)
+	a.Direct.FermerMembre(c.Famille.ID, m.ID) // le téléphone perdu ne reçoit plus rien
 	a.Flash(w, "Double authentification et passkeys de "+m.Nom+" retirées")
 	a.Rediriger(w, r, "/famille")
 }

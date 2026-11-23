@@ -64,6 +64,10 @@
 <section class="carte bloc">
   <h2>⭐ Ajouter un enfant</h2>
   <p class="aide">L'enfant se connecte en touchant son prénom puis en tapant son code PIN, sur un appareil où un parent s'est déjà connecté.</p>
+  <form method="post" action="/famille/appareils/oublier" class="bloc" hx-confirm="Oublier tous les appareils de confiance (sauf celui-ci) ? Un parent devra se reconnecter sur chacun pour que les enfants puissent y entrer.">
+    {{template "jeton" $c.CSRF}}
+    <button class="bouton petit secondaire">📵 Oublier les appareils de confiance (tablette perdue…)</button>
+  </form>
   <form method="post" action="/famille/enfants">
     {{template "jeton" $c.CSRF}}
     <div class="rangee">

@@ -193,8 +193,15 @@ func TestRappelsDuMatin(t *testing.T) {
 	if rep, err := marie.c.Do(req); err != nil || rep.StatusCode != http.StatusNoContent {
 		t.Fatal("abonnement")
 	}
-	if n := a.EnvoyerRappels(ctx, time.Now()); n != 2 {
-		t.Fatalf("%d rappels, 2 attendus", n)
+	// Heure de la famille (Europe/Paris par défaut) : seulement à 9 h.
+	paris, _ := time.LoadLocation("Europe/Paris")
+	maintenant := time.Now().In(paris)
+	a9h := time.Date(maintenant.Year(), maintenant.Month(), maintenant.Day(), 9, 0, 0, 0, paris)
+	if n := a.envoyerRappelsA(ctx, a9h.Add(time.Hour), true); n != 0 {
+		t.Fatalf("%d rappels à 10 h, aucun attendu", n)
+	}
+	if n := a.envoyerRappelsA(ctx, a9h.Add(-time.Second), true); n != 2 {
+		t.Fatalf("%d rappels à 9 h, 2 attendus", n)
 	}
 	for i := 0; i < 200; i++ {
 		mu.Lock()

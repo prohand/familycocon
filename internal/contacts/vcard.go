@@ -12,6 +12,7 @@ package contacts
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -28,7 +29,7 @@ import (
 
 // echapper : \ , ; et retours à la ligne, comme le veut la norme.
 func echapper(s string) string {
-	return strings.NewReplacer(`\`, `\\`, ",", `\,`, ";", `\;`, "\r\n", `\n`, "\n", `\n`).Replace(s)
+	return strings.NewReplacer(`\`, `\\`, ",", `\,`, ";", `\;`, "\r\n", `\n`, "\n", `\n`, "\r", `\n`).Replace(s)
 }
 
 // plier : lignes de 75 octets au plus, la suite commence par une espace
@@ -131,25 +132,58 @@ func (p propriete) a(param string) bool {
 }
 
 // lignes : les lignes dépliées (suite commençant par une espace ou une
-// tabulation ; en quoted-printable, « = » en fin de ligne).
-func lignes(r io.Reader) ([]string, error) {
+// tabulation ; en quoted-printable, « = » en fin de ligne). Linéaire : une
+// ligne logique est construite morceau par morceau, 256 Kio au plus ; le
+// contenu des photos est sauté ; 500 000 lignes au plus.
+func lignes(ctx context.Context, r io.Reader) ([]string, error) {
+	const (
+		ligneMax  = 256 << 10
+		lignesMax = 500000
+	)
 	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 64<<10), 8<<20)
 	var out []string
-	qpSuite := false
+	var cur strings.Builder
+	en, qp, ignorer, finEgal := false, false, false, false
+	ecrire := func(t string) {
+		if qp {
+			finEgal = strings.HasSuffix(t, "=")
+			t = strings.TrimSuffix(t, "=")
+		}
+		if !ignorer && cur.Len()+len(t) <= ligneMax {
+			cur.WriteString(t)
+		}
+	}
+	n := 0
 	for sc.Scan() {
+		if n++; n > lignesMax {
+			return nil, errors.New("fichier trop long")
+		}
+		if n%10000 == 0 && ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		l := strings.TrimRight(sc.Text(), "\r")
 		switch {
-		case qpSuite && len(out) > 0:
-			out[len(out)-1] = strings.TrimSuffix(out[len(out)-1], "=") + l
-		case (strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t")) && len(out) > 0:
-			out[len(out)-1] += l[1:]
+		case en && qp && finEgal:
+			ecrire(l)
+		case en && (strings.HasPrefix(l, " ") || strings.HasPrefix(l, "\t")):
+			ecrire(l[1:])
 		default:
-			out = append(out, l)
+			if en {
+				out = append(out, cur.String())
+				cur.Reset()
+			}
+			en, finEgal = true, false
+			tete := strings.ToUpper(l[:max(0, strings.Index(l, ":"))])
+			qp = strings.Contains(tete, "QUOTED-PRINTABLE")
+			ignorer = false
+			ecrire(l)
+			// Photos (souvent des centaines de Kio) : l'en-tête suffit.
+			ignorer = strings.HasPrefix(tete, "PHOTO") || strings.Contains(tete, ".PHOTO")
 		}
-		dernier := out[len(out)-1]
-		qpSuite = strings.Contains(strings.ToUpper(dernier[:max(0, strings.Index(dernier, ":"))]), "QUOTED-PRINTABLE") &&
-			strings.HasSuffix(dernier, "=")
+	}
+	if en {
+		out = append(out, cur.String())
 	}
 	return out, sc.Err()
 }
@@ -260,8 +294,8 @@ func naissanceVCard(s string) string {
 }
 
 // lireVCards : les contacts d'un fichier .vcf.
-func lireVCards(r io.Reader) ([]saisie, error) {
-	ls, err := lignes(r)
+func lireVCards(ctx context.Context, r io.Reader) ([]saisie, error) {
+	ls, err := lignes(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +420,7 @@ func (m *Module) importer(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		return
 	}
 	defer f.Close()
-	cartes, err := lireVCards(f)
+	cartes, err := lireVCards(r.Context(), f)
 	if err != nil || len(cartes) == 0 {
 		m.a.Echec(w, r, http.StatusBadRequest, "Aucun contact trouvé dans ce fichier (format vCard .vcf attendu).")
 		return

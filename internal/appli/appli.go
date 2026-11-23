@@ -40,6 +40,9 @@ type App struct {
 	Direct *Direct
 	// Petites données de quelques minutes (connexion en attente, défis).
 	Memoire *MemoireCourte
+	// MemoireDefis : défis de passkey demandés sans être connecté, à part
+	// (une avalanche de demandes ne bloque pas les autres connexions).
+	MemoireDefis *MemoireCourte
 	// Notifications Web Push (nil tant que DemarrerPush n'a pas été appelé).
 	Push *Pousseur
 
@@ -56,18 +59,19 @@ type App struct {
 // modules peuvent d'abord ajouter leurs fonctions avec AjouterFonctions).
 func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error) {
 	a := &App{
-		Config:     cfg,
-		DB:         db,
-		Q:          donnees.New(db),
-		Journal:    journal,
-		Mux:        http.NewServeMux(),
-		Demarre:    time.Now(),
-		Limiteur:   NouveauLimiteur(),
-		Direct:     nouveauDirect(),
-		Memoire:    NouvelleMemoireCourte(2000),
-		resumes:    map[string]ResumeFunc{},
-		echeances:  map[string]EcheancesFunc{},
-		calendrier: map[string]CalendrierFunc{},
+		Config:       cfg,
+		DB:           db,
+		Q:            donnees.New(db),
+		Journal:      journal,
+		Mux:          http.NewServeMux(),
+		Demarre:      time.Now(),
+		Limiteur:     NouveauLimiteur(),
+		Direct:       nouveauDirect(),
+		Memoire:      NouvelleMemoireCourte(2000),
+		MemoireDefis: NouvelleMemoireCourte(2000),
+		resumes:      map[string]ResumeFunc{},
+		echeances:    map[string]EcheancesFunc{},
+		calendrier:   map[string]CalendrierFunc{},
 	}
 	sous, err := fs.Sub(web.Fichiers, "statique")
 	if err != nil {

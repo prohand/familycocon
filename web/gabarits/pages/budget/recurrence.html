@@ -42,8 +42,10 @@
     {{template "jeton" $c.CSRF}}<button class="bouton secondaire">⏹️ Arrêter</button>
   </form>
   {{end}}
-  <form method="post" action="/recurrences/{{.R.ID}}/supprimer" hx-confirm="Supprimer{{if .R.Abonnement}} (et l'abonnement){{end}} ? Les opérations passées restent dans le budget.">
-    {{template "jeton" $c.CSRF}}<button class="bouton danger">Supprimer</button>
+  <form method="post" action="/recurrences/{{.R.ID}}/supprimer" hx-confirm="Supprimer{{if .R.Abonnement}} (et l'abonnement){{end}} ?">
+    {{template "jeton" $c.CSRF}}
+    <label class="case-a-cocher"><input type="checkbox" name="passees" value="1"> et les opérations déjà ajoutées automatiquement</label>
+    <button class="bouton danger">Supprimer</button>
   </form>
 </div>
 {{end}}

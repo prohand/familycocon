@@ -125,6 +125,22 @@ func (q *Queries) EcrireServeur(ctx context.Context, arg EcrireServeurParams) er
 	return err
 }
 
+const garderDerniersAbonnements = `-- name: GarderDerniersAbonnements :exec
+DELETE FROM abonnements_push WHERE abonnements_push.membre_id = ?1 AND abonnements_push.id NOT IN (
+  SELECT r.id FROM abonnements_push r WHERE r.membre_id = ?1 ORDER BY r.id DESC LIMIT ?2
+)
+`
+
+type GarderDerniersAbonnementsParams struct {
+	Membre int64
+	Garder int64
+}
+
+func (q *Queries) GarderDerniersAbonnements(ctx context.Context, arg GarderDerniersAbonnementsParams) error {
+	_, err := q.db.ExecContext(ctx, garderDerniersAbonnements, arg.Membre, arg.Garder)
+	return err
+}
+
 const lireServeur = `-- name: LireServeur :one
 
 SELECT valeur FROM serveur WHERE nom = ?
@@ -158,5 +174,14 @@ DELETE FROM abonnements_push WHERE id = ?
 
 func (q *Queries) SupprimerAbonnement(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, supprimerAbonnement, id)
+	return err
+}
+
+const supprimerAbonnementsPushMembre = `-- name: SupprimerAbonnementsPushMembre :exec
+DELETE FROM abonnements_push WHERE membre_id = ?
+`
+
+func (q *Queries) SupprimerAbonnementsPushMembre(ctx context.Context, membreID int64) error {
+	_, err := q.db.ExecContext(ctx, supprimerAbonnementsPushMembre, membreID)
 	return err
 }

@@ -126,6 +126,12 @@ func LireMontant(s string) (int64, error) {
 	if len(dec) > 2 || entier == "" && dec == "" {
 		return 0, errMontant
 	}
+	// Chiffres seulement (« 12.-5 » refusé).
+	for _, c := range entier + dec {
+		if c < '0' || c > '9' {
+			return 0, errMontant
+		}
+	}
 	for len(dec) < 2 {
 		dec += "0"
 	}

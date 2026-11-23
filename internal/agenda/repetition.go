@@ -145,16 +145,29 @@ func rangDecale(d0 time.Time, k int, lieu *time.Location) time.Time {
 	return d
 }
 
+// occurrencesMax : au plus par événement et par période affichée (garde-fou).
+const occurrencesMax = 400
+
 // deplier : les occurrences d'un événement dans la période [debut, fin[.
 func deplier(e donnees.Evenement, lieu *time.Location, debut, fin time.Time) [][2]time.Time {
 	d0 := time.Unix(e.Debut, 0).In(lieu)
 	duree := time.Duration(e.Fin-e.Debut) * time.Second
 	r := lireRegle(e.Repetition)
 	finRep := e.RepetitionFin // '' : sans fin
+	// Journée entière : la fin se compte en jours de calendrier (un jour de
+	// changement d'heure dure 23 ou 25 h).
+	f0 := time.Unix(e.Fin, 0).In(lieu)
+	nbJours := int(numeroJour(f0) - numeroJour(d0))
+	finDe := func(d time.Time) time.Time {
+		if e.Journee == 1 {
+			return time.Date(d.Year(), d.Month(), d.Day()+nbJours+1, 0, 0, 0, 0, lieu).Add(-time.Second)
+		}
+		return d.Add(duree)
+	}
 	var out [][2]time.Time
 	ajouter := func(d time.Time) {
-		if chevauche(d, d.Add(duree), debut, fin) {
-			out = append(out, [2]time.Time{d, d.Add(duree)})
+		if f := finDe(d); chevauche(d, f, debut, fin) && len(out) < occurrencesMax {
+			out = append(out, [2]time.Time{d, f})
 		}
 	}
 	apresFin := func(d time.Time) bool { return finRep != "" && repetition.CleJour(d) > finRep }

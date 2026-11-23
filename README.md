@@ -134,7 +134,8 @@ Variables d'environnement, dans le fichier `.env` (modèle : [`.env.exemple`](.e
 | `FC_INSCRIPTIONS` | `premiere` | `premiere` (une seule famille), `ouverte` (plusieurs familles) ou `fermee`. |
 | `FC_SAUVEGARDE_HEURE` | `03:30` | Sauvegarde automatique quotidienne (`non` pour la couper). |
 | `FC_SAUVEGARDE_GARDER` | `7` | Nombre de sauvegardes automatiques gardées. |
-| `FC_DUREE_SESSION_JOURS` | `90` | Durée d'une session (prolongée à chaque visite). |
+| `FC_DUREE_SESSION_JOURS` | `90` | Sans visite pendant ce temps, la session expire (prolongée à chaque visite). |
+| `FC_SESSION_MAX_JOURS` | `365` | Durée maximale d'une session, même utilisée chaque jour : il faut ensuite se reconnecter. |
 | `FC_NIVEAU_LOGS` / `FC_FORMAT_LOGS` | `info` / `json` | Journal (`debug`, `info`, `warn`, `error` ; `json` ou `texte`). En `info` : démarrage, connexions, sauvegardes, accès refusés et erreurs ; chaque requête n'apparaît qu'en `debug`. |
 | `FC_CONTACT_PUSH` | `mailto:admin@<domaine>` | Contact transmis aux services de notification. |
 | `TZ` | `UTC` | Fuseau du serveur (heure des sauvegardes et des logs), ex. `Europe/Paris`. |
