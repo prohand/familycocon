@@ -302,6 +302,10 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 		if err := q.EffacerCodesSecours(ctx, m.ID); err != nil {
 			return err
 		}
+		// Son lien secret vers l'agenda ne marche plus.
+		if err := q.SupprimerIcal(ctx, m.ID); err != nil {
+			return err
+		}
 		// Un parent retiré : ses appareils de confiance ne doivent plus
 		// proposer les enfants. On les oublie tous (les autres parents les
 		// retrouvent à leur prochaine connexion).

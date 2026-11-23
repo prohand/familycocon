@@ -70,6 +70,21 @@
   {{if .Modifiable}}<div class="boutons"><button class="bouton">{{if .Nouveau}}Ajouter{{else}}Enregistrer{{end}}</button></div>{{end}}
   </fieldset>
 </form>
+{{if and .Jour .Modifiable}}
+<form class="bloc" method="post" action="/agenda/{{.Evt.ID}}/sauter" hx-confirm="Annuler « {{.Evt.Titre}} » le {{.JourTitre}} seulement ?">
+  {{template "jeton" $c.CSRF}}<input type="hidden" name="jour" value="{{.Jour}}">
+  <button class="bouton secondaire">🚫 Annuler cette fois seulement ({{.JourTitre}})</button>
+</form>
+{{end}}
+{{if .Annulees}}
+<section class="carte bloc">
+  <h2>🚫 Fois annulées</h2>
+  {{- range .Annulees}}
+  <div class="ligne"><span class="quoi">{{.Titre}}</span>
+    {{if $.Donnees.Modifiable}}<form method="post" action="/agenda/{{$.Donnees.Evt.ID}}/retablir">{{template "jeton" $c.CSRF}}<input type="hidden" name="jour" value="{{.Cle}}"><button class="bouton petit secondaire">Rétablir</button></form>{{end}}</div>
+  {{- end}}
+</section>
+{{end}}
 {{if and (not .Nouveau) $c.EstParent}}
 <form class="bloc" method="post" action="/agenda/{{.Evt.ID}}/supprimer" hx-confirm="Supprimer « {{.Evt.Titre}} »{{if .Evt.Repetition}} (et toutes ses répétitions){{end}} ?">
   {{template "jeton" $c.CSRF}}

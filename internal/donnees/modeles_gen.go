@@ -28,6 +28,14 @@ type AbonnementsPush struct {
 	CreeLe   int64
 }
 
+type AgendaIcal struct {
+	MembreID  int64
+	FamilleID int64
+	Empreinte []byte
+	CreeLe    int64
+	LuLe      int64
+}
+
 type Animal struct {
 	ID            int64
 	FamilleID     int64
@@ -163,6 +171,11 @@ type Evenement struct {
 type EvenementsContact struct {
 	EvenementID int64
 	ContactID   int64
+}
+
+type EvenementsException struct {
+	EvenementID int64
+	Jour        string
 }
 
 type EvenementsMembre struct {
@@ -399,6 +412,7 @@ type Tache struct {
 	Active     int64
 	CreePar    sql.NullInt64
 	CreeLe     int64
+	Tour       string
 }
 
 type TacheFaite struct {

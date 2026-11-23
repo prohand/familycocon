@@ -1456,3 +1456,7 @@ details.plus-champs > summary { cursor: pointer; margin-bottom: 10px; }
   font-size: 1.2rem;
 }
 .loupe:hover, .loupe:focus-visible { background: var(--carte); }
+
+/* Tâches : les membres du tour de rôle, seulement si « À tour de rôle » est choisi. */
+.tour-membres { display: none; }
+form:has(option[value="tour"]:checked) .tour-membres { display: block; }

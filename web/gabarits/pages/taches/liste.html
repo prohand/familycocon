@@ -80,7 +80,7 @@
   {{- end}}
   <span class="p-emoji">{{$l.Emoji}}</span>
   <span class="quoi">{{$l.Titre}}
-    <small>{{if $l.Faite}}{{with $l.ParQui}}par {{.Nom}} {{end}}à {{$l.FaiteLe}}{{else}}{{with $l.Assigne}}{{.Nom}}{{else}}Tout le monde{{end}} · {{$l.Regle.Texte}}{{end}}</small></span>
+    <small>{{if $l.Faite}}{{with $l.ParQui}}par {{.Nom}} {{end}}à {{$l.FaiteLe}}{{else}}{{with $l.Assigne}}{{.Nom}}{{else}}Tout le monde{{end}}{{if $l.Tour}} 🔄{{end}} · {{$l.Regle.Texte}}{{end}}</small></span>
   {{template "avatar-petit" $l.Assigne}}
   {{if $l.Modifiable}}<a class="crayon" href="/taches/{{$l.ID}}/modifier" aria-label="Modifier {{$l.Titre}}">✏️</a>{{end}}
 </div>

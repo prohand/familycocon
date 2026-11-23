@@ -147,6 +147,47 @@ func (r Regle) Occurrence(t time.Time) (cle string, aFaire bool) {
 	return CleUnique, true
 }
 
+// joursDepuisOrigine : jours entre l'origine (lundi 1er janvier 2024) et le
+// jour t, comptés sur les dates (un changement d'heure ne décale rien).
+func joursDepuisOrigine(t time.Time) int64 {
+	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	return int64(d.Sub(origineQuinzaines).Hours()/24 + 0.5)
+}
+
+// Numero : le rang de l'occurrence du jour t (0, 1, 2…), qui sert au tour
+// de rôle : l'occurrence n revient au membre n modulo leur nombre. Calculé
+// sur le calendrier (pas de tâche de fond, le même pour tout le monde).
+func (r Regle) Numero(t time.Time) int64 {
+	jours := joursDepuisOrigine(t)
+	semaines := jours / 7
+	if jours < 0 {
+		semaines = (jours - 6) / 7
+	}
+	switch r.Type {
+	case Jour:
+		return jours
+	case Jours:
+		// Chaque semaine compte autant d'occurrences que de jours cochés.
+		var n, rang int64
+		for i := 1; i <= 7; i++ {
+			if r.Jours[i] {
+				if i < NumeroJour(t) {
+					rang++
+				}
+				n++
+			}
+		}
+		return semaines*n + rang
+	case Semaine:
+		return semaines
+	case DeuxSemaines:
+		return semaines / 2
+	case Mois:
+		return int64(t.Year())*12 + int64(t.Month())
+	}
+	return 0
+}
+
 // DebutQuinzaine : le lundi qui ouvre la période de deux semaines du jour t.
 func DebutQuinzaine(t time.Time) time.Time {
 	lundi := Lundi(t)

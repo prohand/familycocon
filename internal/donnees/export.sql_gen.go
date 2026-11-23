@@ -975,7 +975,7 @@ func (q *Queries) ExportRepas(ctx context.Context, familleID int64) ([]Repas, er
 }
 
 const exportTaches = `-- name: ExportTaches :many
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le FROM taches WHERE famille_id = ?
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour FROM taches WHERE famille_id = ?
 `
 
 func (q *Queries) ExportTaches(ctx context.Context, familleID int64) ([]Tache, error) {
@@ -997,6 +997,7 @@ func (q *Queries) ExportTaches(ctx context.Context, familleID int64) ([]Tache, e
 			&i.Active,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.Tour,
 		); err != nil {
 			return nil, err
 		}

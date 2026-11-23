@@ -92,6 +92,10 @@ func jetonAleatoire() (string, []byte) {
 	return j, Empreinte256(j)
 }
 
+// NouveauJeton : un jeton aléatoire (pour un lien secret) et son empreinte,
+// seule gardée en base.
+func NouveauJeton() (string, []byte) { return jetonAleatoire() }
+
 // Empreinte256 : empreinte SHA-256 d'un jeton.
 func Empreinte256(jeton string) []byte {
 	s := sha256.Sum256([]byte(jeton))

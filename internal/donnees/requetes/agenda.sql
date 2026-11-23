@@ -48,3 +48,40 @@ INSERT OR IGNORE INTO evenements_membres (evenement_id, membre_id) VALUES (?, ?)
 
 -- name: ViderParticipants :exec
 DELETE FROM evenements_membres WHERE evenement_id = ?;
+
+-- Fois annulees des evenements lus.
+-- name: ExceptionsDesEvenements :many
+SELECT evenement_id, jour FROM evenements_exceptions WHERE evenement_id IN (sqlc.slice(ids));
+
+-- name: ExceptionsEvenement :many
+SELECT jour FROM evenements_exceptions WHERE evenement_id = ? ORDER BY jour;
+
+-- name: AjouterException :exec
+INSERT INTO evenements_exceptions (evenement_id, jour) VALUES (?, ?) ON CONFLICT DO NOTHING;
+
+-- name: RetirerException :exec
+DELETE FROM evenements_exceptions WHERE evenement_id = ? AND jour = ?;
+
+-- name: CompterExceptions :one
+SELECT count(*) FROM evenements_exceptions WHERE evenement_id = ?;
+
+-- Lien secret de l'agenda (calendrier du telephone).
+
+-- name: PoserIcal :exec
+INSERT INTO agenda_ical (membre_id, famille_id, empreinte, cree_le) VALUES (?, ?, ?, ?)
+ON CONFLICT (membre_id) DO UPDATE SET empreinte = excluded.empreinte, cree_le = excluded.cree_le, lu_le = 0;
+
+-- name: IcalMembre :one
+SELECT cree_le, lu_le FROM agenda_ical WHERE membre_id = ?;
+
+-- Le lien d'un membre encore actif seulement.
+-- name: IcalParEmpreinte :one
+SELECT agenda_ical.membre_id, agenda_ical.famille_id FROM agenda_ical
+JOIN membres ON membres.id = agenda_ical.membre_id AND membres.actif = 1
+WHERE agenda_ical.empreinte = ?;
+
+-- name: NoterLectureIcal :exec
+UPDATE agenda_ical SET lu_le = ? WHERE membre_id = ?;
+
+-- name: SupprimerIcal :exec
+DELETE FROM agenda_ical WHERE membre_id = ?;

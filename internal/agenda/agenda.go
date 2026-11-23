@@ -54,10 +54,17 @@ func Brancher(a *appli.App) {
 	a.Route("GET /agenda", mod, appli.Membre, m.page)
 	a.Route("GET /agenda/contenu", mod, appli.Membre, m.contenu)
 	a.Route("GET /agenda/nouveau", mod, appli.Membre, m.formulaire)
+	a.Route("GET /agenda/calendrier", mod, appli.Membre, m.pageCalendrier)
+	a.Route("POST /agenda/calendrier", mod, appli.Membre, m.creerLien)
+	a.Route("POST /agenda/calendrier/couper", mod, appli.Membre, m.couperLien)
+	// Flux iCalendar : sans session, le lien secret suffit.
+	a.Mux.HandleFunc("GET /ical/{jeton}", m.flux)
 	a.Route("POST /agenda", mod, appli.Membre, m.creer)
 	a.Route("GET /agenda/{id}", mod, appli.Membre, m.formulaire)
 	a.Route("POST /agenda/{id}", mod, appli.Membre, m.modifier)
 	a.Route("POST /agenda/{id}/supprimer", mod, appli.Parent, m.supprimer)
+	a.Route("POST /agenda/{id}/sauter", mod, appli.Membre, m.sauter)
+	a.Route("POST /agenda/{id}/retablir", mod, appli.Membre, m.retablir)
 
 	a.AjouterResume(mod, m.resume)
 	a.AjouterEcheances(mod, m.echeances)
@@ -191,9 +198,13 @@ func (m *Module) Occurrences(ctx context.Context, c *appli.Contexte, debut, fin 
 			return nil, err
 		}
 	}
+	annulees, err := m.exceptions(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	var out []Occurrence
 	for _, e := range evts {
-		for _, dates := range deplier(e, c.Lieu, debut, fin) {
+		for _, dates := range deplierSans(e, c.Lieu, debut, fin, annulees[e.ID]) {
 			out = append(out, Occurrence{Evt: e, Debut: dates[0], Fin: dates[1], Membres: parEvt[e.ID], Contacts: cites[e.ID]})
 		}
 	}
@@ -377,6 +388,12 @@ type formEvt struct {
 	Jour       string // événement qui revient, ouvert depuis une de ses dates (2026-12-01)
 	JourTitre  string // « Mardi 1er décembre »
 	Retour     string // date de la semaine où revenir
+	Annulees   []jourAnnule
+}
+
+// jourAnnule : une fois annulée d'un événement qui revient.
+type jourAnnule struct {
+	Cle, Titre string
 }
 
 // caseJour : une case « lun … dim » de la répétition « certains jours ».
@@ -452,6 +469,16 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			f.Choisis[p.MembreID] = true
 		}
 		if e.Repetition != "" {
+			jours, err := m.a.Q.ExceptionsEvenement(ctx, e.ID)
+			if err != nil {
+				m.a.ErreurInterne(w, r, err)
+				return
+			}
+			for _, j := range jours {
+				if d, err := time.ParseInLocation("2006-01-02", j, c.Lieu); err == nil && !d.Before(minuit(c.Maintenant())) {
+					f.Annulees = append(f.Annulees, jourAnnule{Cle: j, Titre: appli.DateLongue(d)})
+				}
+			}
 			if j, err := time.ParseInLocation("2006-01-02", r.URL.Query().Get("jour"), c.Lieu); err == nil {
 				f.Jour, f.JourTitre = repetition.CleJour(j), appli.DateLongue(j)
 			}
@@ -780,12 +807,22 @@ func (m *Module) echeances(ctx context.Context, f donnees.Famille, debut, fin ti
 	if err != nil {
 		return nil, err
 	}
+	var ids []int64
+	for _, e := range evts {
+		if e.Rappel == 1 {
+			ids = append(ids, e.ID)
+		}
+	}
+	annulees, err := m.exceptions(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
 	var out []appli.Echeance
 	for _, e := range evts {
 		if e.Rappel == 0 {
 			continue
 		}
-		for _, dates := range deplier(e, debut.Location(), debut, fin) {
+		for _, dates := range deplierSans(e, debut.Location(), debut, fin, annulees[e.ID]) {
 			if dates[0].Before(debut) {
 				continue
 			}

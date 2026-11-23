@@ -12,8 +12,19 @@
   <label class="champ"><span>Pour qui ?</span>
     <select name="assigne">
       <option value="0">Tout le monde</option>
+      <option value="tour"{{if .Tache.Tour}} selected{{end}}>🔄 À tour de rôle…</option>
       {{- range .Membres}}<option value="{{.ID}}"{{if and $.Donnees.Tache.AssigneA.Valid (eq .ID $.Donnees.Tache.AssigneA.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}
     </select></label>
+  {{/* Montré seulement pour « À tour de rôle » (CSS :has, pas de script). */}}
+  <fieldset class="qui tour-membres">
+    <legend>Qui se relaie ? <small>(à chaque fois, le suivant)</small></legend>
+    <div class="choix-membres">
+      {{- range .Membres}}
+      <label><input type="checkbox" name="tour" value="{{.ID}}"{{if index $.Donnees.DansTour .ID}} checked{{end}}>
+        <span class="pastille c{{.Couleur}}">{{.Nom}}</span></label>
+      {{- end}}
+    </div>
+  </fieldset>
   {{template "choix-repetition" .Regle}}
   <div class="boutons"><button class="bouton">{{if .Nouvelle}}Ajouter la tâche{{else}}Enregistrer{{end}}</button></div>
 </form>

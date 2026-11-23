@@ -97,9 +97,7 @@ func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin t
 				continue
 			}
 			e := appli.ElementJour{Jour: cle, Emoji: x.t.Emoji, Titre: x.t.Titre, URL: "/taches", Module: mod}
-			if x.t.AssigneA.Valid {
-				e.Membre = parID[x.t.AssigneA.Int64]
-			}
+			e.Membre = assigneLe(x.t, x.regle, j, parID)
 			out = append(out, e)
 			ids = append(ids, x.t.ID)
 		}
@@ -150,7 +148,8 @@ func DevinerEmoji(titre string) string {
 type ligneTache struct {
 	donnees.Tache
 	Regle      repetition.Regle
-	Assigne    *donnees.Membre
+	Assigne    *donnees.Membre   // à qui revient la tâche aujourd'hui
+	Tour       []*donnees.Membre // tour de rôle (vide : pas de tour)
 	Faite      bool
 	ParQui     *donnees.Membre
 	FaiteLe    string // « 18:42 »
@@ -200,6 +199,37 @@ func modifiable(c *appli.Contexte, t donnees.Tache) bool {
 	return appli.PeutModifier(c, t.CreePar.Int64, t.CreePar.Valid)
 }
 
+// membresTour : les membres du tour de rôle, dans l'ordre (ceux qui ont
+// quitté la famille sont sautés).
+func membresTour(t donnees.Tache, parID map[int64]*donnees.Membre) []*donnees.Membre {
+	if t.Tour == "" {
+		return nil
+	}
+	var out []*donnees.Membre
+	for _, x := range strings.Split(t.Tour, ",") {
+		if id, err := strconv.ParseInt(x, 10, 64); err == nil && parID[id] != nil {
+			out = append(out, parID[id])
+		}
+	}
+	return out
+}
+
+// assigneLe : à qui revient la tâche le jour j (tour de rôle, ou membre
+// choisi ; nil : tout le monde).
+func assigneLe(t donnees.Tache, regle repetition.Regle, j time.Time, parID map[int64]*donnees.Membre) *donnees.Membre {
+	if tour := membresTour(t, parID); len(tour) > 0 {
+		n := regle.Numero(j) % int64(len(tour))
+		if n < 0 {
+			n += int64(len(tour))
+		}
+		return tour[n]
+	}
+	if t.AssigneA.Valid {
+		return parID[t.AssigneA.Int64]
+	}
+	return nil
+}
+
 // etat : les tâches actives de la famille et leur état aujourd'hui.
 func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map[int64]*donnees.Membre, []donnees.Membre, error) {
 	depuis := debutDuJour(c)
@@ -222,9 +252,7 @@ func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map
 		cle, l.AFaire = l.Regle.Occurrence(maintenant)
 		cles[cle] = true
 		clesLignes = append(clesLignes, cle)
-		if t.AssigneA.Valid {
-			l.Assigne = parID[t.AssigneA.Int64]
-		}
+		l.Assigne, l.Tour = assigneLe(t, l.Regle, maintenant, parID), membresTour(t, parID)
 		l.Modifiable = modifiable(c, t)
 		lignes = append(lignes, l)
 	}
@@ -268,7 +296,7 @@ func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map
 // pourMembre : la tâche concerne-t-elle ce membre (ou tout le monde) ?
 // Une tâche confiée à un membre retiré de la famille revient à tout le monde.
 func pourMembre(l ligneTache, id int64) bool {
-	return id == 0 || !l.AssigneA.Valid || l.Assigne == nil || l.AssigneA.Int64 == id
+	return id == 0 || l.Assigne == nil || l.Assigne.ID == id
 }
 
 func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour int64) (*vueTaches, error) {
@@ -389,10 +417,11 @@ type formTache struct {
 	Regle    repetition.Regle
 	Membres  []donnees.Membre
 	Nouvelle bool
+	DansTour map[int64]bool // membres du tour de rôle
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	f := &formTache{Nouvelle: r.PathValue("id") == ""}
+	f := &formTache{Nouvelle: r.PathValue("id") == "", DansTour: map[int64]bool{}}
 	if !f.Nouvelle {
 		t, err := m.tache(r, c)
 		if err != nil {
@@ -404,6 +433,11 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Tache, f.Regle = t, repetition.Lire(t.Repetition)
+		for _, x := range strings.Split(t.Tour, ",") {
+			if id, err := strconv.ParseInt(x, 10, 64); err == nil {
+				f.DansTour[id] = true
+			}
+		}
 	}
 	var err error
 	if f.Membres, err = m.a.Membres(r.Context(), c); err != nil {
@@ -417,30 +451,73 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	m.a.Afficher(w, r, c, "taches/formulaire", titre, mod, f)
 }
 
-// lireFormulaire : titre, membre et répétition d'une tâche.
-func (m *Module) lireFormulaire(r *http.Request, c *appli.Contexte) (titre string, assigne sql.NullInt64, regle repetition.Regle, msg string) {
+// saisieTache : une tâche lue dans le formulaire.
+type saisieTache struct {
+	titre   string
+	assigne sql.NullInt64
+	tour    string  // « 3,5,7 » : à tour de rôle
+	pour    []int64 // à notifier (membre choisi ou ceux du tour)
+	regle   repetition.Regle
+}
+
+// lireFormulaire : titre, membre (ou tour de rôle) et répétition d'une tâche.
+func (m *Module) lireFormulaire(r *http.Request, c *appli.Contexte) (s saisieTache, msg string) {
 	if err := r.ParseForm(); err != nil {
-		return "", assigne, regle, "Formulaire invalide."
+		return s, "Formulaire invalide."
 	}
-	titre = strings.TrimSpace(r.PostForm.Get("titre"))
-	if n := utf8.RuneCountInString(titre); n < 1 || n > 80 {
-		return "", assigne, regle, "Le titre doit faire entre 1 et 80 caractères."
+	s.titre = strings.TrimSpace(r.PostForm.Get("titre"))
+	if n := utf8.RuneCountInString(s.titre); n < 1 || n > 80 {
+		return s, "Le titre doit faire entre 1 et 80 caractères."
 	}
-	if id, err := strconv.ParseInt(r.PostForm.Get("assigne"), 10, 64); err == nil && id > 0 {
-		if _, err := m.a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: id, FamilleID: c.Famille.ID}); err != nil {
-			return "", assigne, regle, "Membre inconnu."
+	membre := func(v string) (int64, bool) {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || id <= 0 {
+			return 0, false
 		}
-		assigne = sql.NullInt64{Int64: id, Valid: true}
+		_, err = m.a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: id, FamilleID: c.Famille.ID})
+		return id, err == nil
 	}
-	regle, err := repetition.DepuisFormulaire(r.PostForm)
-	if err != nil {
-		return "", assigne, regle, err.Error()
+	switch v := r.PostForm.Get("assigne"); v {
+	case "tour":
+		// À tour de rôle : deux membres au moins, chacun une fois.
+		var ids []string
+		vus := map[int64]bool{}
+		if len(r.PostForm["tour"]) > 20 {
+			return s, "Trop de membres."
+		}
+		for _, x := range r.PostForm["tour"] {
+			id, ok := membre(x)
+			if !ok {
+				return s, "Membre inconnu."
+			}
+			if !vus[id] {
+				vus[id] = true
+				ids = append(ids, strconv.FormatInt(id, 10))
+				s.pour = append(s.pour, id)
+			}
+		}
+		if len(ids) < 2 {
+			return s, "À tour de rôle : cochez au moins deux personnes."
+		}
+		s.tour = strings.Join(ids, ",")
+	case "", "0":
+	default:
+		id, ok := membre(v)
+		if !ok {
+			return s, "Membre inconnu."
+		}
+		s.assigne = sql.NullInt64{Int64: id, Valid: true}
+		s.pour = []int64{id}
 	}
-	return titre, assigne, regle, ""
+	var err error
+	if s.regle, err = repetition.DepuisFormulaire(r.PostForm); err != nil {
+		return s, err.Error()
+	}
+	return s, ""
 }
 
 func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	titre, assigne, regle, msg := m.lireFormulaire(r, c)
+	s, msg := m.lireFormulaire(r, c)
 	if msg != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
@@ -453,19 +530,15 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		return
 	}
 	t, err := m.a.Q.CreerTache(r.Context(), donnees.CreerTacheParams{
-		FamilleID: c.Famille.ID, Titre: titre, Emoji: DevinerEmoji(titre), AssigneA: assigne,
-		Repetition: regle.String(), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+		FamilleID: c.Famille.ID, Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour,
+		Repetition: s.regle.String(), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	// Confiée à quelqu'un : lui seul est notifié.
-	var pour []int64
-	if assigne.Valid {
-		pour = []int64{assigne.Int64}
-	}
-	m.a.PublierPour(c, mod, fmt.Sprintf("%s a ajouté la tâche « %s » %s", c.Membre.Nom, t.Titre, t.Emoji), pour)
+	// Confiée à quelqu'un (ou à tour de rôle) : seuls eux sont notifiés.
+	m.a.PublierPour(c, mod, fmt.Sprintf("%s a ajouté la tâche « %s » %s", c.Membre.Nom, t.Titre, t.Emoji), s.pour)
 	m.a.Flash(w, "Tâche ajoutée ✓")
 	m.a.Rediriger(w, r, "/taches")
 }
@@ -480,13 +553,14 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.Echec(w, r, http.StatusForbidden, "Seul un parent (ou qui l'a créée) peut la modifier.")
 		return
 	}
-	titre, assigne, regle, msg := m.lireFormulaire(r, c)
+	s, msg := m.lireFormulaire(r, c)
 	if msg != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
+	regle := s.regle
 	if err := m.a.Q.ModifierTache(r.Context(), donnees.ModifierTacheParams{
-		Titre: titre, Emoji: DevinerEmoji(titre), AssigneA: assigne, Repetition: regle.String(), ID: t.ID, FamilleID: c.Famille.ID,
+		Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour, Repetition: regle.String(), ID: t.ID, FamilleID: c.Famille.ID,
 	}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -608,7 +682,7 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	}
 	moi := 0
 	for _, t := range l {
-		if t.AssigneA.Valid && t.AssigneA.Int64 == c.Membre.ID {
+		if t.Assigne != nil && t.Assigne.ID == c.Membre.ID {
 			moi++
 		}
 	}

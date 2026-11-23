@@ -11,6 +11,20 @@ import (
 	"strings"
 )
 
+const ajouterException = `-- name: AjouterException :exec
+INSERT INTO evenements_exceptions (evenement_id, jour) VALUES (?, ?) ON CONFLICT DO NOTHING
+`
+
+type AjouterExceptionParams struct {
+	EvenementID int64
+	Jour        string
+}
+
+func (q *Queries) AjouterException(ctx context.Context, arg AjouterExceptionParams) error {
+	_, err := q.db.ExecContext(ctx, ajouterException, arg.EvenementID, arg.Jour)
+	return err
+}
+
 const ajouterParticipant = `-- name: AjouterParticipant :exec
 INSERT OR IGNORE INTO evenements_membres (evenement_id, membre_id) VALUES (?, ?)
 `
@@ -31,6 +45,17 @@ SELECT count(*) FROM evenements WHERE famille_id = ?
 
 func (q *Queries) CompterEvenements(ctx context.Context, familleID int64) (int64, error) {
 	row := q.db.QueryRowContext(ctx, compterEvenements, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const compterExceptions = `-- name: CompterExceptions :one
+SELECT count(*) FROM evenements_exceptions WHERE evenement_id = ?
+`
+
+func (q *Queries) CompterExceptions(ctx context.Context, evenementID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterExceptions, evenementID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -265,6 +290,106 @@ func (q *Queries) EvenementsPeriode(ctx context.Context, arg EvenementsPeriodePa
 	return items, nil
 }
 
+const exceptionsDesEvenements = `-- name: ExceptionsDesEvenements :many
+SELECT evenement_id, jour FROM evenements_exceptions WHERE evenement_id IN (/*SLICE:ids*/?)
+`
+
+// Fois annulees des evenements lus.
+func (q *Queries) ExceptionsDesEvenements(ctx context.Context, ids []int64) ([]EvenementsException, error) {
+	query := exceptionsDesEvenements
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EvenementsException{}
+	for rows.Next() {
+		var i EvenementsException
+		if err := rows.Scan(&i.EvenementID, &i.Jour); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const exceptionsEvenement = `-- name: ExceptionsEvenement :many
+SELECT jour FROM evenements_exceptions WHERE evenement_id = ? ORDER BY jour
+`
+
+func (q *Queries) ExceptionsEvenement(ctx context.Context, evenementID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, exceptionsEvenement, evenementID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var jour string
+		if err := rows.Scan(&jour); err != nil {
+			return nil, err
+		}
+		items = append(items, jour)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const icalMembre = `-- name: IcalMembre :one
+SELECT cree_le, lu_le FROM agenda_ical WHERE membre_id = ?
+`
+
+type IcalMembreRow struct {
+	CreeLe int64
+	LuLe   int64
+}
+
+func (q *Queries) IcalMembre(ctx context.Context, membreID int64) (IcalMembreRow, error) {
+	row := q.db.QueryRowContext(ctx, icalMembre, membreID)
+	var i IcalMembreRow
+	err := row.Scan(&i.CreeLe, &i.LuLe)
+	return i, err
+}
+
+const icalParEmpreinte = `-- name: IcalParEmpreinte :one
+SELECT agenda_ical.membre_id, agenda_ical.famille_id FROM agenda_ical
+JOIN membres ON membres.id = agenda_ical.membre_id AND membres.actif = 1
+WHERE agenda_ical.empreinte = ?
+`
+
+type IcalParEmpreinteRow struct {
+	MembreID  int64
+	FamilleID int64
+}
+
+// Le lien d'un membre encore actif seulement.
+func (q *Queries) IcalParEmpreinte(ctx context.Context, empreinte []byte) (IcalParEmpreinteRow, error) {
+	row := q.db.QueryRowContext(ctx, icalParEmpreinte, empreinte)
+	var i IcalParEmpreinteRow
+	err := row.Scan(&i.MembreID, &i.FamilleID)
+	return i, err
+}
+
 const modifierEvenement = `-- name: ModifierEvenement :exec
 UPDATE evenements SET titre = ?, lieu = ?, note = ?, debut = ?, fin = ?, journee = ?, repetition = ?, repetition_fin = ?, rappel = ?
 WHERE id = ? AND famille_id = ?
@@ -298,6 +423,20 @@ func (q *Queries) ModifierEvenement(ctx context.Context, arg ModifierEvenementPa
 		arg.ID,
 		arg.FamilleID,
 	)
+	return err
+}
+
+const noterLectureIcal = `-- name: NoterLectureIcal :exec
+UPDATE agenda_ical SET lu_le = ? WHERE membre_id = ?
+`
+
+type NoterLectureIcalParams struct {
+	LuLe     int64
+	MembreID int64
+}
+
+func (q *Queries) NoterLectureIcal(ctx context.Context, arg NoterLectureIcalParams) error {
+	_, err := q.db.ExecContext(ctx, noterLectureIcal, arg.LuLe, arg.MembreID)
 	return err
 }
 
@@ -368,6 +507,44 @@ func (q *Queries) ParticipantsDesEvenements(ctx context.Context, evenements []in
 	return items, nil
 }
 
+const poserIcal = `-- name: PoserIcal :exec
+
+INSERT INTO agenda_ical (membre_id, famille_id, empreinte, cree_le) VALUES (?, ?, ?, ?)
+ON CONFLICT (membre_id) DO UPDATE SET empreinte = excluded.empreinte, cree_le = excluded.cree_le, lu_le = 0
+`
+
+type PoserIcalParams struct {
+	MembreID  int64
+	FamilleID int64
+	Empreinte []byte
+	CreeLe    int64
+}
+
+// Lien secret de l'agenda (calendrier du telephone).
+func (q *Queries) PoserIcal(ctx context.Context, arg PoserIcalParams) error {
+	_, err := q.db.ExecContext(ctx, poserIcal,
+		arg.MembreID,
+		arg.FamilleID,
+		arg.Empreinte,
+		arg.CreeLe,
+	)
+	return err
+}
+
+const retirerException = `-- name: RetirerException :exec
+DELETE FROM evenements_exceptions WHERE evenement_id = ? AND jour = ?
+`
+
+type RetirerExceptionParams struct {
+	EvenementID int64
+	Jour        string
+}
+
+func (q *Queries) RetirerException(ctx context.Context, arg RetirerExceptionParams) error {
+	_, err := q.db.ExecContext(ctx, retirerException, arg.EvenementID, arg.Jour)
+	return err
+}
+
 const supprimerEvenement = `-- name: SupprimerEvenement :exec
 DELETE FROM evenements WHERE id = ? AND famille_id = ?
 `
@@ -379,6 +556,15 @@ type SupprimerEvenementParams struct {
 
 func (q *Queries) SupprimerEvenement(ctx context.Context, arg SupprimerEvenementParams) error {
 	_, err := q.db.ExecContext(ctx, supprimerEvenement, arg.ID, arg.FamilleID)
+	return err
+}
+
+const supprimerIcal = `-- name: SupprimerIcal :exec
+DELETE FROM agenda_ical WHERE membre_id = ?
+`
+
+func (q *Queries) SupprimerIcal(ctx context.Context, membreID int64) error {
+	_, err := q.db.ExecContext(ctx, supprimerIcal, membreID)
 	return err
 }
 
