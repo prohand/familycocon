@@ -65,3 +65,14 @@ func TestErreursRegroupees(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionMax(t *testing.T) {
+	c, err := LireDepuis(envDe(nil))
+	if err != nil || c.SessionMax != 365*24*time.Hour {
+		t.Fatalf("défaut : %v %v", c.SessionMax, err)
+	}
+	// Plus court que la durée d'inactivité : refusé.
+	if _, err := LireDepuis(envDe(map[string]string{"FC_DUREE_SESSION_JOURS": "90", "FC_SESSION_MAX_JOURS": "30"})); err == nil || !strings.Contains(err.Error(), "FC_SESSION_MAX_JOURS") {
+		t.Fatalf("30 < 90 accepté : %v", err)
+	}
+}

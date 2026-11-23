@@ -26,7 +26,7 @@ de la double authentification et des cartes de fidélité, ~30 Ko, BSD). Rien d'
 ## 2. Configuration
 Variables d'environnement (`.env.exemple`) : `FC_URL_PUBLIQUE`, `FC_PROXYS`,
 `FC_INSCRIPTIONS`, `FC_NIVEAU_LOGS`, `FC_FORMAT_LOGS`, `FC_SAUVEGARDE_HEURE`,
-`FC_SAUVEGARDE_GARDER`, `FC_DUREE_SESSION_JOURS`, `FC_CONTACT_PUSH`, `GOMEMLIMIT`.
+`FC_SAUVEGARDE_GARDER`, `FC_DUREE_SESSION_JOURS`, `FC_SESSION_MAX_JOURS`, `FC_CONTACT_PUSH`, `GOMEMLIMIT`.
 Le fuseau horaire et la monnaie se règlent **dans l'interface** (réglages de la famille).
 
 ## 3. Base
@@ -174,4 +174,4 @@ Aucun accès aux données d'une autre famille n'a été trouvé.
 
 Non corrigé (choix à faire) : changer de mot de passe ne retire pas les
 passkeys ; un inconnu peut bloquer un compte 15 min et plus en ratant le mot
-de passe (la passkey reste possible) ; sessions glissantes sans durée maximale.
+de passe (la passkey reste possible) ; sessions glissantes sans durée maximale (corrigé : FC_SESSION_MAX_JOURS, 1 an par défaut).

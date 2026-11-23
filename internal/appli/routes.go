@@ -37,7 +37,7 @@ const (
 // la session est exigé, en plus du contrôle d'origine global.
 func (a *App) Route(motif, module string, acces Acces, h Gestionnaire) {
 	a.Mux.HandleFunc(motif, func(w http.ResponseWriter, r *http.Request) {
-		c, err := a.lireSession(r)
+		c, err := a.lireSession(w, r)
 		if err != nil {
 			a.ErreurInterne(w, r, err)
 			return

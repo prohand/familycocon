@@ -101,7 +101,7 @@ func (a *App) afficherAnonyme(w http.ResponseWriter, r *http.Request, statut int
 }
 
 func (a *App) pageConnexion(w http.ResponseWriter, r *http.Request) {
-	if c, _ := a.lireSession(r); c != nil {
+	if c, _ := a.lireSession(w, r); c != nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}

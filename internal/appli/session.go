@@ -118,7 +118,7 @@ func (a *App) FermerSession(w http.ResponseWriter, r *http.Request) {
 }
 
 // lireSession : le contexte du membre connecté, ou nil.
-func (a *App) lireSession(r *http.Request) (*Contexte, error) {
+func (a *App) lireSession(w http.ResponseWriter, r *http.Request) (*Contexte, error) {
 	ck, err := r.Cookie(a.nomCookie("fc_session"))
 	if err != nil || len(ck.Value) != 43 {
 		return nil, nil
@@ -132,12 +132,23 @@ func (a *App) lireSession(r *http.Request) (*Contexte, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Session glissante : prolongée au plus une fois par heure.
+	// Trop ancienne (durée maximale dépassée) : fermée, il faut se reconnecter.
+	if ligne.Session.CreeLe+int64(a.Config.SessionMax/time.Second) <= t.Unix() {
+		_ = a.Q.SupprimerSession(r.Context(), empreinte)
+		return nil, nil
+	}
+	// Session glissante (prolongée au plus une fois par heure), mais jamais
+	// au-delà de SessionMax après la connexion : un cookie volé ne sert pas
+	// indéfiniment. Le cookie du navigateur suit la même échéance.
 	if t.Unix()-ligne.Session.VueLe > 3600 {
+		expire := min(t.Add(a.Config.DureeSession).Unix(), ligne.Session.CreeLe+int64(a.Config.SessionMax/time.Second))
 		if err := a.Q.ProlongerSession(r.Context(), donnees.ProlongerSessionParams{
-			VueLe: t.Unix(), ExpireLe: t.Add(a.Config.DureeSession).Unix(), Empreinte: empreinte,
+			VueLe: t.Unix(), ExpireLe: expire, Empreinte: empreinte,
 		}); err != nil {
 			return nil, err
+		}
+		if w != nil && expire > t.Unix() {
+			a.poserCookie(w, "fc_session", ck.Value, time.Duration(expire-t.Unix())*time.Second)
 		}
 	}
 	return a.NouveauContexte(ligne.Membre, ligne.Famille, ligne.Session.JetonCsrf, empreinte), nil
