@@ -73,6 +73,9 @@ type vueFiche struct {
 	Modifier, Supprimer string
 	KmURL               string // formulaire « kilométrage » (véhicules)
 	FuelioURL           string // reprise d'une sauvegarde Fuelio (véhicules, parents)
+	Kilometrage         int64  // compteur noté sur le véhicule
+	Ouvrir              string // fenêtre d'ajout à ouvrir (« plein », « entretien »)
+	Autres              []Lien // les autres véhicules (fenêtre « Ajouter un plein »)
 	Contacts            []ContactCite
 }
 
@@ -142,12 +145,27 @@ func (m *Module) afficherFiche(w http.ResponseWriter, r *http.Request, c *appli.
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	// Véhicules : onglet « Pleins » (graphiques sur 12 mois ou depuis le début).
-	if b.Onglets && r.URL.Query().Get("onglet") == suivi.OngletPleins {
-		if err := m.s.ChargerPleins(r.Context(), c, b, r.URL.Query().Get("periode")); err != nil {
+	// Véhicules : onglets « Pleins » et « Chiffres », fenêtres d'ajout.
+	if b.Onglets {
+		ctx, q := r.Context(), r.URL.Query()
+		var err error
+		switch q.Get("onglet") {
+		case suivi.OngletPleins:
+			b.Onglet = suivi.OngletPleins
+			err = m.s.ChargerPleins(ctx, c, b)
+		case suivi.OngletChiffres:
+			b.Onglet = suivi.OngletChiffres
+			err = m.s.ChargerChiffres(ctx, c, b, q.Get("periode"), q.Get("du"), q.Get("au"))
+		}
+		if err == nil {
+			err = m.s.ChargerAjout(ctx, c, b)
+		}
+		if err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		}
+		b.Compteur = max(b.KmMax, v.Kilometrage)
+		v.Ouvrir = q.Get("ajout") // « plein » ou « entretien » : fenêtre ouverte tout de suite
 	}
 	v.Suivi = b
 	m.a.Afficher(w, r, c, "foyer/fiche", v.Nom, module, v)

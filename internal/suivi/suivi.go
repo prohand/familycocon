@@ -162,14 +162,20 @@ type Bloc struct {
 	Pieces        map[int64][]donnees.Piece // photos (tickets) par ligne, parents seulement
 	CoutKm        string                    // « 0,18 € / km » (véhicules)
 	Conso         string                    // « 6,4 L / 100 km » (véhicules, avec des pleins notés)
-	// Véhicules : onglets « Entretien » et « Pleins » (voir pleins.go).
+	// Véhicules : onglets « Entretien », « Pleins » et « Chiffres » (voir pleins.go).
 	Onglets        bool
-	Onglet         string     // OngletEntretien ou OngletPleins
-	Pleins         *VuePleins // onglet « Pleins » (rempli par ChargerPleins)
+	Onglet         string       // OngletEntretien, OngletPleins ou OngletChiffres
+	Pleins         *VuePleins   // onglet « Pleins » (rempli par ChargerPleins)
+	Chiffres       *VueChiffres // onglet « Chiffres » (rempli par ChargerChiffres)
+	Ajout          *AjoutPlein  // fenêtre « Ajouter un plein » (ChargerAjout)
+	Compteur       int64        // kilométrage connu (le plus haut noté)
+	KmMax          int64        // kilométrage le plus haut du carnet
 	NbPleins       int64
 	NbEntretiens   int64
 	CarburantAnnee int64
 	EntretienAnnee int64
+	DepenseAnnee   int64 // carburant et entretien de l'année (résumé)
+	Annee          int
 }
 
 // Bloc : les échéances et le carnet de l'objet.
@@ -199,6 +205,7 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 			return nil, err
 		}
 		b.NbPleins, b.NbEntretiens, b.CarburantAnnee, b.EntretienAnnee = t.Pleins, t.Entretiens, t.CarburantAnnee, t.EntretienAnnee
+		b.DepenseAnnee, b.Annee = t.CarburantAnnee+t.EntretienAnnee, auj.Year()
 	} else if b.Carnet, err = s.a.Q.CarnetObjet(ctx, donnees.CarnetObjetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet}); err != nil {
 		return nil, err
 	}
@@ -243,6 +250,7 @@ func (s *Suivi) statsKm(ctx context.Context, c *appli.Contexte, b *Bloc) error {
 	if err != nil {
 		return err
 	}
+	b.KmMax = km.Maxi
 	if d := km.Maxi - km.Mini; d >= 100 && b.Total > 0 {
 		b.CoutKm = appli.Montant(b.Total*100/d, c.Famille.Devise) + " pour 100 km"
 	}

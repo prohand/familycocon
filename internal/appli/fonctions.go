@@ -64,10 +64,12 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		"moisRepetition": func() []int64 { return []int64{0, 1, 3, 6, 12, 24} },
 		"texteMois":      TexteMois,
 		// {{litres 4250}} → 42,5 (centilitres)
+		// {{litres 851}} → 8,51 ; 4110 → 41,1 ; 4000 → 40 (au centilitre : le
+		// formulaire « Corriger » ne doit rien arrondir).
 		"litres": func(cl int64) string {
 			s := strconv.FormatInt(cl/100, 10)
-			if d := cl % 100 / 10; d != 0 {
-				s += "," + strconv.FormatInt(d, 10)
+			if d := cl % 100; d != 0 {
+				s += strings.TrimRight(fmt.Sprintf(",%02d", d), "0")
 			}
 			return s
 		},

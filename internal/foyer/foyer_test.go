@@ -187,10 +187,11 @@ func TestCarnetAmeliore(t *testing.T) {
 	if _, e := marie.Get("/vehicules/" + id); !strings.Contains(e, "21,00") || strings.Contains(e, "45,00") {
 		t.Fatalf("onglet entretien :\n%s", e)
 	}
-	_, page = marie.Get("/vehicules/" + id + "?onglet=pleins")
+	_, page = marie.Get("/vehicules/" + id + "?onglet=chiffres&periode=tout")
 	if !strings.Contains(page, "6,0 L / 100 km") || !strings.Contains(page, "21,00") || !strings.Contains(page, "pour 100 km") {
 		t.Fatalf("consommation ou coût au km :\n%s", page)
 	}
+	_, page = marie.Get("/vehicules/" + id + "?onglet=pleins")
 	if _, b := marie.Get("/budget?mois=2026-11"); !strings.Contains(b, "Plein · La Clio") || !strings.Contains(b, "45,00") {
 		t.Fatalf("dépense absente du budget :\n%s", b)
 	}
@@ -321,22 +322,24 @@ func TestOngletPleins(t *testing.T) {
 	if code != 200 {
 		t.Fatalf("ajout : %d", code)
 	}
-	// Ajouter un plein ramène sur l'onglet des pleins.
+	// Ajouter un plein ramène sur l'onglet des pleins : la liste, avec la
+	// consommation de chaque plein complet.
 	_, page = marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": jour(10), "km": "21300", "litres": "20", "montant": "37"})
-	if !strings.Contains(page, "Prix moyen du litre") {
-		t.Fatal("après un plein : pas sur l'onglet des pleins")
+	if !strings.Contains(page, "⛽ Les pleins") || !strings.Contains(page, "· Plein partiel<small>") || !strings.Contains(page, "· 4,0 L/100") {
+		t.Fatalf("après un plein : pas sur l'onglet des pleins\n%s", page)
 	}
-	// (10 + 30) L sur 800 km = 5,0 ; puis 20 L sur 500 km = 4,0 : 60 L / 1 300 km = 4,6.
-	for _, attendu := range []string{"4,6 L / 100 km", "Consommation à chaque plein", "Prix du litre", "Dépenses par mois", "Kilomètres parcourus", "<svg class=\"graphique\"", "Plein partiel"} {
-		if !strings.Contains(page, attendu) {
-			t.Errorf("onglet pleins sans « %s »", attendu)
-		}
-	}
-	if strings.Contains(page, "Vidange</span>") {
+	if strings.Contains(page, "Vidange<small>") {
 		t.Error("entretien dans l'onglet des pleins")
 	}
+	// Chiffres : (10 + 30) L sur 800 km = 5,0 ; puis 20 L sur 500 km = 4,0 : 60 L / 1 300 km = 4,6.
+	_, page = marie.Get("/vehicules/" + id + "?onglet=chiffres")
+	for _, attendu := range []string{"4,6 L / 100 km", "Consommation à chaque plein", "Prix du litre", "Dépenses par mois", "Kilomètres parcourus", "<svg class=\"graphique\"", "sur 12 mois"} {
+		if !strings.Contains(page, attendu) {
+			t.Errorf("onglet chiffres sans « %s »", attendu)
+		}
+	}
 	_, page = marie.Get("/vehicules/" + id)
-	if !strings.Contains(page, "Vidange") || strings.Contains(page, "Plein partiel") {
+	if !strings.Contains(page, "Vidange") || strings.Contains(page, "Plein partiel<small>") {
 		t.Error("onglet entretien")
 	}
 	// Léa (enfant) : les véhicules lui sont fermés.
@@ -361,7 +364,7 @@ func TestCarburantPlein(t *testing.T) {
 		t.Fatalf("carburant non enregistré ou non proposé :\n%s", page)
 	}
 	_, page = marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2026-11-08", "km": "1500", "litres": "30", "carburant": "Kérosène"})
-	if strings.Contains(page, "Kérosène") || !strings.Contains(page, "30 L</small>") {
+	if strings.Contains(page, "Kérosène") || !strings.Contains(page, "30 L<small>") {
 		t.Fatal("carburant hors liste accepté")
 	}
 	// Corrigé en Gazole.
@@ -374,5 +377,47 @@ func TestCarburantPlein(t *testing.T) {
 	_, page = marie.Post(carnet, map[string]string{"libelle": "Vidange", "jour": "2026-11-09", "carburant": "SP98"})
 	if strings.Contains(page, "Vidange<small>") && strings.Contains(page, "· SP98</small>") {
 		t.Fatal("carburant sur une ligne d'entretien")
+	}
+}
+
+// Ajouter un plein d'un geste : raccourci (page Ajouter, icône de l'appli),
+// fenêtre ouverte sur la fiche, carburant et station proposés ; chiffres
+// sur la période choisie.
+func TestAjoutRapidePlein(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		s := suivi.Brancher(a)
+		Brancher(a, s)
+	})
+	marie := essai.Famille(t, srv)
+	if _, page := marie.Get("/vehicules/plein"); !strings.Contains(page, "Nouveau véhicule") {
+		t.Fatal("raccourci sans véhicule : pas vers la création")
+	}
+	_, page := marie.Post("/vehicules", map[string]string{"nom": "Clio", "genre": "voiture", "kilometrage": "1000"})
+	clio := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	_, page = marie.Post("/vehicules", map[string]string{"nom": "Twingo", "genre": "voiture"})
+	twingo := essai.Trouver(t, page, `action="/vehicules/(\d+)/km"`)
+	if _, p := marie.Get("/ajouter"); !strings.Contains(p, `href="/vehicules/plein"`) {
+		t.Error("« Un plein » absent de la page Ajouter")
+	}
+	carnet := "/suivi/vehicules/" + clio + "/carnet"
+	marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2025-03-01", "km": "1000", "litres": "40", "montant": "70", "carburant": "Gazole", "note": "Leclerc"})
+	marie.Post(carnet, map[string]string{"libelle": "Plein", "jour": "2025-03-20", "km": "1500", "litres": "30", "montant": "54", "carburant": "Gazole", "note": "Leclerc"})
+	// Le raccourci ouvre la fiche du véhicule du dernier plein, fenêtre ouverte.
+	_, page = marie.Get("/vehicules/plein")
+	for _, attendu := range []string{`id="fenetre-plein" aria-labelledby="titre-plein" data-auto`, `data-dernier-km="1500"`,
+		`value="Gazole" checked`, `data-valeur="Leclerc"`, "1 500 km", "autre véhicule", `/vehicules/` + twingo + `?ajout=plein`} {
+		if !strings.Contains(page, attendu) {
+			t.Errorf("fenêtre « Ajouter un plein » sans %s", attendu)
+		}
+	}
+	// Chiffres en 2025 : 30 L sur 500 km = 6,0 ; pas de comparaison (2024 vide).
+	_, page = marie.Get("/vehicules/" + clio + "?onglet=chiffres&periode=2025")
+	if !strings.Contains(page, "en 2025") || !strings.Contains(page, "6,0 L / 100 km") || !strings.Contains(page, "70 L") || strings.Contains(page, "Par rapport") {
+		t.Fatalf("chiffres 2025 :\n%s", page)
+	}
+	// Des dates : seulement le second plein.
+	_, page = marie.Get("/vehicules/" + clio + "?onglet=chiffres&periode=dates&du=2025-03-10&au=2025-03-31")
+	if !strings.Contains(page, "du 10/03/2025 au 31/03/2025") || !strings.Contains(page, "30 L") {
+		t.Fatalf("chiffres entre deux dates :\n%s", page)
 	}
 }

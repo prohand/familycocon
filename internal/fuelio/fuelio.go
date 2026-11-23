@@ -398,7 +398,10 @@ func LireCSV(r io.Reader) (Vehicule, error) {
 			continue
 		}
 		x := Ligne{Plein: true, Jour: jour, Libelle: "Plein", Km: km(log.col(l, "Odo")), Cle: log.col(l, "UniqueId"), Guid: log.col(l, "guid")}
-		if log.col(l, "Full") == "0" {
+		// Full : 1 plein complet ; 0 partiel ; 2 partiel dont Fuelio estime
+		// le niveau du réservoir (TankCalc) : partiel aussi pour nous (ses
+		// litres comptent au plein complet suivant).
+		if f := log.col(l, "Full"); f == "0" || f == "2" {
 			x.Libelle = "Plein partiel"
 		}
 		if f, ok := nombre(log.col(l, "Fuel")); ok && f > 0 {

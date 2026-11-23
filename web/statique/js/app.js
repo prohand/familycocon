@@ -401,8 +401,17 @@ document.addEventListener("change", function (e) {
     [["jour", res.jour], ["litres", res.litres], ["montant", res.montant], ["carburant", res.carburant], ["note", res.note]].forEach(function (x) {
       var champ = f.querySelector("[name=" + x[0] + "]");
       if (!champ || !x[1] || (x[0] === "note" && champ.value)) return;
-      champ.value = x[1];
-      champ.classList.add("lu");
+      if (champ.type === "radio") {
+        // Choix en boutons (carburant) : celui lu sur le ticket.
+        var r = f.querySelector("[name=" + x[0] + "][value='" + x[1].replace(/'/g, "") + "']");
+        if (!r) return;
+        r.checked = true;
+        r.closest("label").classList.add("lu");
+      } else {
+        champ.value = x[1];
+        champ.classList.add("lu");
+      }
+      champ.dispatchEvent(new Event("input", { bubbles: true }));
       n++;
     });
     return n;
@@ -415,7 +424,10 @@ document.addEventListener("change", function (e) {
   });
   ["input", "change"].forEach(function (type) {
     document.addEventListener(type, function (e) {
+      if (!e.isTrusted) return;
       if (e.target.classList && e.target.classList.contains("lu")) e.target.classList.remove("lu");
+      var lbl = e.target.type === "radio" && e.target.form && e.target.form.querySelector("label.lu [name=" + e.target.name + "]");
+      if (lbl) lbl.closest("label").classList.remove("lu");
     });
   });
   document.addEventListener("change", function (e) {
@@ -769,4 +781,76 @@ if ("serviceWorker" in navigator) {
       if (window.fcToast) window.fcToast(msg, true);
     }).finally(function () { b.disabled = false; });
   });
+})();
+
+// Fenêtres par-dessus la page (« Ajouter un plein », « Entretien ») :
+// data-ouvrir="id" ouvre, data-fermer ferme ; data-auto : ouverte dès
+// l'arrivée sur la page (raccourci « Ajouter un plein »). Dans la fenêtre du
+// plein : prix au litre calculé, kilométrage comparé au dernier relevé,
+// stations proposées en un toucher.
+(function () {
+  "use strict";
+  function ouvrir(d) {
+    if (!d || d.open) return;
+    if (d.showModal) d.showModal(); else d.setAttribute("open", "");
+  }
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-ouvrir]");
+    if (b) { e.preventDefault(); ouvrir(document.getElementById(b.getAttribute("data-ouvrir"))); return; }
+    var f = e.target.closest && e.target.closest("[data-fermer]");
+    if (f) { var d = f.closest("dialog"); if (d) d.close(); return; }
+    // Toucher le fond (hors de la fenêtre) la ferme.
+    if (e.target.tagName === "DIALOG" && e.target.classList.contains("fenetre")) {
+      var r = e.target.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.target.close();
+    }
+    var p = e.target.closest && e.target.closest("[data-remplir]");
+    if (p) {
+      var champ = p.closest("form").querySelector("[name=" + p.getAttribute("data-remplir") + "]");
+      if (champ) { champ.value = p.getAttribute("data-valeur"); champ.dispatchEvent(new Event("input", { bubbles: true })); }
+    }
+  });
+  function auto() {
+    var d = document.querySelector("dialog.fenetre[data-auto]");
+    if (!d) return;
+    d.removeAttribute("data-auto");
+    ouvrir(d);
+    // L'adresse perd « ajout=… » : recharger la page ne rouvre pas la fenêtre.
+    try {
+      var u = new URL(location.href);
+      u.searchParams.delete("ajout");
+      history.replaceState(history.state, "", u.pathname + u.search + u.hash);
+    } catch (_) { /* rien */ }
+  }
+  document.addEventListener("DOMContentLoaded", auto);
+  document.addEventListener("htmx:afterSettle", auto);
+
+  function nombre(v) { return parseFloat(String(v || "").replace(/\s/g, "").replace(",", ".")); }
+  function milliers(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f"); }
+  document.addEventListener("input", function (e) {
+    var f = e.target.form;
+    if (!f || !f.classList.contains("ajout-plein")) return;
+    var l = nombre(f.litres && f.litres.value), m = nombre(f.montant && f.montant.value);
+    var pl = f.querySelector("[data-prix-litre]");
+    if (pl) pl.textContent = l > 0 && m > 0 ? "= " + (m / l).toFixed(3).replace(".", ",") + " le litre" : "";
+    var etat = f.querySelector("[data-etat-km]"), dernier = parseInt(f.getAttribute("data-dernier-km"), 10) || 0;
+    var km = parseInt(String(f.km.value).replace(/\D/g, ""), 10);
+    if (!etat || !dernier) return;
+    etat.classList.remove("attention");
+    if (!km) { etat.textContent = "Dernier relevé : " + milliers(dernier) + " km"; return; }
+    var d = km - dernier;
+    if (d < 0) { etat.textContent = "⚠️ Moins que le dernier relevé (" + milliers(dernier) + " km) : vérifiez."; etat.classList.add("attention"); }
+    else if (d > 3000) { etat.textContent = "⚠️ +" + milliers(d) + " km depuis le dernier relevé : vérifiez."; etat.classList.add("attention"); }
+    else etat.textContent = "+" + milliers(d) + " km depuis le dernier relevé ✓";
+  });
+
+  // Chiffres : la période choisie, visible dans la rangée de boutons.
+  function centrer() {
+    document.querySelectorAll(".defile .active").forEach(function (a) {
+      var n = a.parentNode;
+      n.scrollLeft = a.offsetLeft - n.offsetLeft - (n.clientWidth - a.offsetWidth) / 2;
+    });
+  }
+  document.addEventListener("DOMContentLoaded", centrer);
+  document.addEventListener("htmx:afterSettle", centrer);
 })();

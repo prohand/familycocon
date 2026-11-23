@@ -321,7 +321,7 @@ SELECT CAST(substr(jour, 1, 7) AS TEXT) AS mois,
   CAST(coalesce(sum(CASE WHEN litres > 0 THEN montant ELSE 0 END), 0) AS INTEGER) AS carburant,
   CAST(coalesce(sum(CASE WHEN litres = 0 THEN montant ELSE 0 END), 0) AS INTEGER) AS entretien
 FROM carnet WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
-  AND jour >= ?4 GROUP BY mois ORDER BY mois
+  AND jour >= ?4 AND jour <= ?5 GROUP BY mois ORDER BY mois
 `
 
 type DepensesMoisObjetParams struct {
@@ -329,6 +329,7 @@ type DepensesMoisObjetParams struct {
 	Module    string
 	ObjetID   int64
 	Du        string
+	Au        string
 }
 
 type DepensesMoisObjetRow struct {
@@ -344,6 +345,7 @@ func (q *Queries) DepensesMoisObjet(ctx context.Context, arg DepensesMoisObjetPa
 		arg.Module,
 		arg.ObjetID,
 		arg.Du,
+		arg.Au,
 	)
 	if err != nil {
 		return nil, err
@@ -383,6 +385,24 @@ func (q *Queries) DernierCarburant(ctx context.Context, arg DernierCarburantPara
 	var carburant string
 	err := row.Scan(&carburant)
 	return carburant, err
+}
+
+const dernierObjetPlein = `-- name: DernierObjetPlein :one
+SELECT objet_id FROM carnet WHERE famille_id = ?1 AND module = ?2 AND litres > 0
+ORDER BY cree_le DESC, id DESC LIMIT 1
+`
+
+type DernierObjetPleinParams struct {
+	FamilleID int64
+	Module    string
+}
+
+// Le vehicule du dernier plein note (raccourci Ajouter un plein).
+func (q *Queries) DernierObjetPlein(ctx context.Context, arg DernierObjetPleinParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, dernierObjetPlein, arg.FamilleID, arg.Module)
+	var objet_id int64
+	err := row.Scan(&objet_id)
+	return objet_id, err
 }
 
 const echeanceParID = `-- name: EcheanceParID :one
@@ -703,6 +723,41 @@ func (q *Queries) ModifierEcheance(ctx context.Context, arg ModifierEcheancePara
 	return err
 }
 
+const notesPleinsRecents = `-- name: NotesPleinsRecents :many
+SELECT note FROM carnet WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
+  AND litres > 0 AND note != '' ORDER BY jour DESC, id DESC LIMIT 30
+`
+
+type NotesPleinsRecentsParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+// Notes des derniers pleins (les stations proposees pour le suivant).
+func (q *Queries) NotesPleinsRecents(ctx context.Context, arg NotesPleinsRecentsParams) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, notesPleinsRecents, arg.FamilleID, arg.Module, arg.ObjetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var note string
+		if err := rows.Scan(&note); err != nil {
+			return nil, err
+		}
+		items = append(items, note)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const pieceParID = `-- name: PieceParID :one
 SELECT id, famille_id, carnet_id, fichier, taille, cree_par, cree_le FROM pieces WHERE id = ? AND famille_id = ?
 `
@@ -910,7 +965,7 @@ func (q *Queries) PleinsObjet(ctx context.Context, arg PleinsObjetParams) ([]Ple
 const pleinsPeriodeObjet = `-- name: PleinsPeriodeObjet :many
 SELECT id, jour, libelle, km, litres, montant FROM carnet
 WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
-  AND litres > 0 AND jour >= ?4 ORDER BY jour, km, id
+  AND litres > 0 AND jour >= ?4 AND jour <= ?5 ORDER BY jour, km, id
 `
 
 type PleinsPeriodeObjetParams struct {
@@ -918,6 +973,7 @@ type PleinsPeriodeObjetParams struct {
 	Module    string
 	ObjetID   int64
 	Du        string
+	Au        string
 }
 
 type PleinsPeriodeObjetRow struct {
@@ -929,13 +985,14 @@ type PleinsPeriodeObjetRow struct {
 	Montant int64
 }
 
-// Pleins d'une periode (du : AAAA-MM-JJ ; '0000' : tout), dans l'ordre.
+// Pleins d'une periode (du, au : AAAA-MM-JJ ; '0000' et '9999' : tout), dans l'ordre.
 func (q *Queries) PleinsPeriodeObjet(ctx context.Context, arg PleinsPeriodeObjetParams) ([]PleinsPeriodeObjetRow, error) {
 	rows, err := q.db.QueryContext(ctx, pleinsPeriodeObjet,
 		arg.FamilleID,
 		arg.Module,
 		arg.ObjetID,
 		arg.Du,
+		arg.Au,
 	)
 	if err != nil {
 		return nil, err
@@ -963,6 +1020,25 @@ func (q *Queries) PleinsPeriodeObjet(ctx context.Context, arg PleinsPeriodeObjet
 		return nil, err
 	}
 	return items, nil
+}
+
+const premierJourObjet = `-- name: PremierJourObjet :one
+SELECT CAST(coalesce(min(jour), '') AS TEXT) FROM carnet
+WHERE famille_id = ?1 AND module = ?2 AND objet_id = ?3
+`
+
+type PremierJourObjetParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+// Premier jour du carnet (annees proposees pour les graphiques).
+func (q *Queries) PremierJourObjet(ctx context.Context, arg PremierJourObjetParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, premierJourObjet, arg.FamilleID, arg.Module, arg.ObjetID)
+	var column_1 string
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const premieresEcheancesModule = `-- name: PremieresEcheancesModule :many
@@ -1004,6 +1080,44 @@ func (q *Queries) PremieresEcheancesModule(ctx context.Context, arg PremieresEch
 		return nil, err
 	}
 	return items, nil
+}
+
+const renommerPleinImporte = `-- name: RenommerPleinImporte :execrows
+UPDATE carnet SET libelle = ?1
+WHERE famille_id = ?2 AND module = ?3 AND objet_id = ?4 AND jour = ?5
+  AND libelle = ?6 AND montant = ?7 AND km = ?8 AND litres = ?9
+`
+
+type RenommerPleinImporteParams struct {
+	Nouveau   string
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+	Jour      string
+	Ancien    string
+	Montant   int64
+	Km        int64
+	Litres    int64
+}
+
+// Import Fuelio : un plein deja repris sous l'autre libelle (complet ou
+// partiel) est corrige, pas ajoute une seconde fois.
+func (q *Queries) RenommerPleinImporte(ctx context.Context, arg RenommerPleinImporteParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, renommerPleinImporte,
+		arg.Nouveau,
+		arg.FamilleID,
+		arg.Module,
+		arg.ObjetID,
+		arg.Jour,
+		arg.Ancien,
+		arg.Montant,
+		arg.Km,
+		arg.Litres,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const reporterEcheanceSiJour = `-- name: ReporterEcheanceSiJour :execrows

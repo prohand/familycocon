@@ -39,6 +39,7 @@ var fuelioUn sync.Mutex
 // fuelioRetour : ce que la reprise a fait.
 type fuelioRetour struct {
 	pleins, depenses, deja, photos, sansLigne int  // sansLigne : photos non jointes
+	corriges                                  int  // pleins déjà là, devenus partiels (ou complets)
 	plein                                     bool // carnet plein : la fin n'est pas reprise
 	ecart                                     fuelio.Ecart
 }
@@ -57,6 +58,9 @@ func (x fuelioRetour) message() string {
 	}
 	if x.deja > 0 {
 		t += fmt.Sprintf(" · %d déjà là", x.deja)
+	}
+	if x.corriges > 0 {
+		t += " · " + appli.Pluriel(x.corriges, "plein corrigé (partiel)", "pleins corrigés (partiels)")
 	}
 	if x.photos > 0 {
 		t += " · " + appli.Pluriel(x.photos, "photo jointe", "photos jointes")
@@ -168,6 +172,20 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 				ret.deja++
 				continue
 			}
+			// Plein repris avant sous l'autre libellé (complet / partiel) :
+			// corrigé sur place.
+			if l.Plein {
+				ancien := map[string]string{"Plein": "Plein partiel", "Plein partiel": "Plein"}[l.Libelle]
+				n, err := q.RenommerPleinImporte(ctx, donnees.RenommerPleinImporteParams{Nouveau: l.Libelle, FamilleID: c.Famille.ID,
+					Module: modVehicules, ObjetID: x.ID, Jour: l.Jour, Ancien: ancien, Montant: l.Montant, Km: l.Km, Litres: l.Litres})
+				if err != nil {
+					return err
+				}
+				if n > 0 {
+					ret.corriges++
+					continue
+				}
+			}
 			if n >= suivi.CarnetMax {
 				ret.plein = true
 				break
@@ -226,7 +244,7 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 			m.a.Journal.Error("fuelio : kilométrage non noté", "erreur", err)
 		}
 	}
-	m.a.Journal.Info("reprise Fuelio", "vehicule", x.ID, "pleins", ret.pleins, "depenses", ret.depenses, "deja", ret.deja,
+	m.a.Journal.Info("reprise Fuelio", "vehicule", x.ID, "pleins", ret.pleins, "depenses", ret.depenses, "deja", ret.deja, "corriges", ret.corriges,
 		"photos", ret.photos, "photos_sans_ligne", ret.sansLigne, "images_zip", len(sv.Images),
 		"depenses_lues", v.Ecart.DepensesLues, "modeles", v.Ecart.Modeles, "recettes", v.Ecart.Recettes,
 		"sans_date", v.Ecart.PleinsSansDate+v.Ecart.DepensesSansDate, "vehicules", len(sv.Vehicules), "nom", v.Nom)
