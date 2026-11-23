@@ -272,16 +272,19 @@ type MissionFaite struct {
 }
 
 type Note struct {
-	ID        int64
-	FamilleID int64
-	AuteurID  sql.NullInt64
-	Titre     string
-	Texte     string
-	Couleur   int64
-	Epinglee  int64
-	Privee    int64
-	CreeLe    int64
-	ModifieLe int64
+	ID           int64
+	FamilleID    int64
+	AuteurID     sql.NullInt64
+	Titre        string
+	Texte        string
+	Couleur      int64
+	Epinglee     int64
+	Privee       int64
+	CreeLe       int64
+	ModifieLe    int64
+	CocheesEnBas int64
+	RappelLe     int64
+	RappelEnvoye int64
 }
 
 type Operation struct {

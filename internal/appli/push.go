@@ -47,6 +47,7 @@ type annonce struct {
 	url             string  // page ouverte au toucher (sinon celle du module)
 	pour            []int64 // membres visés (vide : toute la famille)
 	sauf            []int64 // membres exclus (ils ont reçu leur propre version)
+	toujours        bool    // même aux membres qui ont l'appli ouverte (rappel à une heure dite)
 }
 
 // tailleFile : au-delà, les annonces sont perdues (elles restent visibles
@@ -157,7 +158,7 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 	for _, ab := range abos {
 		// Un rappel du matin ne s'affiche nulle part ailleurs : il part même si
 		// le membre a une page ouverte (un onglet oublié sur l'ordinateur).
-		enLigne := an.module != moduleRappels && p.a.Direct.EnLigne(an.famille, ab.MembreID)
+		enLigne := an.module != moduleRappels && !an.toujours && p.a.Direct.EnLigne(an.famille, ab.MembreID)
 		if !contient(strings.Split(ab.PushModules, ","), an.module) || enLigne ||
 			(an.parents && ab.Role != RoleParent) || (an.sansParents && ab.Role == RoleParent) ||
 			(len(an.pour) > 0 && !slices.Contains(an.pour, ab.MembreID)) || slices.Contains(an.sauf, ab.MembreID) {
@@ -183,6 +184,16 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		}()
 	}
 	groupe.Wait()
+}
+
+// Rappeler : une notification à l'heure demandée (rappel d'une liste…),
+// envoyée même aux membres qui ont l'appli ouverte. pour : membres visés
+// (vide : toute la famille). Tâches de fond seulement (attend une place).
+func (a *App) Rappeler(ctx context.Context, famille int64, module, texte, url string, pour []int64) {
+	if a.Push == nil {
+		return
+	}
+	a.Push.annoncerEnAttendant(ctx, annonce{famille: famille, module: module, texte: texte, url: url, pour: pour, toujours: true})
 }
 
 // envoisSimultanes : envois vers les services de push en même temps.

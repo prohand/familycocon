@@ -1674,3 +1674,40 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 @keyframes g-trace { to { stroke-dashoffset: 0; } }
 @keyframes g-monte { from { transform: scaleY(0); } }
 @keyframes g-apparait { from { opacity: 0; } }
+
+/* Listes : avancement, mode « Ranger », rappel. */
+.tete-liste { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.tete-liste .avancement { flex: 1; color: var(--texte-doux); }
+.tete-liste .avancement b { color: var(--texte); font-size: 1.05rem; }
+.tete-liste form { display: contents; }
+.tete-liste .pilule { font: inherit; font-weight: 800; font-size: .85rem; padding: 6px 12px; }
+.barre-avancement { height: 6px; border-radius: 6px; background: var(--bordure); overflow: hidden; margin-bottom: 10px; }
+.barre-avancement i { display: block; height: 100%; background: var(--corail); transition: width .3s; }
+.barre-avancement .p0 { width: 0%; }
+.barre-avancement .p5 { width: 5%; }
+.barre-avancement .p10 { width: 10%; }
+.barre-avancement .p15 { width: 15%; }
+.barre-avancement .p20 { width: 20%; }
+.barre-avancement .p25 { width: 25%; }
+.barre-avancement .p30 { width: 30%; }
+.barre-avancement .p35 { width: 35%; }
+.barre-avancement .p40 { width: 40%; }
+.barre-avancement .p45 { width: 45%; }
+.barre-avancement .p50 { width: 50%; }
+.barre-avancement .p55 { width: 55%; }
+.barre-avancement .p60 { width: 60%; }
+.barre-avancement .p65 { width: 65%; }
+.barre-avancement .p70 { width: 70%; }
+.barre-avancement .p75 { width: 75%; }
+.barre-avancement .p80 { width: 80%; }
+.barre-avancement .p85 { width: 85%; }
+.barre-avancement .p90 { width: 90%; }
+.barre-avancement .p95 { width: 95%; }
+.barre-avancement .p100 { width: 100%; }
+.rangee-element { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
+.rangee-element input[name=texte] { flex: 1; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--bordure); background: var(--fond); color: var(--texte); font: inherit; }
+.rangee-element .crayon { width: 34px; height: 34px; flex: none; font-weight: 800; }
+.rappel-note { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.rappel-note .champ { margin: 0; flex: 1; min-width: 180px; }
+.note-rappel { font-weight: 800; color: var(--corail-fonce); }
+.rangee-element.cochee input[name=texte] { text-decoration: line-through; color: var(--texte-doux); }

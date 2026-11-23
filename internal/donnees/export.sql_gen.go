@@ -620,7 +620,7 @@ func (q *Queries) ExportMissionsFaites(ctx context.Context, familleID int64) ([]
 }
 
 const exportNotes = `-- name: ExportNotes :many
-SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le FROM notes WHERE famille_id = ? AND (privee = 0 OR auteur_id = ?)
+SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye FROM notes WHERE famille_id = ? AND (privee = 0 OR auteur_id = ?)
 `
 
 type ExportNotesParams struct {
@@ -649,6 +649,9 @@ func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]Not
 			&i.Privee,
 			&i.CreeLe,
 			&i.ModifieLe,
+			&i.CocheesEnBas,
+			&i.RappelLe,
+			&i.RappelEnvoye,
 		); err != nil {
 			return nil, err
 		}

@@ -58,6 +58,7 @@ type App struct {
 	partages   []Partage
 	recherches map[string]RechercheFunc
 	departs    []DepartFunc
+	minutes    []MinuteFunc // tâches de chaque minute (AjouterMinute)
 }
 
 // DepartFunc : ce qu'un module efface quand un membre quitte la famille

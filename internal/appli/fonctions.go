@@ -77,6 +77,14 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		// {{montantSaisie 1250}} → 12,50 (pour un champ de formulaire)
 		"montantSaisie": func(c int64) string { return fmt.Sprintf("%d,%02d", c/100, c%100) },
 		"milliers":      Milliers,
+		// {{pourcent 3 10}} → 30 (arrondi à 5 : classes CSS p0 à p100, la CSP
+		// interdit les largeurs écrites dans la page).
+		"pourcent": func(n, total int) int {
+			if total <= 0 {
+				return 0
+			}
+			return (n*100/total + 2) / 5 * 5
+		},
 		// Textes longs mis en forme (notes des fiches, descriptions : voir
 		// internal/riche) : {{riche .Notes}} pour les lire,
 		// {{richeEdition .Notes}} pour l'éditeur, {{simple .Idees}} sans les signes.

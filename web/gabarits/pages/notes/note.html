@@ -57,6 +57,19 @@
   </fieldset>
 </form>
 {{if .Cases}}</details>{{end}}
+{{if and (not .Nouvelle) .Modifiable}}
+{{/* Rappel : une notification à la date et à l'heure choisies. */}}
+<details class="carte bloc"{{if .RappelTexte}} open{{end}}>
+  <summary class="lien-ajout">⏰ {{if .RappelTexte}}Rappel {{.RappelTexte}}{{else}}Me le rappeler…{{end}}</summary>
+  <form method="post" action="/notes/{{.Note.ID}}/rappel" class="rappel-note">
+    {{template "jeton" $c.CSRF}}
+    <label class="champ"><span>Le</span><input type="datetime-local" name="rappel" value="{{.RappelValeur}}" required></label>
+    <button class="bouton petit">{{if .RappelTexte}}Changer{{else}}Programmer{{end}}</button>
+    {{if .RappelTexte}}<button class="bouton petit secondaire" name="retirer" value="1" formnovalidate>Retirer</button>{{end}}
+  </form>
+  <p class="aide">{{if eq .Note.Privee 1}}Vous seul recevrez la notification.{{else}}Tous ceux qui voient la note la recevront (selon leurs réglages de notifications).{{end}}</p>
+</details>
+{{end}}
 {{if .Supprimable}}
 <form class="bloc" method="post" action="/notes/{{.Note.ID}}/supprimer" hx-confirm="Supprimer cette note ?">
   {{template "jeton" $c.CSRF}}
@@ -69,9 +82,26 @@
 {{/* Liste à cocher de la note (rechargée seule quand on coche ou ajoute). */}}
 {{define "cases-note"}}
 {{- with .Donnees}}
-<section class="carte bloc cases-note" id="cases-note">
+<section class="carte bloc cases-note{{if .Ranger}} en-rangement{{end}}" id="cases-note">
   {{- $id := .ID}}
+  {{/* Avancement, et pour ceux qui peuvent modifier : cochés en bas, ranger la liste. */}}
+  <div class="tete-liste">
+    <span class="avancement" aria-label="{{len .Cases | printf "%d"}} éléments, {{.Cochees}} faits"><b>{{.Cochees}}/{{.Total}}</b> faits</span>
+    {{if .Modifiable}}
+    {{if not .Ranger}}
+    <form hx-post="/notes/{{$id}}/cochees" hx-target="#cases-note" hx-swap="outerHTML" method="post" action="/notes/{{$id}}/cochees">
+      {{template "jeton" .CSRF}}<input type="hidden" name="en_bas" value="{{if .EnBas}}0{{else}}1{{end}}">
+      <button class="pilule{{if .EnBas}} active{{end}}" title="Les éléments cochés passent après les autres">↓ Cochés en bas</button>
+    </form>
+    <button class="pilule" hx-get="/notes/liste/{{$id}}?ranger=1" hx-target="#cases-note" hx-swap="outerHTML">✏️ Ranger</button>
+    {{else}}
+    <button class="pilule active" hx-get="/notes/liste/{{$id}}" hx-target="#cases-note" hx-swap="outerHTML">✓ Terminé</button>
+    {{end}}
+    {{end}}
+  </div>
+  {{if .Total}}<div class="barre-avancement" role="presentation"><i class="p{{pourcent .Cochees .Total}}"></i></div>{{end}}
   <div class="contenu-note">{{.HTML}}</div>
+  {{if .Ranger}}<p class="aide">Modifiez un élément puis ✓ ; ↑ ↓ le déplacent, ✕ le supprime.</p>{{end}}
   <form class="ajout-element" method="post" action="/notes/{{$id}}/element" hx-post="/notes/{{$id}}/element" hx-target="#cases-note" hx-swap="outerHTML">
     {{template "jeton" .CSRF}}
     <input name="element" maxlength="200" placeholder="＋ Ajouter un élément" aria-label="Ajouter un élément" required autocomplete="off">

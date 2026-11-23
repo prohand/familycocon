@@ -142,12 +142,12 @@ func (m *Module) repondreCases(w http.ResponseWriter, r *http.Request, c *appli.
 		m.a.Rediriger(w, r, "/notes/"+strconv.FormatInt(n.ID, 10))
 		return
 	}
-	m.a.Fragment(w, r, c, "notes/note", "cases-note", vueCases(c, n))
+	m.a.Fragment(w, r, c, "notes/note", "cases-note", vueCases(c, n, false))
 }
 
 // vueCases : ce que montre le bloc de la liste à cocher (toute la note :
 // le texte et les photos autour des cases).
-func vueCases(c *appli.Contexte, n donnees.Note) map[string]any {
+func vueCases(c *appli.Contexte, n donnees.Note, ranger bool) map[string]any {
 	cases := Cases(n.Texte)
 	cochees := 0
 	for _, x := range cases {
@@ -155,7 +155,8 @@ func vueCases(c *appli.Contexte, n donnees.Note) map[string]any {
 			cochees++
 		}
 	}
-	return map[string]any{"ID": n.ID, "Cases": cases, "HTML": riche.HTML(n.Texte, riche.Options{Mode: riche.Lecture, Note: n.ID}), "Cochees": cochees, "Modifiable": modifiable(c, n), "CSRF": c.CSRF}
+	return map[string]any{"ID": n.ID, "Cases": cases, "HTML": riche.HTML(n.Texte, riche.Options{Mode: riche.Lecture, Note: n.ID, CocheesEnBas: n.CocheesEnBas == 1, Ranger: ranger, Jeton: c.CSRF}),
+		"Cochees": cochees, "Modifiable": modifiable(c, n), "CSRF": c.CSRF, "Ranger": ranger, "EnBas": n.CocheesEnBas == 1, "Total": len(cases)}
 }
 
 // ajouterElement : un élément de plus dans la liste (tous ceux qui voient

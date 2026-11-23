@@ -588,3 +588,24 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   trace et les barres montent à l'affichage (sauf « réduire les
   animations »). Période des chiffres changée sans recharger la page
   (htmx, l'adresse suit).
+
+## 22. Listes (v0.9.3)
+- Onglet « ☑️ Listes » dans les notes (notes dont une ligne commence par
+  une case) ; bouton « ＋ Liste ».
+- Avancement « 2/5 faits » et barre (classes `p0` à `p100` : pas de style
+  écrit dans la page).
+- Cochés en bas (réglage de la note, migration 0034 `cochees_en_bas`, oui
+  par défaut) : à l'affichage seulement, dans chaque suite de cases ; le
+  texte ne bouge pas (décocher remet l'élément à sa place).
+- « ✏️ Ranger » (ceux qui peuvent modifier la note) : chaque élément devient
+  un champ (✓, ↑, ↓, ✕) ; chaque action envoie la ligne telle qu'elle était
+  (`avant`) : si la note a changé entre-temps, rien n'est touché. Un
+  élément modifié est enregistré en texte simple (signes gardés tels quels).
+  Adresses `POST /notes/elements/{id}/{ligne}[/monter|/descendre|/supprimer]`,
+  `GET /notes/liste/{id}?ranger=1` (pas `/notes/{id}/…` : conflit avec
+  `/notes/photos/{id}`).
+- Rappel d'une note (`rappel_le`, `rappel_envoye`) : date et heure (fuseau
+  de la famille, 2 ans au plus) ; une tâche de chaque minute
+  (`App.AjouterMinute`) envoie la notification une seule fois, même aux
+  membres qui ont l'appli ouverte (`App.Rappeler`) ; note privée : son
+  auteur seul. Montré sur la carte (⏰ 28/11 18:00).

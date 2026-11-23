@@ -36,6 +36,7 @@
 | Type de carburant ; budget perso et compte commun, virements ; abonnements et projets privés (v0.7.0, SPEC § 18-19) | **fait** |
 | Fiche véhicule : résumé, ajout d'un plein en un geste, onglet Chiffres et périodes ; photos dans le texte des notes (v0.8.0, SPEC § 20) | **fait** |
 | Éditeur de texte riche (notes et textes longs, coller des photos) ; graphiques interactifs (v0.9.0, SPEC § 21) | **fait** |
+| Listes : onglet, avancement, cochés en bas, ranger (modifier, déplacer, supprimer), rappel à une date (v0.9.3, SPEC § 22) | **fait** |
 
 ## Mesures
 
