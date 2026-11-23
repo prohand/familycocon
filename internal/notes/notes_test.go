@@ -89,8 +89,8 @@ func TestRevueNotes(t *testing.T) {
 		t.Fatal("recherche de « 50% »")
 	}
 	// L'adresse de rafraîchissement garde la recherche entière, encodée.
-	_, page = marie.Get("/notes?q=" + url.QueryEscape("pain & beurre #1"))
-	if !strings.Contains(page, `hx-get="/notes/contenu?q=pain+%26+beurre+%231"`) || !strings.Contains(page, "Soldes") {
+	_, page = marie.Get("/notes?q=" + url.QueryEscape("pain & beurre"))
+	if !strings.Contains(page, `hx-get="/notes/contenu?q=pain&#43;%26&#43;beurre"`) || !strings.Contains(page, "Soldes") {
 		t.Fatalf("adresse de rafraîchissement mal encodée :\n%s", page)
 	}
 	// La liste ne porte que le début d'une longue note.

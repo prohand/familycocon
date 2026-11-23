@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"familycocon/internal/appli"
+	"familycocon/internal/contacts"
 	"familycocon/internal/donnees"
 	"familycocon/internal/suivi"
 )
@@ -34,6 +34,14 @@ func (m *Module) brancherPrestataires() {
 			x, err := a.Q.ContactParID(ctx, donnees.ContactParIDParams{ID: id, FamilleID: famille})
 			return x.Nom, err == nil && x.Pro == 1
 		},
+		Noms: func(ctx context.Context, famille int64) (map[int64]string, error) {
+			l, err := a.Q.NomsPrestataires(ctx, famille)
+			noms := make(map[int64]string, len(l))
+			for _, x := range l {
+				noms[x.ID] = x.Nom
+			}
+			return noms, err
+		},
 		URL: func(id int64) string { return fmt.Sprintf("/prestataires/%d", id) },
 	})
 	a.AjouterResume(modPrestataires, func(ctx context.Context, c *appli.Contexte) appli.Resume {
@@ -54,13 +62,14 @@ func (m *Module) listePrestataires(w http.ResponseWriter, r *http.Request, c *ap
 	}
 	v := vueListe{Titre: "Prestataires", Emoji: "🧰", Module: modPrestataires, Nouveau: "/contacts/nouveau?pro=1", TexteNouveau: "＋ Prestataire",
 		Vide: "Le plombier, la nounou, le ramoneur… avec leurs coordonnées et l'historique de leurs interventions. Ce sont des contacts marqués « professionnel »."}
+	alertes := m.alertes(r.Context(), c, modPrestataires)
 	for _, x := range l {
 		detail := strings.Trim(x.Metier+" · "+x.Societe, " ·")
 		if x.Telephone != "" {
 			detail = strings.Trim(detail+" · 📞 "+x.Telephone, " ·")
 		}
 		v.Elements = append(v.Elements, Element{URL: fmt.Sprintf("/prestataires/%d", x.ID), Emoji: "🧰", Nom: x.Nom, Detail: detail,
-			Alerte: m.alerte(r.Context(), c, modPrestataires, x.ID)})
+			Alerte: alertes[x.ID]})
 	}
 	m.a.Afficher(w, r, c, "foyer/liste", "Prestataires", modPrestataires, v)
 }
@@ -69,14 +78,7 @@ func (m *Module) listePrestataires(w http.ResponseWriter, r *http.Request, c *ap
 func liensContact(x donnees.Contact) ([]Lien, []string) {
 	var liens []Lien
 	var infos []string
-	tel := x.Telephone
-	if tel == "" {
-		tel = x.TelFixe
-	}
-	if tel == "" {
-		tel = x.TelTravail
-	}
-	if t := lienTel(tel); t != "" {
+	if t := contacts.LienTel(contacts.PremierTel(x.Telephone, x.TelFixe, x.TelTravail)); t != "" {
 		liens = append(liens, Lien{URL: template.URL("tel:" + t), Emoji: "📞", Texte: "Appeler"}, Lien{URL: template.URL("sms:" + t), Emoji: "💬", Texte: "SMS"})
 	}
 	for _, t := range []string{x.Telephone, x.TelFixe, x.TelTravail} {
@@ -85,15 +87,16 @@ func liensContact(x donnees.Contact) ([]Lien, []string) {
 		}
 	}
 	if x.Email != "" {
-		liens = append(liens, Lien{URL: template.URL("mailto:" + url.PathEscape(x.Email)), Emoji: "✉️", Texte: "E-mail"})
+		if lien := contacts.LienMail(x.Email); lien != "" {
+			liens = append(liens, Lien{URL: lien, Emoji: "✉️", Texte: "E-mail"})
+		}
 		infos = append(infos, "✉️ "+x.Email)
 	}
-	if s := siteSur(x.Site); s != "" {
+	if s := contacts.SiteSur(x.Site); s != "" {
 		liens = append(liens, Lien{URL: s, Emoji: "🌐", Texte: "Site", Externe: true})
 	}
 	if x.Adresse != "" {
-		liens = append(liens, Lien{URL: template.URL("https://www.openstreetmap.org/search?query=" + strings.ReplaceAll(url.QueryEscape(strings.ReplaceAll(x.Adresse, "\n", ", ")), "+", "%20")),
-			Emoji: "🗺️", Texte: "Plan", Externe: true})
+		liens = append(liens, Lien{URL: template.URL(contacts.LienCarte(x.Adresse)), Emoji: "🗺️", Texte: "Plan", Externe: true}) // #nosec G203 -- adresse construite ici
 		infos = append(infos, "🏠 "+x.Adresse)
 	}
 	return liens, infos
@@ -113,13 +116,4 @@ func (m *Module) fichePrestataire(w http.ResponseWriter, r *http.Request, c *app
 		v.Infos = append(v.Infos, "📝 "+x.Notes)
 	}
 	m.afficherFiche(w, r, c, modPrestataires, x.ID, v)
-}
-
-// siteSur : le site seulement s'il commence par http:// ou https://.
-func siteSur(s string) template.URL {
-	u, err := url.Parse(s)
-	if s == "" || err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
-		return ""
-	}
-	return template.URL(u.String()) // #nosec G203 -- schéma vérifié
 }

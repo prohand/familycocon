@@ -13,14 +13,17 @@ package foyer
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"familycocon/internal/appli"
+	"familycocon/internal/contacts"
 	"familycocon/internal/donnees"
 	"familycocon/internal/suivi"
 )
@@ -76,11 +79,18 @@ type ContactCite struct {
 	Tel            string // pour « appeler »
 }
 
-// contactsChoix : les contacts du carnet, pour les listes de choix.
-func (m *Module) contactsChoix(ctx context.Context, c *appli.Contexte) []donnees.Contact {
-	l, _ := m.a.Q.ContactsFamille(ctx, c.Famille.ID)
+// contactsChoix : les contacts du carnet, pour les listes de choix (nom et
+// métier seulement). En cas d'erreur : liste vide, et une ligne au journal.
+func (m *Module) contactsChoix(ctx context.Context, c *appli.Contexte) []donnees.ContactsChoixRow {
+	l, err := m.a.Q.ContactsChoix(ctx, c.Famille.ID)
+	if err != nil {
+		m.a.Journal.Error("foyer : liste des contacts", "erreur", err)
+	}
 	return l
 }
+
+// ObjetsMax : véhicules ou animaux par famille (garde-fou).
+const ObjetsMax = 100
 
 // lireContact : le contact choisi dans le champ (seulement de la famille).
 func (m *Module) lireContact(r *http.Request, c *appli.Contexte, champ string) sql.NullInt64 {
@@ -104,27 +114,18 @@ func (m *Module) citer(ctx context.Context, c *appli.Contexte, role string, id s
 	if err != nil {
 		return ContactCite{}, false
 	}
-	tel := x.Telephone
-	if tel == "" {
-		tel = x.TelFixe
-	}
-	if tel == "" {
-		tel = x.TelTravail
-	}
-	return ContactCite{Role: role, Nom: x.Nom, URL: fmt.Sprintf("/contacts/%d", x.ID), Tel: lienTel(tel)}, true
+	tel := contacts.PremierTel(x.Telephone, x.TelFixe, x.TelTravail)
+	return ContactCite{Role: role, Nom: x.Nom, URL: fmt.Sprintf("/contacts/%d", x.ID), Tel: contacts.LienTel(tel)}, true
 }
 
-// alerte : la prochaine échéance d'un objet, si elle est en retard ou proche.
-func (m *Module) alerte(ctx context.Context, c *appli.Contexte, module string, objet int64) string {
-	b, err := m.s.Bloc(ctx, c, module, objet)
-	if err != nil || len(b.Echeances) == 0 {
-		return ""
+// alertes : pour chaque objet du module, sa prochaine échéance si elle est
+// en retard ou proche (une requête pour toute la liste).
+func (m *Module) alertes(ctx context.Context, c *appli.Contexte, module string) map[int64]string {
+	al, err := m.s.Alertes(ctx, c, module)
+	if err != nil {
+		m.a.Journal.Error("foyer : échéances", "module", module, "erreur", err)
 	}
-	e := b.Echeances[0]
-	if e.Retard || e.Proche {
-		return "⏰ " + e.Libelle + " : " + strings.ToLower(e.Quand[:1]) + e.Quand[1:]
-	}
-	return ""
+	return al
 }
 
 func idDe(r *http.Request) int64 {
@@ -156,6 +157,7 @@ func (m *Module) supprimerObjet(w http.ResponseWriter, r *http.Request, c *appli
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	m.a.Publier(c, module, "")
 	m.a.Flash(w, nom+" supprimé(e)")
 	m.a.Rediriger(w, r, retour)
 }
@@ -176,22 +178,26 @@ func age(naissance string, maintenant time.Time) string {
 	return appli.Pluriel(mois/12, "an", "ans")
 }
 
-// lienTel : chiffres et « + » seulement.
-func lienTel(t string) string {
-	var b strings.Builder
-	for _, r := range t {
-		if (r >= '0' && r <= '9') || (r == '+' && b.Len() == 0) {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
+// errTropLong : un champ dépasse sa longueur (le formulaire affiche son
+// propre message).
+var errTropLong = errors.New("champ trop long")
 
 // texte : champ de formulaire nettoyé, au plus max caractères.
 func texte(r *http.Request, champ string, max int) (string, error) {
 	v := strings.TrimSpace(r.PostFormValue(champ))
-	if len([]rune(v)) > max {
-		return "", fmt.Errorf("%s : %d caractères au plus", champ, max)
+	if utf8.RuneCountInString(v) > max {
+		return "", errTropLong
 	}
 	return v, nil
+}
+
+// lireKm : « 45 000 », « 45000 km » → 45000. Vide : 0 (inconnu). ok = faux
+// si ce n'est pas un nombre entre 0 et 5 millions.
+func lireKm(s string) (int64, bool) {
+	s = strings.NewReplacer(" ", "", "\u00a0", "", "\u202f", "", "km", "", "KM", "", "Km", "").Replace(strings.TrimSpace(s))
+	if s == "" {
+		return 0, true
+	}
+	km, err := strconv.ParseInt(s, 10, 64)
+	return km, err == nil && km >= 0 && km <= 5_000_000
 }

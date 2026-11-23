@@ -49,6 +49,14 @@ func (m *Module) brancherAnimaux() {
 			x, err := a.Q.AnimalParID(ctx, donnees.AnimalParIDParams{ID: id, FamilleID: famille})
 			return x.Nom, err == nil
 		},
+		Noms: func(ctx context.Context, famille int64) (map[int64]string, error) {
+			l, err := a.Q.NomsAnimaux(ctx, famille)
+			noms := make(map[int64]string, len(l))
+			for _, x := range l {
+				noms[x.ID] = x.Nom
+			}
+			return noms, err
+		},
 		URL: func(id int64) string { return fmt.Sprintf("/animaux/%d", id) },
 	})
 	a.AjouterResume(modAnimaux, func(ctx context.Context, c *appli.Contexte) appli.Resume {
@@ -56,8 +64,9 @@ func (m *Module) brancherAnimaux() {
 		if err != nil || len(l) == 0 {
 			return appli.Resume{Info: "Aucun animal"}
 		}
+		alertes := m.alertes(ctx, c, modAnimaux)
 		for _, x := range l {
-			if al := m.alerte(ctx, c, modAnimaux, x.ID); al != "" {
+			if al := alertes[x.ID]; al != "" {
 				return appli.Resume{Info: al, Badge: 1}
 			}
 		}
@@ -83,6 +92,7 @@ func (m *Module) listeAnimaux(w http.ResponseWriter, r *http.Request, c *appli.C
 	}
 	v := vueListe{Titre: "Animaux", Emoji: "🐾", Module: modAnimaux, Nouveau: "/animaux/nouveau", TexteNouveau: "＋ Animal",
 		Vide: "Ajoutez vos compagnons : vaccins, vermifuge et visites chez le vétérinaire seront rappelés."}
+	alertes := m.alertes(r.Context(), c, modAnimaux)
 	for _, x := range l {
 		detail := x.Race
 		if a := age(x.Naissance, c.Maintenant()); a != "" {
@@ -92,7 +102,7 @@ func (m *Module) listeAnimaux(w http.ResponseWriter, r *http.Request, c *appli.C
 			detail += a
 		}
 		v.Elements = append(v.Elements, Element{URL: fmt.Sprintf("/animaux/%d", x.ID), Emoji: emojiEspece(x.Espece), Nom: x.Nom,
-			Detail: detail, Alerte: m.alerte(r.Context(), c, modAnimaux, x.ID)})
+			Detail: detail, Alerte: alertes[x.ID]})
 	}
 	m.a.Afficher(w, r, c, "foyer/liste", "Animaux", modAnimaux, v)
 }
@@ -128,7 +138,7 @@ type formAnimal struct {
 	Nouveau  bool
 	A        donnees.Animal
 	Especes  any
-	Contacts []donnees.Contact
+	Contacts []donnees.ContactsChoixRow
 }
 
 func (m *Module) formAnimal(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -161,12 +171,19 @@ func (m *Module) enregistrerAnimal(w http.ResponseWriter, r *http.Request, c *ap
 		espece = "autre"
 	}
 	naissance := r.PostFormValue("naissance")
-	if t, err := time.Parse("2006-01-02", naissance); naissance != "" && (err != nil || t.After(time.Now())) {
+	if t, err := time.Parse("2006-01-02", naissance); naissance != "" && (err != nil || t.After(time.Now()) || t.Year() < 1900) {
 		m.a.Echec(w, r, http.StatusBadRequest, "Date de naissance invalide.")
 		return
 	}
 	id := idDe(r)
 	if r.PathValue("id") == "" {
+		if n, err := m.a.Q.CompterAnimaux(ctx, c.Famille.ID); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		} else if n >= ObjetsMax {
+			m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Trop d'animaux (%d au plus).", ObjetsMax))
+			return
+		}
 		x, err := m.a.Q.CreerAnimal(ctx, donnees.CreerAnimalParams{FamilleID: c.Famille.ID, Nom: nom, Espece: espece, Race: race,
 			Naissance: naissance, Puce: puce, Veterinaire: veto, VeterinaireID: m.lireContact(r, c, "veterinaire_id"), Notes: notes, CreeLe: time.Now().Unix()})
 		if err != nil {
@@ -185,6 +202,7 @@ func (m *Module) enregistrerAnimal(w http.ResponseWriter, r *http.Request, c *ap
 			return
 		}
 	}
+	m.a.Publier(c, modAnimaux, "")
 	m.a.Flash(w, "Fiche enregistrée 🐾")
 	m.a.Rediriger(w, r, fmt.Sprintf("/animaux/%d", id))
 }
