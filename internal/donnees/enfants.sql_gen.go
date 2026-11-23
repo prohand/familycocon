@@ -11,6 +11,33 @@ import (
 	"strings"
 )
 
+const ajouterBonus = `-- name: AjouterBonus :exec
+
+INSERT INTO etoiles_bonus (famille_id, enfant_id, etoiles, motif, par, le) VALUES (?, ?, ?, ?, ?, ?)
+`
+
+type AjouterBonusParams struct {
+	FamilleID int64
+	EnfantID  int64
+	Etoiles   int64
+	Motif     string
+	Par       sql.NullInt64
+	Le        int64
+}
+
+// Etoiles donnees ou retirees par un parent.
+func (q *Queries) AjouterBonus(ctx context.Context, arg AjouterBonusParams) error {
+	_, err := q.db.ExecContext(ctx, ajouterBonus,
+		arg.FamilleID,
+		arg.EnfantID,
+		arg.Etoiles,
+		arg.Motif,
+		arg.Par,
+		arg.Le,
+	)
+	return err
+}
+
 const annulerCoche = `-- name: AnnulerCoche :exec
 DELETE FROM missions_faites WHERE mission_id = ? AND occurrence = ? AND etat = 'attente'
   AND mission_id IN (SELECT m.id FROM missions m WHERE m.famille_id = ?)
@@ -25,6 +52,63 @@ type AnnulerCocheParams struct {
 func (q *Queries) AnnulerCoche(ctx context.Context, arg AnnulerCocheParams) error {
 	_, err := q.db.ExecContext(ctx, annulerCoche, arg.MissionID, arg.Occurrence, arg.FamilleID)
 	return err
+}
+
+const bonusIdentiqueRecent = `-- name: BonusIdentiqueRecent :one
+SELECT count(*) FROM etoiles_bonus WHERE enfant_id = ? AND etoiles = ? AND motif = ? AND le >= ?
+`
+
+type BonusIdentiqueRecentParams struct {
+	EnfantID int64
+	Etoiles  int64
+	Motif    string
+	Le       int64
+}
+
+// Bonus d'un instant (double envoi) : meme enfant, meme motif, 10 dernieres secondes.
+func (q *Queries) BonusIdentiqueRecent(ctx context.Context, arg BonusIdentiqueRecentParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, bonusIdentiqueRecent,
+		arg.EnfantID,
+		arg.Etoiles,
+		arg.Motif,
+		arg.Le,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const bonusRecents = `-- name: BonusRecents :many
+SELECT etoiles, motif, le FROM etoiles_bonus WHERE enfant_id = ? ORDER BY le DESC LIMIT 8
+`
+
+type BonusRecentsRow struct {
+	Etoiles int64
+	Motif   string
+	Le      int64
+}
+
+func (q *Queries) BonusRecents(ctx context.Context, enfantID int64) ([]BonusRecentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, bonusRecents, enfantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []BonusRecentsRow{}
+	for rows.Next() {
+		var i BonusRecentsRow
+		if err := rows.Scan(&i.Etoiles, &i.Motif, &i.Le); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const cocherMission = `-- name: CocherMission :execrows
@@ -388,6 +472,17 @@ func (q *Queries) EchangesEnfant(ctx context.Context, enfantID int64) ([]Echange
 		return nil, err
 	}
 	return items, nil
+}
+
+const etoilesBonus = `-- name: EtoilesBonus :one
+SELECT CAST(coalesce(sum(etoiles), 0) AS INTEGER) FROM etoiles_bonus WHERE enfant_id = ?
+`
+
+func (q *Queries) EtoilesBonus(ctx context.Context, enfantID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, etoilesBonus, enfantID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const etoilesEchangees = `-- name: EtoilesEchangees :one

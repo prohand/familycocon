@@ -135,6 +135,44 @@ document.addEventListener("htmx:afterRequest", function (e) {
   if (champ) champ.focus();
 });
 
+// Échéance choisie parmi les modèles (« Contrôle technique ») : sa
+// fréquence (« Tous les 2 ans ») est choisie toute seule ; on peut la changer.
+document.addEventListener("input", function (e) {
+  var champ = e.target;
+  if (!champ.matches || !champ.matches("input[data-modele]") || !champ.list || !champ.form) return;
+  var choix = champ.form.querySelector("select[name=repetition_mois]");
+  if (!choix) return;
+  for (var i = 0; i < champ.list.options.length; i++) {
+    var o = champ.list.options[i];
+    if (o.value === champ.value && choix.querySelector("option[value='" + o.getAttribute("data-mois") + "']")) {
+      choix.value = o.getAttribute("data-mois");
+      return;
+    }
+  }
+});
+
+// Carte de fidélité à la caisse : l'écran reste allumé tant que la carte
+// est affichée (Wake Lock, si le navigateur le permet).
+(function () {
+  "use strict";
+  var verrou = null;
+  function mettreAJour() {
+    var voulu = document.visibilityState === "visible" && document.querySelector("[data-ecran-allume]");
+    if (voulu && !verrou && navigator.wakeLock) {
+      navigator.wakeLock.request("screen").then(function (v) {
+        verrou = v;
+        v.addEventListener("release", function () { verrou = null; });
+      }).catch(function () {});
+    } else if (!voulu && verrou) {
+      verrou.release().catch(function () {});
+      verrou = null;
+    }
+  }
+  document.addEventListener("DOMContentLoaded", mettreAJour);
+  document.addEventListener("htmx:afterSettle", mettreAJour);
+  document.addEventListener("visibilitychange", mettreAJour);
+})();
+
 // Rayons repliés : gardés en mémoire sur cet appareil (la liste est
 // rechargée à chaque changement, les rayons repliés le restent).
 (function () {

@@ -17,6 +17,9 @@
   {{if .AValider}}
   <section class="bloc">
     <div class="section-titre"><h2>👀 À valider</h2><span class="aide">{{len .AValider}}</span></div>
+    {{if gt .NbMissions 1}}
+    <p><button class="bouton petit" hx-post="/enfants/validations/tout" hx-target="#parent" hx-swap="outerHTML">✓ Valider les {{.NbMissions}} missions</button></p>
+    {{end}}
     <div class="carte">
       {{- range .AValider}}
       <div class="ligne a-valider">
@@ -25,11 +28,11 @@
         <span class="quoi">{{.Titre}}<small>{{with .Enfant}}{{.Nom}}{{end}} · {{if .Echange}}veut l'échanger contre {{.Etoiles}} ⭐{{else}}{{.Etoiles}} ⭐ à gagner{{end}}</small></span>
         <span class="boutons-decision">
           {{if .Echange}}
-          <button class="bouton petit" hx-post="/enfants/echanges/{{.ID}}/confirmer" hx-target="#parent" hx-swap="outerHTML" aria-label="Confirmer">✓</button>
-          <button class="bouton petit secondaire" hx-post="/enfants/echanges/{{.ID}}/refuser" hx-target="#parent" hx-swap="outerHTML" aria-label="Refuser">✗</button>
+          <button class="bouton petit" hx-post="/enfants/echanges/{{.ID}}/confirmer" hx-target="#parent" hx-swap="outerHTML" aria-label="Confirmer « {{.Titre}} »">✓</button>
+          <button class="bouton petit secondaire" hx-post="/enfants/echanges/{{.ID}}/refuser" hx-target="#parent" hx-swap="outerHTML" aria-label="Refuser « {{.Titre}} »">✗</button>
           {{else}}
-          <button class="bouton petit" hx-post="/enfants/validations/{{.ID}}/valider" hx-target="#parent" hx-swap="outerHTML" aria-label="Valider">✓</button>
-          <button class="bouton petit secondaire" hx-post="/enfants/validations/{{.ID}}/refuser" hx-target="#parent" hx-swap="outerHTML" aria-label="À refaire">✗</button>
+          <button class="bouton petit" hx-post="/enfants/validations/{{.ID}}/valider" hx-target="#parent" hx-swap="outerHTML" aria-label="Valider « {{.Titre}} »">✓</button>
+          <button class="bouton petit secondaire" hx-post="/enfants/validations/{{.ID}}/refuser" hx-target="#parent" hx-swap="outerHTML" aria-label="« {{.Titre}} » à refaire">✗</button>
           {{end}}
         </span>
       </div>

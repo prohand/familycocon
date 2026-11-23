@@ -21,7 +21,7 @@
     <span class="quoi">{{.Libelle}}
       <small>{{.Frequence}} · prochain : {{.Prochain}}</small>
       {{if .Engagement}}<small class="{{if .Bientot}}alerte{{end}}">🔒 {{.Engagement}}</small>{{end}}</span>
-    <b class="montant depense">{{montant .Montant $.Donnees.Devise}}</b>
+    <b class="montant depense">{{montant .Montant $.Donnees.Devise}}{{if ne .ParMois .Montant}}<small>≈ {{montant .ParMois $.Donnees.Devise}}/mois</small>{{end}}</b>
   </a>
   {{- end}}
 </div>

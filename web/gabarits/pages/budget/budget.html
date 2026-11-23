@@ -25,6 +25,11 @@
   <a class="bouton secondaire" href="/budget/nouvelle?sens=revenu">＋ Revenu</a>
 </div>
 <a class="lien-recurrences bloc" href="/budget/recurrences">🔁 Opérations qui reviennent{{if .NbRecur}} ({{.NbRecur}}){{end}} <span class="fleche-droite">›</span></a>
+<nav class="pilules bloc" aria-label="Outils du budget">
+  <a class="pilule" href="/budget/annee?an={{slice .Mois 0 4}}">📊 L'année</a>
+  <a class="pilule" href="/budget/chercher">🔎 Chercher</a>
+  <a class="pilule" href="/budget/plafonds">🎯 Plafonds</a>
+</nav>
 
 {{if .Prevues}}
 <section class="carte bloc prevues">
@@ -42,20 +47,31 @@
 
 <section class="carte bloc">
   <div class="section-titre premier"><h2>Dépenses du mois{{with .Filtre}} · filtrées{{end}}</h2></div>
+  {{if .Filtre}}<p class="aide">Le reste à vivre et « À venir » comptent toutes les catégories.</p>{{end}}
   {{.Courbe}}
   <p class="legende"><span class="trait actuel"></span>Ce mois-ci <span class="trait precedent"></span>Mois précédent</p>
 </section>
 
 {{if .ParCat}}
 <section class="carte bloc">
-  <div class="section-titre premier"><h2>Par catégorie</h2></div>
+  <div class="section-titre premier"><h2>Par catégorie</h2>{{if .Plafonds}}<a href="/budget/plafonds">Plafonds ›</a>{{end}}</div>
   {{- range .ParCat}}
-  <a class="barre-cat" href="/budget?mois={{$.Donnees.Mois}}&amp;cat={{.Cat.Cle}}">
-    <span class="nom-cat">{{.Cat.Emoji}} {{.Cat.Nom}}</span>
+  <a class="barre-cat{{if .Alerte}} alerte{{end}}" href="/budget?mois={{$.Donnees.Mois}}&amp;cat={{.Cat.Cle}}">
+    <span class="nom-cat">{{.Cat.Emoji}} {{.Cat.Nom}}{{if .Plafond}} <small>{{.Pour100}} % de {{montant .Plafond $.Donnees.Devise}}</small>{{end}}</span>
     <b>{{montant .Montant $.Donnees.Devise}}</b>
-    <progress class="jauge" max="{{$.Donnees.MaxCat}}" value="{{.Montant}}"></progress>
+    <progress class="jauge{{if .Alerte}} alerte{{end}}" max="{{if .Max}}{{.Max}}{{else}}1{{end}}" value="{{.Montant}}"></progress>
   </a>
   {{- end}}
+</section>
+{{end}}
+
+{{if .PayePar}}
+<section class="carte bloc">
+  <div class="section-titre premier"><h2>Payé par</h2></div>
+  {{- range .PayePar}}
+  <div class="ligne">{{with .Membre}}<span class="avatar petit c{{.Couleur}}">{{initiale .Nom}}</span><span class="quoi">{{.Nom}}</span>{{end}}<b>{{montant .Montant $.Donnees.Devise}}</b></div>
+  {{- end}}
+  <p class="aide">Écart : <b>{{montant .Ecart .Devise}}</b> (dépenses où « Qui ? » est rempli).</p>
 </section>
 {{end}}
 

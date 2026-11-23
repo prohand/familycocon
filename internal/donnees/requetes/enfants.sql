@@ -107,3 +107,18 @@ WHERE recompenses.famille_id = ? AND echanges.etat = 'attente' ORDER BY echanges
 SELECT echanges.*, recompenses.titre, recompenses.emoji
 FROM echanges JOIN recompenses ON recompenses.id = echanges.recompense_id
 WHERE echanges.enfant_id = ? ORDER BY echanges.demande_le DESC LIMIT 20;
+
+-- Etoiles donnees ou retirees par un parent.
+
+-- name: AjouterBonus :exec
+INSERT INTO etoiles_bonus (famille_id, enfant_id, etoiles, motif, par, le) VALUES (?, ?, ?, ?, ?, ?);
+
+-- name: EtoilesBonus :one
+SELECT CAST(coalesce(sum(etoiles), 0) AS INTEGER) FROM etoiles_bonus WHERE enfant_id = ?;
+
+-- name: BonusRecents :many
+SELECT etoiles, motif, le FROM etoiles_bonus WHERE enfant_id = ? ORDER BY le DESC LIMIT 8;
+
+-- Bonus d'un instant (double envoi) : meme enfant, meme motif, 10 dernieres secondes.
+-- name: BonusIdentiqueRecent :one
+SELECT count(*) FROM etoiles_bonus WHERE enfant_id = ? AND etoiles = ? AND motif = ? AND le >= ?;

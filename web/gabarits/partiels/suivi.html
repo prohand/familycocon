@@ -30,8 +30,9 @@
     <summary class="lien-ajout">＋ Ajouter une échéance</summary>
     <form method="post" action="/suivi/{{$s.Module}}/{{$s.ObjetID}}/echeances">
       {{template "jeton" $j}}
-      <label class="champ"><span>Quoi ?</span><input name="libelle" list="modeles-{{$s.Module}}" maxlength="80" required></label>
-      <datalist id="modeles-{{$s.Module}}">{{range $s.Modeles}}<option value="{{.Libelle}}">{{end}}</datalist>
+      <label class="champ"><span>Quoi ?</span><input name="libelle" list="modeles-{{$s.Module}}" maxlength="80" required data-modele></label>
+      {{/* data-mois : la fréquence du modèle, choisie toute seule (app.js). */}}
+      <datalist id="modeles-{{$s.Module}}">{{range $s.Modeles}}<option value="{{.Libelle}}" data-mois="{{.Mois}}">{{end}}</datalist>
       <div class="rangee">
         <label class="champ"><span>Quand ?</span><input type="date" name="jour" required></label>
         <label class="champ"><span>Revient</span>

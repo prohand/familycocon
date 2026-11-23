@@ -105,6 +105,13 @@ func (n *Navigateur) Post(chemin string, champs map[string]string) (int, string)
 	for k, x := range champs {
 		v.Set(k, x)
 	}
+	return n.PostValeurs(chemin, v)
+}
+
+// PostValeurs : comme Post, avec plusieurs valeurs possibles par champ
+// (cases à cocher du même nom).
+func (n *Navigateur) PostValeurs(chemin string, v url.Values) (int, string) {
+	n.t.Helper()
 	req, _ := http.NewRequest("POST", n.srv.URL+chemin, strings.NewReader(v.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	if n.Jeton != "" {

@@ -1028,10 +1028,23 @@ progress.jauge {
 progress.jauge::-webkit-progress-bar { background: var(--bordure); border-radius: 4px; }
 progress.jauge::-webkit-progress-value { background: var(--budget-t); border-radius: 4px; }
 progress.jauge::-moz-progress-bar { background: var(--budget-t); border-radius: 4px; }
+/* Plafond presque atteint (90 %), revenus de la vue de l'année. */
+progress.jauge.alerte::-webkit-progress-value { background: var(--rouge); }
+progress.jauge.alerte::-moz-progress-bar { background: var(--rouge); }
+.barre-cat.alerte .nom-cat small { color: var(--rouge); font-weight: 800; }
+.barre-cat .nom-cat small { color: var(--texte-doux); font-weight: 700; }
+progress.jauge.depense::-webkit-progress-value { background: var(--corail); }
+progress.jauge.depense::-moz-progress-bar { background: var(--corail); }
+.chiffres .revenu { color: var(--budget-t); }
+.barre-mois { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 8px 0; font-weight: 700; }
+.barre-mois + .barre-mois { border-top: 1px solid var(--bordure); }
+.barre-mois progress { grid-column: 1 / -1; height: 8px; }
+.barre-mois .chiffres { font-size: .85rem; }
 .operations { padding-top: 4px; padding-bottom: 4px; }
 .ligne.op .montant { white-space: nowrap; }
 .montant.depense { color: var(--texte); }
 .montant.revenu { color: var(--budget-t); }
+.montant small { display: block; font-size: .75rem; font-weight: 700; color: var(--texte-doux); text-align: right; }
 .gros-montant { font-size: 1.8rem !important; font-weight: 900 !important; text-align: center; }
 .categories { border: 0; padding: 0; margin: 10px 0; }
 .categories legend { font-weight: 800; font-size: .9rem; margin-bottom: 8px; padding: 0; }

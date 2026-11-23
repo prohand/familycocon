@@ -49,6 +49,12 @@ type Appareil struct {
 	VueLe     int64
 }
 
+type BudgetPlafond struct {
+	FamilleID int64
+	Categorie string
+	Montant   int64
+}
+
 type Carnet struct {
 	ID        int64
 	FamilleID int64
@@ -126,6 +132,16 @@ type Echeance struct {
 	Jour           string
 	RepetitionMois int64
 	CreeLe         int64
+}
+
+type EtoilesBonu struct {
+	ID        int64
+	FamilleID int64
+	EnfantID  int64
+	Etoiles   int64
+	Motif     string
+	Par       sql.NullInt64
+	Le        int64
 }
 
 type Evenement struct {

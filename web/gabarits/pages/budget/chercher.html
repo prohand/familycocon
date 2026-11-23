@@ -1,0 +1,34 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/budget">‹ Budget</a>
+  <h1>🔎 Chercher</h1>
+  <p>Dans les libellés des 12 derniers mois</p>
+</section>
+<form class="ajout" method="get" action="/budget/chercher" role="search">
+  <input name="q" value="{{.Q}}" placeholder="Ex. : dentiste, cantine…" maxlength="60" aria-label="Texte à chercher" autofocus>
+  <button class="bouton">Chercher</button>
+</form>
+{{if .Q}}
+<section class="carte reste bloc">
+  <p class="reste-titre">{{pluriel .Nombre "opération trouvée" "opérations trouvées"}}{{if .Tronquee}} (les 200 plus récentes){{end}}</p>
+  <p class="reste-montant">{{montant .Total .Devise}}</p>
+  {{if .Revenus}}<div class="reste-detail"><span>⬆️ Revenus <b>{{montant .Revenus .Devise}}</b></span></div>{{end}}
+</section>
+{{- range .Jours}}
+<h3 class="jour-histo">{{.Titre}}</h3>
+<div class="carte operations">
+  {{- range .Ops}}
+  <a class="ligne op" href="/budget/{{.ID}}">
+    <span class="p-emoji">{{.Cat.Emoji}}</span>
+    <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>{{.Cat.Nom}}</small></span>
+    <b class="montant {{.Sens}}">{{if eq .Sens "depense"}}−{{else}}+{{end}}{{montant .Montant $.Donnees.Devise}}</b>
+  </a>
+  {{- end}}
+</div>
+{{- else}}
+<div class="carte vide bloc"><span class="emoji">🔎</span>Rien trouvé pour « {{.Q}} ».</div>
+{{- end}}
+{{end}}
+{{end}}
+{{end}}
