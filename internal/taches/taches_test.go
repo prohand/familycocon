@@ -478,3 +478,25 @@ func TestDescriptionTache(t *testing.T) {
 		t.Fatalf("description trop longue acceptée : %d", code)
 	}
 }
+
+// Une tâche « une fois » datée plus tard n'est pas « du jour » (accueil) :
+// elle attend dans « Les autres jours », et on peut déjà la cocher.
+func TestTacheDateePlusTard(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	plusTard := time.Now().AddDate(0, 0, 10).Format("2006-01-02")
+	marie.Post("/taches", map[string]string{"titre": "Reserver le centre", "repetition": "unique", "rappel": "12:30", "date_rappel": plusTard})
+	marie.Post("/taches", map[string]string{"titre": "Sortir les poubelles", "repetition": "jour"})
+	_, p := marie.Get("/")
+	if strings.Contains(p, "Reserver le centre") || !strings.Contains(p, "Sortir les poubelles") {
+		t.Fatalf("accueil : tâche datée plus tard montrée comme « du jour »")
+	}
+	_, p = marie.Get("/taches")
+	i, j := strings.Index(p, "Les autres jours"), strings.Index(p, "Reserver le centre")
+	if i < 0 || j < i {
+		t.Fatal("tâche datée plus tard absente de « Les autres jours »")
+	}
+	if !strings.Contains(p[i:], `aria-label="J'ai fait Reserver le centre"`) {
+		t.Fatal("tâche datée plus tard : pas de case à cocher")
+	}
+}
