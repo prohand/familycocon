@@ -10,7 +10,7 @@ ORDER BY debut DESC LIMIT 8;
 
 -- name: ChercherTaches :many
 SELECT id, titre, emoji FROM taches
-WHERE taches.famille_id = sqlc.arg(famille_id) AND taches.active = 1 AND instr(plier(taches.titre), plier(sqlc.arg(motif))) > 0
+WHERE taches.famille_id = sqlc.arg(famille_id) AND taches.active = 1 AND (instr(plier(taches.titre), plier(sqlc.arg(motif))) > 0 OR instr(plier(taches.description), plier(sqlc.arg(motif))) > 0)
   AND (taches.cree_par = sqlc.arg(membre_id) OR (taches.privee = 0 AND (taches.assigne_a = sqlc.arg(membre_id) OR instr(',' || taches.tour || ',', ',' || sqlc.arg(membre_id) || ',') > 0 OR CAST(sqlc.arg(parent) AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
 ORDER BY id DESC LIMIT 8;
 

@@ -25,12 +25,12 @@ WHERE taches.famille_id = sqlc.arg(famille_id) AND taches.active = 1
 SELECT * FROM taches WHERE id = ? AND famille_id = ? AND active = 1;
 
 -- name: CreerTache :one
-INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, privee, parents, pour_parents, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, privee, parents, pour_parents, description, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: ModifierTache :exec
 UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ?, categorie_id = ?, rappel = ?, date_rappel = ?,
-  privee = ?, parents = ?, pour_parents = ?
+  privee = ?, parents = ?, pour_parents = ?, description = ?
 WHERE id = ? AND famille_id = ?;
 
 -- name: RetirerTache :exec

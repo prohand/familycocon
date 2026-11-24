@@ -187,8 +187,8 @@ func (q *Queries) CreerCategorieTache(ctx context.Context, arg CreerCategorieTac
 }
 
 const creerTache = `-- name: CreerTache :one
-INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, privee, parents, pour_parents, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents, pour_parents
+INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, privee, parents, pour_parents, description, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents, pour_parents, description
 `
 
 type CreerTacheParams struct {
@@ -204,6 +204,7 @@ type CreerTacheParams struct {
 	Privee      int64
 	Parents     int64
 	PourParents int64
+	Description string
 	CreePar     sql.NullInt64
 	CreeLe      int64
 }
@@ -222,6 +223,7 @@ func (q *Queries) CreerTache(ctx context.Context, arg CreerTacheParams) (Tache, 
 		arg.Privee,
 		arg.Parents,
 		arg.PourParents,
+		arg.Description,
 		arg.CreePar,
 		arg.CreeLe,
 	)
@@ -243,6 +245,7 @@ func (q *Queries) CreerTache(ctx context.Context, arg CreerTacheParams) (Tache, 
 		&i.Privee,
 		&i.Parents,
 		&i.PourParents,
+		&i.Description,
 	)
 	return i, err
 }
@@ -411,7 +414,7 @@ func (q *Queries) ModifierCategorieTache(ctx context.Context, arg ModifierCatego
 
 const modifierTache = `-- name: ModifierTache :exec
 UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ?, categorie_id = ?, rappel = ?, date_rappel = ?,
-  privee = ?, parents = ?, pour_parents = ?
+  privee = ?, parents = ?, pour_parents = ?, description = ?
 WHERE id = ? AND famille_id = ?
 `
 
@@ -427,6 +430,7 @@ type ModifierTacheParams struct {
 	Privee      int64
 	Parents     int64
 	PourParents int64
+	Description string
 	ID          int64
 	FamilleID   int64
 }
@@ -444,6 +448,7 @@ func (q *Queries) ModifierTache(ctx context.Context, arg ModifierTacheParams) er
 		arg.Privee,
 		arg.Parents,
 		arg.PourParents,
+		arg.Description,
 		arg.ID,
 		arg.FamilleID,
 	)
@@ -548,7 +553,7 @@ func (q *Queries) SupprimerCategorieTache(ctx context.Context, arg SupprimerCate
 }
 
 const tacheParID = `-- name: TacheParID :one
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents, pour_parents FROM taches WHERE id = ? AND famille_id = ? AND active = 1
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents, pour_parents, description FROM taches WHERE id = ? AND famille_id = ? AND active = 1
 `
 
 type TacheParIDParams struct {
@@ -576,13 +581,14 @@ func (q *Queries) TacheParID(ctx context.Context, arg TacheParIDParams) (Tache, 
 		&i.Privee,
 		&i.Parents,
 		&i.PourParents,
+		&i.Description,
 	)
 	return i, err
 }
 
 const tachesActives = `-- name: TachesActives :many
 
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents, pour_parents FROM taches
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents, pour_parents, description FROM taches
 WHERE taches.famille_id = ?1 AND taches.active = 1
   AND (taches.cree_par = ?2 OR (taches.privee = 0 AND (taches.assigne_a = ?2 OR instr(',' || taches.tour || ',', ',' || ?2 || ',') > 0 OR CAST(?3 AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
   AND NOT (taches.repetition = '' AND EXISTS (
@@ -635,6 +641,7 @@ func (q *Queries) TachesActives(ctx context.Context, arg TachesActivesParams) ([
 			&i.Privee,
 			&i.Parents,
 			&i.PourParents,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}

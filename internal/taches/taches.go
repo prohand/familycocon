@@ -225,10 +225,11 @@ type jourHisto struct {
 }
 
 type vueTaches struct {
-	Pour       int64  // filtre par membre (0 : tout le monde)
-	Categorie  int64  // filtre par catégorie (0 : toutes ; -1 : sans)
-	Cat        string // la même, pour les adresses (« 3 », « sans », vide)
-	Voir       string // « partagees », « privees », « enfants » ou vide
+	Pour       int64          // filtre par membre (0 : tout le monde)
+	Categorie  int64          // filtre par catégorie (0 : toutes ; -1 : sans)
+	Cat        string         // la même, pour les adresses (« 3 », « sans », vide)
+	Voir       string         // « partagees », « privees », « enfants » ou vide
+	Nombres    map[string]int // tâches de chaque filtre « Voir » (clé : sa valeur)
 	Categories []Categorie
 	Membres    []donnees.Membre
 	AFaire     []ligneTache
@@ -239,8 +240,12 @@ type vueTaches struct {
 	Formulaire *formTache
 }
 
-// tachesMax : tâches en cours par famille.
-const tachesMax = 500
+// tachesMax : tâches en cours par famille ; descriptionMax : caractères
+// de la description.
+const (
+	tachesMax      = 500
+	descriptionMax = 2000
+)
 
 // debutDuJour : aujourd'hui à minuit, heure de la famille (secondes Unix).
 func debutDuJour(c *appli.Contexte) int64 {
@@ -439,7 +444,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 	if err != nil {
 		return nil, err
 	}
-	v := &vueTaches{Pour: pour, Categorie: cat, Cat: paramCategorie(cat), Voir: voir, Categories: cats, Membres: membres}
+	v := &vueTaches{Pour: pour, Categorie: cat, Cat: paramCategorie(cat), Voir: voir, Categories: cats, Membres: membres, Nombres: map[string]int{}}
 	aujourdhui := repetition.CleJour(c.Maintenant())
 	for _, l := range lignes {
 		if !pourMembre(l, pour, parID) || !dansCategorie(l.Tache, cat) {
@@ -448,15 +453,22 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 		l.Categorie = nomCat[l.CategorieID.Int64]
 		l.Joints = joints[l.ID]
 		l.Cachee = l.Privee == 0 && (l.Parents == 1 || catParents[l.CategorieID.Int64])
+		// Une tâche « une fois » faite un autre jour n'est plus montrée.
+		if l.Faite && !l.Regle.Repete() && l.FaiteJour != aujourdhui {
+			continue
+		}
+		// Nombres du filtre « Voir » (avec les autres filtres).
+		for _, x := range []string{"", voirPartagees, voirPrivees, voirEnfants} {
+			if dansVoir(l, x, parID) {
+				v.Nombres[x]++
+			}
+		}
 		if !dansVoir(l, voir, parID) {
 			continue
 		}
 		switch {
 		case l.Faite:
-			// Une tâche « une fois » faite un autre jour n'est plus montrée.
-			if l.Regle.Repete() || l.FaiteJour == aujourdhui {
-				v.Faites = append(v.Faites, l)
-			}
+			v.Faites = append(v.Faites, l)
 		case l.AFaire:
 			v.AFaire = append(v.AFaire, l)
 		default:
@@ -633,6 +645,7 @@ type saisieTache struct {
 	pour    []int64 // à notifier (membre choisi, ceux du tour, ou les parents)
 	// pourParents : « Parents » (l'un ou l'autre la fait).
 	pourParents int64
+	description string // facultative (texte mis en forme)
 	regle       repetition.Regle
 	// Catégorie (nulle : aucune) ; rappel : heure (« 18:00 », vide : aucun)
 	// et jour d'une tâche « une fois » (vide : chaque jour jusqu'à ce
@@ -650,6 +663,10 @@ func (m *Module) lireFormulaire(r *http.Request, c *appli.Contexte) (s saisieTac
 	s.titre = strings.TrimSpace(r.PostForm.Get("titre"))
 	if n := utf8.RuneCountInString(s.titre); n < 1 || n > 80 {
 		return s, "Le titre doit faire entre 1 et 80 caractères."
+	}
+	s.description = strings.TrimSpace(r.PostForm.Get("description"))
+	if utf8.RuneCountInString(s.description) > descriptionMax {
+		return s, fmt.Sprintf("Description : %d caractères au plus.", descriptionMax)
 	}
 	membre := func(v string) (int64, bool) {
 		id, err := strconv.ParseInt(v, 10, 64)
@@ -729,7 +746,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	t, err := m.a.Q.CreerTache(r.Context(), donnees.CreerTacheParams{
 		FamilleID: c.Famille.ID, Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour,
 		Repetition: s.regle.String(), CategorieID: s.categorie, Rappel: s.rappel, DateRappel: s.dateRappel,
-		Privee: s.privee, Parents: s.parents, PourParents: s.pourParents, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+		Privee: s.privee, Parents: s.parents, PourParents: s.pourParents, Description: s.description, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -776,7 +793,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	if err := m.a.Q.ModifierTache(r.Context(), donnees.ModifierTacheParams{
 		Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour, Repetition: regle.String(),
 		CategorieID: s.categorie, Rappel: s.rappel, DateRappel: s.dateRappel, Privee: s.privee, Parents: s.parents,
-		PourParents: s.pourParents, ID: t.ID, FamilleID: c.Famille.ID,
+		PourParents: s.pourParents, Description: s.description, ID: t.ID, FamilleID: c.Famille.ID,
 	}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return

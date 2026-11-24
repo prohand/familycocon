@@ -206,7 +206,7 @@ func (q *Queries) ChercherRepas(ctx context.Context, arg ChercherRepasParams) ([
 
 const chercherTaches = `-- name: ChercherTaches :many
 SELECT id, titre, emoji FROM taches
-WHERE taches.famille_id = ?1 AND taches.active = 1 AND instr(plier(taches.titre), plier(?2)) > 0
+WHERE taches.famille_id = ?1 AND taches.active = 1 AND (instr(plier(taches.titre), plier(?2)) > 0 OR instr(plier(taches.description), plier(?2)) > 0)
   AND (taches.cree_par = ?3 OR (taches.privee = 0 AND (taches.assigne_a = ?3 OR instr(',' || taches.tour || ',', ',' || ?3 || ',') > 0 OR CAST(?4 AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
 ORDER BY id DESC LIMIT 8
 `

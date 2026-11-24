@@ -94,8 +94,9 @@ type vueNotes struct {
 	Categorie  int64 // filtre : 0 toutes, -1 sans catégorie, sinon son numéro
 	Categories []Categorie
 	Recherche  string
-	Cat        string // la catégorie pour une adresse (« 3 », « sans », vide)
-	Params     string // filtre et recherche, encodés pour une adresse (« voir=…&q=… »)
+	Cat        string                      // la catégorie pour une adresse (« 3 », « sans », vide)
+	Nombres    donnees.CompterNotesVoirRow // notes de chaque filtre « Voir »
+	Params     string                      // filtre et recherche, encodés pour une adresse (« voir=…&q=… »)
 	Epinglees  []carteNote
 	Autres     []carteNote
 	Tronquee   bool // la liste est coupée (notesListe)
@@ -226,6 +227,10 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, cate
 		return nil, err
 	}
 	v := &vueNotes{Filtre: filtre, Categorie: categorie, Categories: cats, Recherche: recherche, Params: paramsListe(filtre, categorie, recherche)}
+	if v.Nombres, err = m.a.Q.CompterNotesVoir(ctx, donnees.CompterNotesVoirParams{FamilleID: c.Famille.ID,
+		MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Parent: estParent(c), Categorie: categorie, Motif: recherche}); err != nil {
+		return nil, err
+	}
 	switch {
 	case categorie == -1:
 		v.Cat = sansCat

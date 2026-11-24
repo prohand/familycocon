@@ -390,6 +390,11 @@ func TestTachesPriveesEtParents(t *testing.T) {
 			t.Errorf("filtre enfants : « %s » montrée = %v", x.titre, !x.vue)
 		}
 	}
+	// Nombres : 6 tâches (avec celle de Léa), 1 privée, 3 vues des enfants.
+	if _, q := marie.Get("/taches"); !strings.Contains(q, "Toutes <small>6</small>") || !strings.Contains(q, "Privées <small>1</small>") ||
+		!strings.Contains(q, "Vues des enfants <small>3</small>") {
+		t.Fatalf("nombres du filtre « Voir » :\n%s", q)
+	}
 	if _, p = marie.Get("/taches?voir=privees"); !strings.Contains(p, "Cadeau surprise") || strings.Contains(p, "Mettre la table") {
 		t.Fatal("filtre Privées")
 	}
@@ -459,3 +464,18 @@ func mustGet(t *testing.T, n *essai.Navigateur, chemin string) string {
 	_, p := n.Get(chemin)
 	return p
 }
+
+// Description facultative : montrée mise en forme, trouvée par la recherche.
+func TestDescriptionTache(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	marie.Post("/taches", map[string]string{"titre": "Centre aéré", "repetition": "unique", "description": "Réserver sur le **site de la mairie**"})
+	_, p := marie.Get("/taches")
+	if !strings.Contains(p, `class="description-tache contenu-note"`) || !strings.Contains(p, "<strong>site de la mairie</strong>") {
+		t.Fatalf("description absente :\n%s", p)
+	}
+	if code, _ := marie.Post("/taches", map[string]string{"titre": "X", "repetition": "jour", "description": strings.Repeat("a", 2001)}); code != 400 {
+		t.Fatalf("description trop longue acceptée : %d", code)
+	}
+}
+

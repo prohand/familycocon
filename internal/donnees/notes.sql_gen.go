@@ -259,6 +259,51 @@ func (q *Queries) CompterNotesFamille(ctx context.Context, familleID int64) (int
 	return count, err
 }
 
+const compterNotesVoir = `-- name: CompterNotesVoir :one
+SELECT CAST(count(*) AS INTEGER) AS toutes,
+  CAST(coalesce(sum(n.privee = 0), 0) AS INTEGER) AS partagees,
+  CAST(coalesce(sum(n.privee = 1), 0) AS INTEGER) AS privees,
+  CAST(coalesce(sum(n.privee = 0 AND (NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)) OR EXISTS (SELECT 1 FROM membres e WHERE e.id = n.auteur_id AND e.role = 'enfant'))), 0) AS INTEGER) AS enfants
+FROM notes n
+WHERE n.famille_id = ?1 AND (n.auteur_id = ?2 OR (n.privee = 0 AND (CAST(?3 AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
+  AND (?4 = 0 OR (?4 = -1 AND n.categorie_id IS NULL) OR n.categorie_id = ?4)
+  AND (?5 = '' OR instr(plier(n.titre), plier(?5)) > 0 OR instr(plier(n.texte), plier(?5)) > 0)
+`
+
+type CompterNotesVoirParams struct {
+	FamilleID int64
+	MembreID  sql.NullInt64
+	Parent    int64
+	Categorie interface{}
+	Motif     interface{}
+}
+
+type CompterNotesVoirRow struct {
+	Toutes    int64
+	Partagees int64
+	Privees   int64
+	Enfants   int64
+}
+
+// Nombres du filtre " Voir " (avec la categorie et la recherche choisies).
+func (q *Queries) CompterNotesVoir(ctx context.Context, arg CompterNotesVoirParams) (CompterNotesVoirRow, error) {
+	row := q.db.QueryRowContext(ctx, compterNotesVoir,
+		arg.FamilleID,
+		arg.MembreID,
+		arg.Parent,
+		arg.Categorie,
+		arg.Motif,
+	)
+	var i CompterNotesVoirRow
+	err := row.Scan(
+		&i.Toutes,
+		&i.Partagees,
+		&i.Privees,
+		&i.Enfants,
+	)
+	return i, err
+}
+
 const compterPhotosNote = `-- name: CompterPhotosNote :one
 SELECT count(*) FROM photos_notes WHERE note_id = ?
 `
