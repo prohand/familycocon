@@ -140,6 +140,7 @@ func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin t
 				e.Titre += " · ⏰ " + x.t.Rappel
 			}
 			e.Membre = assigneLe(x.t, x.regle, j, parID)
+			e.PourParents = e.Membre == nil && x.t.PourParents == 1
 			out = append(out, e)
 			ids = append(ids, x.t.ID)
 			cleDe = append(cleDe, occ)

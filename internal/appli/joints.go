@@ -168,7 +168,9 @@ func (a *App) routesJoints() {
 // n'a pas de pièces, est fermé, ou réservé aux parents).
 func (a *App) droitsJoint(ctx context.Context, c *Contexte, module string, objet int64) (bool, bool) {
 	f, ok := a.joints[module]
-	if !ok {
+	// Module fermé par la famille (ou réservé aux parents) : rien. Le carnet
+	// vérifie le module de son objet lui-même.
+	if !ok || (module != "carnet" && !c.Voit(module)) {
 		return false, false
 	}
 	return f(ctx, c, objet)
@@ -351,15 +353,22 @@ func (a *App) envoyerJoints(w http.ResponseWriter, r *http.Request, c *Contexte)
 		return nil
 	})
 	var trop *http.MaxBytesError
+	// Une partie a pu être gardée avant l'erreur : on le dit (sinon on la
+	// renverrait, en double).
+	deja := ""
+	if err != nil && n > 0 {
+		deja = Pluriel(n, "pièce jointe ajoutée", "pièces jointes ajoutées") + ", puis : "
+		a.Publier(c, module, "")
+	}
 	switch {
 	case errors.Is(err, errJointType):
-		a.Echec(w, r, http.StatusBadRequest, "Fichier refusé : PDF, image, document (Word, Excel, PowerPoint, LibreOffice), texte, CSV ou ZIP seulement.")
+		a.Echec(w, r, http.StatusBadRequest, deja+"Fichier refusé : PDF, image, document (Word, Excel, PowerPoint, LibreOffice), texte, CSV ou ZIP seulement.")
 		return
 	case errors.Is(err, errJointTaille), errors.As(err, &trop):
-		a.Echec(w, r, http.StatusRequestEntityTooLarge, fmt.Sprintf("Fichier trop gros : %d Mo au plus.", JointMax>>20))
+		a.Echec(w, r, http.StatusRequestEntityTooLarge, deja+fmt.Sprintf("Fichier trop gros : %d Mo au plus par fichier, 50 Mo par envoi.", JointMax>>20))
 		return
 	case errors.Is(err, errJointPlace):
-		a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Plus de place : %d pièces au plus ici, 2 Go pour la famille.", JointsParObjet))
+		a.Echec(w, r, http.StatusBadRequest, deja+fmt.Sprintf("Plus de place : %d pièces au plus ici, 2 Go pour la famille.", JointsParObjet))
 		return
 	case err != nil:
 		a.ErreurInterne(w, r, err)
