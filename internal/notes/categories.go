@@ -27,6 +27,17 @@ const (
 	emojiMax      = 8  // caractères (un emoji peut en compter plusieurs)
 )
 
+// emojisCategories : la grille proposée pour choisir l'emoji d'une
+// catégorie (on peut aussi en écrire un autre).
+var emojisCategories = []string{
+	"🚗", "🏠", "🍳", "🛒", "💶", "🏦", "🧾", "📄",
+	"🏥", "💊", "👶", "🎓", "📚", "💼", "💻", "📱",
+	"✈️", "🏖️", "🎁", "🎂", "🎄", "🎉", "🐶", "🐱",
+	"🌱", "🔧", "🧹", "👕", "📦", "🔑", "💡", "📅",
+	"⚽", "🏃", "🎮", "🎵", "🎨", "🎬", "📷", "🍷",
+	"☕", "🧸", "❤️", "⭐", "📝", "🔒", "🗂️", "📌",
+}
+
 // Categorie : une catégorie montrée (rangée de filtres, formulaire, cartes).
 type Categorie struct {
 	ID     int64
@@ -75,6 +86,7 @@ func (m *Module) ranger(ctx context.Context, c *appli.Contexte, note, categorie 
 type vueCategories struct {
 	Categories []Categorie
 	Plein      bool
+	Emojis     []string
 }
 
 // pageCategories : GET /notes/categories.
@@ -84,7 +96,7 @@ func (m *Module) pageCategories(w http.ResponseWriter, r *http.Request, c *appli
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	m.a.Afficher(w, r, c, "notes/categories", "Catégories des notes", mod, vueCategories{Categories: l, Plein: len(l) >= categoriesMax})
+	m.a.Afficher(w, r, c, "notes/categories", "Catégories des notes", mod, vueCategories{Categories: l, Plein: len(l) >= categoriesMax, Emojis: emojisCategories})
 }
 
 // lireNomEmoji : le nom (obligatoire) et l'emoji (facultatif) du formulaire.
