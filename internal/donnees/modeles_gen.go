@@ -82,16 +82,17 @@ type Carnet struct {
 }
 
 type Carte struct {
-	ID         int64
-	FamilleID  int64
-	Enseigne   string
-	Numero     string
-	Format     string
-	Couleur    int64
-	Titulaire  string
-	Notes      string
-	CreeLe     int64
-	UtiliseeLe int64
+	ID              int64
+	FamilleID       int64
+	Enseigne        string
+	Numero          string
+	Format          string
+	Couleur         int64
+	Titulaire       string
+	Notes           string
+	CreeLe          int64
+	UtiliseeLe      int64
+	CouleurEnseigne int64
 }
 
 type CategoriesNote struct {

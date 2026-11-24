@@ -45,6 +45,7 @@
 | Tâches privées et « parents seulement » ; filtre « Vues des enfants » (tâches, notes) (v0.9.10, SPEC § 27) | **fait** |
 | Pièces jointes (notes, tâches, projets, carnet) (v0.9.10, SPEC § 28) | **fait** |
 | Tâches : « Pour qui ? : Parents » (v0.9.11, SPEC § 29) | **fait** |
+| Cartes de fidélité aux couleurs de l'enseigne (v0.9.12, SPEC § 30) | **fait** |
 
 ## Mesures
 

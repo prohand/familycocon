@@ -10,7 +10,7 @@ import (
 )
 
 const carteParID = `-- name: CarteParID :one
-SELECT id, famille_id, enseigne, numero, format, couleur, titulaire, notes, cree_le, utilisee_le FROM cartes WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, enseigne, numero, format, couleur, titulaire, notes, cree_le, utilisee_le, couleur_enseigne FROM cartes WHERE id = ? AND famille_id = ?
 `
 
 type CarteParIDParams struct {
@@ -32,6 +32,7 @@ func (q *Queries) CarteParID(ctx context.Context, arg CarteParIDParams) (Carte, 
 		&i.Notes,
 		&i.CreeLe,
 		&i.UtiliseeLe,
+		&i.CouleurEnseigne,
 	)
 	return i, err
 }
@@ -53,7 +54,7 @@ func (q *Queries) CarteUtilisee(ctx context.Context, arg CarteUtiliseeParams) er
 
 const cartesFamille = `-- name: CartesFamille :many
 
-SELECT id, famille_id, enseigne, numero, format, couleur, titulaire, notes, cree_le, utilisee_le FROM cartes WHERE famille_id = ? ORDER BY utilisee_le DESC, enseigne COLLATE NOCASE
+SELECT id, famille_id, enseigne, numero, format, couleur, titulaire, notes, cree_le, utilisee_le, couleur_enseigne FROM cartes WHERE famille_id = ? ORDER BY utilisee_le DESC, enseigne COLLATE NOCASE
 `
 
 // Cartes de fidelite (les plus utilisees en premier).
@@ -77,6 +78,7 @@ func (q *Queries) CartesFamille(ctx context.Context, familleID int64) ([]Carte, 
 			&i.Notes,
 			&i.CreeLe,
 			&i.UtiliseeLe,
+			&i.CouleurEnseigne,
 		); err != nil {
 			return nil, err
 		}
@@ -103,19 +105,20 @@ func (q *Queries) CompterCartes(ctx context.Context, familleID int64) (int64, er
 }
 
 const creerCarte = `-- name: CreerCarte :one
-INSERT INTO cartes (famille_id, enseigne, numero, format, couleur, titulaire, notes, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, enseigne, numero, format, couleur, titulaire, notes, cree_le, utilisee_le
+INSERT INTO cartes (famille_id, enseigne, numero, format, couleur, couleur_enseigne, titulaire, notes, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, enseigne, numero, format, couleur, titulaire, notes, cree_le, utilisee_le, couleur_enseigne
 `
 
 type CreerCarteParams struct {
-	FamilleID int64
-	Enseigne  string
-	Numero    string
-	Format    string
-	Couleur   int64
-	Titulaire string
-	Notes     string
-	CreeLe    int64
+	FamilleID       int64
+	Enseigne        string
+	Numero          string
+	Format          string
+	Couleur         int64
+	CouleurEnseigne int64
+	Titulaire       string
+	Notes           string
+	CreeLe          int64
 }
 
 func (q *Queries) CreerCarte(ctx context.Context, arg CreerCarteParams) (Carte, error) {
@@ -125,6 +128,7 @@ func (q *Queries) CreerCarte(ctx context.Context, arg CreerCarteParams) (Carte, 
 		arg.Numero,
 		arg.Format,
 		arg.Couleur,
+		arg.CouleurEnseigne,
 		arg.Titulaire,
 		arg.Notes,
 		arg.CreeLe,
@@ -141,23 +145,26 @@ func (q *Queries) CreerCarte(ctx context.Context, arg CreerCarteParams) (Carte, 
 		&i.Notes,
 		&i.CreeLe,
 		&i.UtiliseeLe,
+		&i.CouleurEnseigne,
 	)
 	return i, err
 }
 
 const modifierCarte = `-- name: ModifierCarte :exec
-UPDATE cartes SET enseigne = ?, numero = ?, format = ?, couleur = ?, titulaire = ?, notes = ? WHERE id = ? AND famille_id = ?
+UPDATE cartes SET enseigne = ?, numero = ?, format = ?, couleur = ?, couleur_enseigne = ?, titulaire = ?, notes = ?
+WHERE id = ? AND famille_id = ?
 `
 
 type ModifierCarteParams struct {
-	Enseigne  string
-	Numero    string
-	Format    string
-	Couleur   int64
-	Titulaire string
-	Notes     string
-	ID        int64
-	FamilleID int64
+	Enseigne        string
+	Numero          string
+	Format          string
+	Couleur         int64
+	CouleurEnseigne int64
+	Titulaire       string
+	Notes           string
+	ID              int64
+	FamilleID       int64
 }
 
 func (q *Queries) ModifierCarte(ctx context.Context, arg ModifierCarteParams) error {
@@ -166,6 +173,7 @@ func (q *Queries) ModifierCarte(ctx context.Context, arg ModifierCarteParams) er
 		arg.Numero,
 		arg.Format,
 		arg.Couleur,
+		arg.CouleurEnseigne,
 		arg.Titulaire,
 		arg.Notes,
 		arg.ID,

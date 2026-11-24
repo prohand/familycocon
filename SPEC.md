@@ -731,10 +731,26 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   celui d'un enfant ; annonce et rappel aux parents ; compte dans le
   badge « à moi » de chaque parent. Une tâche privée ne peut pas l'être.
 - Description facultative d'une tâche (migration 0042, `taches.description`,
-  2 000 caractères, éditeur riche) : 3 lignes au plus sous le titre dans la
-  liste ; trouvée par la recherche.
+  2 000 caractères, éditeur riche) : dans la liste, sa première ligne
+  (« 📝 … », coupée) ; touchée, le texte entier (« ▴ Réduire ») ; trouvée par
+  la recherche.
 - Rappels des tâches et des notes : l'année est écrite quand ce n'est pas
   l'année en cours (`appli.DateCourte` : « 14/01/2027 »).
 - Filtre « Voir » (tâches et notes) : le nombre de chaque choix, avec les
   autres filtres (personne, catégorie, recherche).
+
+## 30. Cartes de fidélité aux couleurs de l'enseigne (v0.9.12)
+- Une liste d'environ 70 enseignes (`internal/fidelite/enseignes.go` :
+  supermarchés, bricolage, sport, beauté, mode, carburant, restauration…)
+  avec deux couleurs chacune. Pas de logo (marques protégées), rien ne
+  part sur Internet.
+- Le nom de la carte est comparé en mots entiers, sans accent ni casse
+  (« Carte Carrefour Market », « Super U », « E.Leclerc » ; pas
+  « Boulangerie » pour « Boulanger »).
+- Migration 0043 : `cartes.couleur_enseigne` (1 par défaut : aussi pour
+  les cartes déjà là) ; décoché dans le formulaire, la couleur choisie.
+- Couleurs en classes (`/fidelite/enseignes.css`, faite par le serveur ;
+  pas de style dans la page) ; carte et en-tête de caisse : couleur de
+  l'enseigne et bande en biais de la seconde ; texte blanc ou noir selon
+  la clarté.
 

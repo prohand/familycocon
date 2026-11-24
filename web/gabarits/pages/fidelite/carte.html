@@ -5,7 +5,8 @@
   <a class="retour" href="/fidelite">‹ Cartes</a>
 </section>
 <section class="carte-caisse" data-ecran-allume>
-  <div class="entete-caisse c{{.Carte.Couleur}}"><b>{{.Carte.Enseigne}}</b>{{if .Carte.Titulaire}}<small>{{.Carte.Titulaire}}</small>{{end}}</div>
+  <link rel="stylesheet" href="/fidelite/enseignes.css">
+  <div class="entete-caisse c{{.Carte.Couleur}}{{with .Marque}} marque marque-{{.}}{{end}}"><b>{{.Carte.Enseigne}}</b>{{if .Carte.Titulaire}}<small>{{.Carte.Titulaire}}</small>{{end}}</div>
   <div class="code-caisse">
     {{if .SVG}}{{.SVG}}{{end}}
     {{if .QR}}<img class="qr-caisse" src="{{.QR}}" alt="QR code de la carte">{{end}}

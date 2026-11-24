@@ -471,7 +471,7 @@ func TestDescriptionTache(t *testing.T) {
 	marie := essai.Famille(t, srv)
 	marie.Post("/taches", map[string]string{"titre": "Centre aéré", "repetition": "unique", "description": "Réserver sur le **site de la mairie**"})
 	_, p := marie.Get("/taches")
-	if !strings.Contains(p, `class="description-tache contenu-note"`) || !strings.Contains(p, "<strong>site de la mairie</strong>") {
+	if !strings.Contains(p, `<details class="description-tache"><summary>Réserver sur le site de la mairie</summary>`) || !strings.Contains(p, "<strong>site de la mairie</strong>") {
 		t.Fatalf("description absente :\n%s", p)
 	}
 	if code, _ := marie.Post("/taches", map[string]string{"titre": "X", "repetition": "jour", "description": strings.Repeat("a", 2001)}); code != 400 {
