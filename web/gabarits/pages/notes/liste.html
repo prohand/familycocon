@@ -2,7 +2,10 @@
 {{with .Donnees}}
 <section class="titre-page">
   <a class="retour" href="/">‹ Accueil</a>
-  <h1>📝 Notes</h1>
+  <div class="titre-ligne">
+    <h1>📝 Notes</h1>
+    <a class="bouton" href="/notes/nouvelle{{if gt .Categorie 0}}?cat={{.Categorie}}{{else if eq .Filtre "privees"}}?voir=privees{{end}}">＋ Note</a>
+  </div>
 </section>
 <div class="barre-actions barre-notes">
   {{/* Catégories de la famille (filtre), puis « Sans catégorie ». */}}
@@ -14,9 +17,6 @@
     {{if .Categories}}<a class="pilule{{if eq .Categorie -1}} active{{end}}" href="/notes?{{with .Filtre}}voir={{.}}&amp;{{end}}cat=sans">Sans catégorie</a>{{end}}
     <a class="pilule" href="/notes/categories" aria-label="Gérer les catégories" title="Gérer les catégories">⚙️ Catégories</a>
   </nav>
-  <span class="boutons-ajout">
-    <a class="bouton" href="/notes/nouvelle{{if gt .Categorie 0}}?cat={{.Categorie}}{{else if eq .Filtre "privees"}}?voir=privees{{end}}">＋ Note</a>
-  </span>
 </div>
 {{/* Qui la voit : toutes, partagées (la famille), privées (moi seul). */}}
 <nav class="pilules petites voir" aria-label="Partagées ou privées">

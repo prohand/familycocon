@@ -221,6 +221,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   margin-bottom: 6px;
 }
 .titre-page h1 { font-size: 1.7rem; display: flex; align-items: center; gap: 10px; }
+/* Titre et bouton d'ajout sur la même ligne (« 📝 Notes   ＋ Note »). */
+.titre-page .titre-ligne { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.titre-page .titre-ligne h1 { min-width: 0; }
+.titre-page .titre-ligne .bouton { flex-shrink: 0; }
 .titre-page p { margin: 4px 0 0; color: var(--texte-doux); font-weight: 600; }
 
 /* ---------- Tuiles de l'accueil ---------- */
@@ -1514,8 +1518,7 @@ details.replie-avatar > summary { cursor: pointer; margin: 4px 0 10px; }
 .ajout-element input { flex: 1; min-width: 0; }
 button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer; font: inherit; font-weight: 800; }
 .modifier-liste > summary { margin-bottom: 8px; }
-/* Notes : les catégories (qui défilent) et le bouton « ＋ Note » à droite,
-   sur la même ligne (comme les tâches). */
+/* Notes : les catégories défilent (le bouton « ＋ Note » est dans le titre). */
 .barre-notes .pilules.defile { margin-top: 0; }
 
 /* Véhicules : onglets « Entretien | Pleins », chiffres et graphiques (SVG

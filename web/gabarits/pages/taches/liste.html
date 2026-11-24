@@ -2,7 +2,10 @@
 {{with .Donnees}}
 <section class="titre-page">
   <a class="retour" href="/">‹ Accueil</a>
-  <h1>✅ Tâches</h1>
+  <div class="titre-ligne">
+    <h1>✅ Tâches</h1>
+    <a class="bouton" href="/taches/nouvelle{{if gt .Categorie 0}}?cat={{.Categorie}}{{end}}">＋ Tâche</a>
+  </div>
   <p>Qui fait quoi à la maison</p>
 </section>
 <div class="barre-actions">
@@ -12,7 +15,6 @@
     <a class="pilule{{if eq .ID $.Donnees.Pour}} active{{end}}" href="{{$.Donnees.Adresse .ID $.Donnees.Cat $.Donnees.Voir}}">{{.Nom}}</a>
     {{- end}}
   </nav>
-  <a class="bouton" href="/taches/nouvelle{{if gt .Categorie 0}}?cat={{.Categorie}}{{end}}">＋ Tâche</a>
 </div>
 {{/* Catégories : un second filtre (gardé avec celui des membres). */}}
 <nav class="pilules defile filtre-categories" aria-label="Catégories">
