@@ -102,7 +102,7 @@
   <span class="p-emoji">{{$l.Emoji}}</span>
   <span class="quoi">{{if eq $l.Privee 1}}<span title="Privée">🔒</span> {{else if $l.Cachee}}<span title="Parents seulement">👥</span> {{end}}{{$l.Titre}}
     <small>{{if $l.Faite}}{{with $l.ParQui}}par {{.Nom}} {{end}}à {{$l.FaiteLe}}{{else}}{{with $l.Assigne}}{{.Nom}}{{else}}{{if eq $l.PourParents 1}}Parents{{else}}Tout le monde{{end}}{{end}}{{if $l.Tour}} 🔄{{end}} · {{$l.Regle.Texte}}{{with $l.Rappel}} · {{.}}{{end}}{{end}}{{with $l.Categorie}} <span class="etiquette-categorie">{{.}}</span>{{end}}</small>
-    {{- with $l.Description}}<span class="description-tache contenu-note">{{riche .}}</span>{{end}}
+    {{- if $l.Description}}<details class="description-tache"><summary>{{or $l.Resume "Description"}}</summary><div class="contenu-note">{{riche $l.Description}}</div></details>{{end}}
     {{- with $l.Joints}}<span class="joints-tache">{{range .}}<a href="/joints/{{.ID}}/{{.Nom}}" target="_blank" rel="noopener">📎 {{.Nom}}</a>{{end}}</span>{{end}}</span>
   {{if and (not $l.Assigne) (eq $l.PourParents 1)}}{{template "avatar-parents"}}{{else}}{{template "avatar-petit" $l.Assigne}}{{end}}
   {{if $l.Modifiable}}<a class="crayon" href="/taches/{{$l.ID}}/modifier" aria-label="Modifier {{$l.Titre}}">✏️</a>{{end}}

@@ -25,6 +25,7 @@ import (
 	"familycocon/internal/appli"
 	"familycocon/internal/donnees"
 	"familycocon/internal/repetition"
+	"familycocon/internal/riche"
 )
 
 // Module : le module Tâches.
@@ -207,6 +208,7 @@ type ligneTache struct {
 	Rappel     string // « ⏰ 18:00 » (vide : pas de rappel)
 	Cachee     bool   // réservée aux parents (la tâche ou sa catégorie)
 	Joints     []appli.Joint
+	Resume     string // première ligne de la description, en texte simple
 }
 
 type score struct {
@@ -452,6 +454,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 		}
 		l.Categorie = nomCat[l.CategorieID.Int64]
 		l.Joints = joints[l.ID]
+		l.Resume = resumeDescription(l.Description)
 		l.Cachee = l.Privee == 0 && (l.Parents == 1 || catParents[l.CategorieID.Int64])
 		// Une tâche « une fois » faite un autre jour n'est plus montrée.
 		if l.Faite && !l.Regle.Repete() && l.FaiteJour != aujourdhui {
@@ -931,4 +934,15 @@ func (m *Module) blocAccueil(ctx context.Context, c *appli.Contexte) (template.H
 		l = l[:5]
 	}
 	return m.a.RendreBloc("taches/liste", "accueil-taches", c, l)
+}
+
+// resumeDescription : la première ligne non vide de la description, sans
+// mise en forme (montrée sur une ligne, le reste en touchant).
+func resumeDescription(d string) string {
+	for _, l := range strings.Split(d, "\n") {
+		if t := strings.TrimSpace(riche.LigneSimple(l)); t != "" {
+			return t
+		}
+	}
+	return ""
 }

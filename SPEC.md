@@ -731,8 +731,9 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   celui d'un enfant ; annonce et rappel aux parents ; compte dans le
   badge « à moi » de chaque parent. Une tâche privée ne peut pas l'être.
 - Description facultative d'une tâche (migration 0042, `taches.description`,
-  2 000 caractères, éditeur riche) : 3 lignes au plus sous le titre dans la
-  liste ; trouvée par la recherche.
+  2 000 caractères, éditeur riche) : dans la liste, sa première ligne
+  (« 📝 … », coupée) ; touchée, le texte entier (« ▴ Réduire ») ; trouvée par
+  la recherche.
 - Rappels des tâches et des notes : l'année est écrite quand ce n'est pas
   l'année en cours (`appli.DateCourte` : « 14/01/2027 »).
 - Filtre « Voir » (tâches et notes) : le nombre de chaque choix, avec les

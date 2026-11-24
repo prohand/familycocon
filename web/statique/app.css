@@ -1769,8 +1769,14 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 /* Sur une ligne de tâche : en petit, sous le titre. */
 .joints-tache { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; font-size: .8rem; }
 .joints-tache a { font-weight: 700; }
-/* Description d'une tache : en petit, 3 lignes au plus dans la liste. */
-.description-tache { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
-  margin-top: 2px; font-size: .85rem; font-weight: 500; color: var(--texte-doux); }
-.description-tache > * { margin: 0; }
+/* Description d'une tâche : une ligne (coupée « … ») ; touchée, le texte entier. */
+.description-tache { margin-top: 2px; font-size: .85rem; font-weight: 500; color: var(--texte-doux); min-width: 0; }
+.description-tache > summary { list-style: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.description-tache > summary::-webkit-details-marker { display: none; }
+.description-tache > summary::before { content: "📝 "; }
+.description-tache[open] > summary { font-size: 0; }
+.description-tache[open] > summary::before { content: "▴ Réduire"; font-size: .8rem; font-weight: 700; }
+.description-tache[open] > .contenu-note { margin-top: 2px; }
+.description-tache .contenu-note > :first-child { margin-top: 0; }
+.description-tache .contenu-note > :last-child { margin-bottom: 0; }
 
