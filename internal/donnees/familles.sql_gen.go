@@ -404,6 +404,34 @@ func (q *Queries) ModifierRaccourcis(ctx context.Context, arg ModifierRaccourcis
 	return err
 }
 
+const parentsDeFamille = `-- name: ParentsDeFamille :many
+SELECT id FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'parent' ORDER BY id
+`
+
+// Parents d'une famille (rappels d'une note cachee aux enfants).
+func (q *Queries) ParentsDeFamille(ctx context.Context, familleID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, parentsDeFamille, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const retirerMembre = `-- name: RetirerMembre :exec
 UPDATE membres SET actif = 0, identifiant = NULL, mdp = NULL, pin = NULL, totp = '', totp_dernier = 0
 WHERE id = ? AND famille_id = ?

@@ -97,7 +97,7 @@ func (m *Module) photoNote(r *http.Request, c *appli.Contexte) (donnees.PhotoNot
 		return p, donnees.Note{}, false
 	}
 	n, err := m.a.Q.NoteParID(r.Context(), donnees.NoteParIDParams{ID: p.NoteID, FamilleID: c.Famille.ID})
-	return p, n, err == nil && visible(c, n)
+	return p, n, err == nil && m.visible(r.Context(), c, n)
 }
 
 // photo : l'image (jamais gardée par le navigateur : Cache-Control no-store).

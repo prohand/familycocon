@@ -74,6 +74,7 @@ type carteNote struct {
 	Auteur     *donnees.Membre
 	Date       string
 	Modifiable bool
+	Cachee     bool // réservée aux parents (la note ou sa catégorie)
 }
 
 type vueNotes struct {
@@ -130,9 +131,36 @@ func supprimable(c *appli.Contexte, n donnees.Note) bool {
 	return c.EstParent()
 }
 
-// visible : une note privée n'est vue que par son auteur.
-func visible(c *appli.Contexte, n donnees.Note) bool {
-	return n.Privee == 0 || (n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID)
+// visible : une note privée n'est vue que par son auteur ; une note
+// réservée aux parents (elle-même ou sa catégorie) est cachée aux enfants,
+// sauf à son auteur.
+func (m *Module) visible(ctx context.Context, c *appli.Contexte, n donnees.Note) bool {
+	if n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID {
+		return true
+	}
+	if n.Privee == 1 {
+		return false
+	}
+	return c.EstParent() || !m.cachee(ctx, n)
+}
+
+// cachee : la note est réservée aux parents (elle-même ou sa catégorie).
+func (m *Module) cachee(ctx context.Context, n donnees.Note) bool {
+	return n.Parents == 1 || m.categorieParents(ctx, n.CategorieID)
+}
+
+// annoncer : « Marie a écrit la note … » à ceux qui la voient (rien pour
+// une note privée, les parents seulement pour une note qui leur est réservée).
+func (m *Module) annoncer(ctx context.Context, c *appli.Contexte, n donnees.Note) {
+	if n.Privee == 1 {
+		return
+	}
+	texte := fmt.Sprintf("%s a écrit la note « %s » 📝", c.Membre.Nom, apercu(n.Titre, n.Texte))
+	if m.cachee(ctx, n) {
+		m.a.PublierPour(c, mod, texte, m.a.Parents(ctx, c))
+		return
+	}
+	m.a.Publier(c, mod, texte)
 }
 
 // paramsListe : « voir=privees&q=pain+%26+beurre », pour les adresses de
@@ -158,7 +186,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, cate
 	// Le filtre, la recherche (texte cherché tel quel, % et _ compris) et la
 	// borne sont appliqués en SQL ; seul le début du texte est lu.
 	lignes, err := m.a.Q.NotesVisibles(ctx, donnees.NotesVisiblesParams{
-		FamilleID: c.Famille.ID, MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true},
+		FamilleID: c.Famille.ID, MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Parent: estParent(c),
 		Filtre: filtre, Categorie: categorie, Motif: recherche, Nombre: notesListe + 1})
 	if err != nil {
 		return nil, err
@@ -188,7 +216,8 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, cate
 			n.Texte += "…"
 		}
 		n.Texte = apercuCases(n.Texte)
-		cn := carteNote{Note: n, Categorie: nomCat[l.CategorieID.Int64], Photos: l.Photos, Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n)}
+		cn := carteNote{Note: n, Categorie: nomCat[l.CategorieID.Int64], Photos: l.Photos, Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n),
+			Cachee: l.Cachee == 1 && n.Privee == 0}
 		if l.RappelLe > 0 && l.RappelEnvoye == 0 {
 			cn.Rappel = time.Unix(l.RappelLe, 0).In(c.Lieu).Format("02/01 15:04")
 		}
@@ -238,7 +267,7 @@ func (m *Module) note(r *http.Request, c *appli.Contexte) (donnees.Note, bool) {
 		return donnees.Note{}, false
 	}
 	n, err := m.a.Q.NoteParID(r.Context(), donnees.NoteParIDParams{ID: id, FamilleID: c.Famille.ID})
-	return n, err == nil && visible(c, n)
+	return n, err == nil && m.visible(r.Context(), c, n)
 }
 
 type formNote struct {
@@ -258,6 +287,10 @@ type formNote struct {
 	// et pour une note déjà privée ; pour une note partagée, seulement à un
 	// parent qui en est l'auteur).
 	PeutPriver bool
+	// PeutCacher : la case « Parents seulement » est proposée (parents).
+	PeutCacher bool
+	// Cachee : la note est cachée aux enfants par sa catégorie.
+	CacheeParCategorie bool
 }
 
 // peutPriver : qui peut rendre privée une note déjà partagée ? Seulement
@@ -269,7 +302,7 @@ func peutPriver(c *appli.Contexte, n donnees.Note) bool {
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	f := formNote{Nouvelle: r.PathValue("id") == "", Modifiable: true, PeutPriver: true}
+	f := formNote{Nouvelle: r.PathValue("id") == "", Modifiable: true, PeutPriver: true, PeutCacher: c.EstParent()}
 	if f.Nouvelle {
 		f.Note = donnees.Note{Couleur: 1}
 		// Venue de « Partager » : titre et texte préremplis.
@@ -280,6 +313,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		// Venue d'une catégorie de la liste : la note y est rangée.
 		if id, err := strconv.ParseInt(r.URL.Query().Get("cat"), 10, 64); err == nil && id > 0 {
 			f.Note.CategorieID = sqlNul(id)
+			f.CacheeParCategorie = m.categorieParents(r.Context(), f.Note.CategorieID)
 		}
 	} else {
 		n, ok := m.note(r, c)
@@ -288,6 +322,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Note, f.Modifiable, f.PeutPriver = n, modifiable(c, n), peutPriver(c, n)
+		f.CacheeParCategorie = m.categorieParents(r.Context(), n.CategorieID)
 		f.Supprimable = supprimable(c, n)
 		if len(Cases(n.Texte)) > 0 {
 			f.Cases = vueCases(c, n, false)
@@ -325,6 +360,7 @@ type saisie struct {
 	titre, texte     string
 	couleur          int64
 	privee, epinglee int64
+	parents          int64 // cachée aux enfants (choisi par un parent)
 }
 
 func lire(r *http.Request) (saisie, string) {
@@ -382,19 +418,17 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	t := time.Now().Unix()
 	n, err := m.a.Q.CreerNote(r.Context(), donnees.CreerNoteParams{
 		FamilleID: c.Famille.ID, AuteurID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Titre: s.titre, Texte: s.texte,
-		Couleur: s.couleur, Epinglee: s.epinglee, Privee: s.privee, CreeLe: t, ModifieLe: t,
+		Couleur: s.couleur, Epinglee: s.epinglee, Privee: s.privee, Parents: lireParents(r, c), CreeLe: t, ModifieLe: t,
 	})
 	if err == nil {
-		err = m.ranger(r.Context(), c, n.ID, m.lireCategorie(r, c))
+		n.CategorieID = sqlNul(m.lireCategorie(r, c))
+		err = m.ranger(r.Context(), c, n.ID, n.CategorieID.Int64)
 	}
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	if n.Privee == 0 {
-		// Une note privée n'annonce rien (même pas son titre).
-		m.a.Publier(c, mod, fmt.Sprintf("%s a écrit la note « %s » 📝", c.Membre.Nom, apercu(n.Titre, n.Texte)))
-	}
+	m.annoncer(r.Context(), c, n)
 	m.a.Flash(w, "Note enregistrée ✓")
 	// Une liste s'ouvre aussitôt (pour cocher, ajouter des éléments ou des
 	// photos) ; une note simple ramène à la liste des notes.
@@ -431,6 +465,17 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	if !(n.AuteurID.Valid && n.AuteurID.Int64 == c.Membre.ID) || (s.privee == 1 && !peutPriver(c, n)) {
 		s.privee = n.Privee
 	}
+	// « Parents seulement » : choisi par un parent ; un enfant ne le change pas.
+	s.parents = n.Parents
+	if c.EstParent() {
+		s.parents = lireParents(r, c)
+	}
+	// Catégorie : un enfant ne voit pas les catégories des parents ; une note
+	// qu'un parent y a rangée y reste.
+	categorie := m.lireCategorie(r, c)
+	if !c.EstParent() && m.categorieParents(r.Context(), n.CategorieID) {
+		categorie = n.CategorieID.Int64
+	}
 	// Repères de photos : seulement celles de cette note.
 	photos, err := m.a.Q.PhotosNote(r.Context(), donnees.PhotosNoteParams{NoteID: n.ID, FamilleID: c.Famille.ID})
 	if err != nil {
@@ -443,7 +488,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	// (la saisie reste à l'écran).
 	avant, _ := strconv.ParseInt(r.PostFormValue("version"), 10, 64)
 	k, err := m.a.Q.ModifierNote(r.Context(), donnees.ModifierNoteParams{
-		Titre: s.titre, Texte: s.texte, Couleur: s.couleur, Epinglee: s.epinglee, Privee: s.privee,
+		Titre: s.titre, Texte: s.texte, Couleur: s.couleur, Epinglee: s.epinglee, Privee: s.privee, Parents: s.parents,
 		ModifieLe: max(time.Now().Unix(), n.ModifieLe+1), ID: n.ID, FamilleID: c.Famille.ID, Avant: avant,
 	})
 	if err != nil {
@@ -454,7 +499,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.Echec(w, r, http.StatusConflict, "Quelqu'un vient de modifier cette note : copiez votre texte, puis rechargez la page.")
 		return
 	}
-	if err := m.ranger(r.Context(), c, n.ID, m.lireCategorie(r, c)); err != nil {
+	if err := m.ranger(r.Context(), c, n.ID, categorie); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
@@ -513,7 +558,7 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 }
 
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
-	n, err := m.a.Q.CompterNotes(ctx, donnees.CompterNotesParams{FamilleID: c.Famille.ID, MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}})
+	n, err := m.a.Q.CompterNotes(ctx, donnees.CompterNotesParams{FamilleID: c.Famille.ID, MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Parent: estParent(c)})
 	if err != nil || n == 0 {
 		return appli.Resume{Info: "Aucune note"}
 	}

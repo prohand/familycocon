@@ -48,42 +48,60 @@ func (q *Queries) AjouterPhotoNote(ctx context.Context, arg AjouterPhotoNotePara
 }
 
 const categorieNoteExiste = `-- name: CategorieNoteExiste :one
-SELECT count(*) FROM categories_notes WHERE id = ? AND famille_id = ?
+SELECT count(*) FROM categories_notes
+WHERE id = ?1 AND famille_id = ?2 AND (parents = 0 OR CAST(?3 AS INTEGER) = 1)
 `
 
 type CategorieNoteExisteParams struct {
 	ID        int64
 	FamilleID int64
+	Parent    int64
 }
 
+// Categorie utilisable par ce membre (parent : 1 pour un parent).
 func (q *Queries) CategorieNoteExiste(ctx context.Context, arg CategorieNoteExisteParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, categorieNoteExiste, arg.ID, arg.FamilleID)
+	row := q.db.QueryRowContext(ctx, categorieNoteExiste, arg.ID, arg.FamilleID, arg.Parent)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
+const categorieNoteParents = `-- name: CategorieNoteParents :one
+SELECT parents FROM categories_notes WHERE id = ?
+`
+
+func (q *Queries) CategorieNoteParents(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, categorieNoteParents, id)
+	var parents int64
+	err := row.Scan(&parents)
+	return parents, err
+}
+
 const categoriesNotes = `-- name: CategoriesNotes :many
-SELECT c.id, c.nom, c.emoji,
-  (SELECT count(*) FROM notes n WHERE n.categorie_id = c.id AND (n.privee = 0 OR n.auteur_id = ?1)) AS nombre
-FROM categories_notes c WHERE c.famille_id = ?2 ORDER BY c.nom COLLATE NOCASE
+SELECT c.id, c.nom, c.emoji, c.parents,
+  (SELECT count(*) FROM notes n WHERE n.categorie_id = c.id AND (n.auteur_id = ?1 OR (n.privee = 0 AND (CAST(?2 AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))) AS nombre
+FROM categories_notes c WHERE c.famille_id = ?3 AND (CAST(?2 AS INTEGER) = 1 OR c.parents = 0)
+ORDER BY c.nom COLLATE NOCASE
 `
 
 type CategoriesNotesParams struct {
 	MembreID  sql.NullInt64
+	Parent    int64
 	FamilleID int64
 }
 
 type CategoriesNotesRow struct {
-	ID     int64
-	Nom    string
-	Emoji  string
-	Nombre int64
+	ID      int64
+	Nom     string
+	Emoji   string
+	Parents int64
+	Nombre  int64
 }
 
-// Categories des notes de la famille, avec le nombre de notes que ce membre voit.
+// Categories des notes que ce membre voit (celles des parents : parents seulement),
+// avec le nombre de notes qu'il y voit.
 func (q *Queries) CategoriesNotes(ctx context.Context, arg CategoriesNotesParams) ([]CategoriesNotesRow, error) {
-	rows, err := q.db.QueryContext(ctx, categoriesNotes, arg.MembreID, arg.FamilleID)
+	rows, err := q.db.QueryContext(ctx, categoriesNotes, arg.MembreID, arg.Parent, arg.FamilleID)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +113,7 @@ func (q *Queries) CategoriesNotes(ctx context.Context, arg CategoriesNotesParams
 			&i.ID,
 			&i.Nom,
 			&i.Emoji,
+			&i.Parents,
 			&i.Nombre,
 		); err != nil {
 			return nil, err
@@ -138,6 +157,22 @@ type ChangerCocheesEnBasParams struct {
 // Listes : cases cochees en bas (affichage) ou a leur place.
 func (q *Queries) ChangerCocheesEnBas(ctx context.Context, arg ChangerCocheesEnBasParams) error {
 	_, err := q.db.ExecContext(ctx, changerCocheesEnBas, arg.EnBas, arg.ID, arg.FamilleID)
+	return err
+}
+
+const changerParentsCategorie = `-- name: ChangerParentsCategorie :exec
+UPDATE categories_notes SET parents = ? WHERE id = ? AND famille_id = ?
+`
+
+type ChangerParentsCategorieParams struct {
+	Parents   int64
+	ID        int64
+	FamilleID int64
+}
+
+// Reserver une categorie aux parents (ou la rendre a tous) : un parent seulement.
+func (q *Queries) ChangerParentsCategorie(ctx context.Context, arg ChangerParentsCategorieParams) error {
+	_, err := q.db.ExecContext(ctx, changerParentsCategorie, arg.Parents, arg.ID, arg.FamilleID)
 	return err
 }
 
@@ -197,16 +232,17 @@ func (q *Queries) CompterCategoriesNotes(ctx context.Context, familleID int64) (
 }
 
 const compterNotes = `-- name: CompterNotes :one
-SELECT count(*) FROM notes WHERE famille_id = ?1 AND (privee = 0 OR auteur_id = ?2)
+SELECT count(*) FROM notes n WHERE n.famille_id = ?1 AND (n.auteur_id = ?2 OR (n.privee = 0 AND (CAST(?3 AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
 `
 
 type CompterNotesParams struct {
 	FamilleID int64
 	MembreID  sql.NullInt64
+	Parent    int64
 }
 
 func (q *Queries) CompterNotes(ctx context.Context, arg CompterNotesParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, compterNotes, arg.FamilleID, arg.MembreID)
+	row := q.db.QueryRowContext(ctx, compterNotes, arg.FamilleID, arg.MembreID, arg.Parent)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -246,13 +282,14 @@ func (q *Queries) CompterPhotosNotesFamille(ctx context.Context, familleID int64
 }
 
 const creerCategorieNote = `-- name: CreerCategorieNote :one
-INSERT INTO categories_notes (famille_id, nom, emoji, cree_le) VALUES (?, ?, ?, ?) RETURNING id, famille_id, nom, emoji, cree_le
+INSERT INTO categories_notes (famille_id, nom, emoji, parents, cree_le) VALUES (?, ?, ?, ?, ?) RETURNING id, famille_id, nom, emoji, cree_le, parents
 `
 
 type CreerCategorieNoteParams struct {
 	FamilleID int64
 	Nom       string
 	Emoji     string
+	Parents   int64
 	CreeLe    int64
 }
 
@@ -261,6 +298,7 @@ func (q *Queries) CreerCategorieNote(ctx context.Context, arg CreerCategorieNote
 		arg.FamilleID,
 		arg.Nom,
 		arg.Emoji,
+		arg.Parents,
 		arg.CreeLe,
 	)
 	var i CategoriesNote
@@ -270,13 +308,14 @@ func (q *Queries) CreerCategorieNote(ctx context.Context, arg CreerCategorieNote
 		&i.Nom,
 		&i.Emoji,
 		&i.CreeLe,
+		&i.Parents,
 	)
 	return i, err
 }
 
 const creerNote = `-- name: CreerNote :one
-INSERT INTO notes (famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye, categorie_id
+INSERT INTO notes (famille_id, auteur_id, titre, texte, couleur, epinglee, privee, parents, cree_le, modifie_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye, categorie_id, parents
 `
 
 type CreerNoteParams struct {
@@ -287,6 +326,7 @@ type CreerNoteParams struct {
 	Couleur   int64
 	Epinglee  int64
 	Privee    int64
+	Parents   int64
 	CreeLe    int64
 	ModifieLe int64
 }
@@ -300,6 +340,7 @@ func (q *Queries) CreerNote(ctx context.Context, arg CreerNoteParams) (Note, err
 		arg.Couleur,
 		arg.Epinglee,
 		arg.Privee,
+		arg.Parents,
 		arg.CreeLe,
 		arg.ModifieLe,
 	)
@@ -319,6 +360,7 @@ func (q *Queries) CreerNote(ctx context.Context, arg CreerNoteParams) (Note, err
 		&i.RappelLe,
 		&i.RappelEnvoye,
 		&i.CategorieID,
+		&i.Parents,
 	)
 	return i, err
 }
@@ -339,7 +381,8 @@ func (q *Queries) EpinglerNote(ctx context.Context, arg EpinglerNoteParams) erro
 }
 
 const modifierCategorieNote = `-- name: ModifierCategorieNote :exec
-UPDATE categories_notes SET nom = ?1, emoji = ?2 WHERE id = ?3 AND famille_id = ?4
+UPDATE categories_notes SET nom = ?1, emoji = ?2
+WHERE id = ?3 AND famille_id = ?4 AND (parents = 0 OR CAST(?5 AS INTEGER) = 1)
 `
 
 type ModifierCategorieNoteParams struct {
@@ -347,6 +390,7 @@ type ModifierCategorieNoteParams struct {
 	Emoji     string
 	ID        int64
 	FamilleID int64
+	Parent    int64
 }
 
 func (q *Queries) ModifierCategorieNote(ctx context.Context, arg ModifierCategorieNoteParams) error {
@@ -355,14 +399,15 @@ func (q *Queries) ModifierCategorieNote(ctx context.Context, arg ModifierCategor
 		arg.Emoji,
 		arg.ID,
 		arg.FamilleID,
+		arg.Parent,
 	)
 	return err
 }
 
 const modifierNote = `-- name: ModifierNote :execrows
 UPDATE notes SET titre = ?1, texte = ?2, couleur = ?3, epinglee = ?4,
-  privee = ?5, modifie_le = ?6
-WHERE id = ?7 AND famille_id = ?8 AND (?9 = 0 OR modifie_le = ?9)
+  privee = ?5, parents = ?6, modifie_le = ?7
+WHERE id = ?8 AND famille_id = ?9 AND (?10 = 0 OR modifie_le = ?10)
 `
 
 type ModifierNoteParams struct {
@@ -371,6 +416,7 @@ type ModifierNoteParams struct {
 	Couleur   int64
 	Epinglee  int64
 	Privee    int64
+	Parents   int64
 	ModifieLe int64
 	ID        int64
 	FamilleID int64
@@ -386,6 +432,7 @@ func (q *Queries) ModifierNote(ctx context.Context, arg ModifierNoteParams) (int
 		arg.Couleur,
 		arg.Epinglee,
 		arg.Privee,
+		arg.Parents,
 		arg.ModifieLe,
 		arg.ID,
 		arg.FamilleID,
@@ -398,7 +445,7 @@ func (q *Queries) ModifierNote(ctx context.Context, arg ModifierNoteParams) (int
 }
 
 const noteParID = `-- name: NoteParID :one
-SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye, categorie_id FROM notes WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye, categorie_id, parents FROM notes WHERE id = ? AND famille_id = ?
 `
 
 type NoteParIDParams struct {
@@ -424,12 +471,13 @@ func (q *Queries) NoteParID(ctx context.Context, arg NoteParIDParams) (Note, err
 		&i.RappelLe,
 		&i.RappelEnvoye,
 		&i.CategorieID,
+		&i.Parents,
 	)
 	return i, err
 }
 
 const notesARappeler = `-- name: NotesARappeler :many
-SELECT id, famille_id, auteur_id, titre, texte, privee, rappel_le FROM notes
+SELECT n.id, n.famille_id, n.auteur_id, n.titre, n.texte, n.privee, n.rappel_le, CAST((n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)) AS INTEGER) AS cachee FROM notes n
 WHERE rappel_le > 0 AND rappel_envoye = 0 AND rappel_le <= ?1 ORDER BY rappel_le LIMIT 200
 `
 
@@ -441,6 +489,7 @@ type NotesARappelerRow struct {
 	Texte     string
 	Privee    int64
 	RappelLe  int64
+	Cachee    int64
 }
 
 // Rappels arrives a echeance (toutes les familles).
@@ -461,6 +510,7 @@ func (q *Queries) NotesARappeler(ctx context.Context, maintenant int64) ([]Notes
 			&i.Texte,
 			&i.Privee,
 			&i.RappelLe,
+			&i.Cachee,
 		); err != nil {
 			return nil, err
 		}
@@ -478,18 +528,20 @@ func (q *Queries) NotesARappeler(ctx context.Context, maintenant int64) ([]Notes
 const notesVisibles = `-- name: NotesVisibles :many
 
 SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debut, n.couleur, n.epinglee, n.privee, n.modifie_le,
-  n.rappel_le, n.rappel_envoye, n.categorie_id, (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
+  n.rappel_le, n.rappel_envoye, n.categorie_id, (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos,
+  CAST((n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)) AS INTEGER) AS cachee
 FROM notes n
-WHERE n.famille_id = ?1 AND (n.privee = 0 OR n.auteur_id = ?2)
-  AND (?3 = '' OR (?3 = 'privees' AND n.privee = 1))
-  AND (?4 = 0 OR (?4 = -1 AND n.categorie_id IS NULL) OR n.categorie_id = ?4)
-  AND (?5 = '' OR instr(plier(n.titre), plier(?5)) > 0 OR instr(plier(n.texte), plier(?5)) > 0)
-ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT ?6
+WHERE n.famille_id = ?1 AND (n.auteur_id = ?2 OR (n.privee = 0 AND (CAST(?3 AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
+  AND (?4 = '' OR (?4 = 'privees' AND n.privee = 1))
+  AND (?5 = 0 OR (?5 = -1 AND n.categorie_id IS NULL) OR n.categorie_id = ?5)
+  AND (?6 = '' OR instr(plier(n.titre), plier(?6)) > 0 OR instr(plier(n.texte), plier(?6)) > 0)
+ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT ?7
 `
 
 type NotesVisiblesParams struct {
 	FamilleID int64
 	MembreID  sql.NullInt64
+	Parent    int64
 	Filtre    interface{}
 	Categorie interface{}
 	Motif     interface{}
@@ -509,9 +561,12 @@ type NotesVisiblesRow struct {
 	RappelEnvoye int64
 	CategorieID  sql.NullInt64
 	Photos       int64
+	Cachee       int64
 }
 
-// Notes : une note privee n'est visible que par son auteur.
+// Notes : une note privee n'est visible que par son auteur ; une note
+// reservee aux parents (elle-meme ou sa categorie) est cachee aux enfants,
+// sauf a son auteur. parent : 1 pour un parent.
 // Liste : debut du texte seulement, nombre borne. motif ” : pas de
 // recherche ; sinon le texte cherche, tel quel (% et _ compris) ; filtre : ”, 'partagees' ou 'privees'.
 // Filtre : ” toutes ou 'privees' ; categorie : 0 toutes, -1 sans categorie, sinon son numero.
@@ -519,6 +574,7 @@ func (q *Queries) NotesVisibles(ctx context.Context, arg NotesVisiblesParams) ([
 	rows, err := q.db.QueryContext(ctx, notesVisibles,
 		arg.FamilleID,
 		arg.MembreID,
+		arg.Parent,
 		arg.Filtre,
 		arg.Categorie,
 		arg.Motif,
@@ -544,6 +600,7 @@ func (q *Queries) NotesVisibles(ctx context.Context, arg NotesVisiblesParams) ([
 			&i.RappelEnvoye,
 			&i.CategorieID,
 			&i.Photos,
+			&i.Cachee,
 		); err != nil {
 			return nil, err
 		}
@@ -674,17 +731,19 @@ func (q *Queries) RappelNoteEnvoye(ctx context.Context, id int64) error {
 }
 
 const supprimerCategorieNote = `-- name: SupprimerCategorieNote :exec
-DELETE FROM categories_notes WHERE id = ? AND famille_id = ?
+DELETE FROM categories_notes
+WHERE id = ?1 AND famille_id = ?2 AND (parents = 0 OR CAST(?3 AS INTEGER) = 1)
 `
 
 type SupprimerCategorieNoteParams struct {
 	ID        int64
 	FamilleID int64
+	Parent    int64
 }
 
 // Les notes de la categorie restent, sans categorie (ON DELETE SET NULL).
 func (q *Queries) SupprimerCategorieNote(ctx context.Context, arg SupprimerCategorieNoteParams) error {
-	_, err := q.db.ExecContext(ctx, supprimerCategorieNote, arg.ID, arg.FamilleID)
+	_, err := q.db.ExecContext(ctx, supprimerCategorieNote, arg.ID, arg.FamilleID, arg.Parent)
 	return err
 }
 

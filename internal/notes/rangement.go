@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -231,13 +232,27 @@ func (m *Module) envoyerRappels(ctx context.Context, maintenant time.Time) {
 	}
 	for _, n := range l {
 		var pour []int64
-		if n.Privee == 1 && n.AuteurID.Valid {
+		switch {
+		case n.Privee == 1 && n.AuteurID.Valid:
 			pour = []int64{n.AuteurID.Int64}
+		case n.Cachee == 1:
+			// Cachée aux enfants : les parents (et son auteur).
+			pour, err = m.a.Q.ParentsDeFamille(ctx, n.FamilleID)
+			if err != nil {
+				m.a.Journal.Error("rappel d'une note", "note", n.ID, "erreur", err)
+				continue
+			}
+			if n.AuteurID.Valid && !slices.Contains(pour, n.AuteurID.Int64) {
+				pour = append(pour, n.AuteurID.Int64)
+			}
 		}
 		// Marqué envoyé d'abord : jamais deux fois (même si l'envoi échoue).
 		if err := m.a.Q.RappelNoteEnvoye(ctx, n.ID); err != nil {
 			m.a.Journal.Error("rappel d'une note", "note", n.ID, "erreur", err)
 			continue
+		}
+		if n.Cachee == 1 && n.Privee == 0 && len(pour) == 0 {
+			continue // personne : surtout pas « toute la famille » (pour vide)
 		}
 		m.a.Rappeler(ctx, n.FamilleID, mod, "⏰ "+apercu(n.Titre, n.Texte), "/notes/"+strconv.FormatInt(n.ID, 10), pour)
 		m.a.Journal.Info("rappel d'une note envoyé", "note", n.ID)

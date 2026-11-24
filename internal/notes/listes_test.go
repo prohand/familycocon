@@ -313,3 +313,91 @@ func TestRangerEtRappel(t *testing.T) {
 		t.Fatal("rappel pas marqué envoyé")
 	}
 }
+
+// « Parents seulement » : une note, ou toute une catégorie, cachée aux enfants.
+func TestParentsSeulement(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	idNote := func(p, titre string) string {
+		t.Helper()
+		return essai.Trouver(t, p, `href="/notes/(\d+)">\s*(?:<span class="etiquette-categorie">[^<]*</span>\s*)?<h3>`+titre+`</h3>`)
+	}
+
+	// Une note des parents : Léa ne la voit ni dans la liste, ni par la
+	// recherche, ni par son adresse.
+	marie.Post("/notes", map[string]string{"titre": "Cadeaux de Noel", "texte": "velo", "parents": "1"})
+	marie.Post("/notes", map[string]string{"titre": "Wifi", "texte": "code"})
+	_, p := marie.Get("/notes")
+	cadeaux := idNote(p, "Cadeaux de Noel")
+	if !strings.Contains(p, `title="Parents seulement">👥</span>`) {
+		t.Fatal("repère « parents seulement » absent de la carte")
+	}
+	if _, p = lea.Get("/notes"); strings.Contains(p, "Cadeaux") || !strings.Contains(p, "Wifi") {
+		t.Fatalf("liste de Léa :\n%s", p)
+	}
+	if _, p = lea.Get("/notes?q=velo"); strings.Contains(p, "Cadeaux") {
+		t.Fatal("trouvée par la recherche d'un enfant")
+	}
+	if code, _ := lea.Get("/notes/" + cadeaux); code != http.StatusNotFound {
+		t.Fatalf("ouverte par un enfant : %d", code)
+	}
+	// Un enfant n'a pas la case et ne peut pas l'imposer.
+	if _, p = lea.Get("/notes/nouvelle"); strings.Contains(p, `name="parents"`) {
+		t.Fatal("case « Parents seulement » proposée à un enfant")
+	}
+	lea.Post("/notes", map[string]string{"titre": "Mon dessin", "texte": "x", "parents": "1"})
+	if _, p = marie.Get("/notes"); !strings.Contains(p, "Mon dessin") {
+		t.Fatal("note d'un enfant cachée")
+	}
+	dessin := idNote(p, "Mon dessin")
+
+	// Une catégorie des parents : cachée aux enfants, avec ses notes.
+	marie.Post("/notes/categories", map[string]string{"nom": "Papiers", "emoji": "📄", "parents": "1"})
+	lea.Post("/notes/categories", map[string]string{"nom": "Jeux", "emoji": "🎮", "parents": "1"}) // case ignorée
+	_, p = marie.Get("/notes/categories")
+	papiers := essai.Trouver(t, p, `name="id" value="(\d+)"><input type="hidden" name="action" value="modifier">\s*<span class="champ-emoji"><input type="hidden" name="emoji" value="📄">`)
+	if !strings.Contains(p, `aria-pressed="true"`) || !strings.Contains(p, "Jeux") {
+		t.Fatalf("catégories vues par un parent :\n%s", p)
+	}
+	marie.Post("/notes", map[string]string{"titre": "Impots", "texte": "avis", "categorie": papiers})
+	if _, p = lea.Get("/notes/categories"); strings.Contains(p, "Papiers") || !strings.Contains(p, "Jeux") {
+		t.Fatalf("catégories vues par Léa :\n%s", p)
+	}
+	if _, p = lea.Get("/notes"); strings.Contains(p, "Impots") || strings.Contains(p, "Papiers") {
+		t.Fatal("catégorie ou note des parents vue par un enfant")
+	}
+	// Léa ne peut ni s'en servir, ni la changer, ni la supprimer.
+	lea.Post("/notes", map[string]string{"titre": "Devoirs", "texte": "x", "categorie": papiers})
+	lea.Post("/notes/categories", map[string]string{"action": "modifier", "id": papiers, "nom": "Pris", "emoji": ""})
+	lea.Post("/notes/categories", map[string]string{"action": "supprimer", "id": papiers})
+	if code, _ := lea.Post("/notes/categories", map[string]string{"action": "parents", "id": papiers, "parents": "0"}); code != http.StatusForbidden {
+		t.Fatalf("réglage changé par un enfant : %d", code)
+	}
+	if _, p = marie.Get("/notes?cat=" + papiers); !strings.Contains(p, "📄 Papiers") || !strings.Contains(p, "Impots") || strings.Contains(p, "Devoirs") {
+		t.Fatalf("catégorie touchée par un enfant :\n%s", p)
+	}
+	// Une note de Léa rangée par un parent chez les parents : elle la voit
+	// toujours, et la garde dans cette catégorie quand elle la modifie.
+	marie.Post("/notes/"+dessin, map[string]string{"titre": "Mon dessin", "texte": "x", "categorie": papiers})
+	if code, _ := lea.Get("/notes/" + dessin); code != http.StatusOK {
+		t.Fatalf("son auteur ne la voit plus : %d", code)
+	}
+	lea.Post("/notes/"+dessin, map[string]string{"titre": "Mon dessin", "texte": "y", "categorie": "0"})
+	if _, p = marie.Get("/notes?cat=" + papiers); !strings.Contains(p, "Mon dessin") {
+		t.Fatal("note sortie de la catégorie des parents par un enfant")
+	}
+	// Rappel d'une note cachée : repéré comme tel (envoyé aux parents seuls).
+	quand := time.Now().Add(48 * time.Hour)
+	marie.Post("/notes/"+cadeaux+"/rappel", map[string]string{"rappel": quand.Format("2006-01-02T15:04")})
+	l, err := a.Q.NotesARappeler(context.Background(), quand.Add(24*time.Hour).Unix())
+	if err != nil || len(l) != 1 || strconv.FormatInt(l[0].ID, 10) != cadeaux || l[0].Cachee != 1 {
+		t.Fatalf("rappel d'une note cachée : %+v %v", l, err)
+	}
+
+	// Rendue à toute la famille : Léa la voit.
+	marie.Post("/notes/categories", map[string]string{"action": "parents", "id": papiers, "parents": "0"})
+	if _, p = lea.Get("/notes"); !strings.Contains(p, "Impots") {
+		t.Fatal("catégorie rendue à tous : note toujours cachée")
+	}
+}

@@ -7,7 +7,7 @@
 </section>
 {{/* Deux budgets : le compte commun (tous les parents) et le budget perso (privé). */}}
 <nav class="pilules onglets" aria-label="Budget">
-  <a class="pilule{{if not .Perso}} active{{end}}" href="/budget?compte=commun&amp;mois={{.Mois}}">👨‍👩‍👧 Compte commun</a>
+  <a class="pilule{{if not .Perso}} active{{end}}" href="/budget?compte=commun&amp;mois={{.Mois}}">👥‍👧 Compte commun</a>
   <a class="pilule{{if .Perso}} active{{end}}" href="/budget?compte=perso&amp;mois={{.Mois}}">🔒 Mon budget</a>
 </nav>
 <div class="navigation-periode">

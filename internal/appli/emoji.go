@@ -9,7 +9,7 @@ import (
 )
 
 // Emoji choisi dans un formulaire (grille « champ-emoji », ou « Autre » :
-// écrit au clavier). Un emoji peut compter plusieurs caractères (☁️, 👨‍👩‍👧) :
+// écrit au clavier). Un emoji peut compter plusieurs caractères (☁️, 👥‍👧) :
 // 8 au plus, sans lettre, chiffre, espace ni signe ASCII.
 
 // EmojiMax : longueur d'un emoji, en caractères.
