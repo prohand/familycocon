@@ -1,6 +1,25 @@
 {{/* Morceaux réutilisés par plusieurs pages. */}}
 
 {{/* Choix de couleur : dict "Nom" (nom du champ) "Choisie" (int64) */}}
+{{/* Choix d'un emoji : la valeur envoyée (cachée) et le bouton qui ouvre
+     la grille (app.js la copie sous l'élément [data-lieu-emojis]).
+     Emoji, Nom (pour l'aide vocale), Envoyer : enregistrer dès le choix. */}}
+{{define "champ-emoji"}}
+<span class="champ-emoji"><input type="hidden" name="emoji" value="{{.Emoji}}"><button type="button" class="bouton-emoji{{if not .Emoji}} vide{{end}}" data-choix-emoji{{if .Envoyer}}="envoyer"{{end}} aria-expanded="false" aria-label="Choisir l'emoji{{with .Nom}} de {{.}}{{end}}">{{or .Emoji "＋"}}</button></span>
+{{end}}
+
+{{/* Grille des emojis proposés (une par page) ; « Autre » : un emoji écrit
+     au clavier ; Aucun : on peut l'enlever. */}}
+{{define "grille-emojis"}}
+<template id="grille-emojis">
+  <div class="grille-emojis" role="group" aria-label="Choisir un emoji">
+    {{- range .Emojis}}<button type="button" data-emoji="{{.}}">{{.}}</button>{{end}}
+    <label class="autre-emoji">Autre <input data-emoji-autre maxlength="8" placeholder="🙂" autocomplete="off" aria-label="Autre emoji"></label>
+    {{- if .Aucun}}<button type="button" class="sans-emoji" data-emoji="">Aucun</button>{{end}}
+  </div>
+</template>
+{{end}}
+
 {{define "choix-couleur"}}
 <fieldset class="couleurs">
   <legend class="sr">Couleur</legend>

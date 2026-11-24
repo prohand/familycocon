@@ -223,7 +223,11 @@ func TestCategories(t *testing.T) {
 	}
 	marie.Post("/notes/categories", map[string]string{"nom": "Maison", "emoji": "🏠"})
 	_, p := marie.Get("/notes/categories")
-	voiture := essai.Trouver(t, p, `name="id" value="(\d+)"><input type="hidden" name="action" value="modifier">\s*<input name="emoji" value="🚗"`)
+	voiture := essai.Trouver(t, p, `name="id" value="(\d+)"><input type="hidden" name="action" value="modifier">\s*<span class="champ-emoji"><input type="hidden" name="emoji" value="🚗">`)
+	// Grille des emojis proposée sur la page.
+	if !strings.Contains(p, `<template id="grille-emojis">`) || !strings.Contains(p, `data-emoji="🏖️"`) {
+		t.Fatal("grille des emojis absente")
+	}
 	// Une note rangée dans « Voiture », une sans catégorie.
 	_, p = marie.Get("/notes/nouvelle?cat=" + voiture)
 	if !strings.Contains(p, `<option value="`+voiture+`" selected>🚗 Voiture</option>`) {

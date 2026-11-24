@@ -1515,3 +1515,73 @@ if ("serviceWorker" in navigator) {
     if (svg && e.touches[0]) montrer(svg, e.touches[0]);
   }, { passive: true });
 })();
+
+// Choix de l'emoji d'une catégorie de notes : le bouton [data-choix-emoji]
+// ouvre la grille (<template id="grille-emojis">) sous sa ligne
+// ([data-lieu-emojis]) ; un toucher met l'emoji dans le champ caché voisin.
+// « Autre » : un emoji écrit au clavier. data-choix-emoji="envoyer" :
+// catégorie existante, enregistrée dès le choix.
+(function () {
+  "use strict";
+  var ouverte = null; // { grille, bouton }
+
+  function fermer() {
+    if (!ouverte) return;
+    ouverte.grille.remove();
+    ouverte.bouton.setAttribute("aria-expanded", "false");
+    ouverte = null;
+  }
+  function ouvrir(bouton) {
+    var modele = document.getElementById("grille-emojis");
+    var lieu = bouton.closest("[data-lieu-emojis]");
+    if (!modele || !lieu) return;
+    var grille = modele.content.firstElementChild.cloneNode(true);
+    var valeur = bouton.parentNode.querySelector("input[name=emoji]").value;
+    grille.querySelectorAll("[data-emoji]").forEach(function (b) {
+      if (b.getAttribute("data-emoji") === valeur) b.classList.add("choisi");
+    });
+    lieu.after(grille);
+    bouton.setAttribute("aria-expanded", "true");
+    ouverte = { grille: grille, bouton: bouton };
+  }
+  // Met l'emoji dans le champ ; fin : on ferme (et on enregistre si demandé).
+  function choisir(emoji, fin) {
+    var b = ouverte.bouton;
+    b.parentNode.querySelector("input[name=emoji]").value = emoji;
+    b.textContent = emoji || "＋";
+    b.classList.toggle("vide", !emoji);
+    if (!fin) return;
+    fermer();
+    if (b.getAttribute("data-choix-emoji") === "envoyer" && b.form) b.form.requestSubmit();
+    else b.focus();
+  }
+
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-choix-emoji]");
+    if (b) {
+      var deja = ouverte && ouverte.bouton === b;
+      fermer();
+      if (!deja) ouvrir(b);
+      return;
+    }
+    if (!ouverte) return;
+    var x = e.target.closest("[data-emoji]");
+    if (x && ouverte.grille.contains(x)) { choisir(x.getAttribute("data-emoji"), true); return; }
+    // Toucher ailleurs ferme la grille.
+    if (!ouverte.grille.contains(e.target)) fermer();
+  });
+  document.addEventListener("input", function (e) {
+    if (ouverte && e.target.matches("[data-emoji-autre]")) choisir(e.target.value.trim(), false);
+  });
+  document.addEventListener("keydown", function (e) {
+    if (!ouverte) return;
+    if (e.key === "Escape") { var b = ouverte.bouton; fermer(); b.focus(); return; }
+    // Entrée dans « Autre » : valider sans envoyer le formulaire d'ajout.
+    if (e.key === "Enter" && e.target.matches("[data-emoji-autre]")) {
+      e.preventDefault();
+      choisir(e.target.value.trim(), true);
+    }
+  });
+  // Page changée par htmx : la grille ouverte disparaît avec elle.
+  document.addEventListener("htmx:beforeSwap", fermer);
+})();

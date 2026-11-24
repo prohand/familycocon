@@ -1235,12 +1235,6 @@ progress.jauge.etoiles::-moz-progress-bar { background: linear-gradient(90deg, #
 .tresor-petit { font-weight: 900; font-size: 1.2rem; color: var(--enfants-t); }
 .ligne.a-valider .boutons-decision { margin: 0; }
 .etoiles-choix span { letter-spacing: 1px; }
-.grille-emoji { display: flex; flex-wrap: wrap; gap: 8px; }
-.grille-emoji label { position: relative; cursor: pointer; }
-.grille-emoji input { position: absolute; opacity: 0; }
-.grille-emoji span { display: grid; place-items: center; width: 50px; height: 50px; font-size: 1.6rem; border-radius: 14px; border: 2px solid var(--bordure); background: var(--fond); }
-.grille-emoji input:checked + span { border-color: var(--enfants-t); background: var(--enfants); transform: scale(1.08); }
-.grille-emoji input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
 
 
 /* ---------- Sécurité (double authentification, passkeys) ---------- */
@@ -1379,12 +1373,6 @@ progress.progres.depasse::-moz-progress-bar { background: var(--rouge); }
 .ligne.etape form { display: contents; }
 .ligne.etape .coche.cochee { background: var(--projets-t); border-color: var(--projets-t); }
 details.termines > summary { cursor: pointer; }
-.choix-emoji { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; }
-.choix-emoji input { position: absolute; opacity: 0; }
-.choix-emoji span { display: inline-flex; width: 44px; height: 44px; align-items: center; justify-content: center; font-size: 1.5rem;
-  border-radius: 12px; border: 2px solid var(--bordure); cursor: pointer; }
-.choix-emoji input:checked + span { border-color: var(--corail); background: var(--fond); }
-.choix-emoji input:focus-visible + span { outline: 3px solid var(--corail); outline-offset: 2px; }
 
 /* ---------- Budget : opérations qui reviennent ---------- */
 .lien-recurrences { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px;
@@ -1724,6 +1712,24 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .ligne-categorie:last-child { border-bottom: 0; }
 .ligne-categorie input { min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--bordure); background: var(--fond); color: var(--texte); font: inherit; }
 .ligne-categorie input[name=nom] { flex: 1; }
-.ligne-categorie .emoji-categorie { width: 3.2em; text-align: center; flex: none; }
+/* Champ emoji : un bouton qui ouvre la grille. */
+.champ > .champ-emoji { margin: 0; font-weight: inherit; font-size: inherit; }
+.champ-emoji { display: block; flex: none; }
+.rangee-categorie .champ.etroit { flex: none; }
+.bouton-emoji { display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 0; width: 56px; height: 44px; border-radius: 10px; border: 1.5px solid var(--bordure); background: var(--fond);
+  font-size: 1.4rem; line-height: 1; cursor: pointer; color: var(--texte); }
+.rangee-categorie .bouton-emoji { height: 49px; }
+.ligne-emoji { display: flex; align-items: center; gap: 10px; margin: 4px 0 12px; }
+.ligne-emoji .bouton-emoji { width: 60px; height: 52px; font-size: 1.7rem; }
+.bouton-emoji.vide { font-size: 1.1rem; color: var(--texte-doux); }
+.bouton-emoji[aria-expanded=true] { border-color: var(--corail); }
+.grille-emojis { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 4px;
+  padding: 8px; margin: 6px 0 8px; border-radius: 14px; background: var(--fond); border: 1.5px solid var(--bordure); }
+.grille-emojis button { height: 42px; border: 0; border-radius: 10px; background: transparent; font-size: 1.4rem; cursor: pointer; }
+.grille-emojis button:hover, .grille-emojis button.choisi { background: var(--carte); box-shadow: inset 0 0 0 2px var(--corail); }
+.grille-emojis .autre-emoji { grid-column: span 4; display: flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 700; color: var(--texte-doux); }
+.grille-emojis .autre-emoji input { width: 3.2em; min-width: 0; padding: 6px; text-align: center; border-radius: 10px;
+  border: 1.5px solid var(--bordure); background: var(--carte); color: var(--texte); font: inherit; font-size: 1.2rem; }
+.grille-emojis .sans-emoji { grid-column: span 2; font-size: .85rem; font-weight: 700; color: var(--texte-doux); }
 .ligne-categorie .nombre { flex: none; font-size: .85rem; color: var(--texte-doux); white-space: nowrap; }
 .modif-categorie { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }

@@ -28,9 +28,15 @@ func TestProjet(t *testing.T) {
 		t.Fatalf("création : %d\n%s", code, page)
 	}
 	id := essai.Trouver(t, page, `action="/projets/(\d+)/etapes"`)
-	// Emoji inconnu : remplacé.
+	// Pas un emoji : remplacé ; un emoji hors de la grille (« Autre ») : gardé.
 	if _, page := marie.Post("/projets", map[string]string{"nom": "X", "emoji": "<b>"}); !strings.Contains(page, "🎯 X") {
-		t.Fatal("emoji libre accepté")
+		t.Fatal("texte accepté comme emoji")
+	}
+	if _, page := marie.Post("/projets", map[string]string{"nom": "Y", "emoji": "🦄"}); !strings.Contains(page, "🦄 Y") {
+		t.Fatal("emoji « Autre » refusé")
+	}
+	if _, page := marie.Get("/projets/nouveau"); !strings.Contains(page, `<template id="grille-emojis">`) || !strings.Contains(page, `data-choix-emoji`) {
+		t.Fatal("grille des emojis absente du formulaire")
 	}
 
 	// Étapes : une datée pour Léa, une sans date.

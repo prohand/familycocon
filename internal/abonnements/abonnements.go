@@ -34,7 +34,11 @@ import (
 const mod = "abonnements"
 
 // Emojis proposés.
-var Emojis = []string{"📺", "🎵", "📱", "🌐", "☁️", "🎮", "📰", "🏋️", "🛡️", "💡", "🚗", "📦"}
+// Un autre peut être écrit (« Autre »).
+var Emojis = []string{
+	"📺", "🎵", "📱", "🌐", "☁️", "🎮", "📰", "🏋️", "🛡️", "💡", "🚗", "📦",
+	"🎬", "🎧", "📚", "💧", "🔥", "🏠", "🏦", "💳", "🧾", "🐶", "🍽️", "⚽",
+}
 
 // Module : les abonnements.
 type Module struct {
@@ -215,15 +219,6 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	m.a.Afficher(w, r, c, "abonnements/formulaire", titre, mod, f)
 }
 
-func emojiValide(e string) string {
-	for _, x := range Emojis {
-		if x == e {
-			return e
-		}
-	}
-	return "📺"
-}
-
 func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
 	nom := strings.TrimSpace(r.PostFormValue("nom"))
@@ -262,7 +257,7 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			membre = sql.NullInt64{Int64: id, Valid: true}
 		}
 	}
-	emoji := emojiValide(r.PostFormValue("emoji"))
+	emoji := appli.LireEmoji(r.PostFormValue("emoji"), "📺")
 	auteur := sql.NullInt64{Int64: c.Membre.ID, Valid: true}
 	// Privé : dans le budget perso de ce parent, que lui seul voit.
 	var perso int64

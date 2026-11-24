@@ -10,8 +10,8 @@
 <form class="carte bloc ajout-categorie" method="post" action="/notes/categories">
   {{template "jeton" $c.CSRF}}
   <h2>＋ Nouvelle catégorie</h2>
-  <div class="rangee-categorie">
-    <label class="champ etroit"><span>Emoji</span><input name="emoji" maxlength="8" placeholder="🚗" autocomplete="off"></label>
+  <div class="rangee-categorie" data-lieu-emojis>
+    <div class="champ etroit"><span>Emoji</span>{{template "champ-emoji" dict "Emoji" "" "Nom" ""}}</div>
     <label class="champ"><span>Nom</span><input name="nom" maxlength="30" placeholder="Voiture" required autocomplete="off"></label>
   </div>
   <button class="bouton petit">Ajouter</button>
@@ -19,10 +19,10 @@
 {{end}}
 <section class="carte bloc">
   {{- range .Categories}}
-  <div class="ligne-categorie">
+  <div class="ligne-categorie" data-lieu-emojis>
     <form class="modif-categorie" method="post" action="/notes/categories">
       {{template "jeton" $c.CSRF}}<input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="modifier">
-      <input name="emoji" value="{{.Emoji}}" maxlength="8" aria-label="Emoji de {{.Nom}}" class="emoji-categorie">
+      {{template "champ-emoji" dict "Emoji" .Emoji "Nom" .Nom "Envoyer" true}}
       <input name="nom" value="{{.Nom}}" maxlength="30" required aria-label="Nom de la catégorie">
       <button class="crayon" aria-label="Enregistrer {{.Nom}}">✓</button>
     </form>
@@ -36,5 +36,7 @@
   <p class="aide">Pas encore de catégorie : ajoutez la première ci-dessus.</p>
   {{- end}}
 </section>
+{{template "grille-emojis" dict "Emojis" .Emojis "Aucun" true}}
 {{end}}
 {{end}}
+
