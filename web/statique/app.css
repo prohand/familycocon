@@ -1357,6 +1357,7 @@ input[type=file] { max-width: 100%; min-width: 0; }
 .code-barres .barre { fill: #000; }
 .code-barres .legende-code { fill: #000; font-size: 9px; font-family: ui-monospace, monospace; }
 .qr-caisse { width: 240px; height: 240px; image-rendering: pixelated; }
+.pdf417-caisse { width: 100%; max-width: 520px; height: auto; image-rendering: pixelated; display: block; margin: 0 auto; }
 .numero-caisse { font-family: ui-monospace, monospace; font-size: 1.2rem; font-weight: 700; letter-spacing: .08em; margin: 10px 0 0; color: #111; overflow-wrap: anywhere; }
 
 

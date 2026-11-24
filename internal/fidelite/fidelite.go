@@ -9,16 +9,23 @@
 package fidelite
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"fmt"
 	"html/template"
+	"image"
+	"image/color"
+	"image/png"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"github.com/boombuler/barcode"
+	"github.com/boombuler/barcode/aztec"
+	"github.com/boombuler/barcode/pdf417"
 	"rsc.io/qr"
 
 	"familycocon/internal/appli"
@@ -33,7 +40,8 @@ const mod = "fidelite"
 // Formats proposés.
 var Formats = []struct{ Cle, Nom string }{
 	{"auto", "Détecté tout seul"}, {"ean13", "EAN-13 (13 chiffres)"}, {"upca", "UPC-A (12 chiffres)"},
-	{"ean8", "EAN-8 (8 chiffres)"}, {"code128", "Code 128"}, {"qr", "QR code"}, {"aucun", "Pas de code (numéro seul)"},
+	{"ean8", "EAN-8 (8 chiffres)"}, {"code128", "Code 128"}, {"qr", "QR code"},
+	{"pdf417", "PDF417 (code en blocs, ex. Starbucks)"}, {"aztec", "Aztec"}, {"aucun", "Pas de code (numéro seul)"},
 }
 
 func formatValide(f string) bool {
@@ -109,10 +117,29 @@ func (m *Module) trouver(r *http.Request, c *appli.Contexte) (donnees.Carte, boo
 type vueCarte struct {
 	Carte    donnees.Carte
 	SVG      template.HTML // code-barres
-	QR       template.URL  // QR code (image PNG)
+	QR       template.URL  // QR code, PDF417 ou Aztec (image PNG)
+	Large    bool          // image plus large que haute (PDF417)
 	Probleme string
 	Type     string // « EAN-13 (détecté) »
 	Marque   string // enseigne reconnue (classe « marque-… »), vide sinon
+}
+
+// imagePNG : le code agrandi (fx, fy : pixels par module, en largeur et en
+// hauteur : barcode.Scale garderait les proportions), en image PNG noir et
+// blanc dans l'adresse (data:), sans lissage.
+func imagePNG(code barcode.Barcode, fx, fy int) template.URL {
+	b := code.Bounds()
+	grand := image.NewGray(image.Rect(0, 0, b.Dx()*fx, b.Dy()*fy))
+	for y := 0; y < grand.Bounds().Dy(); y++ {
+		for x := 0; x < grand.Bounds().Dx(); x++ {
+			grand.Set(x, y, color.GrayModel.Convert(code.At(b.Min.X+x/fx, b.Min.Y+y/fy)))
+		}
+	}
+	var tampon bytes.Buffer
+	if err := png.Encode(&tampon, grand); err != nil {
+		return ""
+	}
+	return template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(tampon.Bytes())) // #nosec G203 -- image produite ici
 }
 
 // Dessin : le code de la carte (SVG ou QR), ou la raison s'il est impossible.
@@ -135,6 +162,25 @@ func Dessin(ct donnees.Carte) vueCarte {
 		}
 		code.Scale = 8
 		v.QR = template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(code.PNG())) // #nosec G203 -- image produite ici
+	case "pdf417":
+		// Niveau de correction 2 : assez pour un écran de téléphone.
+		code, err := pdf417.Encode(ct.Numero, 2)
+		if err != nil {
+			v.Probleme = "Numéro trop long pour un code PDF417."
+			break
+		}
+		// Rangées étirées : environ trois fois plus large que haut (comme
+		// sur les cartes ; un code trop plat se lit mal en caisse).
+		b := code.Bounds()
+		fy := max(3, b.Dx()/max(1, b.Dy()))
+		v.QR, v.Large = imagePNG(code, 3, fy), true
+	case "aztec":
+		code, err := aztec.Encode([]byte(ct.Numero), 33, 0)
+		if err != nil {
+			v.Probleme = "Numéro trop long pour un code Aztec."
+			break
+		}
+		v.QR = imagePNG(code, 8, 8)
 	default:
 		svg, err := SVG(ct.Numero, format)
 		if err != nil {

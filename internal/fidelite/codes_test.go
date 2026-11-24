@@ -5,6 +5,8 @@ package fidelite
 import (
 	"strings"
 	"testing"
+
+	"familycocon/internal/donnees"
 )
 
 func TestTableCode128(t *testing.T) {
@@ -110,5 +112,21 @@ func TestEAN13(t *testing.T) {
 	svg, _ := SVG("3017620422003", "ean13")
 	if !strings.Contains(string(svg), `class="barre"`) || strings.Contains(string(svg), "style=") {
 		t.Fatal("SVG")
+	}
+}
+
+// PDF417 (Starbucks…) et Aztec : dessinés en image, plus large que haute
+// pour le PDF417.
+func TestDessinPDF417Aztec(t *testing.T) {
+	v := Dessin(donnees.Carte{Numero: "6323725598157482", Format: "pdf417"})
+	if v.Probleme != "" || !strings.HasPrefix(string(v.QR), "data:image/png;base64,") || !v.Large {
+		t.Fatalf("PDF417 : %+v", v.Probleme)
+	}
+	v = Dessin(donnees.Carte{Numero: "17049", Format: "aztec"})
+	if v.Probleme != "" || v.QR == "" || v.Large {
+		t.Fatalf("Aztec : %+v", v.Probleme)
+	}
+	if !formatValide("pdf417") || !formatValide("aztec") {
+		t.Fatal("formats PDF417 / Aztec refusés")
 	}
 }

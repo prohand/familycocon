@@ -46,6 +46,7 @@
 | Pièces jointes (notes, tâches, projets, carnet) (v0.9.10, SPEC § 28) | **fait** |
 | Tâches : « Pour qui ? : Parents » (v0.9.11, SPEC § 29) | **fait** |
 | Cartes de fidélité aux couleurs de l'enseigne (v0.9.12, SPEC § 30) | **fait** |
+| Cartes de fidélité : scan QR / PDF417 / Aztec (iPhone compris), dessin PDF417 et Aztec (v0.9.14, SPEC § 31) | **fait** |
 
 ## Mesures
 
