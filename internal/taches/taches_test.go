@@ -478,4 +478,3 @@ func TestDescriptionTache(t *testing.T) {
 		t.Fatalf("description trop longue acceptée : %d", code)
 	}
 }
-
