@@ -214,6 +214,40 @@ func (q *Queries) ExportCartes(ctx context.Context, familleID int64) ([]Carte, e
 	return items, nil
 }
 
+const exportCategoriesNotes = `-- name: ExportCategoriesNotes :many
+SELECT id, famille_id, nom, emoji, cree_le FROM categories_notes WHERE famille_id = ?
+`
+
+// Notes : les notes partagees et les notes privees de celui qui exporte.
+func (q *Queries) ExportCategoriesNotes(ctx context.Context, familleID int64) ([]CategoriesNote, error) {
+	rows, err := q.db.QueryContext(ctx, exportCategoriesNotes, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CategoriesNote{}
+	for rows.Next() {
+		var i CategoriesNote
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Nom,
+			&i.Emoji,
+			&i.CreeLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const exportContacts = `-- name: ExportContacts :many
 SELECT id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le, tel_fixe, tel_travail, societe, metier, site, favori, pro, groupes FROM contacts WHERE famille_id = ?
 `
@@ -620,7 +654,7 @@ func (q *Queries) ExportMissionsFaites(ctx context.Context, familleID int64) ([]
 }
 
 const exportNotes = `-- name: ExportNotes :many
-SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye FROM notes WHERE famille_id = ? AND (privee = 0 OR auteur_id = ?)
+SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye, categorie_id FROM notes WHERE famille_id = ? AND (privee = 0 OR auteur_id = ?)
 `
 
 type ExportNotesParams struct {
@@ -628,7 +662,6 @@ type ExportNotesParams struct {
 	AuteurID  sql.NullInt64
 }
 
-// Notes : les notes partagees et les notes privees de celui qui exporte.
 func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]Note, error) {
 	rows, err := q.db.QueryContext(ctx, exportNotes, arg.FamilleID, arg.AuteurID)
 	if err != nil {
@@ -652,6 +685,7 @@ func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]Not
 			&i.CocheesEnBas,
 			&i.RappelLe,
 			&i.RappelEnvoye,
+			&i.CategorieID,
 		); err != nil {
 			return nil, err
 		}

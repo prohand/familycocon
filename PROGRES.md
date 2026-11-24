@@ -38,6 +38,7 @@
 | Éditeur de texte riche (notes et textes longs, coller des photos) ; graphiques interactifs (v0.9.0, SPEC § 21) | **fait** |
 | Listes : onglet, avancement, cochés en bas, ranger (modifier, déplacer, supprimer), rappel à une date (v0.9.3, SPEC § 22) | **fait** |
 | Anciens véhicules ; import Fuelio de tous les véhicules d'un coup (v0.9.3, SPEC § 23) | **fait** |
+| Catégories de notes (filtre, étiquette, gérées par tous) ; onglet Listes et « Partagées » retirés (v0.9.6, SPEC § 24) | **fait** |
 
 ## Mesures
 

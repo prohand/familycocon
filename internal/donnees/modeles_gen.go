@@ -94,6 +94,14 @@ type Carte struct {
 	UtiliseeLe int64
 }
 
+type CategoriesNote struct {
+	ID        int64
+	FamilleID int64
+	Nom       string
+	Emoji     string
+	CreeLe    int64
+}
+
 type CodesSecour struct {
 	MembreID  int64
 	Empreinte []byte
@@ -285,6 +293,7 @@ type Note struct {
 	CocheesEnBas int64
 	RappelLe     int64
 	RappelEnvoye int64
+	CategorieID  sql.NullInt64
 }
 
 type Operation struct {

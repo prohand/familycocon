@@ -590,8 +590,8 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   (htmx, l'adresse suit).
 
 ## 22. Listes (v0.9.3)
-- Onglet « ☑️ Listes » dans les notes (notes dont une ligne commence par
-  une case) ; bouton « ＋ Liste ».
+- (v0.9.6 : onglet « ☑️ Listes » et bouton « ＋ Liste » retirés, remplacés
+  par les catégories, § 24. Les cases restent dans toutes les notes.)
 - Avancement « 2/5 faits » et barre (classes `p0` à `p100` : pas de style
   écrit dans la page).
 - Cochés en bas (réglage de la note, migration 0034 `cochees_en_bas`, oui
@@ -627,3 +627,16 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   créé dont le dernier plein a plus d'un an est rangé dans les anciens,
   depuis la date de ce plein. Même reprise que sur une fiche (sans
   doublon, photos, compteur) ; bilan par véhicule.
+
+## 24. Catégories de notes (v0.9.6)
+- Table `categories_notes` (migration 0036 : nom, emoji) ; `notes.categorie_id`
+  (une seule catégorie par note, vide permis ; catégorie supprimée : ses
+  notes restent, sans catégorie). Aucune au départ ; 50 au plus par famille.
+- Tout le monde (enfants compris) crée, renomme et supprime les catégories :
+  page `/notes/categories` (« ⚙️ Catégories »).
+- Filtres de la liste : Toutes, chaque catégorie (avec son nombre de notes),
+  Sans catégorie, 🔒 Privées. Filtre « Partagées » retiré.
+  Adresse : `/notes?cat=ID` ou `/notes?cat=sans`.
+- Formulaire de note : choix de la catégorie (préchoisie depuis le filtre) ;
+  une catégorie d'une autre famille compte comme « aucune ».
+- Carte : étiquette de la catégorie. Export JSON : `notes_categories`.

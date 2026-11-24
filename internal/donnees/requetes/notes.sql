@@ -2,16 +2,14 @@
 
 -- Liste : debut du texte seulement, nombre borne. motif '' : pas de
 -- recherche ; sinon le texte cherche, tel quel (% et _ compris) ; filtre : '', 'partagees' ou 'privees'.
--- Filtre : '' toutes, 'privees', 'partagees', 'listes' (une ligne qui commence par une case).
+-- Filtre : '' toutes ou 'privees' ; categorie : 0 toutes, -1 sans categorie, sinon son numero.
 -- name: NotesVisibles :many
 SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debut, n.couleur, n.epinglee, n.privee, n.modifie_le,
-  n.rappel_le, n.rappel_envoye, (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
+  n.rappel_le, n.rappel_envoye, n.categorie_id, (SELECT count(*) FROM photos_notes p WHERE p.note_id = n.id) AS photos
 FROM notes n
 WHERE n.famille_id = sqlc.arg(famille_id) AND (n.privee = 0 OR n.auteur_id = sqlc.arg(membre_id))
-  AND (sqlc.arg(filtre) = '' OR (sqlc.arg(filtre) = 'privees' AND n.privee = 1) OR (sqlc.arg(filtre) = 'partagees' AND n.privee = 0)
-    OR (sqlc.arg(filtre) = 'listes' AND (n.texte LIKE '[ ]%' OR n.texte LIKE '[x]%' OR n.texte LIKE '- [ ]%' OR n.texte LIKE '- [x]%'
-      OR instr(n.texte, char(10) || '[ ]') > 0 OR instr(n.texte, char(10) || '[x]') > 0 OR instr(n.texte, char(10) || '[X]') > 0
-      OR instr(n.texte, char(10) || '- [ ]') > 0 OR instr(n.texte, char(10) || '- [x]') > 0)))
+  AND (sqlc.arg(filtre) = '' OR (sqlc.arg(filtre) = 'privees' AND n.privee = 1))
+  AND (sqlc.arg(categorie) = 0 OR (sqlc.arg(categorie) = -1 AND n.categorie_id IS NULL) OR n.categorie_id = sqlc.arg(categorie))
   AND (sqlc.arg(motif) = '' OR instr(plier(n.titre), plier(sqlc.arg(motif))) > 0 OR instr(plier(n.texte), plier(sqlc.arg(motif))) > 0)
 ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT sqlc.arg(nombre);
 
@@ -90,3 +88,28 @@ WHERE rappel_le > 0 AND rappel_envoye = 0 AND rappel_le <= sqlc.arg(maintenant) 
 
 -- name: RappelNoteEnvoye :exec
 UPDATE notes SET rappel_envoye = 1 WHERE id = ?;
+
+-- Categories des notes de la famille, avec le nombre de notes que ce membre voit.
+-- name: CategoriesNotes :many
+SELECT c.id, c.nom, c.emoji,
+  (SELECT count(*) FROM notes n WHERE n.categorie_id = c.id AND (n.privee = 0 OR n.auteur_id = sqlc.arg(membre_id))) AS nombre
+FROM categories_notes c WHERE c.famille_id = sqlc.arg(famille_id) ORDER BY c.nom COLLATE NOCASE;
+
+-- name: CompterCategoriesNotes :one
+SELECT count(*) FROM categories_notes WHERE famille_id = ?;
+
+-- name: CategorieNoteExiste :one
+SELECT count(*) FROM categories_notes WHERE id = ? AND famille_id = ?;
+
+-- name: CreerCategorieNote :one
+INSERT INTO categories_notes (famille_id, nom, emoji, cree_le) VALUES (?, ?, ?, ?) RETURNING *;
+
+-- name: ModifierCategorieNote :exec
+UPDATE categories_notes SET nom = sqlc.arg(nom), emoji = sqlc.arg(emoji) WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id);
+
+-- Les notes de la categorie restent, sans categorie (ON DELETE SET NULL).
+-- name: SupprimerCategorieNote :exec
+DELETE FROM categories_notes WHERE id = ? AND famille_id = ?;
+
+-- name: ChangerCategorieNote :exec
+UPDATE notes SET categorie_id = sqlc.arg(categorie_id) WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id);

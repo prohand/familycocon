@@ -71,6 +71,7 @@ var sectionsExport = []sectionExport{
 	s("enfants_recompenses", (*donnees.Queries).ExportRecompenses),
 	s("enfants_echanges", (*donnees.Queries).ExportEchanges),
 	s("enfants_etoiles_bonus", (*donnees.Queries).ExportEtoilesBonus),
+	s("notes_categories", (*donnees.Queries).ExportCategoriesNotes),
 	{nom: "notes", lire: func(ctx context.Context, q *donnees.Queries, famille, membre int64) (any, error) {
 		return q.ExportNotes(ctx, donnees.ExportNotesParams{FamilleID: famille, AuteurID: sql.NullInt64{Int64: membre, Valid: true}})
 	}},

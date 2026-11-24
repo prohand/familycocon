@@ -93,5 +93,8 @@ SELECT missions_faites.* FROM missions_faites JOIN missions ON missions.id = mis
 SELECT echanges.* FROM echanges JOIN recompenses ON recompenses.id = echanges.recompense_id WHERE recompenses.famille_id = ?;
 
 -- Notes : les notes partagees et les notes privees de celui qui exporte.
+-- name: ExportCategoriesNotes :many
+SELECT * FROM categories_notes WHERE famille_id = ?;
+
 -- name: ExportNotes :many
 SELECT * FROM notes WHERE famille_id = ? AND (privee = 0 OR auteur_id = ?);
