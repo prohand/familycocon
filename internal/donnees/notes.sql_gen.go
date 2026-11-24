@@ -597,7 +597,9 @@ SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debu
   CAST((n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)) AS INTEGER) AS cachee
 FROM notes n
 WHERE n.famille_id = ?1 AND (n.auteur_id = ?2 OR (n.privee = 0 AND (CAST(?3 AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
-  AND (?4 = '' OR (?4 = 'privees' AND n.privee = 1) OR (?4 = 'partagees' AND n.privee = 0))
+  AND (?4 = '' OR (?4 = 'privees' AND n.privee = 1) OR (?4 = 'partagees' AND n.privee = 0)
+    OR (?4 = 'enfants' AND n.privee = 0 AND (NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1))
+      OR EXISTS (SELECT 1 FROM membres e WHERE e.id = n.auteur_id AND e.role = 'enfant'))))
   AND (?5 = 0 OR (?5 = -1 AND n.categorie_id IS NULL) OR n.categorie_id = ?5)
   AND (?6 = '' OR instr(plier(n.titre), plier(?6)) > 0 OR instr(plier(n.texte), plier(?6)) > 0)
 ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT ?7
@@ -634,7 +636,7 @@ type NotesVisiblesRow struct {
 // sauf a son auteur. parent : 1 pour un parent.
 // Liste : debut du texte seulement, nombre borne. motif ” : pas de
 // recherche ; sinon le texte cherche, tel quel (% et _ compris) ; filtre : ”, 'partagees' ou 'privees'.
-// Filtre : ” toutes ou 'privees' ; categorie : 0 toutes, -1 sans categorie, sinon son numero.
+// Filtre : ” toutes, 'privees', 'partagees' ou 'enfants' (celles que les enfants voient) ; categorie : 0 toutes, -1 sans categorie, sinon son numero.
 func (q *Queries) NotesVisibles(ctx context.Context, arg NotesVisiblesParams) ([]NotesVisiblesRow, error) {
 	rows, err := q.db.QueryContext(ctx, notesVisibles,
 		arg.FamilleID,

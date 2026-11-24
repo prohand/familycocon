@@ -221,6 +221,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   margin-bottom: 6px;
 }
 .titre-page h1 { font-size: 1.7rem; display: flex; align-items: center; gap: 10px; }
+/* Titre et bouton d'ajout sur la même ligne (« 📝 Notes   ＋ Note »). */
+.titre-page .titre-ligne { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.titre-page .titre-ligne h1 { min-width: 0; }
+.titre-page .titre-ligne .bouton { flex-shrink: 0; }
 .titre-page p { margin: 4px 0 0; color: var(--texte-doux); font-weight: 600; }
 
 /* ---------- Tuiles de l'accueil ---------- */
@@ -1514,9 +1518,8 @@ details.replie-avatar > summary { cursor: pointer; margin: 4px 0 10px; }
 .ajout-element input { flex: 1; min-width: 0; }
 button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer; font: inherit; font-weight: 800; }
 .modifier-liste > summary { margin-bottom: 8px; }
-/* Notes : les filtres sur une ligne, les boutons « Liste » et « Note » dessous à droite. */
-.barre-notes { flex-wrap: wrap; justify-content: flex-end; }
-.barre-notes .pilules { flex-basis: 100%; }
+/* Notes : les catégories défilent (le bouton « ＋ Note » est dans le titre). */
+.barre-notes .pilules.defile { margin-top: 0; }
 
 /* Véhicules : onglets « Entretien | Pleins », chiffres et graphiques (SVG
    dessinés par le serveur, internal/graphique ; couleurs du thème). */
@@ -1525,6 +1528,8 @@ button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer
 .tete-pleins { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .tete-pleins h2 { margin: 0; }
 .pilules.petites .pilule { padding: 4px 12px; min-height: 32px; font-size: .85rem; }
+/* « Voir : Toutes · Partagées · Privées · Vues des enfants » : passe à la ligne. */
+.pilules.petites.voir { flex-wrap: wrap; justify-content: flex-start; overflow: visible; gap: 6px; margin-top: 10px; }
 .chiffres { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .chiffres div { background: var(--fond); border-radius: 12px; padding: 8px 10px; }
 .chiffres small { display: block; color: var(--texte-doux); font-size: .75rem; }
@@ -1747,3 +1752,21 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .grille-emojis .sans-emoji { grid-column: span 2; font-size: .85rem; font-weight: 700; color: var(--texte-doux); }
 .ligne-categorie .nombre { flex: none; font-size: .85rem; color: var(--texte-doux); white-space: nowrap; }
 .modif-categorie { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+
+/* ---------- Pièces jointes (documents) ---------- */
+.pieces-jointes { margin: 8px 0; }
+.liste-joints { list-style: none; margin: 0 0 8px; padding: 0; }
+.liste-joints li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--bordure); }
+.liste-joints li:last-child { border-bottom: 0; }
+.liste-joints a { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.liste-joints small { color: var(--texte-doux); white-space: nowrap; }
+.liste-joints form { margin: 0; }
+.ajout-joint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ajout-joint label { position: relative; overflow: hidden; cursor: pointer; }
+/* Le vrai champ fichier, invisible, couvre le bouton (touché = choisir). */
+.ajout-joint input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
+.ajout-joint.htmx-request label::after { content: " · envoi…"; }
+/* Sur une ligne de tâche : en petit, sous le titre. */
+.joints-tache { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; font-size: .8rem; }
+.joints-tache a { font-weight: 700; }
+

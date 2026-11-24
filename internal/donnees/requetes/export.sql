@@ -10,8 +10,9 @@ SELECT * FROM listes WHERE famille_id = ?;
 -- name: ExportProduitsConnus :many
 SELECT * FROM produits_connus WHERE famille_id = ?;
 
+-- Taches : sans les taches privees des autres membres.
 -- name: ExportTaches :many
-SELECT * FROM taches WHERE famille_id = ?;
+SELECT * FROM taches WHERE famille_id = sqlc.arg(famille_id) AND (privee = 0 OR cree_par = sqlc.arg(membre));
 
 -- name: ExportCategoriesTaches :many
 SELECT * FROM categories_taches WHERE famille_id = ?;

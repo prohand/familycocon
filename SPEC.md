@@ -684,3 +684,43 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - Notes : filtre « Voir : Toutes · 👪 Partagées · 🔒 Privées » (`voir`),
   gardé avec la catégorie (`cat`).
 
+## 27. Tâches privées et « parents seulement » ; filtre « Vues des enfants » (v0.9.10)
+- Migration 0039 : `taches.privee`, `taches.parents`,
+  `categories_taches.parents`.
+- Tâche privée : vue par son créateur seul ; elle lui revient (membre
+  choisi forcé, pas de tour) ; seul lui change ce réglage.
+- « Parents seulement » (la tâche, ou sa catégorie ; choisi par un parent) :
+  cachée aux enfants, sauf à celui qui l'a créée et à ceux qui doivent la
+  faire (membre choisi, tour). Un enfant ne voit pas ces catégories et
+  ne peut ni s'en servir, ni les changer ; sa tâche rangée là par un parent
+  y reste.
+- Partout : liste, accueil, agenda, recherche, historique « Qui a fait
+  quoi », adresse d'une tâche (`Module.visible`), annonces (privée : rien ;
+  cachée : parents et concernés), rappels (privée : son créateur ; « tout
+  le monde » cachée : les parents). Export : sans les tâches privées des
+  autres. Membre retiré : ses tâches privées sont retirées.
+- Filtre « Voir : Toutes · 👪 Partagées · 🔒 Privées · 🧒 Vues des enfants »
+  (le dernier pour les parents) dans les tâches (`voir`) et les notes ;
+  « Vues des enfants » : ce qu'au moins un enfant voit.
+
+## 28. Pièces jointes (documents) (v0.9.10)
+- Migration 0040 : table `pieces_jointes` (module, objet, nom d'origine,
+  type, taille, fichier). Fichiers sur le disque, à côté des photos :
+  `<données>/pieces/<famille>/<nom aléatoire>.<ext>`.
+- Où : notes (page de la note ; 📎 N sur la carte), tâches (formulaire ;
+  liens sous la tâche dans la liste), projets (fiche), lignes d'entretien
+  du carnet (parents seulement, comme les photos de tickets).
+- Types (choisis par le serveur d'après l'extension, début du fichier
+  vérifié) : PDF, JPEG, PNG, GIF, WebP, HEIC, Word, Excel, PowerPoint,
+  LibreOffice, RTF, texte, CSV, ZIP. Refusés : pages web, programmes.
+  10 Mo par fichier, 20 par objet, 2 Go par famille.
+- Droits (`App.AjouterJoints`, par module) : voir = voir l'objet ; ajouter
+  et retirer = pouvoir le modifier (projets : ceux qui le voient ; carnet :
+  parents).
+- Code commun `internal/appli/joints.go` : `POST /joints/{module}/{objet}`
+  (lu en flux, plusieurs fichiers, envoyé dès le choix), `GET
+  /joints/{id}/{nom}` (PDF et images ouverts, le reste téléchargé ;
+  `nosniff`, pas de cache), `POST /joints/{id}/supprimer`. Ménage chaque
+  heure des pièces dont l'objet n'existe plus. Export : métadonnées, sans
+  celles des notes, tâches et projets privés des autres.
+

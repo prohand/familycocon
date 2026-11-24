@@ -2,7 +2,10 @@
 {{with .Donnees}}
 <section class="titre-page">
   <a class="retour" href="/">‹ Accueil</a>
-  <h1>📝 Notes</h1>
+  <div class="titre-ligne">
+    <h1>📝 Notes</h1>
+    <a class="bouton" href="/notes/nouvelle{{if gt .Categorie 0}}?cat={{.Categorie}}{{else if eq .Filtre "privees"}}?voir=privees{{end}}">＋ Note</a>
+  </div>
 </section>
 <div class="barre-actions barre-notes">
   {{/* Catégories de la famille (filtre), puis « Sans catégorie ». */}}
@@ -14,16 +17,14 @@
     {{if .Categories}}<a class="pilule{{if eq .Categorie -1}} active{{end}}" href="/notes?{{with .Filtre}}voir={{.}}&amp;{{end}}cat=sans">Sans catégorie</a>{{end}}
     <a class="pilule" href="/notes/categories" aria-label="Gérer les catégories" title="Gérer les catégories">⚙️ Catégories</a>
   </nav>
-  <span class="boutons-ajout">
-    <a class="bouton" href="/notes/nouvelle{{if gt .Categorie 0}}?cat={{.Categorie}}{{else if eq .Filtre "privees"}}?voir=privees{{end}}">＋ Note</a>
-  </span>
 </div>
 {{/* Qui la voit : toutes, partagées (la famille), privées (moi seul). */}}
-<nav class="pilules petites" aria-label="Partagées ou privées">
+<nav class="pilules petites voir" aria-label="Partagées ou privées">
   <span class="aide">Voir :</span>
   <a class="pilule{{if eq .Filtre ""}} active{{end}}" href="/notes{{with .Cat}}?cat={{.}}{{end}}">Toutes</a>
   <a class="pilule{{if eq .Filtre "partagees"}} active{{end}}" href="/notes?voir=partagees{{with .Cat}}&amp;cat={{.}}{{end}}">👪 Partagées</a>
   <a class="pilule{{if eq .Filtre "privees"}} active{{end}}" href="/notes?voir=privees{{with .Cat}}&amp;cat={{.}}{{end}}">🔒 Privées</a>
+  {{if $.C.EstParent}}<a class="pilule{{if eq .Filtre "enfants"}} active{{end}}" href="/notes?voir=enfants{{with .Cat}}&amp;cat={{.}}{{end}}" title="Ce que les enfants voient">🧒 Vues des enfants</a>{{end}}
 </nav>
 <form class="ajout recherche" method="get" action="/notes">
   {{if .Filtre}}<input type="hidden" name="voir" value="{{.Filtre}}">{{end}}
@@ -63,7 +64,7 @@
   </a>
   <footer>
     {{with $n.Auteur}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{visage .}}</span>{{end}}
-    <span class="note-date">{{if eq $n.Privee 1}}🔒 {{else if $n.Cachee}}<span title="Parents seulement">👥</span> {{end}}{{if $n.Photos}}📷 {{$n.Photos}} · {{end}}{{with $n.Rappel}}<span class="note-rappel">⏰ {{.}}</span> · {{end}}{{$n.Date}}</span>
+    <span class="note-date">{{if eq $n.Privee 1}}🔒 {{else if $n.Cachee}}<span title="Parents seulement">👥</span> {{end}}{{if $n.Photos}}📷 {{$n.Photos}} · {{end}}{{if $n.Joints}}📎 {{$n.Joints}} · {{end}}{{with $n.Rappel}}<span class="note-rappel">⏰ {{.}}</span> · {{end}}{{$n.Date}}</span>
     {{if $n.Modifiable}}
     <button class="epingle{{if eq $n.Epinglee 1}} actif{{end}}" hx-post="/notes/{{$n.ID}}/epingler?{{.V.Params}}" hx-target="#notes" hx-swap="outerHTML"
             aria-label="{{if eq $n.Epinglee 1}}Désépingler{{else}}Épingler{{end}}">📌</button>

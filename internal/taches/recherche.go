@@ -11,7 +11,7 @@ import (
 
 // chercher : recherche globale (tâches en cours).
 func (m *Module) chercher(ctx context.Context, c *appli.Contexte, q string) ([]appli.Resultat, error) {
-	l, err := m.a.Q.ChercherTaches(ctx, donnees.ChercherTachesParams{FamilleID: c.Famille.ID, Motif: q})
+	l, err := m.a.Q.ChercherTaches(ctx, donnees.ChercherTachesParams{FamilleID: c.Famille.ID, Motif: q, MembreID: moi(c), Parent: estParent(c)})
 	if err != nil {
 		return nil, err
 	}

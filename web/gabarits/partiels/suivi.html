@@ -121,6 +121,8 @@
     {{if not $.Plein}}<label class="ajout-piece"><input type="file" accept="image/*" data-piece="/suivi/carnet/{{$id}}/pieces" hidden><span>📎 Ticket, facture</span></label>{{end}}
   </div>
   {{end}}
+  {{/* Documents (facture en PDF…) : lignes d'entretien, parents seulement. */}}
+  {{if and $p (or (index $s.Joints $id) (not $.Plein))}}{{template "joints-ligne" dict "L" (index $s.Joints $id) "ID" $id "J" $j "R" $s.Retour "Ajout" (not $.Plein)}}{{end}}
   <details class="corriger">
     <summary class="lien-ajout" aria-label="Corriger {{.Libelle}}">✏️ Corriger</summary>
     {{if and $p $.Plein}}<label class="ajout-piece"><input type="file" accept="image/*" data-piece="/suivi/carnet/{{$id}}/pieces" hidden><span>📎 Ajouter le ticket</span></label>{{end}}
@@ -390,3 +392,29 @@
     <option value="perso"{{if .BudgetPerso}} selected{{end}}>🔒 Mon budget perso</option>
   </select></label>
 {{end}}
+
+{{/* Documents d'une ligne du carnet : dict "L" ([]appli.Joint) "ID" (ligne)
+     "J" (jeton) "R" (page où revenir) "Ajout" (bouton d'ajout). */}}
+{{define "joints-ligne"}}
+<div class="pieces-jointes joints-ligne">
+  {{- with .L}}
+  <ul class="liste-joints">
+    {{- range .}}
+    <li><a href="/joints/{{.ID}}/{{.Nom}}" target="_blank" rel="noopener">{{or .Icone "📎"}} <span class="nom-joint">{{.Nom}}</span></a> <small>{{.TailleTexte}}</small>
+      <form method="post" action="/joints/{{.ID}}/supprimer" hx-confirm="Retirer « {{.Nom}} » ?">
+        <input type="hidden" name="_jeton" value="{{$.J}}"><input type="hidden" name="retour" value="{{$.R}}">
+        <button class="crayon" aria-label="Retirer {{.Nom}}">✕</button>
+      </form>
+    </li>
+    {{- end}}
+  </ul>
+  {{- end}}
+  {{- if .Ajout}}
+  <form class="ajout-joint" method="post" action="/joints/carnet/{{.ID}}" enctype="multipart/form-data">
+    <input type="hidden" name="_jeton" value="{{.J}}"><input type="hidden" name="retour" value="{{.R}}">
+    <label class="ajout-piece"><span>📄 Document (PDF…)</span><input type="file" name="fichier" multiple accept="{{accepteJoints}}" data-envoi-auto></label>
+  </form>
+  {{- end}}
+</div>
+{{end}}
+

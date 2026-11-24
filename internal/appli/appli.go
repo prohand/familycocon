@@ -53,6 +53,7 @@ type App struct {
 	resumes    map[string]ResumeFunc
 	echeances  map[string]EcheancesFunc
 	calendrier map[string]CalendrierFunc
+	joints     map[string]DroitsJoints // pièces jointes : droits par module
 	blocs      []BlocAccueil
 	ajouts     []Ajout
 	partages   []Partage
@@ -87,6 +88,7 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 		recherches:   map[string]RechercheFunc{},
 		echeances:    map[string]EcheancesFunc{},
 		calendrier:   map[string]CalendrierFunc{},
+		joints:       map[string]DroitsJoints{},
 	}
 	sous, err := fs.Sub(web.Fichiers, "statique")
 	if err != nil {
@@ -106,6 +108,7 @@ func Nouvelle(cfg *config.Config, db *sql.DB, journal *slog.Logger) (*App, error
 	a.Route("POST /annuler/{jeton}", "", Membre, a.annuler)
 	a.AjouterBloc(BlocAccueil{Module: "", Ordre: 0, Rendre: a.blocAVenir})
 	a.routesMFA()
+	a.routesJoints()
 	a.Mux.HandleFunc("GET /hors-ligne", func(w http.ResponseWriter, r *http.Request) {
 		a.Statique.Servir(w, r, "hors-ligne.html", false)
 	})

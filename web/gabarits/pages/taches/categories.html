@@ -4,7 +4,7 @@
 <section class="titre-page">
   <a class="retour" href="/taches">‹ Tâches</a>
   <h1>🗂️ Catégories des tâches</h1>
-  <p>Pour ranger les tâches : 🧹 Ménage, 🍳 Cuisine, 🧺 Linge… Toute la famille peut les changer.</p>
+  <p>Pour ranger les tâches : 🧹 Ménage, 🍳 Cuisine, 🧺 Linge… Toute la famille peut les changer.{{if $c.EstParent}} « 👥 Parents seulement » : les enfants ne voient ni la catégorie, ni ses tâches (sauf celles qu'ils doivent faire).{{end}}</p>
 </section>
 {{if not .Plein}}
 <form class="carte bloc ajout-categorie" method="post" action="/taches/categories">
@@ -14,6 +14,7 @@
     <div class="champ etroit"><span>Emoji</span>{{template "champ-emoji" dict "Emoji" "" "Nom" ""}}</div>
     <label class="champ"><span>Nom</span><input name="nom" maxlength="30" placeholder="Ménage" required autocomplete="off"></label>
   </div>
+  {{if $c.EstParent}}<label class="case-a-cocher"><input type="checkbox" name="parents" value="1"> 👥 Parents seulement (cachée aux enfants)</label>{{end}}
   <button class="bouton petit">Ajouter</button>
 </form>
 {{end}}
@@ -31,6 +32,14 @@
       {{template "jeton" $c.CSRF}}<input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="supprimer">
       <button class="crayon" aria-label="Supprimer {{.Nom}}">🗑️</button>
     </form>
+    {{- if $c.EstParent}}
+    <form class="parents-categorie" method="post" action="/taches/categories">
+      {{template "jeton" $c.CSRF}}<input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="parents">
+      <input type="hidden" name="parents" value="{{if .Parents}}0{{else}}1{{end}}">
+      <button class="pastille-parents{{if .Parents}} actif{{end}}" aria-pressed="{{if .Parents}}true{{else}}false{{end}}"
+        title="{{if .Parents}}Montrer aux enfants{{else}}Cacher aux enfants{{end}}">{{if .Parents}}👥 Parents seulement{{else}}👪 Toute la famille{{end}}</button>
+    </form>
+    {{- end}}
   </div>
   {{- else}}
   <p class="aide">Pas encore de catégorie : ajoutez la première ci-dessus.</p>

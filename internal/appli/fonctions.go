@@ -24,6 +24,8 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		"visage":  Visage,
 		"avatars": func() []string { return Avatars },
 		// {{pluriel 3 "produit" "produits"}} → 3 produits
+		// accepteJoints : les extensions des pièces jointes (champ fichier).
+		"accepteJoints": func() string { return AccepteJoints },
 		"pluriel": func(n any, un, plusieurs string) string {
 			switch x := n.(type) {
 			case int:

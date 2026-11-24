@@ -422,6 +422,14 @@ func TestPartageesPriveesEtAgenda(t *testing.T) {
 	if _, p = marie.Get("/notes?voir=privees&cat=" + maison); !strings.Contains(p, "Journal") || strings.Contains(p, "Wifi") || strings.Contains(p, "Idees") {
 		t.Fatal("filtre Privées + catégorie")
 	}
+	// « Vues des enfants » (parents seulement) : ni privées, ni réservées aux parents.
+	marie.Post("/notes", map[string]string{"titre": "Surprise", "texte": "x", "parents": "1"})
+	if _, q := marie.Get("/notes?voir=enfants"); !strings.Contains(q, "Wifi") || !strings.Contains(q, "Idees") || strings.Contains(q, "Journal") || strings.Contains(q, "Surprise") {
+		t.Fatalf("filtre « Vues des enfants » :\n%s", q)
+	}
+	if _, q := lea.Get("/notes"); strings.Contains(q, "voir=enfants") {
+		t.Fatal("filtre « Vues des enfants » proposé à un enfant")
+	}
 	// Les liens gardent l'autre filtre.
 	if !strings.Contains(p, `href="/notes?voir=partagees&amp;cat=`+maison+`"`) || !strings.Contains(p, `href="/notes?voir=privees&amp;cat=sans"`) {
 		t.Fatalf("liens des filtres :\n%s", p)

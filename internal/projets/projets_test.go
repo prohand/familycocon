@@ -116,3 +116,25 @@ func TestProjet(t *testing.T) {
 		t.Fatalf("toujours là : %d", code)
 	}
 }
+
+// Pièces jointes d'un projet : tous ceux qui le voient ; pas un projet privé
+// d'un autre.
+func TestJointsProjet(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	_, page := marie.Post("/projets", map[string]string{"nom": "Cuisine", "emoji": "🏠"})
+	id := essai.Trouver(t, page, `action="/projets/(\d+)/etapes"`)
+	_, page = marie.Post("/projets", map[string]string{"nom": "Surprise", "emoji": "🎉", "prive": "1"})
+	prive := essai.Trouver(t, page, `action="/projets/(\d+)/etapes"`)
+	devis := essai.Fichier{Champ: "fichier", Nom: "devis.pdf", Contenu: []byte("%PDF-1.5\ndevis")}
+	if code, _ := lea.PostFichiers("/joints/projets/"+id, map[string]string{"retour": "/projets/" + id}, devis); code != 200 {
+		t.Fatalf("envoi par Léa : %d", code)
+	}
+	if _, page = marie.Get("/projets/" + id); !strings.Contains(page, "devis.pdf") || !strings.Contains(page, "📎 Pièces jointes") {
+		t.Fatal("pièce absente de la fiche")
+	}
+	if code, _ := lea.PostFichiers("/joints/projets/"+prive, nil, devis); code != http.StatusForbidden {
+		t.Fatalf("pièce ajoutée au projet privé d'un autre : %d", code)
+	}
+}

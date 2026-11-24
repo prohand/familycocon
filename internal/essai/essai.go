@@ -6,9 +6,11 @@
 package essai
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -200,4 +202,35 @@ func Parent(t *testing.T, srv *httptest.Server, parent *Navigateur, prenom strin
 		t.Fatalf("invitation de %s : %d", prenom, code)
 	}
 	return p
+}
+
+// Fichier : un fichier envoyé par PostFichiers.
+type Fichier struct {
+	Champ, Nom string
+	Contenu    []byte
+}
+
+// PostFichiers envoie un formulaire « multipart/form-data » (champs, puis
+// fichiers), avec le jeton CSRF de la dernière page.
+func (n *Navigateur) PostFichiers(chemin string, champs map[string]string, fichiers ...Fichier) (int, string) {
+	n.t.Helper()
+	var corps bytes.Buffer
+	mw := multipart.NewWriter(&corps)
+	for k, v := range champs {
+		_ = mw.WriteField(k, v)
+	}
+	for _, f := range fichiers {
+		w, _ := mw.CreateFormFile(f.Champ, f.Nom)
+		_, _ = w.Write(f.Contenu)
+	}
+	_ = mw.Close()
+	req, _ := http.NewRequest("POST", n.srv.URL+chemin, &corps)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	if n.Jeton != "" {
+		req.Header.Set("X-Jeton", n.Jeton)
+	}
+	if n.Htmx {
+		req.Header.Set("HX-Request", "true")
+	}
+	return n.lire(n.C.Do(req))
 }
