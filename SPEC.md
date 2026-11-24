@@ -724,3 +724,10 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   heure des pièces dont l'objet n'existe plus. Export : métadonnées, sans
   celles des notes, tâches et projets privés des autres.
 
+## 29. Tâche « Pour qui ? : Parents » (v0.9.11)
+- Migration 0041 : `taches.pour_parents`. Choix « 👥 Parents » dans « Pour
+  qui ? » : l'un ou l'autre des parents la fait.
+- Montrée « Parents » (avatar 👥) ; dans le filtre d'un parent, pas dans
+  celui d'un enfant ; annonce et rappel aux parents ; compte dans le
+  badge « à moi » de chaque parent. Une tâche privée ne peut pas l'être.
+

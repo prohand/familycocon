@@ -60,13 +60,14 @@ func lireRappel(heure, date string, regle repetition.Regle) (string, string, str
 	return heure, d.Format(formatDate), ""
 }
 
-// texteRappel : « ⏰ 18:00 », « ⏰ 28/11 à 18:00 » (montré sur la ligne).
-func texteRappel(t donnees.Tache) string {
+// texteRappel : « ⏰ 18:00 », « ⏰ 28/11 à 18:00 », et l'année si ce n'est
+// pas celle d'aujourd'hui (« ⏰ 14/01/2027 à 12:30 »).
+func texteRappel(t donnees.Tache, maintenant time.Time) string {
 	if t.Rappel == "" {
 		return ""
 	}
 	if d, err := time.Parse(formatDate, t.DateRappel); err == nil {
-		return "⏰ " + d.Format("02/01") + " à " + t.Rappel
+		return "⏰ " + appli.DateCourte(d, maintenant) + " à " + t.Rappel
 	}
 	return "⏰ " + t.Rappel
 }
@@ -152,6 +153,16 @@ func (m *Module) envoyerRappels(ctx context.Context, maintenant time.Time) {
 			pour = []int64{t.CreePar.Int64}
 		case qui != nil:
 			pour = []int64{qui.ID}
+		case t.PourParents == 1:
+			// « Parents » : les parents.
+			for _, mb := range membres {
+				if mb.Role == appli.RoleParent {
+					pour = append(pour, mb.ID)
+				}
+			}
+			if len(pour) == 0 {
+				continue
+			}
 		case t.Cachee == 1:
 			// Pour « tout le monde » mais cachée aux enfants : les parents (et
 			// son créateur).

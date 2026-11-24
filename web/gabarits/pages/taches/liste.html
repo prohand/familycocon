@@ -101,9 +101,9 @@
   {{- end}}
   <span class="p-emoji">{{$l.Emoji}}</span>
   <span class="quoi">{{if eq $l.Privee 1}}<span title="Privée">🔒</span> {{else if $l.Cachee}}<span title="Parents seulement">👥</span> {{end}}{{$l.Titre}}
-    <small>{{if $l.Faite}}{{with $l.ParQui}}par {{.Nom}} {{end}}à {{$l.FaiteLe}}{{else}}{{with $l.Assigne}}{{.Nom}}{{else}}Tout le monde{{end}}{{if $l.Tour}} 🔄{{end}} · {{$l.Regle.Texte}}{{with $l.Rappel}} · {{.}}{{end}}{{end}}{{with $l.Categorie}} <span class="etiquette-categorie">{{.}}</span>{{end}}</small>
+    <small>{{if $l.Faite}}{{with $l.ParQui}}par {{.Nom}} {{end}}à {{$l.FaiteLe}}{{else}}{{with $l.Assigne}}{{.Nom}}{{else}}{{if eq $l.PourParents 1}}Parents{{else}}Tout le monde{{end}}{{end}}{{if $l.Tour}} 🔄{{end}} · {{$l.Regle.Texte}}{{with $l.Rappel}} · {{.}}{{end}}{{end}}{{with $l.Categorie}} <span class="etiquette-categorie">{{.}}</span>{{end}}</small>
     {{- with $l.Joints}}<span class="joints-tache">{{range .}}<a href="/joints/{{.ID}}/{{.Nom}}" target="_blank" rel="noopener">📎 {{.Nom}}</a>{{end}}</span>{{end}}</span>
-  {{template "avatar-petit" $l.Assigne}}
+  {{if and (not $l.Assigne) (eq $l.PourParents 1)}}{{template "avatar-parents"}}{{else}}{{template "avatar-petit" $l.Assigne}}{{end}}
   {{if $l.Modifiable}}<a class="crayon" href="/taches/{{$l.ID}}/modifier" aria-label="Modifier {{$l.Titre}}">✏️</a>{{end}}
 </div>
 {{end}}
@@ -117,7 +117,7 @@
     <button class="coche" hx-post="/taches/{{.ID}}/faire" hx-vals='{"depuis": "accueil"}' hx-target="closest .ligne" hx-swap="outerHTML" aria-label="J'ai fait {{.Titre}}"></button>
     <span>{{.Emoji}}</span>
     <span class="quoi">{{.Titre}}<small>{{.Regle.Texte}}</small></span>
-    {{template "avatar-petit" .Assigne}}
+    {{if and (not .Assigne) (eq .PourParents 1)}}{{template "avatar-parents"}}{{else}}{{template "avatar-petit" .Assigne}}{{end}}
   </div>
   {{- end}}
 </div>
@@ -131,3 +131,7 @@
   <span class="quoi">{{.Donnees.Titre}}<small>Fait par {{.C.Membre.Nom}}</small></span>
 </div>
 {{end}}
+
+{{/* Tâche « Parents » : l'un ou l'autre des parents. */}}
+{{define "avatar-parents"}}<span class="avatar petit ctous" title="Parents">👥</span>{{end}}
+

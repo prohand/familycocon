@@ -12,6 +12,7 @@
   <label class="champ"><span>Pour qui ?</span>
     <select name="assigne">
       <option value="0">Tout le monde</option>
+      <option value="parents"{{if eq .Tache.PourParents 1}} selected{{end}}>👥 Parents</option>
       <option value="tour"{{if .Tache.Tour}} selected{{end}}>🔄 À tour de rôle…</option>
       {{- range .Membres}}<option value="{{.ID}}"{{if and $.Donnees.Tache.AssigneA.Valid (eq .ID $.Donnees.Tache.AssigneA.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}
     </select></label>

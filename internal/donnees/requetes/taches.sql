@@ -25,12 +25,12 @@ WHERE taches.famille_id = sqlc.arg(famille_id) AND taches.active = 1
 SELECT * FROM taches WHERE id = ? AND famille_id = ? AND active = 1;
 
 -- name: CreerTache :one
-INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, privee, parents, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, privee, parents, pour_parents, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: ModifierTache :exec
 UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ?, categorie_id = ?, rappel = ?, date_rappel = ?,
-  privee = ?, parents = ?
+  privee = ?, parents = ?, pour_parents = ?
 WHERE id = ? AND famille_id = ?;
 
 -- name: RetirerTache :exec
@@ -80,7 +80,7 @@ UPDATE taches SET assigne_a = NULL WHERE famille_id = ? AND assigne_a = ?;
 -- de leur famille.
 -- name: TachesAvecRappel :many
 SELECT t.id, t.famille_id, t.titre, t.emoji, t.assigne_a, t.tour, t.repetition, t.rappel, t.date_rappel, t.cree_le, f.fuseau,
-  t.privee, t.cree_par,
+  t.privee, t.cree_par, t.pour_parents,
   CAST((t.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = t.categorie_id AND k.parents = 1)) AS INTEGER) AS cachee
 FROM taches t JOIN familles f ON f.id = t.famille_id
 WHERE t.active = 1 AND t.rappel <> '' ORDER BY t.id LIMIT 5000;

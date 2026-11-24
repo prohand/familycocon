@@ -260,7 +260,7 @@ func TestRappelTaches(t *testing.T) {
 	marie.Post("/taches", map[string]string{"titre": "Poubelles", "repetition": "jour", "rappel": "18:00"})
 	marie.Post("/taches", map[string]string{"titre": "Garage", "repetition": "unique", "rappel": "09:30", "date_rappel": "2030-05-04"})
 	_, p := marie.Get("/taches")
-	if !strings.Contains(p, "⏰ 18:00") || !strings.Contains(p, "⏰ 04/05 à 09:30") {
+	if !strings.Contains(p, "⏰ 18:00") || !strings.Contains(p, "⏰ 04/05/2030 à 09:30") {
 		t.Fatalf("rappel non montré :\n%s", p)
 	}
 	// Une date sur une tâche qui revient est ignorée.
@@ -427,4 +427,35 @@ func TestJointsTaches(t *testing.T) {
 	if code, _ := lea.PostFichiers("/joints/taches/"+id, nil, f); code != http.StatusForbidden {
 		t.Fatalf("pièce ajoutée par qui ne peut pas modifier : %d", code)
 	}
+}
+
+// « Pour qui ? » : Parents (l'un ou l'autre).
+func TestTachePourParents(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	_, p := marie.Get("/taches/nouvelle")
+	if !strings.Contains(p, `<option value="parents">👥 Parents</option>`) {
+		t.Fatal("choix « Parents » absent")
+	}
+	idMarie := essai.Trouver(t, p, `<option value="(\d+)">Marie</option>`)
+	idLea := essai.Trouver(t, p, `<option value="(\d+)">Léa</option>`)
+	marie.Post("/taches", map[string]string{"titre": "Payer la cantine", "repetition": "jour", "assigne": "parents"})
+	_, p = marie.Get("/taches?pour=" + idMarie)
+	if !strings.Contains(p, "Payer la cantine") || !strings.Contains(p, "Parents · Chaque jour") || !strings.Contains(p, `title="Parents">👥</span>`) {
+		t.Fatalf("tâche des parents absente chez Marie :\n%s", p)
+	}
+	if _, p = lea.Get("/taches?pour=" + idLea); strings.Contains(p, "Payer la cantine") {
+		t.Fatal("tâche des parents montrée dans le filtre de Léa")
+	}
+	id := essai.Trouver(t, p+mustGet(t, marie, "/taches"), `href="/taches/(\d+)/modifier" aria-label="Modifier Payer la cantine"`)
+	if _, p = marie.Get("/taches/" + id + "/modifier"); !strings.Contains(p, `<option value="parents" selected>👥 Parents</option>`) {
+		t.Fatal("choix « Parents » non gardé")
+	}
+}
+
+func mustGet(t *testing.T, n *essai.Navigateur, chemin string) string {
+	t.Helper()
+	_, p := n.Get(chemin)
+	return p
 }

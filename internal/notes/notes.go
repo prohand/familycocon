@@ -245,7 +245,8 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, cate
 		cn := carteNote{Note: n, Categorie: nomCat[l.CategorieID.Int64], Photos: l.Photos, Joints: len(joints[n.ID]), Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n),
 			Cachee: l.Cachee == 1 && n.Privee == 0}
 		if l.RappelLe > 0 && l.RappelEnvoye == 0 {
-			cn.Rappel = time.Unix(l.RappelLe, 0).In(c.Lieu).Format("02/01 15:04")
+			quand := time.Unix(l.RappelLe, 0).In(c.Lieu)
+			cn.Rappel = appli.DateCourte(quand, c.Maintenant()) + " " + quand.Format("15:04")
 		}
 		if n.AuteurID.Valid {
 			cn.Auteur = parID[n.AuteurID.Int64]

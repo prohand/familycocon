@@ -138,6 +138,15 @@ var (
 // JourFR : « lundi ».
 func JourFR(t time.Time) string { return joursFR[t.Weekday()] }
 
+// DateCourte : « 28/11 », ou « 14/01/2027 » si ce n'est pas l'année de
+// maintenant (un rappel ou une échéance de l'an prochain).
+func DateCourte(t, maintenant time.Time) string {
+	if t.Year() != maintenant.Year() {
+		return t.Format("02/01/2006")
+	}
+	return t.Format("02/01")
+}
+
 // MoisFR : « novembre ».
 func MoisFR(m time.Month) string { return moisFR[m-1] }
 

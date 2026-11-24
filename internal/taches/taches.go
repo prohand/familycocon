@@ -308,7 +308,7 @@ func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map
 		clesLignes = append(clesLignes, cle)
 		l.Assigne, l.Tour = assigneLe(t, l.Regle, maintenant, parID), membresTour(t, parID)
 		l.Modifiable = modifiable(c, t)
-		l.Rappel = texteRappel(t)
+		l.Rappel = texteRappel(t, maintenant)
 		lignes = append(lignes, l)
 	}
 	if len(cles) > 0 {
@@ -349,9 +349,16 @@ func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map
 }
 
 // pourMembre : la tâche concerne-t-elle ce membre (ou tout le monde) ?
-// Une tâche confiée à un membre retiré de la famille revient à tout le monde.
-func pourMembre(l ligneTache, id int64) bool {
-	return id == 0 || l.Assigne == nil || l.Assigne.ID == id
+// Une tâche confiée à un membre retiré de la famille revient à tout le monde ;
+// une tâche « Parents » concerne chaque parent.
+func pourMembre(l ligneTache, id int64, parID map[int64]*donnees.Membre) bool {
+	if id == 0 {
+		return true
+	}
+	if l.Assigne == nil && l.PourParents == 1 {
+		return parID[id] != nil && parID[id].Role == appli.RoleParent
+	}
+	return l.Assigne == nil || l.Assigne.ID == id
 }
 
 // Filtre « Voir » : toutes, partagées, privées, ou (parents) celles que
@@ -435,7 +442,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 	v := &vueTaches{Pour: pour, Categorie: cat, Cat: paramCategorie(cat), Voir: voir, Categories: cats, Membres: membres}
 	aujourdhui := repetition.CleJour(c.Maintenant())
 	for _, l := range lignes {
-		if !pourMembre(l, pour) || !dansCategorie(l.Tache, cat) {
+		if !pourMembre(l, pour, parID) || !dansCategorie(l.Tache, cat) {
 			continue
 		}
 		l.Categorie = nomCat[l.CategorieID.Int64]
@@ -623,8 +630,10 @@ type saisieTache struct {
 	titre   string
 	assigne sql.NullInt64
 	tour    string  // « 3,5,7 » : à tour de rôle
-	pour    []int64 // à notifier (membre choisi ou ceux du tour)
-	regle   repetition.Regle
+	pour    []int64 // à notifier (membre choisi, ceux du tour, ou les parents)
+	// pourParents : « Parents » (l'un ou l'autre la fait).
+	pourParents int64
+	regle       repetition.Regle
 	// Catégorie (nulle : aucune) ; rappel : heure (« 18:00 », vide : aucun)
 	// et jour d'une tâche « une fois » (vide : chaque jour jusqu'à ce
 	// qu'elle soit faite).
@@ -673,6 +682,9 @@ func (m *Module) lireFormulaire(r *http.Request, c *appli.Contexte) (s saisieTac
 			return s, "À tour de rôle : cochez au moins deux personnes."
 		}
 		s.tour = strings.Join(ids, ",")
+	case "parents":
+		s.pourParents = 1
+		s.pour = m.a.Parents(r.Context(), c)
 	case "", "0":
 	default:
 		id, ok := membre(v)
@@ -712,12 +724,12 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	if s.privee == 1 {
 		// Privée : elle revient à celui qui la crée (personne d'autre ne la voit).
-		s.assigne, s.tour, s.pour = moi(c), "", nil
+		s.assigne, s.tour, s.pour, s.pourParents = moi(c), "", nil, 0
 	}
 	t, err := m.a.Q.CreerTache(r.Context(), donnees.CreerTacheParams{
 		FamilleID: c.Famille.ID, Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour,
 		Repetition: s.regle.String(), CategorieID: s.categorie, Rappel: s.rappel, DateRappel: s.dateRappel,
-		Privee: s.privee, Parents: s.parents, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+		Privee: s.privee, Parents: s.parents, PourParents: s.pourParents, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -758,13 +770,13 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		}
 	}
 	if s.privee == 1 {
-		s.assigne, s.tour = t.CreePar, ""
+		s.assigne, s.tour, s.pourParents = t.CreePar, "", 0
 	}
 	regle := s.regle
 	if err := m.a.Q.ModifierTache(r.Context(), donnees.ModifierTacheParams{
 		Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour, Repetition: regle.String(),
 		CategorieID: s.categorie, Rappel: s.rappel, DateRappel: s.dateRappel, Privee: s.privee, Parents: s.parents,
-		ID: t.ID, FamilleID: c.Famille.ID,
+		PourParents: s.pourParents, ID: t.ID, FamilleID: c.Famille.ID,
 	}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -886,7 +898,7 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	}
 	moi := 0
 	for _, t := range l {
-		if t.Assigne != nil && t.Assigne.ID == c.Membre.ID {
+		if (t.Assigne != nil && t.Assigne.ID == c.Membre.ID) || (t.Assigne == nil && t.PourParents == 1 && c.EstParent()) {
 			moi++
 		}
 	}
