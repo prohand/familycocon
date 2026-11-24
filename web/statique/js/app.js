@@ -465,15 +465,17 @@ document.addEventListener("change", function (e) {
   });
 })();
 
-// Carte de fidélité : « Scanner la carte ». Sur Android (Chrome), le
-// navigateur lit le code en direct avec la caméra (BarcodeDetector). Sinon
-// (iPhone…), une photo est prise, réduite à 1 280 px et envoyée au serveur
-// qui la lit (EAN-13, UPC-A, EAN-8, Code 128). Le numéro et le type de code
-// sont remplis tout seuls ; rien n'est gardé.
+// Carte de fidélité : « Scanner la carte ». La caméra filme et le code est
+// lu en direct : par le lecteur du navigateur (BarcodeDetector, Android),
+// sinon (iPhone…) par zxing-wasm dans un worker (/ocr/zxing316/lecteur.js :
+// QR code, PDF417, Aztec, EAN, Code 128…). Caméra refusée : une photo, lue
+// par zxing-wasm puis, en dernier recours, par le serveur (EAN, Code 128).
+// Le numéro et le type de code sont remplis tout seuls ; rien n'est gardé.
 (function () {
   "use strict";
-  var types = { ean_13: "ean13", ean_8: "ean8", upc_a: "upca", code_128: "code128", qr_code: "qr" };
-  var noms = { ean13: "EAN-13", ean8: "EAN-8", upca: "UPC-A", code128: "Code 128", qr: "QR code" };
+  var types = { ean_13: "ean13", ean_8: "ean8", upc_a: "upca", code_128: "code128", qr_code: "qr", pdf417: "pdf417", aztec: "aztec" };
+  var typesZx = { EAN13: "ean13", EAN8: "ean8", UPCA: "upca", Code128: "code128", QRCode: "qr", PDF417: "pdf417", Aztec: "aztec" };
+  var noms = { ean13: "EAN-13", ean8: "EAN-8", upca: "UPC-A", code128: "Code 128", qr: "QR code", pdf417: "PDF417", aztec: "Aztec" };
   function jeton() {
     try { return JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) { return ""; }
   }
@@ -487,23 +489,68 @@ document.addEventListener("change", function (e) {
     if (info) info.textContent = "Code lu : " + (noms[t] || "détecté tout seul");
     window.fcToast("Carte lue ✓");
   }
-  // Photo (iPhone, ou caméra refusée) : lue par le serveur.
+
+  // Lecteur zxing-wasm (worker unique, chargé au premier scan). lire(image)
+  // → promesse de {texte, format} ou null.
+  var zx = null;
+  function zxing() {
+    if (zx) return zx;
+    if (!window.Worker || !window.WebAssembly) return null;
+    var w = new Worker("/ocr/zxing316/lecteur.js");
+    var attente = null;
+    w.onmessage = function (e) {
+      var r = attente; attente = null;
+      if (!r) return;
+      var c = e.data && e.data.codes && e.data.codes[0];
+      r(c ? { texte: c.texte, format: typesZx[c.format] || "auto" } : null);
+    };
+    w.onerror = function () { var r = attente; attente = null; if (r) r(null); };
+    zx = {
+      lire: function (image) {
+        return new Promise(function (ok) {
+          if (attente) { ok(null); return; } // une lecture à la fois
+          attente = ok;
+          w.postMessage(image, [image.data.buffer]);
+        });
+      }
+    };
+    return zx;
+  }
+  // Une image (vidéo ou photo) en ImageData, 1 600 px au plus.
+  function pixels(source, l, h) {
+    var k = Math.min(1, 1600 / Math.max(l, h));
+    var c = document.createElement("canvas");
+    c.width = Math.round(l * k); c.height = Math.round(h * k);
+    var x = c.getContext("2d", { willReadFrequently: true });
+    x.drawImage(source, 0, 0, c.width, c.height);
+    return x.getImageData(0, 0, c.width, c.height);
+  }
+
+  // Photo : zxing-wasm, sinon le serveur.
   function envoyer(f, fichier) {
     if (!window.createImageBitmap) { window.fcToast("Photo non prise en charge : tapez le numéro", true); return; }
     window.fcToast("Lecture de la photo…");
-    window.fcReduirePhoto(fichier, 1280).then(function (blob) {
-      return fetch("/fidelite/scanner", { method: "POST", credentials: "same-origin",
-        headers: { "X-Jeton": jeton(), "Content-Type": "image/jpeg" }, body: blob });
-    }).then(function (rep) {
-      return rep.json().then(function (d) { if (!rep.ok) throw new Error(d.erreur || "Code non lu"); return d; });
-    }).then(function (d) { remplir(f, d.numero, d.format); })
-      .catch(function (e) { window.fcToast((e && e.message) || "Code non lu", true); });
+    var lecteur = zxing();
+    var d = lecteur ? createImageBitmap(fichier).then(function (bmp) { return lecteur.lire(pixels(bmp, bmp.width, bmp.height)); }).catch(function () { return null; })
+                    : Promise.resolve(null);
+    d.then(function (code) {
+      if (code) { remplir(f, code.texte, code.format); return; }
+      return window.fcReduirePhoto(fichier, 1280).then(function (blob) {
+        return fetch("/fidelite/scanner", { method: "POST", credentials: "same-origin",
+          headers: { "X-Jeton": jeton(), "Content-Type": "image/jpeg" }, body: blob });
+      }).then(function (rep) {
+        return rep.json().then(function (j) { if (!rep.ok) throw new Error(j.erreur || "Code non lu"); return j; });
+      }).then(function (j) { remplir(f, j.numero, j.format); });
+    }).catch(function (e) { window.fcToast((e && e.message) || "Code non lu", true); });
   }
-  // Caméra en direct avec le lecteur du navigateur.
+
+  // Caméra en direct : lecteur du navigateur, ou zxing-wasm image par image.
   function direct(f, photo) {
-    var lecteur;
-    try { lecteur = new BarcodeDetector(); } catch (_) { photo.click(); return; }
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }).then(function (flux) {
+    var detecteur = null, lecteur = null;
+    if ("BarcodeDetector" in window) { try { detecteur = new BarcodeDetector(); } catch (_) { detecteur = null; } }
+    if (!detecteur) lecteur = zxing();
+    if (!detecteur && !lecteur) { photo.click(); return; }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 } } }).then(function (flux) {
       var d = document.createElement("dialog");
       d.className = "scanner";
       var v = document.createElement("video");
@@ -515,7 +562,7 @@ document.addEventListener("change", function (e) {
       b.className = "bouton secondaire";
       b.textContent = "Annuler";
       var aide = document.createElement("p");
-      aide.textContent = "Visez le code-barres de la carte";
+      aide.textContent = "Visez le code de la carte (code-barres, QR code…)";
       d.appendChild(aide); d.appendChild(v); d.appendChild(b);
       document.body.appendChild(d);
       d.showModal();
@@ -530,13 +577,23 @@ document.addEventListener("change", function (e) {
       }
       b.addEventListener("click", arreter);
       d.addEventListener("cancel", arreter);
+      function trouve(texte, type) { arreter(); remplir(f, texte, type); }
       (function chercher() {
         if (fini) return;
-        lecteur.detect(v).then(function (codes) {
+        if (detecteur) {
+          detecteur.detect(v).then(function (codes) {
+            if (fini) return;
+            if (codes.length) { trouve(codes[0].rawValue, types[codes[0].format] || "auto"); return; }
+            setTimeout(chercher, 250);
+          }).catch(function () { setTimeout(chercher, 500); });
+          return;
+        }
+        if (!v.videoWidth) { setTimeout(chercher, 300); return; }
+        lecteur.lire(pixels(v, v.videoWidth, v.videoHeight)).then(function (code) {
           if (fini) return;
-          if (codes.length) { arreter(); remplir(f, codes[0].rawValue, types[codes[0].format] || "auto"); return; }
-          setTimeout(chercher, 250);
-        }).catch(function () { setTimeout(chercher, 500); });
+          if (code) { trouve(code.texte, code.format); return; }
+          setTimeout(chercher, 200);
+        });
       })();
     }).catch(function () { photo.click(); }); // caméra refusée : une photo
   }
@@ -546,7 +603,7 @@ document.addEventListener("change", function (e) {
     var f = b.closest("form");
     var photo = f && f.querySelector("[data-photo]");
     if (!photo) return;
-    if ("BarcodeDetector" in window && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) direct(f, photo);
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) direct(f, photo);
     else photo.click();
   });
   document.addEventListener("change", function (e) {

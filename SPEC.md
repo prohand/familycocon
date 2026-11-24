@@ -21,7 +21,9 @@ Application web d'organisation familiale, auto-hébergée, pensée pour le tél�
 | Image | `scratch` : binaire + certificats + licences | ni shell ni outil ; utilisateur 65532 |
 
 Dépendances directes : `modernc.org/sqlite`, `golang.org/x/crypto`, `rsc.io/qr` (QR code
-de la double authentification et des cartes de fidélité, ~30 Ko, BSD). Rien d'autre.
+de la double authentification et des cartes de fidélité, ~30 Ko, BSD),
+`github.com/boombuler/barcode` v1.1.0 (MIT, Go pur : dessin des codes PDF417 et Aztec
+des cartes de fidélité, ~140 Ko de binaire, rien en mémoire au repos). Rien d'autre.
 
 ## 2. Configuration
 Variables d'environnement (`.env.exemple`) : `FC_ADRESSE` et `FC_DONNEES` (déjà
@@ -757,4 +759,19 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   (accueil, compte de la tuile) ; dans « Les autres jours » de la plus
   proche à la plus lointaine, déjà cochable ; « du jour » à sa date (et
   après, tant qu'elle n'est pas faite).
+
+## 31. Cartes de fidélité : QR code, PDF417 et Aztec (v0.9.14)
+- Scan : la caméra filme et le code est lu en direct, par le lecteur du
+  navigateur (BarcodeDetector, Android) ou sinon (iPhone) par zxing-wasm
+  3.1.6 (MIT ; zxing-cpp, Apache-2.0) dans un worker
+  (`web/ocr/zxing316/lecteur.js`, ~420 Ko compressés, servis comme le
+  lecteur de tickets, téléchargés au premier scan). Photo (caméra refusée) :
+  zxing-wasm, puis le serveur (EAN, Code 128). Rien ne sort du téléphone.
+- Lus : QR code, PDF417, Aztec, Data Matrix, EAN-13/8, UPC-A/E, Code 128,
+  39, 93, ITF, Codabar (les formats d'Apple Wallet : QR, PDF417, Aztec,
+  Code 128).
+- Dessinés en caisse : formats « PDF417 » (rangées étirées, ~3 fois plus
+  large que haut) et « Aztec » (boombuler/barcode), en plus des autres.
+- Essai : les deux cartes Wallet de l'utilisateur (QR code, PDF417 Starbucks)
+  lues depuis une capture d'écran, et chaque code dessiné relu à l'identique.
 

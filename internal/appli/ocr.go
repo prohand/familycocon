@@ -21,6 +21,11 @@ import (
 // aux autres fichiers statiques). Le téléphone les télécharge une fois, au
 // premier scan, puis les garde (adresse versionnée : v7).
 //
+// Même chose pour le lecteur de codes des cartes de fidélité (zxing-wasm,
+// MIT, et zxing-cpp, Apache-2.0 : QR code, PDF417, Aztec, EAN, Code 128…),
+// dans web/ocr/zxing316 (~420 Ko compressés), lancé dans le worker
+// lecteur.js : un iPhone n'a pas de lecteur de codes dans son navigateur.
+//
 // Ces réponses autorisent WebAssembly ('wasm-unsafe-eval') : le lecteur
 // est un programme WebAssembly, lancé dans un « worker » dont la politique
 // de sécurité est celle de sa propre réponse. Le reste du site n'en a pas
@@ -34,7 +39,7 @@ var cspOCR = strings.Replace(csp, "script-src 'self'", "script-src 'self' 'wasm-
 // décompressés pour un client qui ne lit pas le gzip.
 func (a *App) servirOCR(w http.ResponseWriter, r *http.Request) {
 	nom := path.Clean("/" + r.PathValue("fichier"))[1:]
-	if !strings.HasPrefix(nom, "v7/") || strings.Count(nom, "/") != 1 {
+	if !(strings.HasPrefix(nom, "v7/") || strings.HasPrefix(nom, "zxing316/")) || strings.Count(nom, "/") != 1 {
 		http.NotFound(w, r)
 		return
 	}
@@ -56,6 +61,16 @@ func (a *App) servirOCR(w http.ResponseWriter, r *http.Request) {
 	}
 	f, err := racine.Open(nom + ".gz")
 	if err != nil {
+		// Petit script écrit ici (zxing316/lecteur.js) : gardé tel quel. Pas
+		// les .gz eux-mêmes (« fichier.js.gz » demandé tel quel : 404).
+		if strings.HasSuffix(nom, ".js") {
+			if g, err := racine.Open(nom); err == nil {
+				defer g.Close()
+				h.Set("Content-Type", "text/javascript; charset=utf-8")
+				_, _ = io.Copy(w, g)
+				return
+			}
+		}
 		http.NotFound(w, r)
 		return
 	}
