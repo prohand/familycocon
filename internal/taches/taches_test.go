@@ -211,3 +211,122 @@ func TestTourDeRole(t *testing.T) {
 		t.Fatalf("personne du jour absente :\n%s", page)
 	}
 }
+
+// Catégories : créées par tous, filtre, choix dans le formulaire ; une
+// catégorie supprimée laisse ses tâches.
+func TestCategoriesTaches(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	if code, _ := lea.Post("/taches/categories", map[string]string{"nom": "Ménage", "emoji": "🧹"}); code != 200 {
+		t.Fatalf("catégorie créée par un enfant : %d", code)
+	}
+	if code, _ := marie.Post("/taches/categories", map[string]string{"nom": " ", "emoji": "🧹"}); code != 400 {
+		t.Fatalf("nom vide : %d", code)
+	}
+	_, p := marie.Get("/taches/categories")
+	menage := essai.Trouver(t, p, `name="id" value="(\d+)"><input type="hidden" name="action" value="modifier">\s*<span class="champ-emoji"><input type="hidden" name="emoji" value="🧹">`)
+	if !strings.Contains(p, `<template id="grille-emojis">`) {
+		t.Fatal("grille des emojis absente")
+	}
+	// Formulaire venu du filtre : catégorie déjà choisie.
+	if _, p = marie.Get("/taches/nouvelle?cat=" + menage); !strings.Contains(p, `<option value="`+menage+`" selected>🧹 Ménage</option>`) {
+		t.Fatalf("catégorie non proposée :\n%s", p)
+	}
+	marie.Post("/taches", map[string]string{"titre": "Passer l'aspirateur", "repetition": "jour", "categorie": menage})
+	marie.Post("/taches", map[string]string{"titre": "Arroser", "repetition": "jour"})
+	marie.Post("/taches", map[string]string{"titre": "Intrus", "repetition": "jour", "categorie": "999"}) // inconnue : aucune
+	_, p = marie.Get("/taches?cat=" + menage)
+	if !strings.Contains(p, "Passer l&#39;aspirateur") || strings.Contains(p, "Arroser") || !strings.Contains(p, `<span class="etiquette-categorie">🧹 Ménage</span>`) {
+		t.Fatalf("filtre Ménage :\n%s", p)
+	}
+	if _, p = marie.Get("/taches?pour=0&cat=sans"); !strings.Contains(p, "Arroser") || !strings.Contains(p, "Intrus") || strings.Contains(p, "aspirateur") {
+		t.Fatal("filtre « Sans catégorie »")
+	}
+	// Supprimée : la tâche reste, sans catégorie.
+	marie.Post("/taches/categories", map[string]string{"action": "supprimer", "id": menage})
+	if _, p = marie.Get("/taches?pour=0&cat=sans"); !strings.Contains(p, "aspirateur") {
+		t.Fatal("tâche perdue avec sa catégorie")
+	}
+}
+
+// Rappel d'une tâche : heure lue, montrée, envoyée une fois par jour.
+func TestRappelTaches(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	if code, _ := marie.Post("/taches", map[string]string{"titre": "Poubelles", "repetition": "jour", "rappel": "25:00"}); code != 400 {
+		t.Fatalf("heure impossible acceptée : %d", code)
+	}
+	marie.Post("/taches", map[string]string{"titre": "Poubelles", "repetition": "jour", "rappel": "18:00"})
+	marie.Post("/taches", map[string]string{"titre": "Garage", "repetition": "unique", "rappel": "09:30", "date_rappel": "2030-05-04"})
+	_, p := marie.Get("/taches")
+	if !strings.Contains(p, "⏰ 18:00") || !strings.Contains(p, "⏰ 04/05 à 09:30") {
+		t.Fatalf("rappel non montré :\n%s", p)
+	}
+	// Une date sur une tâche qui revient est ignorée.
+	marie.Post("/taches", map[string]string{"titre": "Vaisselle", "repetition": "jour", "rappel": "20:00", "date_rappel": "2030-05-04"})
+	l, err := a.Q.TachesAvecRappel(t.Context())
+	if err != nil || len(l) != 3 {
+		t.Fatalf("tâches avec rappel : %v %v", l, err)
+	}
+	for _, x := range l {
+		if x.Titre == "Vaisselle" && x.DateRappel != "" {
+			t.Fatal("date gardée sur une tâche qui revient")
+		}
+	}
+	// Envoi : demain à 18:01 (heure de Paris), une seule fois.
+	paris, _ := time.LoadLocation("Europe/Paris")
+	d := time.Now().In(paris).AddDate(0, 0, 1)
+	demain := time.Date(d.Year(), d.Month(), d.Day(), 18, 1, 0, 0, paris)
+	m := &Module{a: a}
+	m.envoyerRappels(t.Context(), demain)
+	var poubelles int64
+	for _, x := range l {
+		if x.Titre == "Poubelles" {
+			poubelles = x.ID
+		}
+	}
+	if n, _ := a.Q.MarquerRappelTache(t.Context(), donnees.MarquerRappelTacheParams{TacheID: poubelles, Jour: repetition.CleJour(demain), EnvoyeLe: 1}); n != 0 {
+		t.Fatal("rappel de 18:00 non envoyé")
+	}
+}
+
+// rappelDu : à l'heure, pas avant, pas trop tard ; jour de la période.
+func TestRappelDu(t *testing.T) {
+	paris, _ := time.LoadLocation("Europe/Paris")
+	lundi := time.Date(2026, 11, 23, 0, 0, 0, 0, paris) // un lundi
+	a := func(j, h, mn int) time.Time {
+		return lundi.AddDate(0, 0, j).Add(time.Duration(h)*time.Hour + time.Duration(mn)*time.Minute)
+	}
+	cas := []struct {
+		nom              string
+		repetition, date string
+		quand            time.Time
+		du               bool
+	}{
+		{"chaque jour, à l'heure", "jour", "", a(0, 18, 0), true},
+		{"chaque jour, 10 min après", "jour", "", a(2, 18, 10), true},
+		{"chaque jour, avant", "jour", "", a(0, 17, 59), false},
+		{"chaque jour, trop tard", "jour", "", a(0, 18, 20), false},
+		{"semaine, lundi", "semaine", "", a(0, 18, 0), true},
+		{"semaine, mardi", "semaine", "", a(1, 18, 0), false},
+		{"mois, le 1er", "mois", "", time.Date(2026, 12, 1, 18, 0, 0, 0, paris), true},
+		{"mois, le 2", "mois", "", time.Date(2026, 12, 2, 18, 0, 0, 0, paris), false},
+		{"certains jours, mardi prévu", "jours:2", "", a(1, 18, 0), true},
+		{"certains jours, mercredi", "jours:2", "", a(2, 18, 0), false},
+		{"une fois sans date : chaque jour", "", "", a(3, 18, 0), true},
+		{"une fois, le jour choisi", "", "2026-11-25", a(2, 18, 0), true},
+		{"une fois, un autre jour", "", "2026-11-25", a(1, 18, 0), false},
+	}
+	for _, x := range cas {
+		r := donnees.TachesAvecRappelRow{Repetition: x.repetition, Rappel: "18:00", DateRappel: x.date, CreeLe: lundi.AddDate(0, 0, -30).Unix()}
+		if _, du := rappelDu(r, x.quand); du != x.du {
+			t.Errorf("%s : %v, attendu %v", x.nom, du, x.du)
+		}
+	}
+	// Tâche créée après l'heure du rappel : rien ce jour-là.
+	r := donnees.TachesAvecRappelRow{Repetition: "jour", Rappel: "18:00", CreeLe: a(0, 18, 5).Unix()}
+	if _, du := rappelDu(r, a(0, 18, 6)); du {
+		t.Error("rappel pour une tâche créée après l'heure")
+	}
+}

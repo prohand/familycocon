@@ -47,6 +47,9 @@ func Brancher(a *appli.App) {
 	a.Route("POST /taches/{id}/faire", mod, appli.Membre, m.faire)
 	a.Route("POST /taches/{id}/defaire", mod, appli.Membre, m.defaire)
 	a.Route("POST /taches/{id}/supprimer", mod, appli.Parent, m.supprimer)
+	a.Route("GET /taches/categories", mod, appli.Membre, m.pageCategories)
+	a.Route("POST /taches/categories", mod, appli.Membre, m.categoriesPost)
+	a.AjouterMinute(m.envoyerRappels)
 
 	a.AjouterResume(mod, m.resume)
 	a.AjouterBloc(appli.BlocAccueil{Module: mod, Ordre: 2, Rendre: m.blocAccueil})
@@ -55,9 +58,14 @@ func Brancher(a *appli.App) {
 	a.AjouterCalendrier(mod, m.calendrier)
 }
 
-// calendrier : les tâches des jours affichés dans l'agenda. Seules les tâches
-// rattachées à un jour (chaque jour, certains jours) y sont : « une fois »
-// et « chaque semaine » n'ont pas de jour précis.
+// calendrier : les tâches des jours affichés dans l'agenda :
+//   - chaque jour, certains jours : à leurs jours ;
+//   - une fois, avec une date de rappel : ce jour-là ;
+//   - chaque semaine, quinzaine, mois, avec un rappel : le jour où il part
+//     (premier jour de la période).
+//
+// Les autres (une fois sans date, semaine sans rappel…) n'ont pas de jour
+// précis. L'heure du rappel suit le titre (« Poubelles · ⏰ 18:00 »).
 func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin time.Time) ([]appli.ElementJour, error) {
 	depuis := debutDuJour(c)
 	taches, err := m.a.Q.TachesActives(ctx, donnees.TachesActivesParams{FamilleID: c.Famille.ID, Depuis: depuis})
@@ -78,35 +86,63 @@ func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin t
 	}
 	var duJour []tacheDuJour
 	for _, t := range taches {
-		if regle := repetition.Lire(t.Repetition); regle.Type == repetition.Jour || regle.Type == repetition.Jours {
-			duJour = append(duJour, tacheDuJour{t: t, regle: regle, cree: repetition.CleJour(c.Heure(t.CreeLe))})
+		regle := repetition.Lire(t.Repetition)
+		switch {
+		case regle.Type == repetition.Jour || regle.Type == repetition.Jours:
+		case regle.Type == repetition.Unique && t.DateRappel != "" && t.Rappel != "":
+		case regle.Repete() && t.Rappel != "":
+		default:
+			continue
 		}
+		duJour = append(duJour, tacheDuJour{t: t, regle: regle, cree: repetition.CleJour(c.Heure(t.CreeLe))})
 	}
 	if len(duJour) == 0 {
 		return nil, nil
 	}
 	var out []appli.ElementJour
-	var ids []int64 // tâche de chaque élément de out
-	var cles []string
+	var faitesCles []string   // occurrences à vérifier (déjà faites ?)
+	var cleDe []string        // occurrence de chaque élément de out
+	var ids []int64           // tâche de chaque élément de out
+	vues := map[string]bool{} // occurrences déjà demandées
 	for j := debut; j.Before(fin); j = j.AddDate(0, 0, 1) {
 		cle := repetition.CleJour(j)
-		cles = append(cles, cle)
 		for _, x := range duJour {
-			// Rien avant le jour où la tâche a été créée.
-			if _, aFaire := x.regle.Occurrence(j); !aFaire || cle < x.cree {
-				continue
+			occ, aFaire := x.regle.Occurrence(j)
+			switch x.regle.Type {
+			case repetition.Jour, repetition.Jours:
+				// Rien avant le jour où la tâche a été créée.
+				if !aFaire || cle < x.cree {
+					continue
+				}
+			case repetition.Unique:
+				if cle != x.t.DateRappel {
+					continue
+				}
+			default:
+				// Le premier jour de la période seulement.
+				if hier, _ := x.regle.Occurrence(j.AddDate(0, 0, -1)); hier == occ || cle < x.cree {
+					continue
+				}
 			}
 			e := appli.ElementJour{Jour: cle, Emoji: x.t.Emoji, Titre: x.t.Titre, URL: "/taches", Module: mod}
+			if x.t.Rappel != "" {
+				e.Titre += " · ⏰ " + x.t.Rappel
+			}
 			e.Membre = assigneLe(x.t, x.regle, j, parID)
 			out = append(out, e)
 			ids = append(ids, x.t.ID)
+			cleDe = append(cleDe, occ)
+			if !vues[occ] {
+				vues[occ] = true
+				faitesCles = append(faitesCles, occ)
+			}
 		}
 	}
 	if len(out) == 0 {
 		return nil, nil
 	}
-	// Déjà faites ? (la clé d'une occurrence quotidienne est le jour).
-	faites, err := m.a.Q.TachesFaitesOccurrences(ctx, donnees.TachesFaitesOccurrencesParams{FamilleID: c.Famille.ID, Occurrences: cles, Depuis: depuis})
+	// Déjà faites ? (clé de l'occurrence : le jour, la semaine, « unique »…)
+	faites, err := m.a.Q.TachesFaitesOccurrences(ctx, donnees.TachesFaitesOccurrencesParams{FamilleID: c.Famille.ID, Occurrences: faitesCles, Depuis: depuis})
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +151,7 @@ func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin t
 		fait[strconv.FormatInt(f.TacheID, 10)+"|"+f.Occurrence] = true
 	}
 	for i := range out {
-		out[i].Faite = fait[strconv.FormatInt(ids[i], 10)+"|"+out[i].Jour]
+		out[i].Faite = fait[strconv.FormatInt(ids[i], 10)+"|"+cleDe[i]]
 	}
 	return out, nil
 }
@@ -157,6 +193,8 @@ type ligneTache struct {
 	AFaire     bool   // due aujourd'hui (ou cette semaine, ou pas encore faite)
 	Modifiable bool
 	Decochable bool
+	Categorie  string // « 🧹 Ménage » (vide : sans catégorie)
+	Rappel     string // « ⏰ 18:00 » (vide : pas de rappel)
 }
 
 type score struct {
@@ -175,7 +213,10 @@ type jourHisto struct {
 }
 
 type vueTaches struct {
-	Pour       int64 // filtre par membre (0 : tout le monde)
+	Pour       int64  // filtre par membre (0 : tout le monde)
+	Categorie  int64  // filtre par catégorie (0 : toutes ; -1 : sans)
+	Cat        string // la même, pour les adresses (« 3 », « sans », vide)
+	Categories []Categorie
 	Membres    []donnees.Membre
 	AFaire     []ligneTache
 	Faites     []ligneTache
@@ -254,6 +295,7 @@ func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map
 		clesLignes = append(clesLignes, cle)
 		l.Assigne, l.Tour = assigneLe(t, l.Regle, maintenant, parID), membresTour(t, parID)
 		l.Modifiable = modifiable(c, t)
+		l.Rappel = texteRappel(t)
 		lignes = append(lignes, l)
 	}
 	if len(cles) > 0 {
@@ -299,17 +341,38 @@ func pourMembre(l ligneTache, id int64) bool {
 	return id == 0 || l.Assigne == nil || l.Assigne.ID == id
 }
 
-func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour int64) (*vueTaches, error) {
+// dansCategorie : la tâche est-elle dans ce filtre (0 : toutes ; -1 : sans) ?
+func dansCategorie(t donnees.Tache, cat int64) bool {
+	switch {
+	case cat == 0:
+		return true
+	case cat < 0:
+		return !t.CategorieID.Valid
+	}
+	return t.CategorieID.Valid && t.CategorieID.Int64 == cat
+}
+
+func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64) (*vueTaches, error) {
 	lignes, parID, membres, err := m.etat(ctx, c)
 	if err != nil {
 		return nil, err
 	}
-	v := &vueTaches{Pour: pour, Membres: membres}
+	cats, err := m.categories(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	nomCat := map[int64]string{}
+	for i := range cats {
+		cats[i].Active = cats[i].ID == cat
+		nomCat[cats[i].ID] = cats[i].Etiquette()
+	}
+	v := &vueTaches{Pour: pour, Categorie: cat, Cat: paramCategorie(cat), Categories: cats, Membres: membres}
 	aujourdhui := repetition.CleJour(c.Maintenant())
 	for _, l := range lignes {
-		if !pourMembre(l, pour) {
+		if !pourMembre(l, pour) || !dansCategorie(l.Tache, cat) {
 			continue
 		}
+		l.Categorie = nomCat[l.CategorieID.Int64]
 		switch {
 		case l.Faite:
 			// Une tâche « une fois » faite un autre jour n'est plus montrée.
@@ -385,7 +448,7 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 	} else if n, err := strconv.ParseInt(m.a.LirePreference(r, "taches_pour"), 10, 64); err == nil {
 		pour = n
 	}
-	v, err := m.vue(r.Context(), c, pour)
+	v, err := m.vue(r.Context(), c, pour, lireFiltreCategorie(r.URL.Query().Get("cat")))
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -393,12 +456,12 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 	m.a.Afficher(w, r, c, "taches/liste", "Tâches", mod, v)
 }
 
-func (m *Module) renvoyer(w http.ResponseWriter, r *http.Request, c *appli.Contexte, pour int64) {
+func (m *Module) renvoyer(w http.ResponseWriter, r *http.Request, c *appli.Contexte, pour, cat int64) {
 	if !appli.EstHtmx(r) {
 		http.Redirect(w, r, "/taches", http.StatusSeeOther)
 		return
 	}
-	v, err := m.vue(r.Context(), c, pour)
+	v, err := m.vue(r.Context(), c, pour, cat)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -407,7 +470,7 @@ func (m *Module) renvoyer(w http.ResponseWriter, r *http.Request, c *appli.Conte
 }
 
 func (m *Module) contenu(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	m.renvoyer(w, r, c, lirePour(r))
+	m.renvoyer(w, r, c, lirePour(r), lireFiltreCategorie(r.URL.Query().Get("cat")))
 }
 
 // tache : la tâche {id} de la famille.
@@ -421,16 +484,22 @@ func (m *Module) tache(r *http.Request, c *appli.Contexte) (donnees.Tache, error
 
 // formTache : données du formulaire de création / modification.
 type formTache struct {
-	Tache    donnees.Tache
-	Regle    repetition.Regle
-	Membres  []donnees.Membre
-	Nouvelle bool
-	DansTour map[int64]bool // membres du tour de rôle
+	Tache      donnees.Tache
+	Regle      repetition.Regle
+	Membres    []donnees.Membre
+	Categories []Categorie
+	Nouvelle   bool
+	DansTour   map[int64]bool // membres du tour de rôle
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	f := &formTache{Nouvelle: r.PathValue("id") == "", DansTour: map[int64]bool{}}
-	if !f.Nouvelle {
+	if f.Nouvelle {
+		// Venue d'un filtre de la liste : la tâche y est rangée.
+		if id := lireFiltreCategorie(r.URL.Query().Get("cat")); id > 0 {
+			f.Tache.CategorieID = sql.NullInt64{Int64: id, Valid: true}
+		}
+	} else {
 		t, err := m.tache(r, c)
 		if err != nil {
 			m.a.PageErreur(w, r, c, http.StatusNotFound, "Tâche introuvable", "Cette tâche n'existe plus.")
@@ -452,6 +521,10 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	if f.Categories, err = m.categories(r.Context(), c); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
 	titre := "Nouvelle tâche"
 	if !f.Nouvelle {
 		titre = "Modifier la tâche"
@@ -466,6 +539,11 @@ type saisieTache struct {
 	tour    string  // « 3,5,7 » : à tour de rôle
 	pour    []int64 // à notifier (membre choisi ou ceux du tour)
 	regle   repetition.Regle
+	// Catégorie (nulle : aucune) ; rappel : heure (« 18:00 », vide : aucun)
+	// et jour d'une tâche « une fois » (vide : chaque jour jusqu'à ce
+	// qu'elle soit faite).
+	categorie          sql.NullInt64
+	rappel, dateRappel string
 }
 
 // lireFormulaire : titre, membre (ou tour de rôle) et répétition d'une tâche.
@@ -521,6 +599,10 @@ func (m *Module) lireFormulaire(r *http.Request, c *appli.Contexte) (s saisieTac
 	if s.regle, err = repetition.DepuisFormulaire(r.PostForm); err != nil {
 		return s, err.Error()
 	}
+	if s.rappel, s.dateRappel, msg = lireRappel(r.PostForm.Get("rappel"), r.PostForm.Get("date_rappel"), s.regle); msg != "" {
+		return s, msg
+	}
+	s.categorie = m.lireCategorie(r, c)
 	return s, ""
 }
 
@@ -539,7 +621,8 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	t, err := m.a.Q.CreerTache(r.Context(), donnees.CreerTacheParams{
 		FamilleID: c.Famille.ID, Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour,
-		Repetition: s.regle.String(), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+		Repetition: s.regle.String(), CategorieID: s.categorie, Rappel: s.rappel, DateRappel: s.dateRappel,
+		CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -568,7 +651,8 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	}
 	regle := s.regle
 	if err := m.a.Q.ModifierTache(r.Context(), donnees.ModifierTacheParams{
-		Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour, Repetition: regle.String(), ID: t.ID, FamilleID: c.Famille.ID,
+		Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour, Repetition: regle.String(),
+		CategorieID: s.categorie, Rappel: s.rappel, DateRappel: s.dateRappel, ID: t.ID, FamilleID: c.Famille.ID,
 	}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -614,7 +698,7 @@ func (m *Module) faire(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Fragment(w, r, c, "taches/liste", "accueil-tache-faite", t)
 		return
 	}
-	m.renvoyer(w, r, c, lirePourForm(r))
+	m.renvoyer(w, r, c, lirePourForm(r), lireFiltreCategorie(r.PostFormValue("cat")))
 }
 
 func lirePourForm(r *http.Request) int64 {
@@ -632,7 +716,7 @@ func (m *Module) defaire(w http.ResponseWriter, r *http.Request, c *appli.Contex
 	cle, _ := repetition.Lire(t.Repetition).Occurrence(c.Maintenant())
 	f, err := m.a.Q.FaiteParOccurrence(ctx, donnees.FaiteParOccurrenceParams{TacheID: t.ID, Occurrence: cle})
 	if err != nil {
-		m.renvoyer(w, r, c, lirePourForm(r)) // déjà décochée
+		m.renvoyer(w, r, c, lirePourForm(r), lireFiltreCategorie(r.PostFormValue("cat"))) // déjà décochée
 		return
 	}
 	if !c.EstParent() && (!f.FaitPar.Valid || f.FaitPar.Int64 != c.Membre.ID) {
@@ -644,7 +728,7 @@ func (m *Module) defaire(w http.ResponseWriter, r *http.Request, c *appli.Contex
 		return
 	}
 	m.a.Publier(c, mod, "")
-	m.renvoyer(w, r, c, lirePourForm(r))
+	m.renvoyer(w, r, c, lirePourForm(r), lireFiltreCategorie(r.PostFormValue("cat")))
 }
 
 func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {

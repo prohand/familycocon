@@ -661,3 +661,26 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   d'une photo (`Module.visible`), annonce « X a écrit la note » et rappel
   (parents et auteur seulement), nombre de notes par catégorie.
 
+## 26. Tâches : rappel et catégories (v0.9.9)
+- Migration 0038 : `categories_taches` (comme celles des notes, à part ;
+  gérées par tous, grille d'emojis), `taches.categorie_id`, `taches.rappel`
+  (« HH:MM », heure de la famille), `taches.date_rappel` (tâche « une
+  fois »), `taches_rappels` (un rappel par tâche et par jour au plus).
+- Liste : second filtre « catégories » (`?cat=ID` ou `sans`), gardé avec
+  celui des membres ; étiquette et « ⏰ 18:00 » sur chaque tâche.
+- Rappel (tâche de chaque minute, `envoyerRappels`) : chaque jour où la
+  tâche revient, si elle n'est pas faite ; semaine, quinzaine, mois : le
+  premier jour de la période ; « une fois » : le jour choisi, sinon chaque
+  jour jusqu'à ce qu'elle soit faite. Envoyé à celui qui doit la faire
+  (membre choisi, ou celui dont c'est le tour ; tout le monde sinon).
+  Rattrapé si le serveur revient moins de 15 min après l'heure ; rien pour
+  une tâche créée après l'heure. Traces gardées 60 jours.
+- Export JSON : `taches_categories`.
+- Agenda : tâches « une fois » à la date du rappel ; semaine, quinzaine,
+  mois avec rappel : le jour où il part ; « · ⏰ 18:00 » après le titre.
+  Rappels des notes à leur jour (« ⏰ 18:00 🔒 Cadeaux » ; 👥 parents
+  seulement), seulement ceux que le membre voit ; une note privée compte
+  pour « Les miennes ».
+- Notes : filtre « Voir : Toutes · 👪 Partagées · 🔒 Privées » (`voir`),
+  gardé avec la catégorie (`cat`).
+

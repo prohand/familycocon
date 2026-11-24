@@ -61,9 +61,10 @@ func Brancher(a *appli.App) {
 // Filtres de la liste (« voir ») ; la catégorie a son propre paramètre
 // (« cat » : son numéro, ou « sans »).
 const (
-	toutes  = ""
-	privees = "privees"
-	sansCat = "sans"
+	toutes    = ""
+	privees   = "privees"
+	partagees = "partagees"
+	sansCat   = "sans"
 )
 
 type carteNote struct {
@@ -82,6 +83,7 @@ type vueNotes struct {
 	Categorie  int64 // filtre : 0 toutes, -1 sans catégorie, sinon son numéro
 	Categories []Categorie
 	Recherche  string
+	Cat        string // la catégorie pour une adresse (« 3 », « sans », vide)
 	Params     string // filtre et recherche, encodés pour une adresse (« voir=…&q=… »)
 	Epinglees  []carteNote
 	Autres     []carteNote
@@ -99,7 +101,7 @@ const (
 func lireFiltre(r *http.Request) (filtre string, categorie int64, recherche string) {
 	q := r.URL.Query()
 	filtre = q.Get("voir")
-	if filtre != privees {
+	if filtre != privees && filtre != partagees {
 		filtre = toutes
 	}
 	if q.Get("cat") == sansCat {
@@ -206,6 +208,12 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, cate
 	}
 	parID := appli.MembresParID(membres)
 	v := &vueNotes{Filtre: filtre, Categorie: categorie, Categories: cats, Recherche: recherche, Params: paramsListe(filtre, categorie, recherche)}
+	switch {
+	case categorie == -1:
+		v.Cat = sansCat
+	case categorie > 0:
+		v.Cat = strconv.FormatInt(categorie, 10)
+	}
 	if len(lignes) > notesListe {
 		lignes, v.Tronquee = lignes[:notesListe], true
 	}

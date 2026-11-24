@@ -525,6 +525,71 @@ func (q *Queries) NotesARappeler(ctx context.Context, maintenant int64) ([]Notes
 	return items, nil
 }
 
+const notesRappelsEntre = `-- name: NotesRappelsEntre :many
+SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 200) AS TEXT) AS debut, n.privee, n.rappel_le,
+  CAST((n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)) AS INTEGER) AS cachee
+FROM notes n
+WHERE n.famille_id = ?1 AND n.rappel_le >= ?2 AND n.rappel_le < ?3
+  AND (n.auteur_id = ?4 OR (n.privee = 0 AND (CAST(?5 AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
+ORDER BY n.rappel_le LIMIT 300
+`
+
+type NotesRappelsEntreParams struct {
+	FamilleID int64
+	Depuis    int64
+	Jusqua    int64
+	MembreID  sql.NullInt64
+	Parent    int64
+}
+
+type NotesRappelsEntreRow struct {
+	ID       int64
+	AuteurID sql.NullInt64
+	Titre    string
+	Debut    string
+	Privee   int64
+	RappelLe int64
+	Cachee   int64
+}
+
+// Rappels des notes que ce membre voit, entre deux instants (agenda).
+func (q *Queries) NotesRappelsEntre(ctx context.Context, arg NotesRappelsEntreParams) ([]NotesRappelsEntreRow, error) {
+	rows, err := q.db.QueryContext(ctx, notesRappelsEntre,
+		arg.FamilleID,
+		arg.Depuis,
+		arg.Jusqua,
+		arg.MembreID,
+		arg.Parent,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NotesRappelsEntreRow{}
+	for rows.Next() {
+		var i NotesRappelsEntreRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AuteurID,
+			&i.Titre,
+			&i.Debut,
+			&i.Privee,
+			&i.RappelLe,
+			&i.Cachee,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const notesVisibles = `-- name: NotesVisibles :many
 
 SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debut, n.couleur, n.epinglee, n.privee, n.modifie_le,
@@ -532,7 +597,7 @@ SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debu
   CAST((n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)) AS INTEGER) AS cachee
 FROM notes n
 WHERE n.famille_id = ?1 AND (n.auteur_id = ?2 OR (n.privee = 0 AND (CAST(?3 AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
-  AND (?4 = '' OR (?4 = 'privees' AND n.privee = 1))
+  AND (?4 = '' OR (?4 = 'privees' AND n.privee = 1) OR (?4 = 'partagees' AND n.privee = 0))
   AND (?5 = 0 OR (?5 = -1 AND n.categorie_id IS NULL) OR n.categorie_id = ?5)
   AND (?6 = '' OR instr(plier(n.titre), plier(?6)) > 0 OR instr(plier(n.texte), plier(?6)) > 0)
 ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT ?7

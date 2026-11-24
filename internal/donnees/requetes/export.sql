@@ -13,6 +13,9 @@ SELECT * FROM produits_connus WHERE famille_id = ?;
 -- name: ExportTaches :many
 SELECT * FROM taches WHERE famille_id = ?;
 
+-- name: ExportCategoriesTaches :many
+SELECT * FROM categories_taches WHERE famille_id = ?;
+
 -- name: ExportEvenements :many
 SELECT * FROM evenements WHERE famille_id = ?;
 

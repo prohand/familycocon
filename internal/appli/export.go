@@ -47,6 +47,7 @@ var sectionsExport = []sectionExport{
 	s("courses_listes", (*donnees.Queries).ExportListes),
 	s("courses_produits", (*donnees.Queries).ExportProduits),
 	s("courses_produits_connus", (*donnees.Queries).ExportProduitsConnus),
+	s("taches_categories", (*donnees.Queries).ExportCategoriesTaches),
 	s("taches", (*donnees.Queries).ExportTaches),
 	s("taches_faites", (*donnees.Queries).ExportTachesFaites),
 	s("agenda_evenements", (*donnees.Queries).ExportEvenements),

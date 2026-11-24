@@ -1,0 +1,41 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/taches">‹ Tâches</a>
+  <h1>🗂️ Catégories des tâches</h1>
+  <p>Pour ranger les tâches : 🧹 Ménage, 🍳 Cuisine, 🧺 Linge… Toute la famille peut les changer.</p>
+</section>
+{{if not .Plein}}
+<form class="carte bloc ajout-categorie" method="post" action="/taches/categories">
+  {{template "jeton" $c.CSRF}}
+  <h2>＋ Nouvelle catégorie</h2>
+  <div class="rangee-categorie" data-lieu-emojis>
+    <div class="champ etroit"><span>Emoji</span>{{template "champ-emoji" dict "Emoji" "" "Nom" ""}}</div>
+    <label class="champ"><span>Nom</span><input name="nom" maxlength="30" placeholder="Ménage" required autocomplete="off"></label>
+  </div>
+  <button class="bouton petit">Ajouter</button>
+</form>
+{{end}}
+<section class="carte bloc">
+  {{- range .Categories}}
+  <div class="ligne-categorie" data-lieu-emojis>
+    <form class="modif-categorie" method="post" action="/taches/categories">
+      {{template "jeton" $c.CSRF}}<input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="modifier">
+      {{template "champ-emoji" dict "Emoji" .Emoji "Nom" .Nom "Envoyer" true}}
+      <input name="nom" value="{{.Nom}}" maxlength="30" required aria-label="Nom de la catégorie">
+      <button class="crayon" aria-label="Enregistrer {{.Nom}}">✓</button>
+    </form>
+    <a class="nombre" href="/taches?cat={{.ID}}" title="Voir ses tâches">{{.Nombre}} ✅</a>
+    <form method="post" action="/taches/categories" hx-confirm="Supprimer « {{.Nom}} » ? Ses tâches restent, sans catégorie.">
+      {{template "jeton" $c.CSRF}}<input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="supprimer">
+      <button class="crayon" aria-label="Supprimer {{.Nom}}">🗑️</button>
+    </form>
+  </div>
+  {{- else}}
+  <p class="aide">Pas encore de catégorie : ajoutez la première ci-dessus.</p>
+  {{- end}}
+</section>
+{{template "grille-emojis" dict "Emojis" .Emojis "Aucun" true}}
+{{end}}
+{{end}}

@@ -1454,6 +1454,15 @@ details.plus-champs > summary { cursor: pointer; margin-bottom: 10px; }
 
 /* Tâches : les membres du tour de rôle, seulement si « À tour de rôle » est choisi. */
 .tour-membres { display: none; }
+/* Rappel d'une tâche : la date seulement pour « Une fois ». */
+.rappel-tache { border: 0; padding: 0; margin: 12px 0; }
+.rappel-tache legend { font-weight: 800; font-size: .9rem; margin-bottom: 6px; }
+.rappel-tache legend small { font-weight: 600; color: var(--texte-doux); }
+.rappel-tache .champ { margin: 0; }
+.rappel-tache .date-rappel { display: none; }
+form:has(input[name=repetition][value="unique"]:checked) .rappel-tache .date-rappel { display: block; }
+.filtre-categories { margin: -4px 0 10px; }
+.tache .etiquette-categorie { margin: 0 0 0 4px; vertical-align: 1px; }
 form:has(option[value="tour"]:checked) .tour-membres { display: block; }
 
 /* Suivi : boutons d'une échéance (fait, reporter, modifier), case budget. */
