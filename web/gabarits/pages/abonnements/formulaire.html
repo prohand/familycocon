@@ -19,9 +19,8 @@
 <form class="carte" method="post" action="{{if .Nouveau}}/abonnements{{else}}/abonnements/{{.A.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
   <label class="champ"><span>Nom</span><input name="nom" value="{{.R.Libelle}}" maxlength="80" placeholder="Ex. : Box internet" required{{if .Nouveau}} autofocus{{end}}></label>
-  <div class="choix-emoji">
-    {{- range .Emojis}}<label><input type="radio" name="emoji" value="{{.}}"{{if eq . $.Donnees.A.Emoji}} checked{{end}}><span>{{.}}</span></label>{{end}}
-  </div>
+  <div class="ligne-emoji" data-lieu-emojis><span class="aide">Image</span>{{template "champ-emoji" dict "Emoji" .A.Emoji}}<span class="aide">touchez pour changer</span></div>
+  {{template "grille-emojis" dict "Emojis" .Emojis}}
   <div class="rangee">
     <label class="champ"><span>Montant ({{.Devise}})</span><input name="montant" value="{{.Montant}}" inputmode="decimal" placeholder="0,00" required></label>
     <label class="champ"><span>Prélevé</span>

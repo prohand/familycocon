@@ -36,19 +36,7 @@
   <p class="aide">Pas encore de catégorie : ajoutez la première ci-dessus.</p>
   {{- end}}
 </section>
-{{/* Grille des emojis : copiée par app.js sous le champ touché. */}}
-<template id="grille-emojis">
-  <div class="grille-emojis" role="group" aria-label="Choisir un emoji">
-    {{- range .Emojis}}<button type="button" data-emoji="{{.}}">{{.}}</button>{{end}}
-    <label class="autre-emoji">Autre <input data-emoji-autre maxlength="8" placeholder="🙂" autocomplete="off" aria-label="Autre emoji"></label>
-    <button type="button" class="sans-emoji" data-emoji="">Aucun</button>
-  </div>
-</template>
+{{template "grille-emojis" dict "Emojis" .Emojis "Aucun" true}}
 {{end}}
 {{end}}
 
-{{/* Champ emoji : la valeur envoyée (cachée) et le bouton qui ouvre la
-     grille. Envoyer : enregistrer dès le choix (catégorie existante). */}}
-{{define "champ-emoji"}}
-<span class="champ-emoji"><input type="hidden" name="emoji" value="{{.Emoji}}"><button type="button" class="bouton-emoji{{if not .Emoji}} vide{{end}}" data-choix-emoji{{if .Envoyer}}="envoyer"{{end}} aria-expanded="false" aria-label="Choisir l'emoji{{with .Nom}} de {{.}}{{end}}">{{or .Emoji "＋"}}</button></span>
-{{end}}

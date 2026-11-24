@@ -8,10 +8,8 @@
 <form class="carte" method="post" action="{{if .Nouveau}}/projets{{else}}/projets/{{.P.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
   <label class="champ"><span>Nom</span><input name="nom" value="{{.P.Nom}}" maxlength="80" placeholder="Ex. : Vacances en Bretagne" required autofocus></label>
-  <span class="aide">Image</span>
-  <div class="choix-emoji">
-    {{- range .Emojis}}<label><input type="radio" name="emoji" value="{{.}}"{{if eq . $.Donnees.P.Emoji}} checked{{end}}><span>{{.}}</span></label>{{end}}
-  </div>
+  <div class="ligne-emoji" data-lieu-emojis><span class="aide">Image</span>{{template "champ-emoji" dict "Emoji" .P.Emoji}}<span class="aide">touchez pour changer</span></div>
+  {{template "grille-emojis" dict "Emojis" .Emojis}}
   <span class="aide">Couleur</span>
   {{template "choix-couleur" dict "Nom" "couleur" "Choisie" .P.Couleur}}
   <div class="rangee">

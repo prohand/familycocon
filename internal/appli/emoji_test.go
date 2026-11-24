@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package appli
+
+import "testing"
+
+func TestLireEmoji(t *testing.T) {
+	for texte, attendu := range map[string]string{
+		"🚗": "🚗", " ☁️ ": "☁️", "👨‍👩‍👧": "👨‍👩‍👧", "🏖️": "🏖️",
+		"": "🎁", "a": "🎁", "<b>": "🎁", "🚗 auto": "🎁", "é": "🎁", "🚗🚗🚗🚗🚗🚗🚗🚗🚗": "🎁",
+	} {
+		if r := LireEmoji(texte, "🎁"); r != attendu {
+			t.Errorf("LireEmoji(%q) = %q, attendu %q", texte, r, attendu)
+		}
+	}
+}

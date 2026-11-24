@@ -24,7 +24,6 @@ import (
 const (
 	categoriesMax = 50
 	nomCategorie  = 30 // caractères
-	emojiMax      = 8  // caractères (un emoji peut en compter plusieurs)
 )
 
 // emojisCategories : la grille proposée pour choisir l'emoji d'une
@@ -108,7 +107,7 @@ func lireNomEmoji(r *http.Request) (nom, emoji, msg string) {
 		return "", "", "Donnez un nom à la catégorie."
 	case utf8.RuneCountInString(nom) > nomCategorie:
 		return "", "", fmt.Sprintf("Nom : %d caractères au plus.", nomCategorie)
-	case utf8.RuneCountInString(emoji) > emojiMax || strings.ContainsAny(emoji, "<>&\"'"):
+	case emoji != "" && !appli.EmojiValide(emoji):
 		return "", "", "Emoji : un seul, s'il vous plaît."
 	}
 	return nom, emoji, ""

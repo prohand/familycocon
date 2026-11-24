@@ -637,6 +637,10 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - Emoji choisi dans une grille de 48 (`emojisCategories`, ouverte par le
   bouton du champ, app.js) ; « Autre » pour en écrire un, « Aucun ». Sur
   une catégorie existante, enregistré dès le choix.
+- Même grille (gabarits communs `champ-emoji` et `grille-emojis`) pour les
+  projets, les abonnements et les récompenses des enfants : 24 emojis
+  proposés chacun, « Autre » permis. Lecture commune `appli.LireEmoji`
+  (8 caractères au plus, ni lettre, ni chiffre, ni signe ASCII).
 - Filtres de la liste : Toutes, chaque catégorie (avec son nombre de notes),
   Sans catégorie, 🔒 Privées. Filtre « Partagées » retiré.
   Adresse : `/notes?cat=ID` ou `/notes?cat=sans`.

@@ -546,7 +546,10 @@ type formRecompense struct {
 	Emojis     []string
 }
 
-var emojisRecompense = []string{"🎁", "💶", "🍦", "🎮", "📺", "🎬", "🧸", "📚", "🎨", "⚽", "🛝", "🍕", "🌙", "🎢", "🏊", "🚲"}
+var emojisRecompense = []string{
+	"🎁", "💶", "🍦", "🎮", "📺", "🎬", "🧸", "📚", "🎨", "⚽", "🛝", "🍕",
+	"🌙", "🎢", "🏊", "🚲", "🍫", "🍰", "🎟️", "🏕️", "🎤", "🧩", "📱", "🛍️",
+}
 
 func (m *Module) formRecompense(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	f := formRecompense{Nouvelle: r.PathValue("id") == "", Emojis: emojisRecompense}
@@ -571,14 +574,7 @@ func lireRecompense(r *http.Request) (titre, emoji string, prix int64, msg strin
 	if err != nil || prix < 1 || prix > 9999 {
 		return "", "", 0, "Prix : de 1 à 9999 étoiles."
 	}
-	emoji = r.PostFormValue("emoji")
-	ok := false
-	for _, e := range emojisRecompense {
-		ok = ok || e == emoji
-	}
-	if !ok {
-		emoji = "🎁"
-	}
+	emoji = appli.LireEmoji(r.PostFormValue("emoji"), "🎁") // grille ou « Autre »
 	return titre, emoji, prix, ""
 }
 

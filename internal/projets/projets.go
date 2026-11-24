@@ -36,7 +36,11 @@ const (
 )
 
 // Emojis proposés pour un projet.
-var Emojis = []string{"🎯", "🏖️", "✈️", "🏠", "🔨", "📦", "🎉", "🎄", "🌱", "🎓", "💍", "🚀"}
+// Un autre peut être écrit (« Autre »).
+var Emojis = []string{
+	"🎯", "🏖️", "✈️", "🏠", "🔨", "📦", "🎉", "🎄", "🌱", "🎓", "💍", "🚀",
+	"🚗", "🛋️", "🎂", "👶", "🐶", "💪", "📚", "🎨", "🎸", "🏃", "💰", "🏕️",
+}
 
 // Module : les projets.
 type Module struct {
@@ -254,15 +258,6 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	m.a.Afficher(w, r, c, "projets/formulaire", "Projet", mod, f)
 }
 
-func emojiValide(e string) string {
-	for _, x := range Emojis {
-		if x == e {
-			return e
-		}
-	}
-	return "🎯"
-}
-
 func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
 	nom := strings.TrimSpace(r.PostFormValue("nom"))
@@ -290,7 +285,7 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 	if couleur < 1 || couleur > 8 {
 		couleur = 1
 	}
-	emoji := emojiValide(r.PostFormValue("emoji"))
+	emoji := appli.LireEmoji(r.PostFormValue("emoji"), "🎯")
 	id := idDe(r)
 	// Privé : celui qui le crée le voit seul. On peut le rendre partagé
 	// ensuite (pas l'inverse : un projet partagé ne disparaît pas pour les

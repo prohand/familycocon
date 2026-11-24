@@ -11,14 +11,8 @@
     <input name="titre" value="{{.Recompense.Titre}}" placeholder="Ex. : 5 € d'argent de poche, Soirée film" maxlength="60" required autofocus></label>
   <label class="champ"><span>Prix en étoiles ⭐</span>
     <input type="number" name="prix" value="{{.Recompense.Prix}}" min="1" max="9999" inputmode="numeric" required></label>
-  <fieldset class="categories">
-    <legend>Image</legend>
-    <div class="grille-emoji">
-      {{- range .Emojis}}
-      <label><input type="radio" name="emoji" value="{{.}}"{{if eq . $.Donnees.Recompense.Emoji}} checked{{end}}><span>{{.}}</span></label>
-      {{- end}}
-    </div>
-  </fieldset>
+  <div class="ligne-emoji" data-lieu-emojis><span class="aide">Image</span>{{template "champ-emoji" dict "Emoji" .Recompense.Emoji}}<span class="aide">touchez pour changer</span></div>
+  {{template "grille-emojis" dict "Emojis" .Emojis}}
   <div class="boutons"><button class="bouton">{{if .Nouvelle}}Ajouter{{else}}Enregistrer{{end}}</button></div>
 </form>
 {{if not .Nouvelle}}
