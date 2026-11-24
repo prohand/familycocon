@@ -49,6 +49,8 @@ func formatValide(f string) bool {
 func Brancher(a *appli.App) {
 	m := &Module{a: a}
 	a.Route("GET /fidelite", mod, appli.Membre, m.page)
+	// Couleurs des enseignes (aucune donnée de la famille : sans session).
+	a.Mux.HandleFunc("GET /fidelite/enseignes.css", feuilleEnseignes)
 	a.AjouterRecherche(mod, m.chercher)
 	a.Route("GET /fidelite/nouvelle", mod, appli.Membre, m.formulaire)
 	a.Route("POST /fidelite/scanner", mod, appli.Membre, m.scanner)
@@ -68,7 +70,8 @@ const CartesMax = 200
 // ligneCarte : une carte dans la liste, et la fin de son numéro.
 type ligneCarte struct {
 	donnees.Carte
-	Fin string
+	Fin    string
+	Marque string // enseigne reconnue (classe « marque-… »), vide sinon
 }
 
 // finNumero : les 4 derniers caractères (pas les 4 derniers octets : un
@@ -89,7 +92,7 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 	}
 	lignes := make([]ligneCarte, 0, len(cartes))
 	for _, ct := range cartes {
-		lignes = append(lignes, ligneCarte{Carte: ct, Fin: finNumero(ct.Numero)})
+		lignes = append(lignes, ligneCarte{Carte: ct, Fin: finNumero(ct.Numero), Marque: Marque(ct.Enseigne, ct.CouleurEnseigne)})
 	}
 	m.a.Afficher(w, r, c, "fidelite/cartes", "Cartes de fidélité", mod, lignes)
 }
@@ -109,6 +112,7 @@ type vueCarte struct {
 	QR       template.URL  // QR code (image PNG)
 	Probleme string
 	Type     string // « EAN-13 (détecté) »
+	Marque   string // enseigne reconnue (classe « marque-… »), vide sinon
 }
 
 // Dessin : le code de la carte (SVG ou QR), ou la raison s'il est impossible.
@@ -153,7 +157,9 @@ func (m *Module) carte(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	if err := m.a.Q.CarteUtilisee(r.Context(), donnees.CarteUtiliseeParams{UtiliseeLe: time.Now().Unix(), ID: ct.ID, FamilleID: c.Famille.ID}); err != nil {
 		m.a.Journal.Error("fidélité : carte utilisée", "erreur", err)
 	}
-	m.a.Afficher(w, r, c, "fidelite/carte", ct.Enseigne, mod, Dessin(ct))
+	v := Dessin(ct)
+	v.Marque = Marque(ct.Enseigne, ct.CouleurEnseigne)
+	m.a.Afficher(w, r, c, "fidelite/carte", ct.Enseigne, mod, v)
 }
 
 type formCarte struct {
@@ -161,10 +167,11 @@ type formCarte struct {
 	Carte    donnees.Carte
 	Formats  any
 	Type     string // type de code de la carte (« EAN-13 (détecté) »)
+	Reconnue bool   // enseigne reconnue : ses couleurs sont proposées
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	f := formCarte{Nouvelle: r.PathValue("id") == "", Formats: Formats, Carte: donnees.Carte{Format: "auto", Couleur: 1}}
+	f := formCarte{Nouvelle: r.PathValue("id") == "", Formats: Formats, Carte: donnees.Carte{Format: "auto", Couleur: 1, CouleurEnseigne: 1}}
 	if !f.Nouvelle {
 		ct, ok := m.trouver(r, c)
 		if !ok {
@@ -173,6 +180,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.Carte = ct
 		f.Type = Dessin(ct).Type
+		f.Reconnue = trouverEnseigne(ct.Enseigne) != nil
 	}
 	titre := "Nouvelle carte"
 	if !f.Nouvelle {
@@ -185,7 +193,7 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 
 type saisie struct {
 	enseigne, numero, format, titulaire, notes string
-	couleur                                    int64
+	couleur, couleurEnseigne                   int64
 }
 
 func lire(r *http.Request) (saisie, string) {
@@ -211,6 +219,9 @@ func lire(r *http.Request) (saisie, string) {
 	if s.couleur < 1 || s.couleur > 8 {
 		s.couleur = 1
 	}
+	if r.PostFormValue("couleur_enseigne") == "1" {
+		s.couleurEnseigne = 1
+	}
 	// Le format choisi doit pouvoir coder le numéro.
 	if v := Dessin(donnees.Carte{Numero: s.numero, Format: s.format}); v.Probleme != "" {
 		return s, v.Probleme
@@ -233,7 +244,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	ct, err := m.a.Q.CreerCarte(r.Context(), donnees.CreerCarteParams{
 		FamilleID: c.Famille.ID, Enseigne: s.enseigne, Numero: s.numero, Format: s.format, Couleur: s.couleur,
-		Titulaire: s.titulaire, Notes: s.notes, CreeLe: time.Now().Unix(),
+		CouleurEnseigne: s.couleurEnseigne, Titulaire: s.titulaire, Notes: s.notes, CreeLe: time.Now().Unix(),
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
@@ -256,8 +267,8 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		return
 	}
 	if err := m.a.Q.ModifierCarte(r.Context(), donnees.ModifierCarteParams{
-		Enseigne: s.enseigne, Numero: s.numero, Format: s.format, Couleur: s.couleur, Titulaire: s.titulaire,
-		Notes: s.notes, ID: ct.ID, FamilleID: c.Famille.ID,
+		Enseigne: s.enseigne, Numero: s.numero, Format: s.format, Couleur: s.couleur, CouleurEnseigne: s.couleurEnseigne,
+		Titulaire: s.titulaire, Notes: s.notes, ID: ct.ID, FamilleID: c.Famille.ID,
 	}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return

@@ -739,3 +739,18 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - Filtre « Voir » (tâches et notes) : le nombre de chaque choix, avec les
   autres filtres (personne, catégorie, recherche).
 
+## 30. Cartes de fidélité aux couleurs de l'enseigne (v0.9.12)
+- Une liste d'environ 70 enseignes (`internal/fidelite/enseignes.go` :
+  supermarchés, bricolage, sport, beauté, mode, carburant, restauration…)
+  avec deux couleurs chacune. Pas de logo (marques protégées), rien ne
+  part sur Internet.
+- Le nom de la carte est comparé en mots entiers, sans accent ni casse
+  (« Carte Carrefour Market », « Super U », « E.Leclerc » ; pas
+  « Boulangerie » pour « Boulanger »).
+- Migration 0043 : `cartes.couleur_enseigne` (1 par défaut : aussi pour
+  les cartes déjà là) ; décoché dans le formulaire, la couleur choisie.
+- Couleurs en classes (`/fidelite/enseignes.css`, faite par le serveur ;
+  pas de style dans la page) ; carte et en-tête de caisse : couleur de
+  l'enseigne et bande en biais de la seconde ; texte blanc ou noir selon
+  la clarté.
+

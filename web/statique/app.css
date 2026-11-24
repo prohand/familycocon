@@ -1326,6 +1326,11 @@ progress.jauge.etoiles::-moz-progress-bar { background: linear-gradient(90deg, #
   transition: transform .15s;
 }
 .carte-fidelite:hover { transform: translateY(-2px); }
+/* Aux couleurs de l'enseigne (--c, --c2, --t : /fidelite/enseignes.css) :
+   sa couleur, et une bande en biais de sa seconde couleur. */
+.carte-fidelite.marque { color: var(--t, #fff);
+  background: linear-gradient(135deg, var(--c) 0 64%, var(--c2) 64% 72%, color-mix(in srgb, var(--c) 80%, #000) 72%); }
+.entete-caisse.marque { color: var(--t, #fff); background: linear-gradient(100deg, var(--c) 0 82%, var(--c2) 82% 88%, var(--c) 88%); }
 .carte-fidelite b { font-size: 1.05rem; }
 .carte-fidelite small { font-weight: 700; opacity: .85; letter-spacing: .05em; }
 .carte-caisse { border-radius: 22px; overflow: hidden; box-shadow: var(--ombre-forte); background: #fff; }

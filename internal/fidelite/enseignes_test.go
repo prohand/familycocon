@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+package fidelite
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestTrouverEnseigne(t *testing.T) {
+	for nom, cle := range map[string]string{
+		"Carrefour":              "carrefour",
+		"Carte Carrefour Market": "carrefour",
+		"E.Leclerc":              "leclerc",
+		"Intermarché":            "intermarche",
+		"Super U":                "u",
+		"Hyper U Lyon":           "u",
+		"H&M":                    "hm",
+		"Décathlon":              "decathlon",
+		"Leroy Merlin":           "leroymerlin",
+		"BP":                     "bp",
+		"Pharmacie du centre":    "pharmacie",
+		"Boulangerie Paul":       "",
+		"Décoration Cora":        "cora", // « cora » en mot entier
+		"Décoration":             "",     // pas « cora » au milieu d'un mot
+		"Club U":                 "",
+		"":                       "",
+	} {
+		got := Marque(nom, 1)
+		if got != cle {
+			t.Errorf("Marque(%q) = %q, attendu %q", nom, got, cle)
+		}
+	}
+	if Marque("Carrefour", 0) != "" {
+		t.Error("couleur de l'enseigne alors que la carte garde la sienne")
+	}
+	// La feuille de style contient chaque enseigne.
+	rec := httptest.NewRecorder()
+	feuilleEnseignes(rec, httptest.NewRequest(http.MethodGet, "/fidelite/enseignes.css", nil))
+	css := rec.Body.String()
+	if !strings.Contains(css, ".marque-carrefour{--c:#004E9F;--c2:#E30613;--t:#fff}") || !strings.Contains(css, ".marque-fnac{--c:#E1A925;--c2:#1D1D1B;--t:#111}") {
+		t.Fatalf("feuille des enseignes :\n%s", css)
+	}
+}

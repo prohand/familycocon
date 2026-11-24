@@ -177,7 +177,7 @@ func (q *Queries) ExportCarnet(ctx context.Context, arg ExportCarnetParams) ([]C
 }
 
 const exportCartes = `-- name: ExportCartes :many
-SELECT id, famille_id, enseigne, numero, format, couleur, titulaire, notes, cree_le, utilisee_le FROM cartes WHERE famille_id = ?
+SELECT id, famille_id, enseigne, numero, format, couleur, titulaire, notes, cree_le, utilisee_le, couleur_enseigne FROM cartes WHERE famille_id = ?
 `
 
 func (q *Queries) ExportCartes(ctx context.Context, familleID int64) ([]Carte, error) {
@@ -200,6 +200,7 @@ func (q *Queries) ExportCartes(ctx context.Context, familleID int64) ([]Carte, e
 			&i.Notes,
 			&i.CreeLe,
 			&i.UtiliseeLe,
+			&i.CouleurEnseigne,
 		); err != nil {
 			return nil, err
 		}
