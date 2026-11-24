@@ -25,6 +25,75 @@ func (q *Queries) AnnulerFaite(ctx context.Context, arg AnnulerFaiteParams) erro
 	return err
 }
 
+const categorieTacheExiste = `-- name: CategorieTacheExiste :one
+SELECT count(*) FROM categories_taches WHERE id = ? AND famille_id = ?
+`
+
+type CategorieTacheExisteParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) CategorieTacheExiste(ctx context.Context, arg CategorieTacheExisteParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, categorieTacheExiste, arg.ID, arg.FamilleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const categoriesTaches = `-- name: CategoriesTaches :many
+SELECT c.id, c.nom, c.emoji,
+  (SELECT count(*) FROM taches t WHERE t.categorie_id = c.id AND t.active = 1) AS nombre
+FROM categories_taches c WHERE c.famille_id = ? ORDER BY c.nom COLLATE NOCASE
+`
+
+type CategoriesTachesRow struct {
+	ID     int64
+	Nom    string
+	Emoji  string
+	Nombre int64
+}
+
+// Categories des taches de la famille, avec le nombre de taches en cours.
+func (q *Queries) CategoriesTaches(ctx context.Context, familleID int64) ([]CategoriesTachesRow, error) {
+	rows, err := q.db.QueryContext(ctx, categoriesTaches, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CategoriesTachesRow{}
+	for rows.Next() {
+		var i CategoriesTachesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Nom,
+			&i.Emoji,
+			&i.Nombre,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const compterCategoriesTaches = `-- name: CompterCategoriesTaches :one
+SELECT count(*) FROM categories_taches WHERE famille_id = ?
+`
+
+func (q *Queries) CompterCategoriesTaches(ctx context.Context, familleID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, compterCategoriesTaches, familleID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const compterTachesActives = `-- name: CompterTachesActives :one
 SELECT count(*) FROM taches
 WHERE taches.famille_id = ?1 AND taches.active = 1
@@ -45,20 +114,52 @@ func (q *Queries) CompterTachesActives(ctx context.Context, arg CompterTachesAct
 	return count, err
 }
 
+const creerCategorieTache = `-- name: CreerCategorieTache :one
+INSERT INTO categories_taches (famille_id, nom, emoji, cree_le) VALUES (?, ?, ?, ?) RETURNING id, famille_id, nom, emoji, cree_le
+`
+
+type CreerCategorieTacheParams struct {
+	FamilleID int64
+	Nom       string
+	Emoji     string
+	CreeLe    int64
+}
+
+func (q *Queries) CreerCategorieTache(ctx context.Context, arg CreerCategorieTacheParams) (CategoriesTach, error) {
+	row := q.db.QueryRowContext(ctx, creerCategorieTache,
+		arg.FamilleID,
+		arg.Nom,
+		arg.Emoji,
+		arg.CreeLe,
+	)
+	var i CategoriesTach
+	err := row.Scan(
+		&i.ID,
+		&i.FamilleID,
+		&i.Nom,
+		&i.Emoji,
+		&i.CreeLe,
+	)
+	return i, err
+}
+
 const creerTache = `-- name: CreerTache :one
-INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour
+INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel
 `
 
 type CreerTacheParams struct {
-	FamilleID  int64
-	Titre      string
-	Emoji      string
-	AssigneA   sql.NullInt64
-	Tour       string
-	Repetition string
-	CreePar    sql.NullInt64
-	CreeLe     int64
+	FamilleID   int64
+	Titre       string
+	Emoji       string
+	AssigneA    sql.NullInt64
+	Tour        string
+	Repetition  string
+	CategorieID sql.NullInt64
+	Rappel      string
+	DateRappel  string
+	CreePar     sql.NullInt64
+	CreeLe      int64
 }
 
 func (q *Queries) CreerTache(ctx context.Context, arg CreerTacheParams) (Tache, error) {
@@ -69,6 +170,9 @@ func (q *Queries) CreerTache(ctx context.Context, arg CreerTacheParams) (Tache, 
 		arg.AssigneA,
 		arg.Tour,
 		arg.Repetition,
+		arg.CategorieID,
+		arg.Rappel,
+		arg.DateRappel,
 		arg.CreePar,
 		arg.CreeLe,
 	)
@@ -84,6 +188,9 @@ func (q *Queries) CreerTache(ctx context.Context, arg CreerTacheParams) (Tache, 
 		&i.CreePar,
 		&i.CreeLe,
 		&i.Tour,
+		&i.CategorieID,
+		&i.Rappel,
+		&i.DateRappel,
 	)
 	return i, err
 }
@@ -198,18 +305,63 @@ func (q *Queries) MarquerFaite(ctx context.Context, arg MarquerFaiteParams) (int
 	return result.RowsAffected()
 }
 
+const marquerRappelTache = `-- name: MarquerRappelTache :execrows
+INSERT INTO taches_rappels (tache_id, jour, envoye_le) VALUES (?, ?, ?)
+ON CONFLICT (tache_id, jour) DO NOTHING
+`
+
+type MarquerRappelTacheParams struct {
+	TacheID  int64
+	Jour     string
+	EnvoyeLe int64
+}
+
+// 0 ligne : rappel deja envoye ce jour-la.
+func (q *Queries) MarquerRappelTache(ctx context.Context, arg MarquerRappelTacheParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, marquerRappelTache, arg.TacheID, arg.Jour, arg.EnvoyeLe)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
+const modifierCategorieTache = `-- name: ModifierCategorieTache :exec
+UPDATE categories_taches SET nom = ?, emoji = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierCategorieTacheParams struct {
+	Nom       string
+	Emoji     string
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) ModifierCategorieTache(ctx context.Context, arg ModifierCategorieTacheParams) error {
+	_, err := q.db.ExecContext(ctx, modifierCategorieTache,
+		arg.Nom,
+		arg.Emoji,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
+}
+
 const modifierTache = `-- name: ModifierTache :exec
-UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ? WHERE id = ? AND famille_id = ?
+UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ?, categorie_id = ?, rappel = ?, date_rappel = ?
+WHERE id = ? AND famille_id = ?
 `
 
 type ModifierTacheParams struct {
-	Titre      string
-	Emoji      string
-	AssigneA   sql.NullInt64
-	Tour       string
-	Repetition string
-	ID         int64
-	FamilleID  int64
+	Titre       string
+	Emoji       string
+	AssigneA    sql.NullInt64
+	Tour        string
+	Repetition  string
+	CategorieID sql.NullInt64
+	Rappel      string
+	DateRappel  string
+	ID          int64
+	FamilleID   int64
 }
 
 func (q *Queries) ModifierTache(ctx context.Context, arg ModifierTacheParams) error {
@@ -219,9 +371,21 @@ func (q *Queries) ModifierTache(ctx context.Context, arg ModifierTacheParams) er
 		arg.AssigneA,
 		arg.Tour,
 		arg.Repetition,
+		arg.CategorieID,
+		arg.Rappel,
+		arg.DateRappel,
 		arg.ID,
 		arg.FamilleID,
 	)
+	return err
+}
+
+const oublierRappelsTaches = `-- name: OublierRappelsTaches :exec
+DELETE FROM taches_rappels WHERE envoye_le < ?
+`
+
+func (q *Queries) OublierRappelsTaches(ctx context.Context, envoyeLe int64) error {
+	_, err := q.db.ExecContext(ctx, oublierRappelsTaches, envoyeLe)
 	return err
 }
 
@@ -280,8 +444,23 @@ func (q *Queries) ScoresTaches(ctx context.Context, arg ScoresTachesParams) ([]S
 	return items, nil
 }
 
+const supprimerCategorieTache = `-- name: SupprimerCategorieTache :exec
+DELETE FROM categories_taches WHERE id = ? AND famille_id = ?
+`
+
+type SupprimerCategorieTacheParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+// Les taches de la categorie restent, sans categorie (ON DELETE SET NULL).
+func (q *Queries) SupprimerCategorieTache(ctx context.Context, arg SupprimerCategorieTacheParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerCategorieTache, arg.ID, arg.FamilleID)
+	return err
+}
+
 const tacheParID = `-- name: TacheParID :one
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour FROM taches WHERE id = ? AND famille_id = ? AND active = 1
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel FROM taches WHERE id = ? AND famille_id = ? AND active = 1
 `
 
 type TacheParIDParams struct {
@@ -303,13 +482,16 @@ func (q *Queries) TacheParID(ctx context.Context, arg TacheParIDParams) (Tache, 
 		&i.CreePar,
 		&i.CreeLe,
 		&i.Tour,
+		&i.CategorieID,
+		&i.Rappel,
+		&i.DateRappel,
 	)
 	return i, err
 }
 
 const tachesActives = `-- name: TachesActives :many
 
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour FROM taches
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel FROM taches
 WHERE taches.famille_id = ?1 AND taches.active = 1
   AND NOT (taches.repetition = '' AND EXISTS (
     SELECT 1 FROM taches_faites f
@@ -345,6 +527,66 @@ func (q *Queries) TachesActives(ctx context.Context, arg TachesActivesParams) ([
 			&i.CreePar,
 			&i.CreeLe,
 			&i.Tour,
+			&i.CategorieID,
+			&i.Rappel,
+			&i.DateRappel,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const tachesAvecRappel = `-- name: TachesAvecRappel :many
+SELECT t.id, t.famille_id, t.titre, t.emoji, t.assigne_a, t.tour, t.repetition, t.rappel, t.date_rappel, t.cree_le, f.fuseau
+FROM taches t JOIN familles f ON f.id = t.famille_id
+WHERE t.active = 1 AND t.rappel <> '' ORDER BY t.id LIMIT 5000
+`
+
+type TachesAvecRappelRow struct {
+	ID         int64
+	FamilleID  int64
+	Titre      string
+	Emoji      string
+	AssigneA   sql.NullInt64
+	Tour       string
+	Repetition string
+	Rappel     string
+	DateRappel string
+	CreeLe     int64
+	Fuseau     string
+}
+
+// Rappels : les taches qui en ont un (toutes les familles), avec le fuseau
+// de leur famille.
+func (q *Queries) TachesAvecRappel(ctx context.Context) ([]TachesAvecRappelRow, error) {
+	rows, err := q.db.QueryContext(ctx, tachesAvecRappel)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TachesAvecRappelRow{}
+	for rows.Next() {
+		var i TachesAvecRappelRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Titre,
+			&i.Emoji,
+			&i.AssigneA,
+			&i.Tour,
+			&i.Repetition,
+			&i.Rappel,
+			&i.DateRappel,
+			&i.CreeLe,
+			&i.Fuseau,
 		); err != nil {
 			return nil, err
 		}

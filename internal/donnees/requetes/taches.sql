@@ -21,11 +21,12 @@ WHERE taches.famille_id = sqlc.arg(famille_id) AND taches.active = 1
 SELECT * FROM taches WHERE id = ? AND famille_id = ? AND active = 1;
 
 -- name: CreerTache :one
-INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: ModifierTache :exec
-UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ? WHERE id = ? AND famille_id = ?;
+UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ?, categorie_id = ?, rappel = ?, date_rappel = ?
+WHERE id = ? AND famille_id = ?;
 
 -- name: RetirerTache :exec
 UPDATE taches SET active = 0 WHERE id = ? AND famille_id = ?;
@@ -63,3 +64,40 @@ GROUP BY taches_faites.fait_par;
 -- Membre retire : ses taches reviennent a tout le monde.
 -- name: LibererTachesMembre :exec
 UPDATE taches SET assigne_a = NULL WHERE famille_id = ? AND assigne_a = ?;
+
+-- Rappels : les taches qui en ont un (toutes les familles), avec le fuseau
+-- de leur famille.
+-- name: TachesAvecRappel :many
+SELECT t.id, t.famille_id, t.titre, t.emoji, t.assigne_a, t.tour, t.repetition, t.rappel, t.date_rappel, t.cree_le, f.fuseau
+FROM taches t JOIN familles f ON f.id = t.famille_id
+WHERE t.active = 1 AND t.rappel <> '' ORDER BY t.id LIMIT 5000;
+
+-- 0 ligne : rappel deja envoye ce jour-la.
+-- name: MarquerRappelTache :execrows
+INSERT INTO taches_rappels (tache_id, jour, envoye_le) VALUES (?, ?, ?)
+ON CONFLICT (tache_id, jour) DO NOTHING;
+
+-- name: OublierRappelsTaches :exec
+DELETE FROM taches_rappels WHERE envoye_le < ?;
+
+-- Categories des taches de la famille, avec le nombre de taches en cours.
+-- name: CategoriesTaches :many
+SELECT c.id, c.nom, c.emoji,
+  (SELECT count(*) FROM taches t WHERE t.categorie_id = c.id AND t.active = 1) AS nombre
+FROM categories_taches c WHERE c.famille_id = ? ORDER BY c.nom COLLATE NOCASE;
+
+-- name: CompterCategoriesTaches :one
+SELECT count(*) FROM categories_taches WHERE famille_id = ?;
+
+-- name: CategorieTacheExiste :one
+SELECT count(*) FROM categories_taches WHERE id = ? AND famille_id = ?;
+
+-- name: CreerCategorieTache :one
+INSERT INTO categories_taches (famille_id, nom, emoji, cree_le) VALUES (?, ?, ?, ?) RETURNING *;
+
+-- name: ModifierCategorieTache :exec
+UPDATE categories_taches SET nom = ?, emoji = ? WHERE id = ? AND famille_id = ?;
+
+-- Les taches de la categorie restent, sans categorie (ON DELETE SET NULL).
+-- name: SupprimerCategorieTache :exec
+DELETE FROM categories_taches WHERE id = ? AND famille_id = ?;

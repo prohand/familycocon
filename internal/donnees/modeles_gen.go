@@ -103,6 +103,14 @@ type CategoriesNote struct {
 	Parents   int64
 }
 
+type CategoriesTach struct {
+	ID        int64
+	FamilleID int64
+	Nom       string
+	Emoji     string
+	CreeLe    int64
+}
+
 type CodesSecour struct {
 	MembreID  int64
 	Empreinte []byte
@@ -462,16 +470,19 @@ type Session struct {
 }
 
 type Tache struct {
-	ID         int64
-	FamilleID  int64
-	Titre      string
-	Emoji      string
-	AssigneA   sql.NullInt64
-	Repetition string
-	Active     int64
-	CreePar    sql.NullInt64
-	CreeLe     int64
-	Tour       string
+	ID          int64
+	FamilleID   int64
+	Titre       string
+	Emoji       string
+	AssigneA    sql.NullInt64
+	Repetition  string
+	Active      int64
+	CreePar     sql.NullInt64
+	CreeLe      int64
+	Tour        string
+	CategorieID sql.NullInt64
+	Rappel      string
+	DateRappel  string
 }
 
 type TacheFaite struct {
@@ -480,6 +491,12 @@ type TacheFaite struct {
 	Occurrence string
 	FaitPar    sql.NullInt64
 	FaitLe     int64
+}
+
+type TachesRappel struct {
+	TacheID  int64
+	Jour     string
+	EnvoyeLe int64
 }
 
 type Vehicule struct {

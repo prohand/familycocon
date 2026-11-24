@@ -41,6 +41,7 @@
 | Catégories de notes (filtre, étiquette, gérées par tous) ; onglet Listes et « Partagées » retirés (v0.9.6, SPEC § 24) | **fait** |
 | Grille d'emojis (catégories, projets, abonnements, récompenses) (v0.9.7) | **fait** |
 | Notes et catégories « parents seulement » (v0.9.8, SPEC § 25) | **fait** |
+| Tâches : rappel à une heure, catégories (v0.9.9, SPEC § 26) | **fait** |
 
 ## Mesures
 

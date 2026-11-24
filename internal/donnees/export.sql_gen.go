@@ -249,6 +249,39 @@ func (q *Queries) ExportCategoriesNotes(ctx context.Context, familleID int64) ([
 	return items, nil
 }
 
+const exportCategoriesTaches = `-- name: ExportCategoriesTaches :many
+SELECT id, famille_id, nom, emoji, cree_le FROM categories_taches WHERE famille_id = ?
+`
+
+func (q *Queries) ExportCategoriesTaches(ctx context.Context, familleID int64) ([]CategoriesTach, error) {
+	rows, err := q.db.QueryContext(ctx, exportCategoriesTaches, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CategoriesTach{}
+	for rows.Next() {
+		var i CategoriesTach
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Nom,
+			&i.Emoji,
+			&i.CreeLe,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const exportContacts = `-- name: ExportContacts :many
 SELECT id, famille_id, nom, relation, naissance, telephone, email, adresse, notes, idees, cree_le, modifie_le, tel_fixe, tel_travail, societe, metier, site, favori, pro, groupes FROM contacts WHERE famille_id = ?
 `
@@ -1067,7 +1100,7 @@ func (q *Queries) ExportRepas(ctx context.Context, familleID int64) ([]Repas, er
 }
 
 const exportTaches = `-- name: ExportTaches :many
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour FROM taches WHERE famille_id = ?
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel FROM taches WHERE famille_id = ?
 `
 
 func (q *Queries) ExportTaches(ctx context.Context, familleID int64) ([]Tache, error) {
@@ -1090,6 +1123,9 @@ func (q *Queries) ExportTaches(ctx context.Context, familleID int64) ([]Tache, e
 			&i.CreePar,
 			&i.CreeLe,
 			&i.Tour,
+			&i.CategorieID,
+			&i.Rappel,
+			&i.DateRappel,
 		); err != nil {
 			return nil, err
 		}
