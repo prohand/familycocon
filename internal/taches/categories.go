@@ -19,7 +19,9 @@ import (
 // Catégories des tâches (🧹 Ménage, 🍳 Cuisine, 🧺 Linge…) : comme celles
 // des notes, mais à part. Tout le monde les crée, les renomme et les
 // supprime ; une tâche en a une ou aucune ; supprimer une catégorie laisse
-// ses tâches « sans catégorie ».
+// ses tâches « sans catégorie ». Une catégorie « parents seulement »
+// (choisie par un parent) et ses tâches sont cachées aux enfants (sauf à
+// qui a créé la tâche ou doit la faire).
 
 // Bornes.
 const (
@@ -40,11 +42,12 @@ var emojisCategories = []string{
 
 // Categorie : une catégorie montrée (filtre, formulaire, lignes).
 type Categorie struct {
-	ID     int64
-	Nom    string
-	Emoji  string
-	Nombre int64 // tâches en cours
-	Active bool  // filtre choisi
+	ID      int64
+	Nom     string
+	Emoji   string
+	Nombre  int64 // tâches en cours (que ce membre voit)
+	Active  bool  // filtre choisi
+	Parents bool  // cachée aux enfants
 }
 
 // Etiquette : « 🧹 Ménage ».
@@ -52,28 +55,57 @@ func (c Categorie) Etiquette() string { return strings.TrimSpace(c.Emoji + " " +
 
 // categories : celles de la famille, dans l'ordre alphabétique.
 func (m *Module) categories(ctx context.Context, c *appli.Contexte) ([]Categorie, error) {
-	l, err := m.a.Q.CategoriesTaches(ctx, c.Famille.ID)
+	l, err := m.a.Q.CategoriesTaches(ctx, donnees.CategoriesTachesParams{FamilleID: c.Famille.ID, MembreID: moi(c), Parent: estParent(c)})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]Categorie, 0, len(l))
 	for _, x := range l {
-		out = append(out, Categorie{ID: x.ID, Nom: x.Nom, Emoji: x.Emoji, Nombre: x.Nombre})
+		out = append(out, Categorie{ID: x.ID, Nom: x.Nom, Emoji: x.Emoji, Nombre: x.Nombre, Parents: x.Parents == 1})
 	}
 	return out, nil
 }
 
 // lireCategorie : la catégorie choisie dans le formulaire (aucune : nulle ;
-// une catégorie d'une autre famille compte pour aucune).
+// une catégorie d'une autre famille, ou des parents pour un enfant, compte
+// pour aucune).
 func (m *Module) lireCategorie(r *http.Request, c *appli.Contexte) sql.NullInt64 {
 	id, err := strconv.ParseInt(r.PostFormValue("categorie"), 10, 64)
 	if err != nil || id <= 0 {
 		return sql.NullInt64{}
 	}
-	if n, err := m.a.Q.CategorieTacheExiste(r.Context(), donnees.CategorieTacheExisteParams{ID: id, FamilleID: c.Famille.ID}); err != nil || n == 0 {
+	if n, err := m.a.Q.CategorieTacheExiste(r.Context(), donnees.CategorieTacheExisteParams{ID: id, FamilleID: c.Famille.ID, Parent: estParent(c)}); err != nil || n == 0 {
 		return sql.NullInt64{}
 	}
 	return sql.NullInt64{Int64: id, Valid: true}
+}
+
+// categorieParents : vrai si la catégorie est réservée aux parents.
+func (m *Module) categorieParents(ctx context.Context, cat sql.NullInt64) bool {
+	if !cat.Valid {
+		return false
+	}
+	p, err := m.a.Q.CategorieTacheParents(ctx, cat.Int64)
+	return err == nil && p == 1
+}
+
+// estParent : 1 pour un parent (paramètre des requêtes).
+func estParent(c *appli.Contexte) int64 {
+	if c.EstParent() {
+		return 1
+	}
+	return 0
+}
+
+// moi : le membre connecté (paramètre des requêtes).
+func moi(c *appli.Contexte) sql.NullInt64 { return sql.NullInt64{Int64: c.Membre.ID, Valid: true} }
+
+// lireParents : case « Parents seulement » (un parent seulement ; 0 sinon).
+func lireParents(r *http.Request, c *appli.Contexte) int64 {
+	if c.EstParent() && r.PostFormValue("parents") == "1" {
+		return 1
+	}
+	return 0
 }
 
 // lireFiltreCategorie : « cat » de l'adresse (0 : toutes ; -1 : sans catégorie).
@@ -139,7 +171,7 @@ func (m *Module) categoriesPost(w http.ResponseWriter, r *http.Request, c *appli
 	id, _ := strconv.ParseInt(r.PostFormValue("id"), 10, 64)
 	switch r.PostFormValue("action") {
 	case "supprimer":
-		if err := m.a.Q.SupprimerCategorieTache(ctx, donnees.SupprimerCategorieTacheParams{ID: id, FamilleID: c.Famille.ID}); err != nil {
+		if err := m.a.Q.SupprimerCategorieTache(ctx, donnees.SupprimerCategorieTacheParams{ID: id, FamilleID: c.Famille.ID, Parent: estParent(c)}); err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		}
@@ -150,11 +182,27 @@ func (m *Module) categoriesPost(w http.ResponseWriter, r *http.Request, c *appli
 			m.a.Echec(w, r, http.StatusBadRequest, msg)
 			return
 		}
-		if err := m.a.Q.ModifierCategorieTache(ctx, donnees.ModifierCategorieTacheParams{Nom: nom, Emoji: emoji, ID: id, FamilleID: c.Famille.ID}); err != nil {
+		if err := m.a.Q.ModifierCategorieTache(ctx, donnees.ModifierCategorieTacheParams{Nom: nom, Emoji: emoji, ID: id, FamilleID: c.Famille.ID, Parent: estParent(c)}); err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		}
 		m.a.Flash(w, "Catégorie enregistrée ✓")
+	case "parents":
+		// Cacher aux enfants (ou leur montrer) : un parent seulement.
+		if !c.EstParent() {
+			m.a.Echec(w, r, http.StatusForbidden, "Seul un parent peut changer ce réglage.")
+			return
+		}
+		p := lireParents(r, c)
+		if err := m.a.Q.ChangerParentsCategorieTache(ctx, donnees.ChangerParentsCategorieTacheParams{Parents: p, ID: id, FamilleID: c.Famille.ID}); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		if p == 1 {
+			m.a.Flash(w, "Catégorie cachée aux enfants ✓")
+		} else {
+			m.a.Flash(w, "Catégorie visible par toute la famille ✓")
+		}
 	default:
 		nom, emoji, msg := lireNomEmoji(r)
 		if msg != "" {
@@ -168,7 +216,8 @@ func (m *Module) categoriesPost(w http.ResponseWriter, r *http.Request, c *appli
 			m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("%d catégories au plus.", categoriesMax))
 			return
 		}
-		if _, err := m.a.Q.CreerCategorieTache(ctx, donnees.CreerCategorieTacheParams{FamilleID: c.Famille.ID, Nom: nom, Emoji: emoji, CreeLe: time.Now().Unix()}); err != nil {
+		if _, err := m.a.Q.CreerCategorieTache(ctx, donnees.CreerCategorieTacheParams{FamilleID: c.Famille.ID, Nom: nom, Emoji: emoji,
+			Parents: lireParents(r, c), CreeLe: time.Now().Unix()}); err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		}

@@ -16,7 +16,8 @@ import (
 // Rappel d'une tâche : une heure (« 18:00 », heure de la famille). Chaque
 // jour où la tâche revient, si elle n'est pas encore faite, une
 // notification part vers celui qui doit la faire (le membre choisi ou celui
-// dont c'est le tour ; « tout le monde » : toute la famille).
+// dont c'est le tour ; « tout le monde » : toute la famille, ou les parents
+// pour une tâche cachée aux enfants ; privée : son créateur).
 //
 //   - chaque jour, certains jours : ces jours-là ;
 //   - chaque semaine, toutes les 2 semaines, chaque mois : le premier jour
@@ -139,10 +140,29 @@ func (m *Module) envoyerRappels(ctx context.Context, maintenant time.Time) {
 			m.a.Journal.Error("rappel d'une tâche", "tache", t.ID, "erreur", err)
 			continue
 		}
-		tache := donnees.Tache{ID: t.ID, FamilleID: t.FamilleID, AssigneA: t.AssigneA, Tour: t.Tour, Repetition: t.Repetition}
+		tache := donnees.Tache{ID: t.ID, FamilleID: t.FamilleID, AssigneA: t.AssigneA, Tour: t.Tour, Repetition: t.Repetition, CreePar: t.CreePar}
 		var pour []int64 // vide : toute la famille
-		if qui := assigneLe(tache, repetition.Lire(t.Repetition), ici, appli.MembresParID(membres)); qui != nil {
+		qui := assigneLe(tache, repetition.Lire(t.Repetition), ici, appli.MembresParID(membres))
+		switch {
+		case t.Privee == 1:
+			// Privée : son créateur seul.
+			if !t.CreePar.Valid {
+				continue
+			}
+			pour = []int64{t.CreePar.Int64}
+		case qui != nil:
 			pour = []int64{qui.ID}
+		case t.Cachee == 1:
+			// Pour « tout le monde » mais cachée aux enfants : les parents (et
+			// son créateur).
+			for _, mb := range membres {
+				if mb.Role == appli.RoleParent || (t.CreePar.Valid && mb.ID == t.CreePar.Int64) {
+					pour = append(pour, mb.ID)
+				}
+			}
+			if len(pour) == 0 {
+				continue // surtout pas « toute la famille » (pour vide)
+			}
 		}
 		m.a.Rappeler(ctx, t.FamilleID, mod, "⏰ "+t.Emoji+" "+t.Titre, "/taches", pour)
 		m.a.Journal.Info("rappel d'une tâche envoyé", "tache", t.ID)

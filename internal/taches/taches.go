@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -68,7 +69,7 @@ func Brancher(a *appli.App) {
 // précis. L'heure du rappel suit le titre (« Poubelles · ⏰ 18:00 »).
 func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin time.Time) ([]appli.ElementJour, error) {
 	depuis := debutDuJour(c)
-	taches, err := m.a.Q.TachesActives(ctx, donnees.TachesActivesParams{FamilleID: c.Famille.ID, Depuis: depuis})
+	taches, err := m.a.Q.TachesActives(ctx, donnees.TachesActivesParams{FamilleID: c.Famille.ID, MembreID: moi(c), Parent: estParent(c), Depuis: depuis})
 	if err != nil {
 		return nil, err
 	}
@@ -195,6 +196,7 @@ type ligneTache struct {
 	Decochable bool
 	Categorie  string // « 🧹 Ménage » (vide : sans catégorie)
 	Rappel     string // « ⏰ 18:00 » (vide : pas de rappel)
+	Cachee     bool   // réservée aux parents (la tâche ou sa catégorie)
 }
 
 type score struct {
@@ -216,6 +218,7 @@ type vueTaches struct {
 	Pour       int64  // filtre par membre (0 : tout le monde)
 	Categorie  int64  // filtre par catégorie (0 : toutes ; -1 : sans)
 	Cat        string // la même, pour les adresses (« 3 », « sans », vide)
+	Voir       string // « partagees », « privees », « enfants » ou vide
 	Categories []Categorie
 	Membres    []donnees.Membre
 	AFaire     []ligneTache
@@ -274,7 +277,7 @@ func assigneLe(t donnees.Tache, regle repetition.Regle, j time.Time, parID map[i
 // etat : les tâches actives de la famille et leur état aujourd'hui.
 func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map[int64]*donnees.Membre, []donnees.Membre, error) {
 	depuis := debutDuJour(c)
-	taches, err := m.a.Q.TachesActives(ctx, donnees.TachesActivesParams{FamilleID: c.Famille.ID, Depuis: depuis})
+	taches, err := m.a.Q.TachesActives(ctx, donnees.TachesActivesParams{FamilleID: c.Famille.ID, MembreID: moi(c), Parent: estParent(c), Depuis: depuis})
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -341,6 +344,53 @@ func pourMembre(l ligneTache, id int64) bool {
 	return id == 0 || l.Assigne == nil || l.Assigne.ID == id
 }
 
+// Filtre « Voir » : toutes, partagées, privées, ou (parents) celles que
+// les enfants voient.
+const (
+	voirPartagees = "partagees"
+	voirPrivees   = "privees"
+	voirEnfants   = "enfants"
+)
+
+// lireVoir : le filtre « voir » (« enfants » : parents seulement).
+func lireVoir(v string, c *appli.Contexte) string {
+	switch v {
+	case voirPartagees, voirPrivees:
+		return v
+	case voirEnfants:
+		if c.EstParent() {
+			return v
+		}
+	}
+	return ""
+}
+
+// dansVoir : la tâche est-elle dans le filtre « voir » ?
+func dansVoir(l ligneTache, voir string, parID map[int64]*donnees.Membre) bool {
+	switch voir {
+	case voirPartagees:
+		return l.Privee == 0
+	case voirPrivees:
+		return l.Privee == 1
+	case voirEnfants:
+		return vueParEnfant(l.Tache, l.Cachee, parID)
+	}
+	return true
+}
+
+// Adresse : la liste avec ces filtres (pour les liens des pastilles).
+func (v *vueTaches) Adresse(pour int64, cat, voir string) string {
+	q := url.Values{}
+	q.Set("pour", strconv.FormatInt(pour, 10))
+	if cat != "" {
+		q.Set("cat", cat)
+	}
+	if voir != "" {
+		q.Set("voir", voir)
+	}
+	return "/taches?" + q.Encode()
+}
+
 // dansCategorie : la tâche est-elle dans ce filtre (0 : toutes ; -1 : sans) ?
 func dansCategorie(t donnees.Tache, cat int64) bool {
 	switch {
@@ -352,7 +402,7 @@ func dansCategorie(t donnees.Tache, cat int64) bool {
 	return t.CategorieID.Valid && t.CategorieID.Int64 == cat
 }
 
-func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64) (*vueTaches, error) {
+func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, voir string) (*vueTaches, error) {
 	lignes, parID, membres, err := m.etat(ctx, c)
 	if err != nil {
 		return nil, err
@@ -362,17 +412,23 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64) (*
 		return nil, err
 	}
 	nomCat := map[int64]string{}
+	catParents := map[int64]bool{}
 	for i := range cats {
 		cats[i].Active = cats[i].ID == cat
 		nomCat[cats[i].ID] = cats[i].Etiquette()
+		catParents[cats[i].ID] = cats[i].Parents
 	}
-	v := &vueTaches{Pour: pour, Categorie: cat, Cat: paramCategorie(cat), Categories: cats, Membres: membres}
+	v := &vueTaches{Pour: pour, Categorie: cat, Cat: paramCategorie(cat), Voir: voir, Categories: cats, Membres: membres}
 	aujourdhui := repetition.CleJour(c.Maintenant())
 	for _, l := range lignes {
 		if !pourMembre(l, pour) || !dansCategorie(l.Tache, cat) {
 			continue
 		}
 		l.Categorie = nomCat[l.CategorieID.Int64]
+		l.Cachee = l.Privee == 0 && (l.Parents == 1 || catParents[l.CategorieID.Int64])
+		if !dansVoir(l, voir, parID) {
+			continue
+		}
 		switch {
 		case l.Faite:
 			// Une tâche « une fois » faite un autre jour n'est plus montrée.
@@ -389,7 +445,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64) (*
 	maintenant := c.Maintenant()
 	debut := time.Date(maintenant.Year(), maintenant.Month(), maintenant.Day(), 0, 0, 0, 0, c.Lieu).AddDate(0, 0, -6)
 	lundi := repetition.Lundi(maintenant)
-	histo, err := m.a.Q.HistoriqueTaches(ctx, donnees.HistoriqueTachesParams{FamilleID: c.Famille.ID, FaitLe: debut.Unix()})
+	histo, err := m.a.Q.HistoriqueTaches(ctx, donnees.HistoriqueTachesParams{FamilleID: c.Famille.ID, FaitLe: debut.Unix(), MembreID: moi(c), Parent: estParent(c)})
 	if err != nil {
 		return nil, err
 	}
@@ -448,7 +504,7 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 	} else if n, err := strconv.ParseInt(m.a.LirePreference(r, "taches_pour"), 10, 64); err == nil {
 		pour = n
 	}
-	v, err := m.vue(r.Context(), c, pour, lireFiltreCategorie(r.URL.Query().Get("cat")))
+	v, err := m.vue(r.Context(), c, pour, lireFiltreCategorie(r.URL.Query().Get("cat")), lireVoir(r.URL.Query().Get("voir"), c))
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -456,12 +512,12 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 	m.a.Afficher(w, r, c, "taches/liste", "Tâches", mod, v)
 }
 
-func (m *Module) renvoyer(w http.ResponseWriter, r *http.Request, c *appli.Contexte, pour, cat int64) {
+func (m *Module) renvoyer(w http.ResponseWriter, r *http.Request, c *appli.Contexte, pour, cat int64, voir string) {
 	if !appli.EstHtmx(r) {
 		http.Redirect(w, r, "/taches", http.StatusSeeOther)
 		return
 	}
-	v, err := m.vue(r.Context(), c, pour, cat)
+	v, err := m.vue(r.Context(), c, pour, cat, voir)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -470,7 +526,7 @@ func (m *Module) renvoyer(w http.ResponseWriter, r *http.Request, c *appli.Conte
 }
 
 func (m *Module) contenu(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	m.renvoyer(w, r, c, lirePour(r), lireFiltreCategorie(r.URL.Query().Get("cat")))
+	m.renvoyer(w, r, c, lirePour(r), lireFiltreCategorie(r.URL.Query().Get("cat")), lireVoir(r.URL.Query().Get("voir"), c))
 }
 
 // tache : la tâche {id} de la famille.
@@ -479,7 +535,11 @@ func (m *Module) tache(r *http.Request, c *appli.Contexte) (donnees.Tache, error
 	if err != nil {
 		return donnees.Tache{}, sql.ErrNoRows
 	}
-	return m.a.Q.TacheParID(r.Context(), donnees.TacheParIDParams{ID: id, FamilleID: c.Famille.ID})
+	t, err := m.a.Q.TacheParID(r.Context(), donnees.TacheParIDParams{ID: id, FamilleID: c.Famille.ID})
+	if err == nil && !m.visible(r.Context(), c, t) {
+		return donnees.Tache{}, sql.ErrNoRows
+	}
+	return t, err
 }
 
 // formTache : données du formulaire de création / modification.
@@ -490,10 +550,14 @@ type formTache struct {
 	Categories []Categorie
 	Nouvelle   bool
 	DansTour   map[int64]bool // membres du tour de rôle
+	// PeutPriver : case « Privée » (à la création, puis pour son créateur) ;
+	// PeutCacher : case « Parents seulement » (parents).
+	PeutPriver, PeutCacher bool
+	CacheeParCategorie     bool // déjà cachée aux enfants par sa catégorie
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	f := &formTache{Nouvelle: r.PathValue("id") == "", DansTour: map[int64]bool{}}
+	f := &formTache{Nouvelle: r.PathValue("id") == "", DansTour: map[int64]bool{}, PeutPriver: true, PeutCacher: c.EstParent()}
 	if f.Nouvelle {
 		// Venue d'un filtre de la liste : la tâche y est rangée.
 		if id := lireFiltreCategorie(r.URL.Query().Get("cat")); id > 0 {
@@ -510,6 +574,8 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Tache, f.Regle = t, repetition.Lire(t.Repetition)
+		f.PeutPriver = t.CreePar.Valid && t.CreePar.Int64 == c.Membre.ID
+		f.CacheeParCategorie = m.categorieParents(r.Context(), t.CategorieID)
 		for _, x := range strings.Split(t.Tour, ",") {
 			if id, err := strconv.ParseInt(x, 10, 64); err == nil {
 				f.DansTour[id] = true
@@ -544,6 +610,7 @@ type saisieTache struct {
 	// qu'elle soit faite).
 	categorie          sql.NullInt64
 	rappel, dateRappel string
+	privee, parents    int64 // privée ; réservée aux parents
 }
 
 // lireFormulaire : titre, membre (ou tour de rôle) et répétition d'une tâche.
@@ -603,6 +670,10 @@ func (m *Module) lireFormulaire(r *http.Request, c *appli.Contexte) (s saisieTac
 		return s, msg
 	}
 	s.categorie = m.lireCategorie(r, c)
+	if r.PostForm.Get("privee") == "1" {
+		s.privee = 1
+	}
+	s.parents = lireParents(r, c)
 	return s, ""
 }
 
@@ -619,17 +690,21 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("%d tâches au plus : demandez à un parent d'en supprimer.", tachesMax))
 		return
 	}
+	if s.privee == 1 {
+		// Privée : elle revient à celui qui la crée (personne d'autre ne la voit).
+		s.assigne, s.tour, s.pour = moi(c), "", nil
+	}
 	t, err := m.a.Q.CreerTache(r.Context(), donnees.CreerTacheParams{
 		FamilleID: c.Famille.ID, Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour,
 		Repetition: s.regle.String(), CategorieID: s.categorie, Rappel: s.rappel, DateRappel: s.dateRappel,
-		CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+		Privee: s.privee, Parents: s.parents, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
 	// Confiée à quelqu'un (ou à tour de rôle) : seuls eux sont notifiés.
-	m.a.PublierPour(c, mod, fmt.Sprintf("%s a ajouté la tâche « %s » %s", c.Membre.Nom, t.Titre, t.Emoji), s.pour)
+	m.annoncer(r.Context(), c, t, fmt.Sprintf("%s a ajouté la tâche « %s » %s", c.Membre.Nom, t.Titre, t.Emoji), s.pour)
 	m.a.Flash(w, "Tâche ajoutée ✓")
 	m.a.Rediriger(w, r, "/taches")
 }
@@ -649,10 +724,27 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
+	// Privée : seul son créateur change ce réglage ; « parents seulement » :
+	// un parent. Une tâche privée revient à son créateur.
+	if !(t.CreePar.Valid && t.CreePar.Int64 == c.Membre.ID) {
+		s.privee = t.Privee
+	}
+	if !c.EstParent() {
+		s.parents = t.Parents
+		// Un enfant ne voit pas les catégories des parents : une tâche
+		// qu'un parent y a rangée y reste.
+		if m.categorieParents(r.Context(), t.CategorieID) {
+			s.categorie = t.CategorieID
+		}
+	}
+	if s.privee == 1 {
+		s.assigne, s.tour = t.CreePar, ""
+	}
 	regle := s.regle
 	if err := m.a.Q.ModifierTache(r.Context(), donnees.ModifierTacheParams{
 		Titre: s.titre, Emoji: DevinerEmoji(s.titre), AssigneA: s.assigne, Tour: s.tour, Repetition: regle.String(),
-		CategorieID: s.categorie, Rappel: s.rappel, DateRappel: s.dateRappel, ID: t.ID, FamilleID: c.Famille.ID,
+		CategorieID: s.categorie, Rappel: s.rappel, DateRappel: s.dateRappel, Privee: s.privee, Parents: s.parents,
+		ID: t.ID, FamilleID: c.Famille.ID,
 	}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -690,7 +782,7 @@ func (m *Module) faire(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	// Déjà cochée (double clic, deux membres en même temps) : ni annonce ni bravo.
 	if n == 1 {
-		m.a.Publier(c, mod, fmt.Sprintf("%s a fait « %s » %s", c.Membre.Nom, t.Titre, t.Emoji))
+		m.annoncer(r.Context(), c, t, fmt.Sprintf("%s a fait « %s » %s", c.Membre.Nom, t.Titre, t.Emoji), nil)
 		appli.Notifier(w, "Bravo "+c.Membre.Nom+" ! 🎉", false)
 	}
 	// Cochée depuis l'accueil : seule la ligne change.
@@ -698,7 +790,7 @@ func (m *Module) faire(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.Fragment(w, r, c, "taches/liste", "accueil-tache-faite", t)
 		return
 	}
-	m.renvoyer(w, r, c, lirePourForm(r), lireFiltreCategorie(r.PostFormValue("cat")))
+	m.renvoyer(w, r, c, lirePourForm(r), lireFiltreCategorie(r.PostFormValue("cat")), lireVoir(r.PostFormValue("voir"), c))
 }
 
 func lirePourForm(r *http.Request) int64 {
@@ -716,7 +808,7 @@ func (m *Module) defaire(w http.ResponseWriter, r *http.Request, c *appli.Contex
 	cle, _ := repetition.Lire(t.Repetition).Occurrence(c.Maintenant())
 	f, err := m.a.Q.FaiteParOccurrence(ctx, donnees.FaiteParOccurrenceParams{TacheID: t.ID, Occurrence: cle})
 	if err != nil {
-		m.renvoyer(w, r, c, lirePourForm(r), lireFiltreCategorie(r.PostFormValue("cat"))) // déjà décochée
+		m.renvoyer(w, r, c, lirePourForm(r), lireFiltreCategorie(r.PostFormValue("cat")), lireVoir(r.PostFormValue("voir"), c)) // déjà décochée
 		return
 	}
 	if !c.EstParent() && (!f.FaitPar.Valid || f.FaitPar.Int64 != c.Membre.ID) {
@@ -728,7 +820,7 @@ func (m *Module) defaire(w http.ResponseWriter, r *http.Request, c *appli.Contex
 		return
 	}
 	m.a.Publier(c, mod, "")
-	m.renvoyer(w, r, c, lirePourForm(r), lireFiltreCategorie(r.PostFormValue("cat")))
+	m.renvoyer(w, r, c, lirePourForm(r), lireFiltreCategorie(r.PostFormValue("cat")), lireVoir(r.PostFormValue("voir"), c))
 }
 
 func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {

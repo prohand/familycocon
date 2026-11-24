@@ -30,7 +30,7 @@
     <div class="rangee-categorie">
       <select id="categorie-tache" name="categorie">{{$choisie := .Tache.CategorieID.Int64}}
         <option value="0">Sans catégorie</option>
-        {{- range .Categories}}<option value="{{.ID}}"{{if eq .ID $choisie}} selected{{end}}>{{.Etiquette}}</option>{{end}}
+        {{- range .Categories}}<option value="{{.ID}}"{{if eq .ID $choisie}} selected{{end}}>{{.Etiquette}}{{if .Parents}} (parents){{end}}</option>{{end}}
       </select>
       <a class="bouton petit secondaire" href="/taches/categories">{{if .Categories}}Gérer{{else}}＋ Créer{{end}}</a>
     </div>
@@ -45,6 +45,18 @@
     </div>
     <p class="aide">Envoyé à celui qui doit la faire (à tour de rôle : celui dont c'est le tour). Chaque semaine ou chaque mois : le premier jour.</p>
   </fieldset>
+  {{if .PeutPriver}}
+  <label class="interrupteur">
+    <span class="emoji">🔒</span><span class="nom">Privée <small class="aide">(vous seul la voyez ; elle vous revient)</small></span>
+    <input type="checkbox" name="privee" value="1"{{if eq .Tache.Privee 1}} checked{{end}}><span class="glissiere"></span>
+  </label>
+  {{end}}
+  {{if .PeutCacher}}
+  <label class="interrupteur">
+    <span class="emoji">👥</span><span class="nom">Parents seulement <small class="aide">({{if .CacheeParCategorie}}déjà cachée aux enfants par sa catégorie{{else}}les enfants ne la voient pas, sauf celui qui doit la faire{{end}})</small></span>
+    <input type="checkbox" name="parents" value="1"{{if eq .Tache.Parents 1}} checked{{end}}><span class="glissiere"></span>
+  </label>
+  {{end}}
   <div class="boutons"><button class="bouton">{{if .Nouvelle}}Ajouter la tâche{{else}}Enregistrer{{end}}</button></div>
 </form>
 {{if and (not .Nouvelle) $c.EstParent}}

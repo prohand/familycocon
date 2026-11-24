@@ -48,7 +48,9 @@ var sectionsExport = []sectionExport{
 	s("courses_produits", (*donnees.Queries).ExportProduits),
 	s("courses_produits_connus", (*donnees.Queries).ExportProduitsConnus),
 	s("taches_categories", (*donnees.Queries).ExportCategoriesTaches),
-	s("taches", (*donnees.Queries).ExportTaches),
+	sm("taches", (*donnees.Queries).ExportTaches, func(f, m int64) donnees.ExportTachesParams {
+		return donnees.ExportTachesParams{FamilleID: f, Membre: sql.NullInt64{Int64: m, Valid: true}}
+	}),
 	s("taches_faites", (*donnees.Queries).ExportTachesFaites),
 	s("agenda_evenements", (*donnees.Queries).ExportEvenements),
 	s("agenda_participants", (*donnees.Queries).ExportEvenementsMembres),

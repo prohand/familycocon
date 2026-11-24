@@ -109,6 +109,7 @@ type CategoriesTach struct {
 	Nom       string
 	Emoji     string
 	CreeLe    int64
+	Parents   int64
 }
 
 type CodesSecour struct {
@@ -483,6 +484,8 @@ type Tache struct {
 	CategorieID sql.NullInt64
 	Rappel      string
 	DateRappel  string
+	Privee      int64
+	Parents     int64
 }
 
 type TacheFaite struct {

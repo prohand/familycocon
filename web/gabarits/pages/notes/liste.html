@@ -19,11 +19,12 @@
   </span>
 </div>
 {{/* Qui la voit : toutes, partagées (la famille), privées (moi seul). */}}
-<nav class="pilules petites" aria-label="Partagées ou privées">
+<nav class="pilules petites voir" aria-label="Partagées ou privées">
   <span class="aide">Voir :</span>
   <a class="pilule{{if eq .Filtre ""}} active{{end}}" href="/notes{{with .Cat}}?cat={{.}}{{end}}">Toutes</a>
   <a class="pilule{{if eq .Filtre "partagees"}} active{{end}}" href="/notes?voir=partagees{{with .Cat}}&amp;cat={{.}}{{end}}">👪 Partagées</a>
   <a class="pilule{{if eq .Filtre "privees"}} active{{end}}" href="/notes?voir=privees{{with .Cat}}&amp;cat={{.}}{{end}}">🔒 Privées</a>
+  {{if $.C.EstParent}}<a class="pilule{{if eq .Filtre "enfants"}} active{{end}}" href="/notes?voir=enfants{{with .Cat}}&amp;cat={{.}}{{end}}" title="Ce que les enfants voient">🧒 Vues des enfants</a>{{end}}
 </nav>
 <form class="ajout recherche" method="get" action="/notes">
   {{if .Filtre}}<input type="hidden" name="voir" value="{{.Filtre}}">{{end}}

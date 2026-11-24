@@ -26,37 +26,60 @@ func (q *Queries) AnnulerFaite(ctx context.Context, arg AnnulerFaiteParams) erro
 }
 
 const categorieTacheExiste = `-- name: CategorieTacheExiste :one
-SELECT count(*) FROM categories_taches WHERE id = ? AND famille_id = ?
+SELECT count(*) FROM categories_taches
+WHERE id = ?1 AND famille_id = ?2 AND (parents = 0 OR CAST(?3 AS INTEGER) = 1)
 `
 
 type CategorieTacheExisteParams struct {
 	ID        int64
 	FamilleID int64
+	Parent    int64
 }
 
+// Categorie utilisable par ce membre (parent : 1 pour un parent).
 func (q *Queries) CategorieTacheExiste(ctx context.Context, arg CategorieTacheExisteParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, categorieTacheExiste, arg.ID, arg.FamilleID)
+	row := q.db.QueryRowContext(ctx, categorieTacheExiste, arg.ID, arg.FamilleID, arg.Parent)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
-const categoriesTaches = `-- name: CategoriesTaches :many
-SELECT c.id, c.nom, c.emoji,
-  (SELECT count(*) FROM taches t WHERE t.categorie_id = c.id AND t.active = 1) AS nombre
-FROM categories_taches c WHERE c.famille_id = ? ORDER BY c.nom COLLATE NOCASE
+const categorieTacheParents = `-- name: CategorieTacheParents :one
+SELECT parents FROM categories_taches WHERE id = ?
 `
 
-type CategoriesTachesRow struct {
-	ID     int64
-	Nom    string
-	Emoji  string
-	Nombre int64
+func (q *Queries) CategorieTacheParents(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, categorieTacheParents, id)
+	var parents int64
+	err := row.Scan(&parents)
+	return parents, err
 }
 
-// Categories des taches de la famille, avec le nombre de taches en cours.
-func (q *Queries) CategoriesTaches(ctx context.Context, familleID int64) ([]CategoriesTachesRow, error) {
-	rows, err := q.db.QueryContext(ctx, categoriesTaches, familleID)
+const categoriesTaches = `-- name: CategoriesTaches :many
+SELECT c.id, c.nom, c.emoji, c.parents,
+  (SELECT count(*) FROM taches WHERE taches.categorie_id = c.id AND taches.active = 1 AND (taches.cree_par = ?1 OR (taches.privee = 0 AND (taches.assigne_a = ?1 OR instr(',' || taches.tour || ',', ',' || ?1 || ',') > 0 OR CAST(?2 AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))) AS nombre
+FROM categories_taches c WHERE c.famille_id = ?3 AND (CAST(?2 AS INTEGER) = 1 OR c.parents = 0)
+ORDER BY c.nom COLLATE NOCASE
+`
+
+type CategoriesTachesParams struct {
+	MembreID  sql.NullInt64
+	Parent    int64
+	FamilleID int64
+}
+
+type CategoriesTachesRow struct {
+	ID      int64
+	Nom     string
+	Emoji   string
+	Parents int64
+	Nombre  int64
+}
+
+// Categories des taches que ce membre voit (celles des parents : parents
+// seulement), avec le nombre de taches en cours qu'il y voit.
+func (q *Queries) CategoriesTaches(ctx context.Context, arg CategoriesTachesParams) ([]CategoriesTachesRow, error) {
+	rows, err := q.db.QueryContext(ctx, categoriesTaches, arg.MembreID, arg.Parent, arg.FamilleID)
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +91,7 @@ func (q *Queries) CategoriesTaches(ctx context.Context, familleID int64) ([]Cate
 			&i.ID,
 			&i.Nom,
 			&i.Emoji,
+			&i.Parents,
 			&i.Nombre,
 		); err != nil {
 			return nil, err
@@ -81,6 +105,22 @@ func (q *Queries) CategoriesTaches(ctx context.Context, familleID int64) ([]Cate
 		return nil, err
 	}
 	return items, nil
+}
+
+const changerParentsCategorieTache = `-- name: ChangerParentsCategorieTache :exec
+UPDATE categories_taches SET parents = ? WHERE id = ? AND famille_id = ?
+`
+
+type ChangerParentsCategorieTacheParams struct {
+	Parents   int64
+	ID        int64
+	FamilleID int64
+}
+
+// Reserver une categorie aux parents (ou la rendre a tous) : un parent seulement.
+func (q *Queries) ChangerParentsCategorieTache(ctx context.Context, arg ChangerParentsCategorieTacheParams) error {
+	_, err := q.db.ExecContext(ctx, changerParentsCategorieTache, arg.Parents, arg.ID, arg.FamilleID)
+	return err
 }
 
 const compterCategoriesTaches = `-- name: CompterCategoriesTaches :one
@@ -115,13 +155,14 @@ func (q *Queries) CompterTachesActives(ctx context.Context, arg CompterTachesAct
 }
 
 const creerCategorieTache = `-- name: CreerCategorieTache :one
-INSERT INTO categories_taches (famille_id, nom, emoji, cree_le) VALUES (?, ?, ?, ?) RETURNING id, famille_id, nom, emoji, cree_le
+INSERT INTO categories_taches (famille_id, nom, emoji, parents, cree_le) VALUES (?, ?, ?, ?, ?) RETURNING id, famille_id, nom, emoji, cree_le, parents
 `
 
 type CreerCategorieTacheParams struct {
 	FamilleID int64
 	Nom       string
 	Emoji     string
+	Parents   int64
 	CreeLe    int64
 }
 
@@ -130,6 +171,7 @@ func (q *Queries) CreerCategorieTache(ctx context.Context, arg CreerCategorieTac
 		arg.FamilleID,
 		arg.Nom,
 		arg.Emoji,
+		arg.Parents,
 		arg.CreeLe,
 	)
 	var i CategoriesTach
@@ -139,13 +181,14 @@ func (q *Queries) CreerCategorieTache(ctx context.Context, arg CreerCategorieTac
 		&i.Nom,
 		&i.Emoji,
 		&i.CreeLe,
+		&i.Parents,
 	)
 	return i, err
 }
 
 const creerTache = `-- name: CreerTache :one
-INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel
+INSERT INTO taches (famille_id, titre, emoji, assigne_a, tour, repetition, categorie_id, rappel, date_rappel, privee, parents, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents
 `
 
 type CreerTacheParams struct {
@@ -158,6 +201,8 @@ type CreerTacheParams struct {
 	CategorieID sql.NullInt64
 	Rappel      string
 	DateRappel  string
+	Privee      int64
+	Parents     int64
 	CreePar     sql.NullInt64
 	CreeLe      int64
 }
@@ -173,6 +218,8 @@ func (q *Queries) CreerTache(ctx context.Context, arg CreerTacheParams) (Tache, 
 		arg.CategorieID,
 		arg.Rappel,
 		arg.DateRappel,
+		arg.Privee,
+		arg.Parents,
 		arg.CreePar,
 		arg.CreeLe,
 	)
@@ -191,6 +238,8 @@ func (q *Queries) CreerTache(ctx context.Context, arg CreerTacheParams) (Tache, 
 		&i.CategorieID,
 		&i.Rappel,
 		&i.DateRappel,
+		&i.Privee,
+		&i.Parents,
 	)
 	return i, err
 }
@@ -220,13 +269,16 @@ func (q *Queries) FaiteParOccurrence(ctx context.Context, arg FaiteParOccurrence
 const historiqueTaches = `-- name: HistoriqueTaches :many
 SELECT taches.titre, taches.emoji, taches_faites.fait_le, taches_faites.fait_par
 FROM taches_faites JOIN taches ON taches.id = taches_faites.tache_id
-WHERE taches.famille_id = ? AND taches_faites.fait_le >= ?
+WHERE taches.famille_id = ?1 AND taches_faites.fait_le >= ?2
+  AND (taches.cree_par = ?3 OR (taches.privee = 0 AND (taches.assigne_a = ?3 OR instr(',' || taches.tour || ',', ',' || ?3 || ',') > 0 OR CAST(?4 AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
 ORDER BY taches_faites.fait_le DESC LIMIT 100
 `
 
 type HistoriqueTachesParams struct {
 	FamilleID int64
 	FaitLe    int64
+	MembreID  sql.NullInt64
+	Parent    int64
 }
 
 type HistoriqueTachesRow struct {
@@ -237,7 +289,12 @@ type HistoriqueTachesRow struct {
 }
 
 func (q *Queries) HistoriqueTaches(ctx context.Context, arg HistoriqueTachesParams) ([]HistoriqueTachesRow, error) {
-	rows, err := q.db.QueryContext(ctx, historiqueTaches, arg.FamilleID, arg.FaitLe)
+	rows, err := q.db.QueryContext(ctx, historiqueTaches,
+		arg.FamilleID,
+		arg.FaitLe,
+		arg.MembreID,
+		arg.Parent,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +383,8 @@ func (q *Queries) MarquerRappelTache(ctx context.Context, arg MarquerRappelTache
 }
 
 const modifierCategorieTache = `-- name: ModifierCategorieTache :exec
-UPDATE categories_taches SET nom = ?, emoji = ? WHERE id = ? AND famille_id = ?
+UPDATE categories_taches SET nom = ?1, emoji = ?2
+WHERE id = ?3 AND famille_id = ?4 AND (parents = 0 OR CAST(?5 AS INTEGER) = 1)
 `
 
 type ModifierCategorieTacheParams struct {
@@ -334,6 +392,7 @@ type ModifierCategorieTacheParams struct {
 	Emoji     string
 	ID        int64
 	FamilleID int64
+	Parent    int64
 }
 
 func (q *Queries) ModifierCategorieTache(ctx context.Context, arg ModifierCategorieTacheParams) error {
@@ -342,12 +401,14 @@ func (q *Queries) ModifierCategorieTache(ctx context.Context, arg ModifierCatego
 		arg.Emoji,
 		arg.ID,
 		arg.FamilleID,
+		arg.Parent,
 	)
 	return err
 }
 
 const modifierTache = `-- name: ModifierTache :exec
-UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ?, categorie_id = ?, rappel = ?, date_rappel = ?
+UPDATE taches SET titre = ?, emoji = ?, assigne_a = ?, tour = ?, repetition = ?, categorie_id = ?, rappel = ?, date_rappel = ?,
+  privee = ?, parents = ?
 WHERE id = ? AND famille_id = ?
 `
 
@@ -360,6 +421,8 @@ type ModifierTacheParams struct {
 	CategorieID sql.NullInt64
 	Rappel      string
 	DateRappel  string
+	Privee      int64
+	Parents     int64
 	ID          int64
 	FamilleID   int64
 }
@@ -374,6 +437,8 @@ func (q *Queries) ModifierTache(ctx context.Context, arg ModifierTacheParams) er
 		arg.CategorieID,
 		arg.Rappel,
 		arg.DateRappel,
+		arg.Privee,
+		arg.Parents,
 		arg.ID,
 		arg.FamilleID,
 	)
@@ -400,6 +465,22 @@ type RetirerTacheParams struct {
 
 func (q *Queries) RetirerTache(ctx context.Context, arg RetirerTacheParams) error {
 	_, err := q.db.ExecContext(ctx, retirerTache, arg.ID, arg.FamilleID)
+	return err
+}
+
+const retirerTachesPriveesMembre = `-- name: RetirerTachesPriveesMembre :exec
+UPDATE taches SET active = 0 WHERE famille_id = ? AND cree_par = ? AND privee = 1
+`
+
+type RetirerTachesPriveesMembreParams struct {
+	FamilleID int64
+	CreePar   sql.NullInt64
+}
+
+// Membre retire : ses taches privees disparaissent (personne d'autre ne les
+// voit ; l'historique est garde).
+func (q *Queries) RetirerTachesPriveesMembre(ctx context.Context, arg RetirerTachesPriveesMembreParams) error {
+	_, err := q.db.ExecContext(ctx, retirerTachesPriveesMembre, arg.FamilleID, arg.CreePar)
 	return err
 }
 
@@ -445,22 +526,24 @@ func (q *Queries) ScoresTaches(ctx context.Context, arg ScoresTachesParams) ([]S
 }
 
 const supprimerCategorieTache = `-- name: SupprimerCategorieTache :exec
-DELETE FROM categories_taches WHERE id = ? AND famille_id = ?
+DELETE FROM categories_taches
+WHERE id = ?1 AND famille_id = ?2 AND (parents = 0 OR CAST(?3 AS INTEGER) = 1)
 `
 
 type SupprimerCategorieTacheParams struct {
 	ID        int64
 	FamilleID int64
+	Parent    int64
 }
 
 // Les taches de la categorie restent, sans categorie (ON DELETE SET NULL).
 func (q *Queries) SupprimerCategorieTache(ctx context.Context, arg SupprimerCategorieTacheParams) error {
-	_, err := q.db.ExecContext(ctx, supprimerCategorieTache, arg.ID, arg.FamilleID)
+	_, err := q.db.ExecContext(ctx, supprimerCategorieTache, arg.ID, arg.FamilleID, arg.Parent)
 	return err
 }
 
 const tacheParID = `-- name: TacheParID :one
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel FROM taches WHERE id = ? AND famille_id = ? AND active = 1
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents FROM taches WHERE id = ? AND famille_id = ? AND active = 1
 `
 
 type TacheParIDParams struct {
@@ -485,30 +568,43 @@ func (q *Queries) TacheParID(ctx context.Context, arg TacheParIDParams) (Tache, 
 		&i.CategorieID,
 		&i.Rappel,
 		&i.DateRappel,
+		&i.Privee,
+		&i.Parents,
 	)
 	return i, err
 }
 
 const tachesActives = `-- name: TachesActives :many
 
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel FROM taches
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents FROM taches
 WHERE taches.famille_id = ?1 AND taches.active = 1
+  AND (taches.cree_par = ?2 OR (taches.privee = 0 AND (taches.assigne_a = ?2 OR instr(',' || taches.tour || ',', ',' || ?2 || ',') > 0 OR CAST(?3 AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
   AND NOT (taches.repetition = '' AND EXISTS (
     SELECT 1 FROM taches_faites f
-    WHERE f.tache_id = taches.id AND f.occurrence = 'unique' AND f.fait_le < ?2))
+    WHERE f.tache_id = taches.id AND f.occurrence = 'unique' AND f.fait_le < ?4))
 ORDER BY taches.id
 `
 
 type TachesActivesParams struct {
 	FamilleID int64
+	MembreID  sql.NullInt64
+	Parent    int64
 	Depuis    int64
 }
 
 // Taches menageres.
 // Une tache " une fois " faite avant aujourd'hui (depuis = minuit, heure de
 // la famille) n'est plus chargee : elle n'est plus montree nulle part.
+// Seulement celles que ce membre voit : une tache privee, par son createur ;
+// une tache reservee aux parents (elle ou sa categorie), par les parents,
+// son createur et qui doit la faire. parent : 1 pour un parent.
 func (q *Queries) TachesActives(ctx context.Context, arg TachesActivesParams) ([]Tache, error) {
-	rows, err := q.db.QueryContext(ctx, tachesActives, arg.FamilleID, arg.Depuis)
+	rows, err := q.db.QueryContext(ctx, tachesActives,
+		arg.FamilleID,
+		arg.MembreID,
+		arg.Parent,
+		arg.Depuis,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -530,6 +626,8 @@ func (q *Queries) TachesActives(ctx context.Context, arg TachesActivesParams) ([
 			&i.CategorieID,
 			&i.Rappel,
 			&i.DateRappel,
+			&i.Privee,
+			&i.Parents,
 		); err != nil {
 			return nil, err
 		}
@@ -545,7 +643,9 @@ func (q *Queries) TachesActives(ctx context.Context, arg TachesActivesParams) ([
 }
 
 const tachesAvecRappel = `-- name: TachesAvecRappel :many
-SELECT t.id, t.famille_id, t.titre, t.emoji, t.assigne_a, t.tour, t.repetition, t.rappel, t.date_rappel, t.cree_le, f.fuseau
+SELECT t.id, t.famille_id, t.titre, t.emoji, t.assigne_a, t.tour, t.repetition, t.rappel, t.date_rappel, t.cree_le, f.fuseau,
+  t.privee, t.cree_par,
+  CAST((t.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = t.categorie_id AND k.parents = 1)) AS INTEGER) AS cachee
 FROM taches t JOIN familles f ON f.id = t.famille_id
 WHERE t.active = 1 AND t.rappel <> '' ORDER BY t.id LIMIT 5000
 `
@@ -562,6 +662,9 @@ type TachesAvecRappelRow struct {
 	DateRappel string
 	CreeLe     int64
 	Fuseau     string
+	Privee     int64
+	CreePar    sql.NullInt64
+	Cachee     int64
 }
 
 // Rappels : les taches qui en ont un (toutes les familles), avec le fuseau
@@ -587,6 +690,9 @@ func (q *Queries) TachesAvecRappel(ctx context.Context) ([]TachesAvecRappelRow, 
 			&i.DateRappel,
 			&i.CreeLe,
 			&i.Fuseau,
+			&i.Privee,
+			&i.CreePar,
+			&i.Cachee,
 		); err != nil {
 			return nil, err
 		}

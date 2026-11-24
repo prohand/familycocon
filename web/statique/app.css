@@ -1525,6 +1525,8 @@ button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer
 .tete-pleins { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
 .tete-pleins h2 { margin: 0; }
 .pilules.petites .pilule { padding: 4px 12px; min-height: 32px; font-size: .85rem; }
+/* « Voir : Toutes · Partagées · Privées · Vues des enfants » : passe à la ligne. */
+.pilules.petites.voir { flex-wrap: wrap; justify-content: flex-start; overflow: visible; gap: 6px; }
 .chiffres { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .chiffres div { background: var(--fond); border-radius: 12px; padding: 8px 10px; }
 .chiffres small { display: block; color: var(--texte-doux); font-size: .75rem; }

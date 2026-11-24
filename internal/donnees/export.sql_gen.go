@@ -250,7 +250,7 @@ func (q *Queries) ExportCategoriesNotes(ctx context.Context, familleID int64) ([
 }
 
 const exportCategoriesTaches = `-- name: ExportCategoriesTaches :many
-SELECT id, famille_id, nom, emoji, cree_le FROM categories_taches WHERE famille_id = ?
+SELECT id, famille_id, nom, emoji, cree_le, parents FROM categories_taches WHERE famille_id = ?
 `
 
 func (q *Queries) ExportCategoriesTaches(ctx context.Context, familleID int64) ([]CategoriesTach, error) {
@@ -268,6 +268,7 @@ func (q *Queries) ExportCategoriesTaches(ctx context.Context, familleID int64) (
 			&i.Nom,
 			&i.Emoji,
 			&i.CreeLe,
+			&i.Parents,
 		); err != nil {
 			return nil, err
 		}
@@ -1100,11 +1101,17 @@ func (q *Queries) ExportRepas(ctx context.Context, familleID int64) ([]Repas, er
 }
 
 const exportTaches = `-- name: ExportTaches :many
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel FROM taches WHERE famille_id = ?
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents FROM taches WHERE famille_id = ?1 AND (privee = 0 OR cree_par = ?2)
 `
 
-func (q *Queries) ExportTaches(ctx context.Context, familleID int64) ([]Tache, error) {
-	rows, err := q.db.QueryContext(ctx, exportTaches, familleID)
+type ExportTachesParams struct {
+	FamilleID int64
+	Membre    sql.NullInt64
+}
+
+// Taches : sans les taches privees des autres membres.
+func (q *Queries) ExportTaches(ctx context.Context, arg ExportTachesParams) ([]Tache, error) {
+	rows, err := q.db.QueryContext(ctx, exportTaches, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}
@@ -1126,6 +1133,8 @@ func (q *Queries) ExportTaches(ctx context.Context, familleID int64) ([]Tache, e
 			&i.CategorieID,
 			&i.Rappel,
 			&i.DateRappel,
+			&i.Privee,
+			&i.Parents,
 		); err != nil {
 			return nil, err
 		}

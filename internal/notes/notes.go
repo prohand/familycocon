@@ -64,6 +64,7 @@ const (
 	toutes    = ""
 	privees   = "privees"
 	partagees = "partagees"
+	enfants   = "enfants" // celles que les enfants voient (parents seulement)
 	sansCat   = "sans"
 )
 
@@ -101,7 +102,7 @@ const (
 func lireFiltre(r *http.Request) (filtre string, categorie int64, recherche string) {
 	q := r.URL.Query()
 	filtre = q.Get("voir")
-	if filtre != privees && filtre != partagees {
+	if filtre != privees && filtre != partagees && filtre != enfants {
 		filtre = toutes
 	}
 	if q.Get("cat") == sansCat {
@@ -185,6 +186,9 @@ func paramsListe(filtre string, categorie int64, recherche string) string {
 }
 
 func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, categorie int64, recherche string) (*vueNotes, error) {
+	if filtre == enfants && !c.EstParent() {
+		filtre = toutes
+	}
 	// Le filtre, la recherche (texte cherché tel quel, % et _ compris) et la
 	// borne sont appliqués en SQL ; seul le début du texte est lu.
 	lignes, err := m.a.Q.NotesVisibles(ctx, donnees.NotesVisiblesParams{

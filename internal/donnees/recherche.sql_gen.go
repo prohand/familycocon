@@ -7,6 +7,7 @@ package donnees
 
 import (
 	"context"
+	"database/sql"
 )
 
 const chercherEvenements = `-- name: ChercherEvenements :many
@@ -205,13 +206,16 @@ func (q *Queries) ChercherRepas(ctx context.Context, arg ChercherRepasParams) ([
 
 const chercherTaches = `-- name: ChercherTaches :many
 SELECT id, titre, emoji FROM taches
-WHERE famille_id = ?1 AND active = 1 AND instr(plier(titre), plier(?2)) > 0
+WHERE taches.famille_id = ?1 AND taches.active = 1 AND instr(plier(taches.titre), plier(?2)) > 0
+  AND (taches.cree_par = ?3 OR (taches.privee = 0 AND (taches.assigne_a = ?3 OR instr(',' || taches.tour || ',', ',' || ?3 || ',') > 0 OR CAST(?4 AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
 ORDER BY id DESC LIMIT 8
 `
 
 type ChercherTachesParams struct {
 	FamilleID int64
 	Motif     interface{}
+	MembreID  sql.NullInt64
+	Parent    int64
 }
 
 type ChercherTachesRow struct {
@@ -221,7 +225,12 @@ type ChercherTachesRow struct {
 }
 
 func (q *Queries) ChercherTaches(ctx context.Context, arg ChercherTachesParams) ([]ChercherTachesRow, error) {
-	rows, err := q.db.QueryContext(ctx, chercherTaches, arg.FamilleID, arg.Motif)
+	rows, err := q.db.QueryContext(ctx, chercherTaches,
+		arg.FamilleID,
+		arg.Motif,
+		arg.MembreID,
+		arg.Parent,
+	)
 	if err != nil {
 		return nil, err
 	}

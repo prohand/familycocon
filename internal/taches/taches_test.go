@@ -330,3 +330,77 @@ func TestRappelDu(t *testing.T) {
 		t.Error("rappel pour une tâche créée après l'heure")
 	}
 }
+
+// Tâches privées, « parents seulement » (tâche ou catégorie) et filtre « Voir ».
+func TestTachesPriveesEtParents(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	_, p := marie.Get("/taches/nouvelle")
+	idLea := essai.Trouver(t, p, `<option value="(\d+)">Léa</option>`)
+	if !strings.Contains(p, `name="privee"`) || !strings.Contains(p, `name="parents"`) {
+		t.Fatal("cases Privée / Parents seulement absentes")
+	}
+	marie.Post("/taches", map[string]string{"titre": "Cadeau surprise", "repetition": "jour", "privee": "1", "assigne": idLea})
+	marie.Post("/taches", map[string]string{"titre": "Declarer les impots", "repetition": "jour", "parents": "1"})
+	marie.Post("/taches", map[string]string{"titre": "Ranger la chambre", "repetition": "jour", "parents": "1", "assigne": idLea})
+	marie.Post("/taches", map[string]string{"titre": "Mettre la table", "repetition": "jour"})
+	marie.Post("/taches/categories", map[string]string{"nom": "Papiers", "emoji": "📄", "parents": "1"})
+	_, p = marie.Get("/taches/categories")
+	papiers := essai.Trouver(t, p, `name="id" value="(\d+)"><input type="hidden" name="action" value="modifier">`)
+	marie.Post("/taches", map[string]string{"titre": "Assurance", "repetition": "jour", "categorie": papiers})
+
+	_, p = marie.Get("/taches")
+	cadeau := essai.Trouver(t, p, `href="/taches/(\d+)/modifier" aria-label="Modifier Cadeau surprise"`)
+	if !strings.Contains(p, `<span title="Privée">🔒</span> Cadeau surprise`) || !strings.Contains(p, `<span title="Parents seulement">👥</span> Declarer les impots`) ||
+		!strings.Contains(p, `<span title="Parents seulement">👥</span> Assurance`) {
+		t.Fatalf("repères 🔒 / 👥 absents :\n%s", p)
+	}
+	// Léa : ni la tâche privée (même confiée à elle), ni celles des parents,
+	// sauf celle qu'elle doit faire.
+	_, p = lea.Get("/taches")
+	for _, cache := range []string{"Cadeau surprise", "Declarer les impots", "Assurance", "Papiers"} {
+		if strings.Contains(p, cache) {
+			t.Fatalf("Léa voit « %s »", cache)
+		}
+	}
+	if !strings.Contains(p, "Ranger la chambre") || !strings.Contains(p, "Mettre la table") {
+		t.Fatal("Léa ne voit pas ses tâches")
+	}
+	if code, _ := lea.Get("/taches/" + cadeau + "/modifier"); code != http.StatusNotFound {
+		t.Fatalf("tâche privée ouverte par Léa : %d", code)
+	}
+	if code, _ := lea.Post("/taches/"+cadeau+"/faire", nil); code != http.StatusNotFound {
+		t.Fatalf("tâche privée cochée par Léa : %d", code)
+	}
+	if code, _ := lea.Post("/taches/categories", map[string]string{"action": "parents", "id": papiers, "parents": "0"}); code != http.StatusForbidden {
+		t.Fatalf("réglage changé par un enfant : %d", code)
+	}
+	// Léa ne peut pas cacher sa propre tâche aux enfants (case ignorée).
+	lea.Post("/taches", map[string]string{"titre": "Mon dessin", "repetition": "jour", "parents": "1"})
+	if _, p = marie.Get("/taches?voir=enfants"); !strings.Contains(p, "Mon dessin") {
+		t.Fatal("« parents seulement » posé par un enfant")
+	}
+	// Filtre « Vues des enfants » (parents).
+	for _, x := range []struct {
+		titre string
+		vue   bool
+	}{{"Ranger la chambre", true}, {"Mettre la table", true}, {"Declarer les impots", false}, {"Assurance", false}, {"Cadeau surprise", false}} {
+		if strings.Contains(p, x.titre) != x.vue {
+			t.Errorf("filtre enfants : « %s » montrée = %v", x.titre, !x.vue)
+		}
+	}
+	if _, p = marie.Get("/taches?voir=privees"); !strings.Contains(p, "Cadeau surprise") || strings.Contains(p, "Mettre la table") {
+		t.Fatal("filtre Privées")
+	}
+	if _, p = lea.Get("/taches"); strings.Contains(p, "voir=enfants") {
+		t.Fatal("filtre « Vues des enfants » proposé à un enfant")
+	}
+	// Historique : une tâche des parents cochée n'apparaît pas chez Léa.
+	_, p = marie.Get("/taches")
+	impots := essai.Trouver(t, p, `href="/taches/(\d+)/modifier" aria-label="Modifier Declarer les impots"`)
+	marie.Post("/taches/"+impots+"/faire", nil)
+	if _, p = lea.Get("/taches"); strings.Contains(p, "impots") {
+		t.Fatal("historique : tâche des parents montrée à un enfant")
+	}
+}

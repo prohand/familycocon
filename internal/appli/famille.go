@@ -300,10 +300,14 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 			return err
 		}
 		// Le membre reste en base (désactivé) : les « ON DELETE » ne jouent pas.
-		// Ses tâches reviennent à tout le monde ; ses notes privées, que
+		// Ses tâches reviennent à tout le monde (ses tâches privées sont
+		// retirées) ; ses notes privées, que
 		// personne d'autre ne peut voir ni supprimer, sont effacées.
 		moi := sql.NullInt64{Int64: m.ID, Valid: true}
 		if err := q.LibererTachesMembre(ctx, donnees.LibererTachesMembreParams{FamilleID: c.Famille.ID, AssigneA: moi}); err != nil {
+			return err
+		}
+		if err := q.RetirerTachesPriveesMembre(ctx, donnees.RetirerTachesPriveesMembreParams{FamilleID: c.Famille.ID, CreePar: moi}); err != nil {
 			return err
 		}
 		if err := q.SupprimerNotesPriveesMembre(ctx, donnees.SupprimerNotesPriveesMembreParams{FamilleID: c.Famille.ID, AuteurID: moi}); err != nil {
