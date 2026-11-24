@@ -427,6 +427,11 @@ func TestPartageesPriveesEtAgenda(t *testing.T) {
 	if _, q := marie.Get("/notes?voir=enfants"); !strings.Contains(q, "Wifi") || !strings.Contains(q, "Idees") || strings.Contains(q, "Journal") || strings.Contains(q, "Surprise") {
 		t.Fatalf("filtre « Vues des enfants » :\n%s", q)
 	}
+	// Nombres du filtre « Voir » : 4 notes, 3 partagées, 1 privée, 2 vues des enfants.
+	if _, q := marie.Get("/notes"); !strings.Contains(q, "Toutes <small>4</small>") || !strings.Contains(q, "Partagées <small>3</small>") ||
+		!strings.Contains(q, "Privées <small>1</small>") || !strings.Contains(q, "Vues des enfants <small>2</small>") {
+		t.Fatalf("nombres du filtre « Voir » :\n%s", q)
+	}
 	if _, q := lea.Get("/notes"); strings.Contains(q, "voir=enfants") {
 		t.Fatal("filtre « Vues des enfants » proposé à un enfant")
 	}

@@ -94,8 +94,9 @@ type vueNotes struct {
 	Categorie  int64 // filtre : 0 toutes, -1 sans catégorie, sinon son numéro
 	Categories []Categorie
 	Recherche  string
-	Cat        string // la catégorie pour une adresse (« 3 », « sans », vide)
-	Params     string // filtre et recherche, encodés pour une adresse (« voir=…&q=… »)
+	Cat        string                      // la catégorie pour une adresse (« 3 », « sans », vide)
+	Nombres    donnees.CompterNotesVoirRow // notes de chaque filtre « Voir »
+	Params     string                      // filtre et recherche, encodés pour une adresse (« voir=…&q=… »)
 	Epinglees  []carteNote
 	Autres     []carteNote
 	Tronquee   bool // la liste est coupée (notesListe)
@@ -226,6 +227,10 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, cate
 		return nil, err
 	}
 	v := &vueNotes{Filtre: filtre, Categorie: categorie, Categories: cats, Recherche: recherche, Params: paramsListe(filtre, categorie, recherche)}
+	if v.Nombres, err = m.a.Q.CompterNotesVoir(ctx, donnees.CompterNotesVoirParams{FamilleID: c.Famille.ID,
+		MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Parent: estParent(c), Categorie: categorie, Motif: recherche}); err != nil {
+		return nil, err
+	}
 	switch {
 	case categorie == -1:
 		v.Cat = sansCat
@@ -245,7 +250,8 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, cate
 		cn := carteNote{Note: n, Categorie: nomCat[l.CategorieID.Int64], Photos: l.Photos, Joints: len(joints[n.ID]), Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n),
 			Cachee: l.Cachee == 1 && n.Privee == 0}
 		if l.RappelLe > 0 && l.RappelEnvoye == 0 {
-			cn.Rappel = time.Unix(l.RappelLe, 0).In(c.Lieu).Format("02/01 15:04")
+			quand := time.Unix(l.RappelLe, 0).In(c.Lieu)
+			cn.Rappel = appli.DateCourte(quand, c.Maintenant()) + " " + quand.Format("15:04")
 		}
 		if n.AuteurID.Valid {
 			cn.Auteur = parID[n.AuteurID.Int64]

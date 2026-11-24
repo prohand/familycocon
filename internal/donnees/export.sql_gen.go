@@ -1101,7 +1101,7 @@ func (q *Queries) ExportRepas(ctx context.Context, familleID int64) ([]Repas, er
 }
 
 const exportTaches = `-- name: ExportTaches :many
-SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents FROM taches WHERE famille_id = ?1 AND (privee = 0 OR cree_par = ?2)
+SELECT id, famille_id, titre, emoji, assigne_a, repetition, active, cree_par, cree_le, tour, categorie_id, rappel, date_rappel, privee, parents, pour_parents, description FROM taches WHERE famille_id = ?1 AND (privee = 0 OR cree_par = ?2)
 `
 
 type ExportTachesParams struct {
@@ -1135,6 +1135,8 @@ func (q *Queries) ExportTaches(ctx context.Context, arg ExportTachesParams) ([]T
 			&i.DateRappel,
 			&i.Privee,
 			&i.Parents,
+			&i.PourParents,
+			&i.Description,
 		); err != nil {
 			return nil, err
 		}

@@ -9,9 +9,11 @@
   {{template "jeton" $c.CSRF}}
   <label class="champ"><span>Quoi ?</span>
     <input name="titre" value="{{.Tache.Titre}}" placeholder="Ex. : Sortir les poubelles" maxlength="80" required{{if .Nouvelle}} autofocus{{end}}></label>
+  <label class="champ"><span>Description <small class="aide">(facultatif)</small></span><textarea name="description" rows="2" maxlength="2000" data-riche>{{.Tache.Description}}</textarea><template data-editeur-contenu>{{richeEdition .Tache.Description}}</template></label>
   <label class="champ"><span>Pour qui ?</span>
     <select name="assigne">
       <option value="0">Tout le monde</option>
+      <option value="parents"{{if eq .Tache.PourParents 1}} selected{{end}}>👥 Parents</option>
       <option value="tour"{{if .Tache.Tour}} selected{{end}}>🔄 À tour de rôle…</option>
       {{- range .Membres}}<option value="{{.ID}}"{{if and $.Donnees.Tache.AssigneA.Valid (eq .ID $.Donnees.Tache.AssigneA.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}
     </select></label>

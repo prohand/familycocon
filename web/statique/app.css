@@ -1769,4 +1769,8 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 /* Sur une ligne de tâche : en petit, sous le titre. */
 .joints-tache { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; font-size: .8rem; }
 .joints-tache a { font-weight: 700; }
+/* Description d'une tache : en petit, 3 lignes au plus dans la liste. */
+.description-tache { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  margin-top: 2px; font-size: .85rem; font-weight: 500; color: var(--texte-doux); }
+.description-tache > * { margin: 0; }
 

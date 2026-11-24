@@ -141,3 +141,14 @@ WHERE n.famille_id = sqlc.arg(famille_id) AND n.rappel_le >= sqlc.arg(depuis) AN
   AND (n.auteur_id = sqlc.arg(membre_id) OR (n.privee = 0 AND (CAST(sqlc.arg(parent) AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
 ORDER BY n.rappel_le LIMIT 300;
 
+-- Nombres du filtre " Voir " (avec la categorie et la recherche choisies).
+-- name: CompterNotesVoir :one
+SELECT CAST(count(*) AS INTEGER) AS toutes,
+  CAST(coalesce(sum(n.privee = 0), 0) AS INTEGER) AS partagees,
+  CAST(coalesce(sum(n.privee = 1), 0) AS INTEGER) AS privees,
+  CAST(coalesce(sum(n.privee = 0 AND (NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)) OR EXISTS (SELECT 1 FROM membres e WHERE e.id = n.auteur_id AND e.role = 'enfant'))), 0) AS INTEGER) AS enfants
+FROM notes n
+WHERE n.famille_id = sqlc.arg(famille_id) AND (n.auteur_id = sqlc.arg(membre_id) OR (n.privee = 0 AND (CAST(sqlc.arg(parent) AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
+  AND (sqlc.arg(categorie) = 0 OR (sqlc.arg(categorie) = -1 AND n.categorie_id IS NULL) OR n.categorie_id = sqlc.arg(categorie))
+  AND (sqlc.arg(motif) = '' OR instr(plier(n.titre), plier(sqlc.arg(motif))) > 0 OR instr(plier(n.texte), plier(sqlc.arg(motif))) > 0);
+

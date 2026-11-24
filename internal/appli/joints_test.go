@@ -5,6 +5,7 @@ package appli
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNomJointEtTaille(t *testing.T) {
@@ -29,5 +30,15 @@ func TestNomJointEtTaille(t *testing.T) {
 		if r := retourSur(v); r != attendu {
 			t.Errorf("retourSur(%q) = %q", v, r)
 		}
+	}
+}
+
+func TestDateCourte(t *testing.T) {
+	maintenant := time.Date(2026, 11, 24, 10, 0, 0, 0, time.UTC)
+	if r := DateCourte(time.Date(2026, 12, 10, 0, 0, 0, 0, time.UTC), maintenant); r != "10/12" {
+		t.Errorf("même année : %q", r)
+	}
+	if r := DateCourte(time.Date(2027, 1, 14, 0, 0, 0, 0, time.UTC), maintenant); r != "14/01/2027" {
+		t.Errorf("année suivante : %q", r)
 	}
 }

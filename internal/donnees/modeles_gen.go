@@ -499,6 +499,8 @@ type Tache struct {
 	DateRappel  string
 	Privee      int64
 	Parents     int64
+	PourParents int64
+	Description string
 }
 
 type TacheFaite struct {
