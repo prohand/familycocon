@@ -58,9 +58,14 @@ func Brancher(a *appli.App) {
 	a.AjouterCalendrier(mod, m.calendrier)
 }
 
-// calendrier : les tâches des jours affichés dans l'agenda. Seules les tâches
-// rattachées à un jour (chaque jour, certains jours) y sont : « une fois »
-// et « chaque semaine » n'ont pas de jour précis.
+// calendrier : les tâches des jours affichés dans l'agenda :
+//   - chaque jour, certains jours : à leurs jours ;
+//   - une fois, avec une date de rappel : ce jour-là ;
+//   - chaque semaine, quinzaine, mois, avec un rappel : le jour où il part
+//     (premier jour de la période).
+//
+// Les autres (une fois sans date, semaine sans rappel…) n'ont pas de jour
+// précis. L'heure du rappel suit le titre (« Poubelles · ⏰ 18:00 »).
 func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin time.Time) ([]appli.ElementJour, error) {
 	depuis := debutDuJour(c)
 	taches, err := m.a.Q.TachesActives(ctx, donnees.TachesActivesParams{FamilleID: c.Famille.ID, Depuis: depuis})
@@ -81,35 +86,63 @@ func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin t
 	}
 	var duJour []tacheDuJour
 	for _, t := range taches {
-		if regle := repetition.Lire(t.Repetition); regle.Type == repetition.Jour || regle.Type == repetition.Jours {
-			duJour = append(duJour, tacheDuJour{t: t, regle: regle, cree: repetition.CleJour(c.Heure(t.CreeLe))})
+		regle := repetition.Lire(t.Repetition)
+		switch {
+		case regle.Type == repetition.Jour || regle.Type == repetition.Jours:
+		case regle.Type == repetition.Unique && t.DateRappel != "" && t.Rappel != "":
+		case regle.Repete() && t.Rappel != "":
+		default:
+			continue
 		}
+		duJour = append(duJour, tacheDuJour{t: t, regle: regle, cree: repetition.CleJour(c.Heure(t.CreeLe))})
 	}
 	if len(duJour) == 0 {
 		return nil, nil
 	}
 	var out []appli.ElementJour
-	var ids []int64 // tâche de chaque élément de out
-	var cles []string
+	var faitesCles []string   // occurrences à vérifier (déjà faites ?)
+	var cleDe []string        // occurrence de chaque élément de out
+	var ids []int64           // tâche de chaque élément de out
+	vues := map[string]bool{} // occurrences déjà demandées
 	for j := debut; j.Before(fin); j = j.AddDate(0, 0, 1) {
 		cle := repetition.CleJour(j)
-		cles = append(cles, cle)
 		for _, x := range duJour {
-			// Rien avant le jour où la tâche a été créée.
-			if _, aFaire := x.regle.Occurrence(j); !aFaire || cle < x.cree {
-				continue
+			occ, aFaire := x.regle.Occurrence(j)
+			switch x.regle.Type {
+			case repetition.Jour, repetition.Jours:
+				// Rien avant le jour où la tâche a été créée.
+				if !aFaire || cle < x.cree {
+					continue
+				}
+			case repetition.Unique:
+				if cle != x.t.DateRappel {
+					continue
+				}
+			default:
+				// Le premier jour de la période seulement.
+				if hier, _ := x.regle.Occurrence(j.AddDate(0, 0, -1)); hier == occ || cle < x.cree {
+					continue
+				}
 			}
 			e := appli.ElementJour{Jour: cle, Emoji: x.t.Emoji, Titre: x.t.Titre, URL: "/taches", Module: mod}
+			if x.t.Rappel != "" {
+				e.Titre += " · ⏰ " + x.t.Rappel
+			}
 			e.Membre = assigneLe(x.t, x.regle, j, parID)
 			out = append(out, e)
 			ids = append(ids, x.t.ID)
+			cleDe = append(cleDe, occ)
+			if !vues[occ] {
+				vues[occ] = true
+				faitesCles = append(faitesCles, occ)
+			}
 		}
 	}
 	if len(out) == 0 {
 		return nil, nil
 	}
-	// Déjà faites ? (la clé d'une occurrence quotidienne est le jour).
-	faites, err := m.a.Q.TachesFaitesOccurrences(ctx, donnees.TachesFaitesOccurrencesParams{FamilleID: c.Famille.ID, Occurrences: cles, Depuis: depuis})
+	// Déjà faites ? (clé de l'occurrence : le jour, la semaine, « unique »…)
+	faites, err := m.a.Q.TachesFaitesOccurrences(ctx, donnees.TachesFaitesOccurrencesParams{FamilleID: c.Famille.ID, Occurrences: faitesCles, Depuis: depuis})
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +151,7 @@ func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin t
 		fait[strconv.FormatInt(f.TacheID, 10)+"|"+f.Occurrence] = true
 	}
 	for i := range out {
-		out[i].Faite = fait[strconv.FormatInt(ids[i], 10)+"|"+out[i].Jour]
+		out[i].Faite = fait[strconv.FormatInt(ids[i], 10)+"|"+cleDe[i]]
 	}
 	return out, nil
 }

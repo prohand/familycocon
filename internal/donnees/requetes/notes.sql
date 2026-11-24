@@ -11,7 +11,7 @@ SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 300) AS TEXT) AS debu
   CAST((n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)) AS INTEGER) AS cachee
 FROM notes n
 WHERE n.famille_id = sqlc.arg(famille_id) AND (n.auteur_id = sqlc.arg(membre_id) OR (n.privee = 0 AND (CAST(sqlc.arg(parent) AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
-  AND (sqlc.arg(filtre) = '' OR (sqlc.arg(filtre) = 'privees' AND n.privee = 1))
+  AND (sqlc.arg(filtre) = '' OR (sqlc.arg(filtre) = 'privees' AND n.privee = 1) OR (sqlc.arg(filtre) = 'partagees' AND n.privee = 0))
   AND (sqlc.arg(categorie) = 0 OR (sqlc.arg(categorie) = -1 AND n.categorie_id IS NULL) OR n.categorie_id = sqlc.arg(categorie))
   AND (sqlc.arg(motif) = '' OR instr(plier(n.titre), plier(sqlc.arg(motif))) > 0 OR instr(plier(n.texte), plier(sqlc.arg(motif))) > 0)
 ORDER BY n.epinglee DESC, n.modifie_le DESC LIMIT sqlc.arg(nombre);
@@ -129,3 +129,13 @@ WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND (parents = 0 O
 
 -- name: ChangerCategorieNote :exec
 UPDATE notes SET categorie_id = sqlc.arg(categorie_id) WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id);
+
+-- Rappels des notes que ce membre voit, entre deux instants (agenda).
+-- name: NotesRappelsEntre :many
+SELECT n.id, n.auteur_id, n.titre, CAST(substr(n.texte, 1, 200) AS TEXT) AS debut, n.privee, n.rappel_le,
+  CAST((n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)) AS INTEGER) AS cachee
+FROM notes n
+WHERE n.famille_id = sqlc.arg(famille_id) AND n.rappel_le >= sqlc.arg(depuis) AND n.rappel_le < sqlc.arg(jusqua)
+  AND (n.auteur_id = sqlc.arg(membre_id) OR (n.privee = 0 AND (CAST(sqlc.arg(parent) AS INTEGER) = 1 OR NOT (n.parents = 1 OR EXISTS (SELECT 1 FROM categories_notes k WHERE k.id = n.categorie_id AND k.parents = 1)))))
+ORDER BY n.rappel_le LIMIT 300;
+

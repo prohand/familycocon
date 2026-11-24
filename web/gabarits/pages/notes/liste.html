@@ -5,20 +5,26 @@
   <h1>📝 Notes</h1>
 </section>
 <div class="barre-actions barre-notes">
-  {{/* Catégories de la famille (filtre), puis « Sans catégorie » et « Privées ». */}}
+  {{/* Catégories de la famille (filtre), puis « Sans catégorie ». */}}
   <nav class="pilules defile" aria-label="Catégories">
-    <a class="pilule{{if and (eq .Filtre "") (eq .Categorie 0)}} active{{end}}" href="/notes">Toutes</a>
+    <a class="pilule{{if eq .Categorie 0}} active{{end}}" href="/notes{{with .Filtre}}?voir={{.}}{{end}}">Toutes</a>
     {{- range .Categories}}
-    <a class="pilule{{if .Active}} active{{end}}" href="/notes?cat={{.ID}}">{{.Etiquette}}{{if .Nombre}} <small>{{.Nombre}}</small>{{end}}</a>
+    <a class="pilule{{if .Active}} active{{end}}" href="/notes?{{with $.Donnees.Filtre}}voir={{.}}&amp;{{end}}cat={{.ID}}">{{.Etiquette}}{{if .Nombre}} <small>{{.Nombre}}</small>{{end}}</a>
     {{- end}}
-    {{if .Categories}}<a class="pilule{{if eq .Categorie -1}} active{{end}}" href="/notes?cat=sans">Sans catégorie</a>{{end}}
-    <a class="pilule{{if eq .Filtre "privees"}} active{{end}}" href="/notes?voir=privees">🔒 Privées</a>
+    {{if .Categories}}<a class="pilule{{if eq .Categorie -1}} active{{end}}" href="/notes?{{with .Filtre}}voir={{.}}&amp;{{end}}cat=sans">Sans catégorie</a>{{end}}
     <a class="pilule" href="/notes/categories" aria-label="Gérer les catégories" title="Gérer les catégories">⚙️ Catégories</a>
   </nav>
   <span class="boutons-ajout">
     <a class="bouton" href="/notes/nouvelle{{if gt .Categorie 0}}?cat={{.Categorie}}{{else if eq .Filtre "privees"}}?voir=privees{{end}}">＋ Note</a>
   </span>
 </div>
+{{/* Qui la voit : toutes, partagées (la famille), privées (moi seul). */}}
+<nav class="pilules petites" aria-label="Partagées ou privées">
+  <span class="aide">Voir :</span>
+  <a class="pilule{{if eq .Filtre ""}} active{{end}}" href="/notes{{with .Cat}}?cat={{.}}{{end}}">Toutes</a>
+  <a class="pilule{{if eq .Filtre "partagees"}} active{{end}}" href="/notes?voir=partagees{{with .Cat}}&amp;cat={{.}}{{end}}">👪 Partagées</a>
+  <a class="pilule{{if eq .Filtre "privees"}} active{{end}}" href="/notes?voir=privees{{with .Cat}}&amp;cat={{.}}{{end}}">🔒 Privées</a>
+</nav>
 <form class="ajout recherche" method="get" action="/notes">
   {{if .Filtre}}<input type="hidden" name="voir" value="{{.Filtre}}">{{end}}
   {{if gt .Categorie 0}}<input type="hidden" name="cat" value="{{.Categorie}}">{{else if eq .Categorie -1}}<input type="hidden" name="cat" value="sans">{{end}}

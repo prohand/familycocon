@@ -15,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	"familycocon/internal/agenda"
+	"familycocon/internal/appli"
 	"familycocon/internal/essai"
 )
 
@@ -210,8 +212,8 @@ func TestCategories(t *testing.T) {
 	marie := essai.Famille(t, srv)
 	lea := essai.Enfant(t, srv, marie, "Léa")
 	marie.Get("/notes")
-	if _, p := marie.Get("/notes"); strings.Contains(p, "Partagées") || strings.Contains(p, "＋ Liste") || strings.Contains(p, "voir=listes") {
-		t.Fatal("anciens filtres ou bouton « ＋ Liste » encore là")
+	if _, p := marie.Get("/notes"); strings.Contains(p, "＋ Liste") || strings.Contains(p, "voir=listes") {
+		t.Fatal("ancien filtre ou bouton « ＋ Liste » encore là")
 	}
 	// Léa (enfant) crée une catégorie ; un nom vide est refusé.
 	lea.Get("/notes/categories")
@@ -399,5 +401,42 @@ func TestParentsSeulement(t *testing.T) {
 	marie.Post("/notes/categories", map[string]string{"action": "parents", "id": papiers, "parents": "0"})
 	if _, p = lea.Get("/notes"); !strings.Contains(p, "Impots") {
 		t.Fatal("catégorie rendue à tous : note toujours cachée")
+	}
+}
+
+// Filtre « Partagées / Privées », gardé avec la catégorie ; rappels des
+// notes dans l'agenda (seulement ceux qu'on voit).
+func TestPartageesPriveesEtAgenda(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) { Brancher(a); agenda.Brancher(a) })
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	marie.Post("/notes/categories", map[string]string{"nom": "Maison", "emoji": "🏠"})
+	_, p := marie.Get("/notes/categories")
+	maison := essai.Trouver(t, p, `name="id" value="(\d+)"><input type="hidden" name="action" value="modifier">`)
+	marie.Post("/notes", map[string]string{"titre": "Wifi", "texte": "code", "categorie": maison})
+	marie.Post("/notes", map[string]string{"titre": "Journal", "texte": "secret", "privee": "1", "categorie": maison})
+	marie.Post("/notes", map[string]string{"titre": "Idees", "texte": "x"})
+	if _, p = marie.Get("/notes?voir=partagees"); !strings.Contains(p, "Wifi") || !strings.Contains(p, "Idees") || strings.Contains(p, "Journal") {
+		t.Fatalf("filtre Partagées :\n%s", p)
+	}
+	if _, p = marie.Get("/notes?voir=privees&cat=" + maison); !strings.Contains(p, "Journal") || strings.Contains(p, "Wifi") || strings.Contains(p, "Idees") {
+		t.Fatal("filtre Privées + catégorie")
+	}
+	// Les liens gardent l'autre filtre.
+	if !strings.Contains(p, `href="/notes?voir=partagees&amp;cat=`+maison+`"`) || !strings.Contains(p, `href="/notes?voir=privees&amp;cat=sans"`) {
+		t.Fatalf("liens des filtres :\n%s", p)
+	}
+	// Rappels : dans l'agenda de chacun, sauf la note privée chez Léa.
+	_, p = marie.Get("/notes")
+	quand := time.Now().Add(48 * time.Hour)
+	for _, titre := range []string{"Wifi", "Journal"} {
+		id := essai.Trouver(t, p, `href="/notes/(\d+)">\s*(?:<span class="etiquette-categorie">[^<]*</span>\s*)?<h3>`+titre+`</h3>`)
+		marie.Post("/notes/"+id+"/rappel", map[string]string{"rappel": quand.Format("2006-01-02T15:04")})
+	}
+	if _, p = marie.Get("/agenda?vue=semaine&date=" + quand.Format("2006-01-02")); !strings.Contains(p, "Wifi") || !strings.Contains(p, "🔒") {
+		t.Fatalf("rappels absents de l'agenda :\n%s", p)
+	}
+	if _, p = lea.Get("/agenda?vue=semaine&date=" + quand.Format("2006-01-02")); !strings.Contains(p, "Wifi") || strings.Contains(p, "Journal") {
+		t.Fatal("agenda de Léa : note privée de Marie montrée, ou rappel partagé absent")
 	}
 }

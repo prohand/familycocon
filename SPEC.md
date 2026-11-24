@@ -676,4 +676,11 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   Rattrapé si le serveur revient moins de 15 min après l'heure ; rien pour
   une tâche créée après l'heure. Traces gardées 60 jours.
 - Export JSON : `taches_categories`.
+- Agenda : tâches « une fois » à la date du rappel ; semaine, quinzaine,
+  mois avec rappel : le jour où il part ; « · ⏰ 18:00 » après le titre.
+  Rappels des notes à leur jour (« ⏰ 18:00 🔒 Cadeaux » ; 👥 parents
+  seulement), seulement ceux que le membre voit ; une note privée compte
+  pour « Les miennes ».
+- Notes : filtre « Voir : Toutes · 👪 Partagées · 🔒 Privées » (`voir`),
+  gardé avec la catégorie (`cat`).
 

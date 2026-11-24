@@ -26,7 +26,7 @@
   </div>
   <p class="centre-petit"><a class="lien-discret" href="/agenda?vue={{.Vue}}">Aujourd'hui</a></p>
   {{if .AvecTaches}}
-  <nav class="pilules petites" aria-label="Tâches dans l'agenda">
+  <nav class="pilules petites" aria-label="Tâches et rappels dans l'agenda">
     <span class="aide">✅ Tâches :</span>
     <a class="pilule{{if eq .Taches "tous"}} active{{end}}" href="/agenda?vue={{.Vue}}&amp;date={{.Ref}}&amp;taches=tous">Toutes</a>
     <a class="pilule{{if eq .Taches "moi"}} active{{end}}" href="/agenda?vue={{.Vue}}&amp;date={{.Ref}}&amp;taches=moi">Les miennes</a>

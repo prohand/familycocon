@@ -51,3 +51,25 @@ func TestTachesDansAgenda(t *testing.T) {
 		t.Fatal("tâches non masquées")
 	}
 }
+
+// Tâches avec rappel : « une fois » à sa date ; chaque semaine le lundi ;
+// l'heure du rappel suit le titre.
+func TestRappelsTachesDansAgenda(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		Brancher(a)
+		taches.Brancher(a)
+	})
+	marie := essai.Famille(t, srv)
+	dans10 := time.Now().AddDate(0, 0, 10)
+	marie.Post("/taches", map[string]string{"titre": "Tondre", "repetition": "unique", "rappel": "10:00", "date_rappel": dans10.Format("2006-01-02")})
+	marie.Post("/taches", map[string]string{"titre": "Draps", "repetition": "semaine", "rappel": "09:00"})
+	marie.Post("/taches", map[string]string{"titre": "Vitres", "repetition": "semaine"}) // sans rappel : pas de jour
+	_, page := marie.Get("/agenda?vue=semaine&date=" + dans10.Format("2006-01-02"))
+	if !strings.Contains(page, "Tondre · ⏰ 10:00") || !strings.Contains(page, "Draps · ⏰ 09:00") || strings.Contains(page, "Vitres") {
+		t.Fatalf("rappels des tâches dans l'agenda :\n%s", page)
+	}
+	// La tâche de la semaine n'y est qu'une fois (le lundi).
+	if n := strings.Count(page, "Draps · ⏰ 09:00"); n != 1 {
+		t.Fatalf("tâche de la semaine montrée %d fois", n)
+	}
+}

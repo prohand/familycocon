@@ -39,6 +39,42 @@ func (m *Module) routesRangement() {
 	a.Route("POST /notes/{id}/cochees", mod, appli.Membre, m.cocheesEnBas)
 	a.Route("POST /notes/{id}/rappel", mod, appli.Membre, m.rappel)
 	a.AjouterMinute(m.envoyerRappels)
+	a.AjouterCalendrier(mod, m.calendrier)
+}
+
+// calendrier : les rappels des notes dans l'agenda, à leur jour, avec
+// l'heure (« ⏰ 18:00 Cadeaux » ; 🔒 privée ; 👥 parents seulement).
+// Seulement les notes que ce membre voit. Une note privée est « à lui »
+// (filtre « Les miennes » de l'agenda) ; une note partagée, à tout le monde.
+func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin time.Time) ([]appli.ElementJour, error) {
+	l, err := m.a.Q.NotesRappelsEntre(ctx, donnees.NotesRappelsEntreParams{FamilleID: c.Famille.ID, Depuis: debut.Unix(), Jusqua: fin.Unix(),
+		MembreID: sqlNul(c.Membre.ID), Parent: estParent(c)})
+	if err != nil || len(l) == 0 {
+		return nil, err
+	}
+	membres, err := m.a.Membres(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	parID := appli.MembresParID(membres)
+	out := make([]appli.ElementJour, 0, len(l))
+	for _, n := range l {
+		quand := c.Heure(n.RappelLe)
+		e := appli.ElementJour{Jour: quand.Format("2006-01-02"), Emoji: "⏰", URL: "/notes/" + strconv.FormatInt(n.ID, 10), Module: mod}
+		marque := ""
+		switch {
+		case n.Privee == 1:
+			marque = "🔒 "
+			if n.AuteurID.Valid {
+				e.Membre = parID[n.AuteurID.Int64]
+			}
+		case n.Cachee == 1:
+			marque = "👥 "
+		}
+		e.Titre = quand.Format("15:04") + " " + marque + apercu(n.Titre, n.Debut)
+		out = append(out, e)
+	}
+	return out, nil
 }
 
 // cases : le bloc de la liste (rechargé seul), en mode « Ranger » ou non.
