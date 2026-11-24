@@ -1,0 +1,40 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/notes">‹ Notes</a>
+  <h1>🗂️ Catégories des notes</h1>
+  <p>Pour ranger les notes : 🚗 Voiture, 🏠 Maison, 🍳 Recettes… Toute la famille les voit et peut les changer.</p>
+</section>
+{{if not .Plein}}
+<form class="carte bloc ajout-categorie" method="post" action="/notes/categories">
+  {{template "jeton" $c.CSRF}}
+  <h2>＋ Nouvelle catégorie</h2>
+  <div class="rangee-categorie">
+    <label class="champ etroit"><span>Emoji</span><input name="emoji" maxlength="8" placeholder="🚗" autocomplete="off"></label>
+    <label class="champ"><span>Nom</span><input name="nom" maxlength="30" placeholder="Voiture" required autocomplete="off"></label>
+  </div>
+  <button class="bouton petit">Ajouter</button>
+</form>
+{{end}}
+<section class="carte bloc">
+  {{- range .Categories}}
+  <div class="ligne-categorie">
+    <form class="modif-categorie" method="post" action="/notes/categories">
+      {{template "jeton" $c.CSRF}}<input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="modifier">
+      <input name="emoji" value="{{.Emoji}}" maxlength="8" aria-label="Emoji de {{.Nom}}" class="emoji-categorie">
+      <input name="nom" value="{{.Nom}}" maxlength="30" required aria-label="Nom de la catégorie">
+      <button class="crayon" aria-label="Enregistrer {{.Nom}}">✓</button>
+    </form>
+    <a class="nombre" href="/notes?cat={{.ID}}" title="Voir ses notes">{{.Nombre}} 📝</a>
+    <form method="post" action="/notes/categories" hx-confirm="Supprimer « {{.Nom}} » ? Ses notes restent, sans catégorie.">
+      {{template "jeton" $c.CSRF}}<input type="hidden" name="id" value="{{.ID}}"><input type="hidden" name="action" value="supprimer">
+      <button class="crayon" aria-label="Supprimer {{.Nom}}">🗑️</button>
+    </form>
+  </div>
+  {{- else}}
+  <p class="aide">Pas encore de catégorie : ajoutez la première ci-dessus.</p>
+  {{- end}}
+</section>
+{{end}}
+{{end}}

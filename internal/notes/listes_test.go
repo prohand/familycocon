@@ -45,17 +45,9 @@ func TestListes(t *testing.T) {
 	marie := essai.Famille(t, srv)
 	lea := essai.Enfant(t, srv, marie, "Léa")
 
-	// « ＋ Liste » : un titre et un champ par élément (pas l'éditeur de note).
-	_, page := marie.Get("/notes/nouvelle?liste=1")
-	if !strings.Contains(page, "Nouvelle liste") || !strings.Contains(page, "data-elements") || strings.Contains(page, `name="texte"`) {
-		t.Fatalf("formulaire de liste :\n%s", page)
-	}
-	// La liste enregistrée s'ouvre aussitôt ; les éléments vides sont ignorés,
-	// un élément collé sur deux lignes en fait deux, les signes restent tels quels.
-	_, page = marie.Post("/notes", map[string]string{"titre": "Valise", "liste": "1", "element": "pulls\n  \n*chaussettes*"})
-	if !strings.Contains(page, "> *chaussettes*</label>") {
-		t.Fatalf("liste créée :\n%s", page)
-	}
+	// Une note avec des cases (bouton ☑ de l'éditeur) se lit comme une liste.
+	marie.Get("/notes/nouvelle")
+	_, page := marie.Post("/notes", map[string]string{"titre": "Valise", "texte": "[ ] pulls\n[ ] "})
 	id := essai.Trouver(t, page, `action="/notes/(\d+)/element"`)
 	// Léa (enfant) ajoute un élément et coche ; elle ne retire pas les cochés.
 	lea.Get("/notes/" + id)
@@ -211,21 +203,53 @@ func TestPhotoDansLeTexte(t *testing.T) {
 	}
 }
 
-// Onglet « Listes » : seulement les notes avec des cases à cocher.
-func TestFiltreListes(t *testing.T) {
-	_, srv := essai.NouvelleApp(t, Brancher)
+// Catégories : créées par tout le monde, une par note, filtre de la liste,
+// étiquette sur la carte ; supprimée : ses notes restent, sans catégorie.
+func TestCategories(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
 	marie := essai.Famille(t, srv)
-	marie.Get("/notes/nouvelle")
-	marie.Post("/notes", map[string]string{"titre": "Valise", "texte": "Pour la mer\n[ ] maillot\n[x] crème"})
-	marie.Post("/notes", map[string]string{"titre": "Courses", "texte": "- [ ] pain"})
-	marie.Post("/notes", map[string]string{"titre": "Code wifi", "texte": "abc [ ] pas une case"})
-	_, p := marie.Get("/notes?voir=listes")
-	if !strings.Contains(p, "Valise") || !strings.Contains(p, "Courses") || strings.Contains(p, "Code wifi") {
-		t.Fatalf("onglet Listes :\n%s", p)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	marie.Get("/notes")
+	if _, p := marie.Get("/notes"); strings.Contains(p, "Partagées") || strings.Contains(p, "＋ Liste") || strings.Contains(p, "voir=listes") {
+		t.Fatal("anciens filtres ou bouton « ＋ Liste » encore là")
 	}
-	if !strings.Contains(p, `class="pilule active" href="/notes?voir=listes"`) || !strings.Contains(p, "＋ Liste") {
-		t.Error("onglet ou bouton absent")
+	// Léa (enfant) crée une catégorie ; un nom vide est refusé.
+	lea.Get("/notes/categories")
+	if code, _ := lea.Post("/notes/categories", map[string]string{"nom": "  ", "emoji": "🚗"}); code != 400 {
+		t.Fatalf("nom vide : %d", code)
 	}
+	if code, _ := lea.Post("/notes/categories", map[string]string{"nom": "Voiture", "emoji": "🚗"}); code != 200 {
+		t.Fatalf("catégorie créée par un enfant : %d", code)
+	}
+	marie.Post("/notes/categories", map[string]string{"nom": "Maison", "emoji": "🏠"})
+	_, p := marie.Get("/notes/categories")
+	voiture := essai.Trouver(t, p, `name="id" value="(\d+)"><input type="hidden" name="action" value="modifier">\s*<input name="emoji" value="🚗"`)
+	// Une note rangée dans « Voiture », une sans catégorie.
+	_, p = marie.Get("/notes/nouvelle?cat=" + voiture)
+	if !strings.Contains(p, `<option value="`+voiture+`" selected>🚗 Voiture</option>`) {
+		t.Fatalf("catégorie de la liste non proposée :\n%s", p)
+	}
+	marie.Post("/notes", map[string]string{"titre": "Pneus", "texte": "Continental", "categorie": voiture})
+	marie.Post("/notes", map[string]string{"titre": "Wifi", "texte": "code"})
+	// Une catégorie d'une autre famille (inconnue) : sans catégorie.
+	marie.Post("/notes", map[string]string{"titre": "Intrus", "texte": "x", "categorie": "999"})
+	_, p = marie.Get("/notes?cat=" + voiture)
+	if !strings.Contains(p, "Pneus") || strings.Contains(p, "Wifi") || strings.Contains(p, "Intrus") || !strings.Contains(p, `<span class="etiquette-categorie">🚗 Voiture</span>`) {
+		t.Fatalf("filtre Voiture :\n%s", p)
+	}
+	if _, p = marie.Get("/notes?cat=sans"); !strings.Contains(p, "Wifi") || !strings.Contains(p, "Intrus") || strings.Contains(p, "Pneus") {
+		t.Fatal("filtre « Sans catégorie »")
+	}
+	// Renommée, puis supprimée : la note reste, sans catégorie.
+	marie.Post("/notes/categories", map[string]string{"action": "modifier", "id": voiture, "nom": "Auto", "emoji": "🚙"})
+	if _, p = marie.Get("/notes"); !strings.Contains(p, "🚙 Auto") {
+		t.Fatal("catégorie non renommée")
+	}
+	marie.Post("/notes/categories", map[string]string{"action": "supprimer", "id": voiture})
+	if _, p = marie.Get("/notes?cat=sans"); !strings.Contains(p, "Pneus") || strings.Contains(p, "🚙 Auto") {
+		t.Fatal("note perdue ou catégorie restée après suppression")
+	}
+	_ = a
 }
 
 // Listes : cochés en bas (affichage), ranger (modifier, déplacer,

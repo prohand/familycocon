@@ -1712,6 +1712,18 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .note-rappel { font-weight: 800; color: var(--corail-fonce); }
 .rangee-element.cochee input[name=texte] { text-decoration: line-through; color: var(--texte-doux); }
 .liste-objets.anciens .objet { opacity: .7; filter: grayscale(.6); }
-.elements-liste { display: flex; flex-direction: column; gap: 6px; }
-.elements-liste input { padding: 10px 12px; border-radius: var(--rayon-petit); border: 1.5px solid var(--bordure); background: var(--fond); color: var(--texte); font: inherit; }
-.elements-liste input:focus { border-color: var(--corail); outline: none; }
+
+/* Notes : catégories (étiquette sur la carte, choix, gestion). */
+.etiquette-categorie { display: inline-block; font-size: .75rem; font-weight: 800; padding: 2px 8px; border-radius: 99px;
+  background: rgba(0, 0, 0, .07); margin-bottom: 4px; }
+.rangee-categorie { display: flex; gap: 8px; align-items: end; }
+.rangee-categorie select, .rangee-categorie .champ:not(.etroit) { flex: 1; min-width: 0; }
+.rangee-categorie .champ { margin: 0; }
+.ajout-categorie .bouton { margin-top: 10px; }
+.ligne-categorie { display: flex; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--bordure); }
+.ligne-categorie:last-child { border-bottom: 0; }
+.ligne-categorie input { min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--bordure); background: var(--fond); color: var(--texte); font: inherit; }
+.ligne-categorie input[name=nom] { flex: 1; }
+.ligne-categorie .emoji-categorie { width: 3.2em; text-align: center; flex: none; }
+.ligne-categorie .nombre { flex: none; font-size: .85rem; color: var(--texte-doux); white-space: nowrap; }
+.modif-categorie { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }

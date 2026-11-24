@@ -49,6 +49,8 @@ func Brancher(a *appli.App) {
 	a.Route("POST /notes/photos/{id}/supprimer", mod, appli.Membre, m.supprimerPhoto)
 	a.Route("POST /notes/{id}/supprimer", mod, appli.Membre, m.supprimer)
 	m.routesRangement()
+	a.Route("GET /notes/categories", mod, appli.Membre, m.pageCategories)
+	a.Route("POST /notes/categories", mod, appli.Membre, m.categoriesPost)
 
 	a.AjouterResume(mod, m.resume)
 	a.AjouterRecherche(mod, m.chercher)
@@ -56,16 +58,17 @@ func Brancher(a *appli.App) {
 	a.AjouterPartage(appli.Partage{Module: mod, Emoji: "📝", Texte: "En note", URL: "/notes/nouvelle"})
 }
 
-// Filtres de la liste.
+// Filtres de la liste (« voir ») ; la catégorie a son propre paramètre
+// (« cat » : son numéro, ou « sans »).
 const (
-	toutes    = ""
-	partagees = "partagees"
-	privees   = "privees"
-	listes    = "listes" // notes avec des cases à cocher
+	toutes  = ""
+	privees = "privees"
+	sansCat = "sans"
 )
 
 type carteNote struct {
 	donnees.Note
+	Categorie  string // « 🚗 Voiture » (vide : sans catégorie)
 	Photos     int64  // nombre de photos
 	Rappel     string // « 28/11 18:00 » (rappel à venir)
 	Auteur     *donnees.Membre
@@ -74,12 +77,14 @@ type carteNote struct {
 }
 
 type vueNotes struct {
-	Filtre    string
-	Recherche string
-	Params    string // filtre et recherche, encodés pour une adresse (« voir=…&q=… »)
-	Epinglees []carteNote
-	Autres    []carteNote
-	Tronquee  bool // la liste est coupée (notesListe)
+	Filtre     string
+	Categorie  int64 // filtre : 0 toutes, -1 sans catégorie, sinon son numéro
+	Categories []Categorie
+	Recherche  string
+	Params     string // filtre et recherche, encodés pour une adresse (« voir=…&q=… »)
+	Epinglees  []carteNote
+	Autres     []carteNote
+	Tronquee   bool // la liste est coupée (notesListe)
 }
 
 // Bornes : notes par famille, notes montrées dans la liste, et longueur du
@@ -90,16 +95,22 @@ const (
 	debutMax   = 300
 )
 
-func lireFiltre(r *http.Request) (filtre, recherche string) {
-	filtre = r.URL.Query().Get("voir")
-	if filtre != partagees && filtre != privees && filtre != listes {
+func lireFiltre(r *http.Request) (filtre string, categorie int64, recherche string) {
+	q := r.URL.Query()
+	filtre = q.Get("voir")
+	if filtre != privees {
 		filtre = toutes
 	}
-	recherche = strings.TrimSpace(r.URL.Query().Get("q"))
+	if q.Get("cat") == sansCat {
+		categorie = -1
+	} else if id, err := strconv.ParseInt(q.Get("cat"), 10, 64); err == nil && id > 0 {
+		categorie = id
+	}
+	recherche = strings.TrimSpace(q.Get("q"))
 	if utf8.RuneCountInString(recherche) > 60 {
 		recherche = string([]rune(recherche)[:60])
 	}
-	return filtre, recherche
+	return filtre, categorie, recherche
 }
 
 // modifiable : l'auteur, ou un parent pour une note partagée.
@@ -126,10 +137,16 @@ func visible(c *appli.Contexte, n donnees.Note) bool {
 
 // paramsListe : « voir=privees&q=pain+%26+beurre », pour les adresses de
 // la liste (les attributs hx-* ne sont pas encodés par le gabarit).
-func paramsListe(filtre, recherche string) string {
+func paramsListe(filtre string, categorie int64, recherche string) string {
 	v := url.Values{}
 	if filtre != toutes {
 		v.Set("voir", filtre)
+	}
+	switch {
+	case categorie == -1:
+		v.Set("cat", sansCat)
+	case categorie > 0:
+		v.Set("cat", strconv.FormatInt(categorie, 10))
 	}
 	if recherche != "" {
 		v.Set("q", recherche)
@@ -137,21 +154,30 @@ func paramsListe(filtre, recherche string) string {
 	return v.Encode()
 }
 
-func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre, recherche string) (*vueNotes, error) {
+func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, categorie int64, recherche string) (*vueNotes, error) {
 	// Le filtre, la recherche (texte cherché tel quel, % et _ compris) et la
 	// borne sont appliqués en SQL ; seul le début du texte est lu.
 	lignes, err := m.a.Q.NotesVisibles(ctx, donnees.NotesVisiblesParams{
 		FamilleID: c.Famille.ID, MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true},
-		Filtre: filtre, Motif: recherche, Nombre: notesListe + 1})
+		Filtre: filtre, Categorie: categorie, Motif: recherche, Nombre: notesListe + 1})
 	if err != nil {
 		return nil, err
+	}
+	cats, err := m.categories(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	nomCat := map[int64]string{}
+	for i := range cats {
+		cats[i].Active = cats[i].ID == categorie
+		nomCat[cats[i].ID] = cats[i].Etiquette()
 	}
 	membres, err := m.a.Membres(ctx, c)
 	if err != nil {
 		return nil, err
 	}
 	parID := appli.MembresParID(membres)
-	v := &vueNotes{Filtre: filtre, Recherche: recherche, Params: paramsListe(filtre, recherche)}
+	v := &vueNotes{Filtre: filtre, Categorie: categorie, Categories: cats, Recherche: recherche, Params: paramsListe(filtre, categorie, recherche)}
 	if len(lignes) > notesListe {
 		lignes, v.Tronquee = lignes[:notesListe], true
 	}
@@ -162,7 +188,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre, recherche s
 			n.Texte += "…"
 		}
 		n.Texte = apercuCases(n.Texte)
-		cn := carteNote{Note: n, Photos: l.Photos, Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n)}
+		cn := carteNote{Note: n, Categorie: nomCat[l.CategorieID.Int64], Photos: l.Photos, Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n)}
 		if l.RappelLe > 0 && l.RappelEnvoye == 0 {
 			cn.Rappel = time.Unix(l.RappelLe, 0).In(c.Lieu).Format("02/01 15:04")
 		}
@@ -187,8 +213,8 @@ func dateCourte(t, maintenant time.Time) string {
 }
 
 func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	filtre, recherche := lireFiltre(r)
-	v, err := m.vue(r.Context(), c, filtre, recherche)
+	filtre, categorie, recherche := lireFiltre(r)
+	v, err := m.vue(r.Context(), c, filtre, categorie, recherche)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -197,8 +223,8 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 }
 
 func (m *Module) contenu(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	filtre, recherche := lireFiltre(r)
-	v, err := m.vue(r.Context(), c, filtre, recherche)
+	filtre, categorie, recherche := lireFiltre(r)
+	v, err := m.vue(r.Context(), c, filtre, categorie, recherche)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -221,7 +247,7 @@ type formNote struct {
 	Modifiable  bool
 	Supprimable bool
 	Cases       map[string]any // liste à cocher dans le texte (voir vueCases)
-	Liste       bool           // nouvelle liste à cocher
+	Categories  []Categorie    // choix de la catégorie
 	Photos      []donnees.PhotoNote
 	Edition     template.HTML // contenu de l'éditeur (voir format.go)
 	Ouvert      bool          // note avec des cases : éditeur déplié (« ?modifier=1 »)
@@ -251,9 +277,9 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		if r.URL.Query().Get("voir") == privees {
 			f.Note.Privee = 1
 		}
-		// « ☑️ Liste » : la note commence par une case (Entrée en ajoute une).
-		if r.URL.Query().Get("liste") == "1" && f.Note.Texte == "" {
-			f.Liste, f.Note.Texte = true, "[ ] "
+		// Venue d'une catégorie de la liste : la note y est rangée.
+		if id, err := strconv.ParseInt(r.URL.Query().Get("cat"), 10, 64); err == nil && id > 0 {
+			f.Note.CategorieID = sqlNul(id)
 		}
 	} else {
 		n, ok := m.note(r, c)
@@ -273,6 +299,12 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		}
 		f.Photos = enBas(n.Texte, photos) // celles du texte y sont montrées
 	}
+	cats, err := m.categories(r.Context(), c)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	f.Categories = cats
 	f.Edition = riche.HTML(f.Note.Texte, riche.Options{Mode: riche.Edition, Note: f.Note.ID})
 	f.Ouvert = r.URL.Query().Get("modifier") == "1"
 	if f.Note.RappelLe > 0 && f.Note.RappelEnvoye == 0 {
@@ -280,9 +312,6 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		f.RappelValeur, f.RappelTexte = t.Format(formatRappel), quandRappel(t, c.Maintenant())
 	}
 	titre := "Nouvelle note"
-	if f.Liste {
-		titre = "Nouvelle liste"
-	}
 	if !f.Nouvelle {
 		titre = f.Note.Titre
 		if titre == "" {
@@ -337,10 +366,6 @@ func apercu(titre, texte string) string {
 }
 
 func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	// Nouvelle liste : un champ par élément → une case par ligne.
-	if r.PostFormValue("liste") == "1" {
-		r.PostForm.Set("texte", texteListe(r.PostForm["element"]))
-	}
 	s, msg := lire(r)
 	if msg != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msg)
@@ -359,6 +384,9 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		FamilleID: c.Famille.ID, AuteurID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Titre: s.titre, Texte: s.texte,
 		Couleur: s.couleur, Epinglee: s.epinglee, Privee: s.privee, CreeLe: t, ModifieLe: t,
 	})
+	if err == nil {
+		err = m.ranger(r.Context(), c, n.ID, m.lireCategorie(r, c))
+	}
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
@@ -380,23 +408,6 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		return
 	}
 	m.a.Rediriger(w, r, "/notes")
-}
-
-// texteListe : les éléments saisis, une case par élément (texte simple :
-// signes gardés tels quels ; vides ignorés ; 500 au plus).
-func texteListe(elements []string) string {
-	var l []string
-	for _, e := range elements {
-		for _, x := range strings.Split(e, "\n") { // un élément collé sur plusieurs lignes
-			if x = strings.TrimSpace(x); x != "" && len(l) < 500 {
-				if utf8.RuneCountInString(x) > elementMax {
-					x = string([]rune(x)[:elementMax])
-				}
-				l = append(l, "[ ] "+riche.Echapper(x))
-			}
-		}
-	}
-	return strings.Join(l, "\n")
 }
 
 func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -443,6 +454,10 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		m.a.Echec(w, r, http.StatusConflict, "Quelqu'un vient de modifier cette note : copiez votre texte, puis rechargez la page.")
 		return
 	}
+	if err := m.ranger(r.Context(), c, n.ID, m.lireCategorie(r, c)); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
 	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Note enregistrée ✓")
 	m.a.Rediriger(w, r, "/notes")
@@ -463,8 +478,8 @@ func (m *Module) epingler(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		http.Redirect(w, r, "/notes", http.StatusSeeOther)
 		return
 	}
-	filtre, recherche := lireFiltre(r)
-	v, err := m.vue(r.Context(), c, filtre, recherche)
+	filtre, categorie, recherche := lireFiltre(r)
+	v, err := m.vue(r.Context(), c, filtre, categorie, recherche)
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
