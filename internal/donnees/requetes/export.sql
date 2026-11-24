@@ -79,8 +79,10 @@ WHERE e.famille_id = ? AND p.perso_de IN (0, sqlc.arg(membre));
 -- name: ExportProduits :many
 SELECT produits.* FROM produits JOIN listes ON listes.id = produits.liste_id WHERE listes.famille_id = ?;
 
+-- Sans les taches privees des autres membres.
 -- name: ExportTachesFaites :many
-SELECT taches_faites.* FROM taches_faites JOIN taches ON taches.id = taches_faites.tache_id WHERE taches.famille_id = ?;
+SELECT taches_faites.* FROM taches_faites JOIN taches ON taches.id = taches_faites.tache_id
+WHERE taches.famille_id = sqlc.arg(famille_id) AND (taches.privee = 0 OR taches.cree_par = sqlc.arg(membre));
 
 -- name: ExportEvenementsMembres :many
 SELECT evenements_membres.* FROM evenements_membres JOIN evenements ON evenements.id = evenements_membres.evenement_id

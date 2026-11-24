@@ -140,6 +140,7 @@ func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin t
 				e.Titre += " · ⏰ " + x.t.Rappel
 			}
 			e.Membre = assigneLe(x.t, x.regle, j, parID)
+			e.PourParents = e.Membre == nil && x.t.PourParents == 1
 			out = append(out, e)
 			ids = append(ids, x.t.ID)
 			cleDe = append(cleDe, occ)
@@ -194,14 +195,18 @@ func DevinerEmoji(titre string) string {
 // ligneTache : une tâche et son état pour la période en cours.
 type ligneTache struct {
 	donnees.Tache
-	Regle      repetition.Regle
-	Assigne    *donnees.Membre   // à qui revient la tâche aujourd'hui
-	Tour       []*donnees.Membre // tour de rôle (vide : pas de tour)
-	Faite      bool
-	ParQui     *donnees.Membre
-	FaiteLe    string // « 18:42 »
-	FaiteJour  string // « 2026-11-22 »
-	AFaire     bool   // due aujourd'hui (ou cette semaine, ou pas encore faite)
+	Regle     repetition.Regle
+	Assigne   *donnees.Membre   // à qui revient la tâche aujourd'hui
+	Tour      []*donnees.Membre // tour de rôle (vide : pas de tour)
+	Faite     bool
+	ParQui    *donnees.Membre
+	FaiteLe   string // « 18:42 »
+	FaiteJour string // « 2026-11-22 »
+	AFaire    bool   // due aujourd'hui (ou cette semaine, ou pas encore faite)
+	// AVenir : tâche « une fois » prévue un autre jour (sa date est plus
+	// tard) : dans « Les autres jours », pas dans celles du jour (accueil),
+	// mais on peut déjà la cocher.
+	AVenir     bool
 	Modifiable bool
 	Decochable bool
 	Categorie  string // « 🧹 Ménage » (vide : sans catégorie)
@@ -311,6 +316,7 @@ func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map
 		l := ligneTache{Tache: t, Regle: repetition.Lire(t.Repetition)}
 		var cle string
 		cle, l.AFaire = l.Regle.Occurrence(maintenant)
+		l.AVenir = l.Regle.Type == repetition.Unique && t.DateRappel > repetition.CleJour(maintenant)
 		cles[cle] = true
 		clesLignes = append(clesLignes, cle)
 		l.Assigne, l.Tour = assigneLe(t, l.Regle, maintenant, parID), membresTour(t, parID)
@@ -472,12 +478,15 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 		switch {
 		case l.Faite:
 			v.Faites = append(v.Faites, l)
-		case l.AFaire:
+		case l.AFaire && !l.AVenir:
 			v.AFaire = append(v.AFaire, l)
 		default:
 			v.PlusTard = append(v.PlusTard, l)
 		}
 	}
+	// Les autres jours : les tâches « une fois » datées, de la plus proche à
+	// la plus lointaine (les autres d'abord).
+	sort.SliceStable(v.PlusTard, func(i, j int) bool { return v.PlusTard[i].DateRappel < v.PlusTard[j].DateRappel })
 	// Historique : 7 jours ; scores : depuis lundi.
 	maintenant := c.Maintenant()
 	debut := time.Date(maintenant.Year(), maintenant.Month(), maintenant.Day(), 0, 0, 0, 0, c.Lieu).AddDate(0, 0, -6)
@@ -900,7 +909,7 @@ func (m *Module) aFaireAujourdhui(ctx context.Context, c *appli.Contexte) ([]lig
 		}
 		var out []ligneTache
 		for _, l := range lignes {
-			if l.AFaire && !l.Faite {
+			if l.AFaire && !l.Faite && !l.AVenir {
 				out = append(out, l)
 			}
 		}

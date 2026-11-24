@@ -753,4 +753,8 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   pas de style dans la page) ; carte et en-tête de caisse : couleur de
   l'enseigne et bande en biais de la seconde ; texte blanc ou noir selon
   la clarté.
+- Tâche « une fois » datée (date du rappel) plus tard : pas « du jour »
+  (accueil, compte de la tuile) ; dans « Les autres jours » de la plus
+  proche à la plus lointaine, déjà cochable ; « du jour » à sa date (et
+  après, tant qu'elle n'est pas faite).
 

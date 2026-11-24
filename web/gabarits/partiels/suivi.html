@@ -286,11 +286,14 @@
   {{with $v.Comparer}}<p class="aide">↔️ {{.}}</p>{{end}}
   {{if $v.AucunPlein}}<p class="aide">Aucun plein sur cette période.</p>{{end}}
 </section>
+{{/* Graphiques : une colonne sur téléphone, deux sur grand écran. */}}
+<div class="graphes">
 {{with $v.GConso}}<section class="carte bloc graphe"><h3>Consommation à chaque plein <small>L / 100 km · pointillé : moyenne</small></h3>{{.}}</section>{{end}}
 {{if $p}}{{with $v.GPrix}}<section class="carte bloc graphe"><h3>Prix du litre <small>pointillé : moyenne</small></h3>{{.}}</section>{{end}}
 {{with $v.GDepenses}}<section class="carte bloc graphe"><h3>Dépenses par {{if $v.ParAn}}année{{else}}mois{{end}}</h3>{{.}}
   <p class="legende"><span class="pastille g-s0"></span> Carburant <span class="pastille g-s1"></span> Entretien</p></section>{{end}}{{end}}
 {{with $v.GKm}}<section class="carte bloc graphe"><h3>Kilomètres parcourus par {{if $v.ParAn}}année{{else}}mois{{end}}</h3>{{.}}</section>{{end}}
+</div>
 </div>
 {{end}}
 

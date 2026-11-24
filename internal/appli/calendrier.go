@@ -23,6 +23,9 @@ type ElementJour struct {
 	Membre *donnees.Membre // à qui c'est (nil : tout le monde)
 	Faite  bool
 	Module string
+	// PourParents : pour les parents (l'un ou l'autre) : pas dans « Les
+	// miennes » d'un enfant.
+	PourParents bool
 }
 
 // CalendrierFunc : éléments d'un module, du jour debut (inclus) au jour fin (exclu).

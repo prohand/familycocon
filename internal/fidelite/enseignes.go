@@ -56,7 +56,7 @@ var enseignes = []enseigne{
 	{"mrbricolage", []string{"mrbricolage", "monsieurbricolage"}, "#E30613", "#004C97"},
 	{"ikea", []string{"ikea"}, "#0058A3", "#FFDB00"},
 	{"conforama", []string{"conforama"}, "#E30613", "#1D1D1B"},
-	{"but", []string{"but"}, "#E3001B", "#1D1D1B"},
+	{"but", []string{"=but"}, "#E3001B", "#1D1D1B"},
 	{"gifi", []string{"gifi"}, "#E5007E", "#FFD500"},
 	{"action", []string{"action"}, "#0A3A85", "#E30613"},
 	{"truffaut", []string{"truffaut"}, "#0D7D3A", "#C8D400"},
@@ -86,7 +86,7 @@ var enseignes = []enseigne{
 	{"primark", []string{"primark"}, "#00A1E4", "#1D1D1B"},
 	{"celio", []string{"celio"}, "#1D1D1B", "#E30613"},
 	{"jules", []string{"jules"}, "#1D1D1B", "#FFFFFF"},
-	{"ca", []string{"ca", "cunda"}, "#003B7C", "#E30613"},
+	{"ca", []string{"=ca", "canda"}, "#003B7C", "#E30613"},
 	// Animaux
 	{"maxizoo", []string{"maxizoo"}, "#E30613", "#FFD500"},
 	{"animalis", []string{"animalis"}, "#00A0DF", "#F39200"},
@@ -98,7 +98,7 @@ var enseignes = []enseigne{
 	{"totalenergies", []string{"totalenergies", "total"}, "#E2001A", "#F39200"},
 	{"shell", []string{"shell"}, "#FFD500", "#DD1D21"},
 	{"esso", []string{"esso"}, "#E30613", "#004C97"},
-	{"bp", []string{"bp"}, "#009900", "#FFE600"},
+	{"bp", []string{"=bp"}, "#009900", "#FFE600"},
 	// Restauration, cinéma
 	{"mcdonalds", []string{"mcdonalds", "mcdo"}, "#DA291C", "#FFC72C"},
 	{"burgerking", []string{"burgerking"}, "#D62300", "#F5A623"},
@@ -140,9 +140,16 @@ func trouverEnseigne(nom string) *enseigne {
 			suites[colle] = true
 		}
 	}
+	colle := strings.Join(m, "")
 	for i := range enseignes {
 		for _, n := range enseignes[i].noms {
-			if suites[n] {
+			// « =ca » : le nom entier seulement (« ça », « but » sont aussi
+			// des mots courants).
+			if seul, ok := strings.CutPrefix(n, "="); ok {
+				if colle == seul {
+					return &enseignes[i]
+				}
+			} else if suites[n] {
 				return &enseignes[i]
 			}
 		}

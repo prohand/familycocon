@@ -51,7 +51,9 @@ var sectionsExport = []sectionExport{
 	sm("taches", (*donnees.Queries).ExportTaches, func(f, m int64) donnees.ExportTachesParams {
 		return donnees.ExportTachesParams{FamilleID: f, Membre: sql.NullInt64{Int64: m, Valid: true}}
 	}),
-	s("taches_faites", (*donnees.Queries).ExportTachesFaites),
+	sm("taches_faites", (*donnees.Queries).ExportTachesFaites, func(f, m int64) donnees.ExportTachesFaitesParams {
+		return donnees.ExportTachesFaitesParams{FamilleID: f, Membre: sql.NullInt64{Int64: m, Valid: true}}
+	}),
 	s("agenda_evenements", (*donnees.Queries).ExportEvenements),
 	s("agenda_participants", (*donnees.Queries).ExportEvenementsMembres),
 	s("agenda_contacts", (*donnees.Queries).ExportEvenementsContacts),

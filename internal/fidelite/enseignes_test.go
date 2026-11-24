@@ -27,6 +27,10 @@ func TestTrouverEnseigne(t *testing.T) {
 		"Décoration":             "",     // pas « cora » au milieu d'un mot
 		"Club U":                 "",
 		"":                       "",
+		"C&A":                    "ca",
+		"Ça c'est Paris":         "",
+		"Carte Action Logement":  "action",
+		"Station BP":             "",
 	} {
 		got := Marque(nom, 1)
 		if got != cle {

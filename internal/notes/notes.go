@@ -171,7 +171,13 @@ func (m *Module) annoncer(ctx context.Context, c *appli.Contexte, n donnees.Note
 	}
 	texte := fmt.Sprintf("%s a écrit la note « %s » 📝", c.Membre.Nom, apercu(n.Titre, n.Texte))
 	if m.cachee(ctx, n) {
-		m.a.PublierPour(c, mod, texte, m.a.Parents(ctx, c))
+		// Les parents seulement ; liste vide (erreur de lecture) : aucune
+		// annonce, surtout pas à toute la famille (pour vide).
+		if parents := m.a.Parents(ctx, c); len(parents) > 0 {
+			m.a.PublierPour(c, mod, texte, parents)
+		} else {
+			m.a.Publier(c, mod, "")
+		}
 		return
 	}
 	m.a.Publier(c, mod, texte)

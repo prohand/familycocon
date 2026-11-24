@@ -691,6 +691,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
   outline: none;
   transition: border-color .15s, box-shadow .15s;
 }
+/* Date et heure sur iPhone (Safari) : le champ garde une largeur minimale
+   à lui et dépasse du cadre, texte centré, et vide il s'aplatit ou
+   grandit. On le ramène à un champ comme les autres. */
+input[type=date], input[type=time], input[type=datetime-local], input[type=month] {
+  -webkit-appearance: none; appearance: none; display: block;
+  min-width: 0; max-width: 100%; min-height: 48px; text-align: left; line-height: 1.3; }
+input[type=date]::-webkit-date-and-time-value, input[type=time]::-webkit-date-and-time-value,
+input[type=datetime-local]::-webkit-date-and-time-value { text-align: left; margin: 0; min-height: 1.3em; }
+.rangee > .champ { min-width: 0; }
 .champ input:focus, .champ select:focus, .champ textarea:focus {
   border-color: var(--corail);
   box-shadow: 0 0 0 4px var(--corail-doux);
@@ -1312,13 +1321,18 @@ progress.jauge.etoiles::-moz-progress-bar { background: linear-gradient(90deg, #
 .actions-contact .action { align-items: center; padding: 12px 6px; font-size: .85rem; }
 .actions-contact .action .emoji { font-size: 1.6rem; }
 .texte-long { white-space: pre-wrap; overflow-wrap: anywhere; }
-.barre-actions .recherche { flex: 1; margin: 0; }
+.barre-actions .recherche { flex: 1; margin: 0; min-width: 0; }
+/* Petits écrans : la recherche rétrécit (pas le bouton à côté), un champ
+   fichier ne dépasse pas du cadre. */
+.barre-actions .recherche input { min-width: 0; width: 100%; }
+.barre-actions > .bouton { flex-shrink: 0; white-space: nowrap; }
+input[type=file] { max-width: 100%; min-width: 0; }
 .interrupteur.etroit { flex: 0 1 auto; padding: 6px 0; }
 
 
 /* ---------- Cartes de fidélité ---------- */
-.cartes-fidelite { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-@media (min-width: 900px) { .cartes-fidelite { grid-template-columns: repeat(4, 1fr); } }
+.cartes-fidelite { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+@media (min-width: 900px) { .cartes-fidelite { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .carte-fidelite {
   aspect-ratio: 1.586; border-radius: 16px; padding: 14px; color: #fff;
   background: linear-gradient(135deg, var(--c), color-mix(in srgb, var(--c) 60%, #000));
@@ -1331,7 +1345,8 @@ progress.jauge.etoiles::-moz-progress-bar { background: linear-gradient(90deg, #
 .carte-fidelite.marque { color: var(--t, #fff);
   background: linear-gradient(135deg, var(--c) 0 64%, var(--c2) 64% 72%, color-mix(in srgb, var(--c) 80%, #000) 72%); }
 .entete-caisse.marque { color: var(--t, #fff); background: linear-gradient(100deg, var(--c) 0 82%, var(--c2) 82% 88%, var(--c) 88%); }
-.carte-fidelite b { font-size: 1.05rem; }
+.carte-fidelite b { font-size: 1.05rem; overflow-wrap: anywhere; }
+.carte-fidelite { min-width: 0; }
 .carte-fidelite small { font-weight: 700; opacity: .85; letter-spacing: .05em; }
 .carte-caisse { border-radius: 22px; overflow: hidden; box-shadow: var(--ombre-forte); background: #fff; }
 .entete-caisse { padding: 14px 18px; color: #fff; background: var(--c); display: flex; justify-content: space-between; align-items: baseline; }
@@ -1542,6 +1557,11 @@ button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer
 .graphe h3 { margin: 0 0 6px; font-size: 1rem; }
 .graphe h3 small { display: block; font-weight: 600; color: var(--texte-doux); font-size: .75rem; }
 .graphique { display: block; width: 100%; height: auto; overflow: visible; }
+/* Grand écran : deux graphiques par ligne (sinon un graphique de 340×170
+   agrandi sur toute la largeur devient énorme, textes compris). */
+.graphes { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 0 16px; }
+.graphes > .graphe { min-width: 0; }
+@media (min-width: 1100px) { .graphes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .graphique .g-grille { stroke: var(--bordure); stroke-width: 1; }
 .graphique .g-valeur { fill: var(--texte-doux); font-size: 9px; text-anchor: end; }
 .graphique .g-date { fill: var(--texte-doux); font-size: 9px; }

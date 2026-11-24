@@ -318,7 +318,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, r *http.Request, ta
 	elements := map[string][]appli.ElementJour{}
 	if taches != "non" {
 		for _, e := range m.a.ElementsCalendrier(ctx, c, debut, fin) {
-			if taches == "moi" && e.Membre != nil && e.Membre.ID != c.Membre.ID {
+			if taches == "moi" && (e.Membre != nil && e.Membre.ID != c.Membre.ID || e.PourParents && !c.EstParent()) {
 				continue
 			}
 			elements[e.Jour] = append(elements[e.Jour], e)

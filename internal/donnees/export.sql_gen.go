@@ -1153,11 +1153,18 @@ func (q *Queries) ExportTaches(ctx context.Context, arg ExportTachesParams) ([]T
 }
 
 const exportTachesFaites = `-- name: ExportTachesFaites :many
-SELECT taches_faites.id, taches_faites.tache_id, taches_faites.occurrence, taches_faites.fait_par, taches_faites.fait_le FROM taches_faites JOIN taches ON taches.id = taches_faites.tache_id WHERE taches.famille_id = ?
+SELECT taches_faites.id, taches_faites.tache_id, taches_faites.occurrence, taches_faites.fait_par, taches_faites.fait_le FROM taches_faites JOIN taches ON taches.id = taches_faites.tache_id
+WHERE taches.famille_id = ?1 AND (taches.privee = 0 OR taches.cree_par = ?2)
 `
 
-func (q *Queries) ExportTachesFaites(ctx context.Context, familleID int64) ([]TacheFaite, error) {
-	rows, err := q.db.QueryContext(ctx, exportTachesFaites, familleID)
+type ExportTachesFaitesParams struct {
+	FamilleID int64
+	Membre    sql.NullInt64
+}
+
+// Sans les taches privees des autres membres.
+func (q *Queries) ExportTachesFaites(ctx context.Context, arg ExportTachesFaitesParams) ([]TacheFaite, error) {
+	rows, err := q.db.QueryContext(ctx, exportTachesFaites, arg.FamilleID, arg.Membre)
 	if err != nil {
 		return nil, err
 	}

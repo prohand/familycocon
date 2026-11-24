@@ -59,6 +59,7 @@
 | 23/11/2026 | v0.6.0 (photos du carnet, Fuelio) | 17,9 Mo (amd64), contre 17,4 pour v0.5.0 | non remesurée | 30 Mio (RSS) au démarrage | 62 Mio (RSS) au plus fort d'une reprise Fuelio de 85 Mo (300 pleins, 12 photos de 12 Mpx, ~10 s), 34 Mio juste après (mémoire rendue au système) |
 | 23/11/2026 | v0.6.0, format réel de Fuelio | 17,9 Mo | non remesurée | — | 66 Mio (RSS) au plus fort pour un `.fuelio` de 296 Mo (200 pleins, 40 photos PNG de 7 Mpx dans pictures.data), ~30 s ; 33 Mio juste après ; 287 Mo de disque pris le temps de la reprise |
 | 23/11/2026 | v0.7.0 (notes, pleins, graphiques, scan du ticket) | 19,9 Mo (amd64), contre 17,9 pour v0.6.0 (+1,8 Mo : lecteur de tickets compressé, servi depuis le binaire sans être chargé en mémoire) | non remesurée | 33 Mio (RSS) au démarrage, comme v0.6.0 | scan d'un vrai ticket : ~5 s dans le navigateur (le serveur ne fait que l'analyse du texte) |
+| 24/11/2026 | v0.9.12+ (catégories, pièces jointes, tâches privées, rappels) | 19,6 Mo (amd64, `-s -w`) | non remesurée (pas de Docker ici) | 40 Mio (RSS) au démarrage sur une base neuve, contre 33 pour v0.7.0 (plus de gabarits et de requêtes) | 42 Mio après 200 pages de connexion ; un envoi de pièce jointe est écrit sur le disque au fil de la lecture (jamais gardé en mémoire) |
 
 Notes :
 - v0.6.0 : une seule photo décodée à la fois (pour la reprise Fuelio comme
