@@ -38,6 +38,10 @@ ORDER BY CASE role WHEN 'parent' THEN 0 ELSE 1 END, id;
 SELECT * FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'enfant' AND pin IS NOT NULL
 ORDER BY id;
 
+-- Parents d'une famille (rappels d'une note cachee aux enfants).
+-- name: ParentsDeFamille :many
+SELECT id FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'parent' ORDER BY id;
+
 -- name: CompterParents :one
 SELECT count(*) FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'parent';
 

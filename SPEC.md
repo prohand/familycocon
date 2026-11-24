@@ -647,3 +647,17 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - Formulaire de note : choix de la catégorie (préchoisie depuis le filtre) ;
   une catégorie d'une autre famille compte comme « aucune ».
 - Carte : étiquette de la catégorie. Export JSON : `notes_categories`.
+
+## 25. Notes « parents seulement » (v0.9.8)
+- Migration 0037 : `notes.parents` et `categories_notes.parents` (0/1).
+- Une note est cachée aux enfants si elle est « parents seulement » ou si
+  sa catégorie l'est ; son auteur la voit toujours (même un enfant). Une
+  note privée reste vue par son seul auteur.
+- Seul un parent coche « 👥 Parents seulement » (note ou catégorie ; sur la
+  page Catégories : pastille « 👥 Parents seulement / 👪 Toute la famille »).
+  Un enfant ne voit pas ces catégories, ne peut ni s'en servir, ni les
+  renommer, ni les supprimer ; sa note rangée là par un parent y reste.
+- Partout : liste, recherche, compte de l'accueil, adresse d'une note ou
+  d'une photo (`Module.visible`), annonce « X a écrit la note » et rappel
+  (parents et auteur seulement), nombre de notes par catégorie.
+

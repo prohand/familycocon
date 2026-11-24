@@ -1708,7 +1708,12 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .rangee-categorie select, .rangee-categorie .champ:not(.etroit) { flex: 1; min-width: 0; }
 .rangee-categorie .champ { margin: 0; }
 .ajout-categorie .bouton { margin-top: 10px; }
-.ligne-categorie { display: flex; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--bordure); }
+.ligne-categorie { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--bordure); }
+/* « Parents seulement » : sur sa propre ligne, sous le nom. */
+.parents-categorie { flex-basis: 100%; padding-left: 62px; }
+.pastille-parents { font: inherit; font-size: .8rem; font-weight: 700; padding: 3px 10px; border-radius: 99px; cursor: pointer;
+  border: 1.5px solid var(--bordure); background: transparent; color: var(--texte-doux); }
+.pastille-parents.actif { border-color: var(--corail); color: var(--texte); background: var(--fond); }
 .ligne-categorie:last-child { border-bottom: 0; }
 .ligne-categorie input { min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1.5px solid var(--bordure); background: var(--fond); color: var(--texte); font: inherit; }
 .ligne-categorie input[name=nom] { flex: 1; }

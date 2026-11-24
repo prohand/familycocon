@@ -215,7 +215,7 @@ func (q *Queries) ExportCartes(ctx context.Context, familleID int64) ([]Carte, e
 }
 
 const exportCategoriesNotes = `-- name: ExportCategoriesNotes :many
-SELECT id, famille_id, nom, emoji, cree_le FROM categories_notes WHERE famille_id = ?
+SELECT id, famille_id, nom, emoji, cree_le, parents FROM categories_notes WHERE famille_id = ?
 `
 
 // Notes : les notes partagees et les notes privees de celui qui exporte.
@@ -234,6 +234,7 @@ func (q *Queries) ExportCategoriesNotes(ctx context.Context, familleID int64) ([
 			&i.Nom,
 			&i.Emoji,
 			&i.CreeLe,
+			&i.Parents,
 		); err != nil {
 			return nil, err
 		}
@@ -654,7 +655,7 @@ func (q *Queries) ExportMissionsFaites(ctx context.Context, familleID int64) ([]
 }
 
 const exportNotes = `-- name: ExportNotes :many
-SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye, categorie_id FROM notes WHERE famille_id = ? AND (privee = 0 OR auteur_id = ?)
+SELECT id, famille_id, auteur_id, titre, texte, couleur, epinglee, privee, cree_le, modifie_le, cochees_en_bas, rappel_le, rappel_envoye, categorie_id, parents FROM notes WHERE famille_id = ? AND (privee = 0 OR auteur_id = ?)
 `
 
 type ExportNotesParams struct {
@@ -686,6 +687,7 @@ func (q *Queries) ExportNotes(ctx context.Context, arg ExportNotesParams) ([]Not
 			&i.RappelLe,
 			&i.RappelEnvoye,
 			&i.CategorieID,
+			&i.Parents,
 		); err != nil {
 			return nil, err
 		}

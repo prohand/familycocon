@@ -57,7 +57,7 @@
   </a>
   <footer>
     {{with $n.Auteur}}<span class="avatar petit c{{.Couleur}}" title="{{.Nom}}">{{visage .}}</span>{{end}}
-    <span class="note-date">{{if eq $n.Privee 1}}🔒 {{end}}{{if $n.Photos}}📷 {{$n.Photos}} · {{end}}{{with $n.Rappel}}<span class="note-rappel">⏰ {{.}}</span> · {{end}}{{$n.Date}}</span>
+    <span class="note-date">{{if eq $n.Privee 1}}🔒 {{else if $n.Cachee}}<span title="Parents seulement">👥</span> {{end}}{{if $n.Photos}}📷 {{$n.Photos}} · {{end}}{{with $n.Rappel}}<span class="note-rappel">⏰ {{.}}</span> · {{end}}{{$n.Date}}</span>
     {{if $n.Modifiable}}
     <button class="epingle{{if eq $n.Epinglee 1}} actif{{end}}" hx-post="/notes/{{$n.ID}}/epingler?{{.V.Params}}" hx-target="#notes" hx-swap="outerHTML"
             aria-label="{{if eq $n.Epinglee 1}}Désépingler{{else}}Épingler{{end}}">📌</button>

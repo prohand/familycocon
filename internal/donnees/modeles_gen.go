@@ -100,6 +100,7 @@ type CategoriesNote struct {
 	Nom       string
 	Emoji     string
 	CreeLe    int64
+	Parents   int64
 }
 
 type CodesSecour struct {
@@ -294,6 +295,7 @@ type Note struct {
 	RappelLe     int64
 	RappelEnvoye int64
 	CategorieID  sql.NullInt64
+	Parents      int64
 }
 
 type Operation struct {

@@ -6,7 +6,7 @@ import "testing"
 
 func TestLireEmoji(t *testing.T) {
 	for texte, attendu := range map[string]string{
-		"🚗": "🚗", " ☁️ ": "☁️", "👨‍👩‍👧": "👨‍👩‍👧", "🏖️": "🏖️",
+		"🚗": "🚗", " ☁️ ": "☁️", "👥‍👧": "👥‍👧", "🏖️": "🏖️",
 		"": "🎁", "a": "🎁", "<b>": "🎁", "🚗 auto": "🎁", "é": "🎁", "🚗🚗🚗🚗🚗🚗🚗🚗🚗": "🎁",
 	} {
 		if r := LireEmoji(texte, "🎁"); r != attendu {

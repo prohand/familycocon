@@ -14,7 +14,7 @@ import (
 // chercher : recherche globale (notes visibles par ce membre).
 func (m *Module) chercher(ctx context.Context, c *appli.Contexte, q string) ([]appli.Resultat, error) {
 	l, err := m.a.Q.NotesVisibles(ctx, donnees.NotesVisiblesParams{FamilleID: c.Famille.ID,
-		MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Filtre: toutes, Categorie: int64(0), Motif: q, Nombre: 8})
+		MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Parent: estParent(c), Filtre: toutes, Categorie: int64(0), Motif: q, Nombre: 8})
 	if err != nil {
 		return nil, err
 	}

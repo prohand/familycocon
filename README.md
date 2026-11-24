@@ -129,6 +129,7 @@ Prérequis : Docker avec Docker Compose, et un nom de domaine en HTTPS (reverse 
 4. Brancher le reverse proxy sur `127.0.0.1:8080` :
    - **Nginx** : exemple dans [`deploy/nginx.conf`](deploy/nginx.conf). Pensez à `proxy_set_header Host $host;` et à `proxy_buffering off` pour `/direct` (le temps réel).
    - **Traefik** : exemple dans [`deploy/docker-compose.traefik.yml`](deploy/docker-compose.traefik.yml).
+   - **Proxy qui demande une connexion** (Pangolin, Authelia…) : l'iPhone demande l'icône de l'écran d'accueil sans cookie. Laissez passer sans connexion le seul chemin `/apple-touch-icon*` (une image publique) ; sinon l'icône est une lettre sur fond gris.
 
 Le conteneur tourne sans privilège : utilisateur 65532, système de fichiers en lecture seule, `cap_drop: ALL`, 128 Mo de RAM au plus. Toutes les données sont dans le volume `familycocon-donnees` (`/donnees`).
 
