@@ -72,6 +72,12 @@
   </fieldset>
 </form>
 {{if .Cases}}</details>{{end}}
+{{if not .Nouvelle}}{{if or .Joints.L .Modifiable}}
+<section class="carte bloc">
+  <h2 class="sous-titre">📎 Pièces jointes</h2>
+  {{template "pieces-jointes" .Joints}}
+</section>
+{{end}}{{end}}
 {{if and (not .Nouvelle) .Modifiable}}
 {{/* Rappel : une notification à la date et à l'heure choisies. */}}
 <details class="carte bloc"{{if .RappelTexte}} open{{end}}>

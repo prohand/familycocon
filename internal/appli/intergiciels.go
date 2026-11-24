@@ -29,6 +29,10 @@ const TailleMaxCorps = 1 << 20
 // TailleMaxImport : 8 Mio pour l'import d'un carnet vCard.
 const TailleMaxImport = 8 << 20
 
+// TailleMaxJoints : un envoi de pièces jointes (plusieurs fichiers de
+// 10 Mo au plus, écrits sur le disque au fil de la lecture).
+const TailleMaxJoints = 5*JointMax + 1<<20
+
 // TailleMaxFuelio : 1 Gio pour une sauvegarde Fuelio avec ses photos
 // (près de 300 Mo pour quelques années de tickets ; écrite sur le disque,
 // jamais gardée en mémoire).
@@ -103,6 +107,10 @@ func (a *App) Envelopper(h http.Handler) http.Handler {
 			taille = TailleMaxImport // carnet d'un téléphone (photos comprises)
 			// 8 Mio sur une connexion mobile lente : plus que les 30 s du serveur.
 			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(3 * time.Minute))
+		}
+		if r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/joints/") {
+			taille = TailleMaxJoints // pièces jointes (10 Mo chacune, plusieurs à la fois)
+			_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(5 * time.Minute))
 		}
 		if strings.HasPrefix(r.URL.Path, "/vehicules/") && strings.HasSuffix(r.URL.Path, "/fuelio") {
 			taille = TailleMaxFuelio

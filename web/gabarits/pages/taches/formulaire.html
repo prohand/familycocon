@@ -59,6 +59,12 @@
   {{end}}
   <div class="boutons"><button class="bouton">{{if .Nouvelle}}Ajouter la tâche{{else}}Enregistrer{{end}}</button></div>
 </form>
+{{if not .Nouvelle}}
+<section class="carte bloc">
+  <h2 class="sous-titre">📎 Pièces jointes</h2>
+  {{template "pieces-jointes" .Joints}}
+</section>
+{{end}}
 {{if and (not .Nouvelle) $c.EstParent}}
 <form class="bloc" method="post" action="/taches/{{.Tache.ID}}/supprimer" hx-confirm="Supprimer cette tâche ? (l'historique est gardé)">
   {{template "jeton" $c.CSRF}}

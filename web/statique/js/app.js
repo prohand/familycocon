@@ -1585,3 +1585,11 @@ if ("serviceWorker" in navigator) {
   // Page changée par htmx : la grille ouverte disparaît avec elle.
   document.addEventListener("htmx:beforeSwap", fermer);
 })();
+
+// Pièces jointes : le fichier choisi part aussitôt (le formulaire est
+// envoyé par htmx, avec le fichier).
+document.addEventListener("change", function (e) {
+  var f = e.target;
+  if (f.matches && f.matches("input[type=file][data-envoi-auto]") && f.files.length && f.form) f.form.requestSubmit();
+});
+

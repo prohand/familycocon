@@ -357,6 +357,19 @@ type Piece struct {
 	CreeLe    int64
 }
 
+type PiecesJointe struct {
+	ID        int64
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+	Nom       string
+	Type      string
+	Taille    int64
+	Fichier   string
+	CreePar   sql.NullInt64
+	CreeLe    int64
+}
+
 type Produit struct {
 	ID        int64
 	ListeID   int64

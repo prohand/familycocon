@@ -52,6 +52,13 @@ type Module struct {
 func Brancher(a *appli.App, s *suivi.Suivi) {
 	m := &Module{a: a, s: s}
 	a.Route("GET /projets", mod, appli.Membre, m.liste)
+	// Pièces jointes (devis, factures, plans) : tous ceux qui voient le
+	// projet (comme pour ses étapes).
+	a.AjouterJoints(mod, func(ctx context.Context, c *appli.Contexte, id int64) (bool, bool) {
+		p, err := a.Q.ProjetParID(ctx, donnees.ProjetParIDParams{ID: id, FamilleID: c.Famille.ID})
+		ok := err == nil && visible(c, p)
+		return ok, ok
+	})
 	a.AjouterRecherche(mod, m.chercher)
 	a.Route("GET /projets/nouveau", mod, appli.Membre, m.formulaire)
 	a.Route("POST /projets", mod, appli.Membre, m.enregistrer)
@@ -181,6 +188,7 @@ type vueFiche struct {
 	Depense, Restant int64
 	Depasse          bool
 	Devise           string
+	Joints           appli.VueJoints
 }
 
 func (m *Module) fiche(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -229,6 +237,10 @@ func (m *Module) fiche(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	v.Depasse = p.Budget > 0 && v.Restant < 0
 	if v.Depasse {
 		v.Restant = -v.Restant
+	}
+	if v.Joints, err = m.a.Joints(ctx, c, mod, p.ID, true, "/projets/"+strconv.FormatInt(p.ID, 10)); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
 	}
 	m.a.Afficher(w, r, c, "projets/fiche", p.Nom, mod, v)
 }

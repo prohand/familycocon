@@ -89,6 +89,9 @@ var sectionsExport = []sectionExport{
 	sm("projets", (*donnees.Queries).ExportProjets, func(f, m int64) donnees.ExportProjetsParams {
 		return donnees.ExportProjetsParams{FamilleID: f, Membre: m}
 	}),
+	sm("pieces_jointes", (*donnees.Queries).ExportJoints, func(f, m int64) donnees.ExportJointsParams {
+		return donnees.ExportJointsParams{FamilleID: f, Membre: sql.NullInt64{Int64: m, Valid: true}}
+	}),
 	sm("projets_etapes", (*donnees.Queries).ExportProjetEtapes, func(f, m int64) donnees.ExportProjetEtapesParams {
 		return donnees.ExportProjetEtapesParams{FamilleID: f, Membre: m}
 	}),

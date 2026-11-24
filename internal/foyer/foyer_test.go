@@ -421,3 +421,24 @@ func TestAjoutRapidePlein(t *testing.T) {
 		t.Fatalf("chiffres entre deux dates :\n%s", page)
 	}
 }
+
+// Documents d'une ligne du carnet : parents seulement.
+func TestJointsCarnet(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	_, page := marie.Post("/animaux", map[string]string{"nom": "Filou", "espece": "chat"})
+	id := essai.Trouver(t, page, `action="/suivi/animaux/(\d+)/carnet"`)
+	_, page = marie.Post("/suivi/animaux/"+id+"/carnet", map[string]string{"libelle": "Vaccin", "jour": "2026-01-15", "montant": "65"})
+	ligne := essai.Trouver(t, page, `action="/joints/carnet/(\d+)"`)
+	pdf := []byte("%PDF-1.7\nfacture")
+	if code, _ := marie.PostFichiers("/joints/carnet/"+ligne, map[string]string{"retour": "/animaux/" + id}, essai.Fichier{Champ: "fichier", Nom: "facture veto.pdf", Contenu: pdf}); code != 200 {
+		t.Fatalf("envoi : %d", code)
+	}
+	if _, page = marie.Get("/animaux/" + id); !strings.Contains(page, "facture veto.pdf") {
+		t.Fatal("document absent du carnet")
+	}
+	if code, _ := lea.PostFichiers("/joints/carnet/"+ligne, nil, essai.Fichier{Champ: "fichier", Nom: "a.pdf", Contenu: pdf}); code != http.StatusForbidden {
+		t.Fatalf("document ajouté par un enfant : %d", code)
+	}
+}

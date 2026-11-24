@@ -43,6 +43,7 @@
 | Notes et catégories « parents seulement » (v0.9.8, SPEC § 25) | **fait** |
 | Tâches : rappel à une heure, catégories (v0.9.9, SPEC § 26) | **fait** |
 | Tâches privées et « parents seulement » ; filtre « Vues des enfants » (tâches, notes) (v0.9.10, SPEC § 27) | **fait** |
+| Pièces jointes (notes, tâches, projets, carnet) (v0.9.10, SPEC § 28) | **fait** |
 
 ## Mesures
 

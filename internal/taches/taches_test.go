@@ -404,3 +404,27 @@ func TestTachesPriveesEtParents(t *testing.T) {
 		t.Fatal("historique : tâche des parents montrée à un enfant")
 	}
 }
+
+// Pièces jointes d'une tâche : montrées dans la liste, ajoutées par qui peut
+// la modifier.
+func TestJointsTaches(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	marie.Post("/taches", map[string]string{"titre": "Remplir le dossier", "repetition": "unique"})
+	_, p := marie.Get("/taches")
+	id := essai.Trouver(t, p, `href="/taches/(\d+)/modifier" aria-label="Modifier Remplir le dossier"`)
+	if _, p = marie.Get("/taches/" + id + "/modifier"); !strings.Contains(p, `action="/joints/taches/`+id+`"`) {
+		t.Fatal("bouton « Joindre un fichier » absent")
+	}
+	f := essai.Fichier{Champ: "fichier", Nom: "notice.pdf", Contenu: []byte("%PDF-1.4\nnotice")}
+	if code, _ := marie.PostFichiers("/joints/taches/"+id, map[string]string{"retour": "/taches/" + id + "/modifier"}, f); code != 200 {
+		t.Fatalf("envoi : %d", code)
+	}
+	if _, p = lea.Get("/taches"); !strings.Contains(p, "📎 notice.pdf") {
+		t.Fatal("pièce absente de la liste")
+	}
+	if code, _ := lea.PostFichiers("/joints/taches/"+id, nil, f); code != http.StatusForbidden {
+		t.Fatalf("pièce ajoutée par qui ne peut pas modifier : %d", code)
+	}
+}

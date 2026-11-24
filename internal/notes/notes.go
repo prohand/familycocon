@@ -49,6 +49,15 @@ func Brancher(a *appli.App) {
 	a.Route("POST /notes/photos/{id}/supprimer", mod, appli.Membre, m.supprimerPhoto)
 	a.Route("POST /notes/{id}/supprimer", mod, appli.Membre, m.supprimer)
 	m.routesRangement()
+	// Pièces jointes : vues par ceux qui voient la note, ajoutées par ceux
+	// qui peuvent la modifier.
+	a.AjouterJoints(mod, func(ctx context.Context, c *appli.Contexte, id int64) (bool, bool) {
+		n, err := a.Q.NoteParID(ctx, donnees.NoteParIDParams{ID: id, FamilleID: c.Famille.ID})
+		if err != nil || !m.visible(ctx, c, n) {
+			return false, false
+		}
+		return true, modifiable(c, n)
+	})
 	a.Route("GET /notes/categories", mod, appli.Membre, m.pageCategories)
 	a.Route("POST /notes/categories", mod, appli.Membre, m.categoriesPost)
 
@@ -72,6 +81,7 @@ type carteNote struct {
 	donnees.Note
 	Categorie  string // « 🚗 Voiture » (vide : sans catégorie)
 	Photos     int64  // nombre de photos
+	Joints     int    // nombre de pièces jointes
 	Rappel     string // « 28/11 18:00 » (rappel à venir)
 	Auteur     *donnees.Membre
 	Date       string
@@ -211,6 +221,10 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, cate
 		return nil, err
 	}
 	parID := appli.MembresParID(membres)
+	joints, err := m.a.JointsParObjet(ctx, c, mod)
+	if err != nil {
+		return nil, err
+	}
 	v := &vueNotes{Filtre: filtre, Categorie: categorie, Categories: cats, Recherche: recherche, Params: paramsListe(filtre, categorie, recherche)}
 	switch {
 	case categorie == -1:
@@ -228,7 +242,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, filtre string, cate
 			n.Texte += "…"
 		}
 		n.Texte = apercuCases(n.Texte)
-		cn := carteNote{Note: n, Categorie: nomCat[l.CategorieID.Int64], Photos: l.Photos, Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n),
+		cn := carteNote{Note: n, Categorie: nomCat[l.CategorieID.Int64], Photos: l.Photos, Joints: len(joints[n.ID]), Date: dateCourte(c.Heure(n.ModifieLe), c.Maintenant()), Modifiable: modifiable(c, n),
 			Cachee: l.Cachee == 1 && n.Privee == 0}
 		if l.RappelLe > 0 && l.RappelEnvoye == 0 {
 			cn.Rappel = time.Unix(l.RappelLe, 0).In(c.Lieu).Format("02/01 15:04")
@@ -299,6 +313,8 @@ type formNote struct {
 	// et pour une note déjà privée ; pour une note partagée, seulement à un
 	// parent qui en est l'auteur).
 	PeutPriver bool
+	// Joints : les pièces jointes (documents).
+	Joints appli.VueJoints
 	// PeutCacher : la case « Parents seulement » est proposée (parents).
 	PeutCacher bool
 	// Cachee : la note est cachée aux enfants par sa catégorie.
@@ -345,6 +361,10 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			return
 		}
 		f.Photos = enBas(n.Texte, photos) // celles du texte y sont montrées
+		if f.Joints, err = m.a.Joints(r.Context(), c, mod, n.ID, f.Modifiable, "/notes/"+strconv.FormatInt(n.ID, 10)); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
 	}
 	cats, err := m.categories(r.Context(), c)
 	if err != nil {

@@ -93,6 +93,14 @@ func Brancher(a *appli.App) *Suivi {
 	a.Route("POST /suivi/carnet/{id}/pieces", "", appli.Parent, s.ajouterPiece)
 	a.Route("GET /suivi/pieces/{id}", "", appli.Parent, s.piece)
 	a.Route("POST /suivi/pieces/{id}/supprimer", "", appli.Parent, s.supprimerPiece)
+	// Documents d'une ligne du carnet (facture en PDF…) : parents seulement,
+	// comme les photos (ils montrent des prix).
+	a.AjouterJoints("carnet", func(ctx context.Context, c *appli.Contexte, id int64) (bool, bool) {
+		l, err := a.Q.LigneCarnetParID(ctx, donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
+		o, ok := s.objets[l.Module]
+		ok = err == nil && ok && c.EstParent() && s.permis(ctx, c, o, l.ObjetID)
+		return ok, ok
+	})
 	return s
 }
 
@@ -160,6 +168,8 @@ type Bloc struct {
 	PeutBudget    bool                      // case « Ajouter aussi au budget » (parent, budget activé)
 	BudgetPerso   bool                      // proposer le budget perso d'abord (projet privé)
 	Pieces        map[int64][]donnees.Piece // photos (tickets) par ligne, parents seulement
+	Joints        map[int64][]appli.Joint   // documents par ligne, parents seulement
+	Retour        string                    // la page de l'objet (après l'envoi d'un document)
 	CoutKm        string                    // « 0,18 € / km » (véhicules)
 	Conso         string                    // « 6,4 L / 100 km » (véhicules, avec des pleins notés)
 	// Véhicules : onglets « Entretien », « Pleins » et « Chiffres » (voir pleins.go).
@@ -220,6 +230,10 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 		if b.Pieces, err = s.piecesParLigne(ctx, c, module, objet); err != nil {
 			return nil, err
 		}
+		if b.Joints, err = s.a.JointsParObjet(ctx, c, "carnet"); err != nil {
+			return nil, err
+		}
+		b.Retour = o.URL(objet)
 	}
 	if o.AvecKm {
 		if err := s.statsKm(ctx, c, b); err != nil {

@@ -20,6 +20,36 @@
 </template>
 {{end}}
 
+{{/* Pièces jointes d'un objet (appli.VueJoints) : la liste, et pour qui
+     peut modifier, « 📎 Joindre un fichier » (envoyé dès le choix ;
+     « retour » avant le fichier : lu en premier). */}}
+{{define "pieces-jointes"}}
+<div class="pieces-jointes">
+  {{- if .L}}
+  <ul class="liste-joints">
+    {{- range .L}}
+    <li><a href="/joints/{{.ID}}/{{.Nom}}" target="_blank" rel="noopener">{{or .Icone "📎"}} <span class="nom-joint">{{.Nom}}</span></a> <small>{{.TailleTexte}}</small>
+      {{- if $.Modifiable}}
+      <form method="post" action="/joints/{{.ID}}/supprimer" hx-confirm="Retirer « {{.Nom}} » ?">
+        <input type="hidden" name="_jeton" value="{{$.CSRF}}"><input type="hidden" name="retour" value="{{$.Retour}}">
+        <button class="crayon" aria-label="Retirer {{.Nom}}">✕</button>
+      </form>
+      {{- end}}
+    </li>
+    {{- end}}
+  </ul>
+  {{- end}}
+  {{- if .Modifiable}}
+  <form class="ajout-joint" method="post" action="/joints/{{.Module}}/{{.Objet}}" enctype="multipart/form-data">
+    <input type="hidden" name="_jeton" value="{{.CSRF}}"><input type="hidden" name="retour" value="{{.Retour}}">
+    <label class="bouton petit secondaire">📎 Joindre un fichier<input type="file" name="fichier" multiple accept="{{.Accepte}}" data-envoi-auto></label>
+    <span class="aide">PDF, image, document, tableur, texte, ZIP : 10 Mo au plus.</span>
+  </form>
+  {{- else if not .L}}<p class="aide">Aucune pièce jointe.</p>
+  {{- end}}
+</div>
+{{end}}
+
 {{define "choix-couleur"}}
 <fieldset class="couleurs">
   <legend class="sr">Couleur</legend>

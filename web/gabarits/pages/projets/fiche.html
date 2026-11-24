@@ -42,6 +42,11 @@
   </details>
 </section>
 
+<section class="carte bloc">
+  <h2 class="sous-titre">📎 Pièces jointes <small class="aide">(devis, factures, plans…)</small></h2>
+  {{template "pieces-jointes" .Joints}}
+</section>
+
 {{if and .P.Budget $c.EstParent}}
 <section class="carte bloc budget-projet">
   <h2>💶 Budget</h2>

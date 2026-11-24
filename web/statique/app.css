@@ -1752,3 +1752,21 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .grille-emojis .sans-emoji { grid-column: span 2; font-size: .85rem; font-weight: 700; color: var(--texte-doux); }
 .ligne-categorie .nombre { flex: none; font-size: .85rem; color: var(--texte-doux); white-space: nowrap; }
 .modif-categorie { display: flex; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+
+/* ---------- Pièces jointes (documents) ---------- */
+.pieces-jointes { margin: 8px 0; }
+.liste-joints { list-style: none; margin: 0 0 8px; padding: 0; }
+.liste-joints li { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--bordure); }
+.liste-joints li:last-child { border-bottom: 0; }
+.liste-joints a { flex: 1; min-width: 0; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.liste-joints small { color: var(--texte-doux); white-space: nowrap; }
+.liste-joints form { margin: 0; }
+.ajout-joint { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ajout-joint label { position: relative; overflow: hidden; cursor: pointer; }
+/* Le vrai champ fichier, invisible, couvre le bouton (touché = choisir). */
+.ajout-joint input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; font-size: 0; }
+.ajout-joint.htmx-request label::after { content: " · envoi…"; }
+/* Sur une ligne de tâche : en petit, sous le titre. */
+.joints-tache { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 2px; font-size: .8rem; }
+.joints-tache a { font-weight: 700; }
+

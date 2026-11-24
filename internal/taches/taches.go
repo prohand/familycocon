@@ -51,6 +51,15 @@ func Brancher(a *appli.App) {
 	a.Route("GET /taches/categories", mod, appli.Membre, m.pageCategories)
 	a.Route("POST /taches/categories", mod, appli.Membre, m.categoriesPost)
 	a.AjouterMinute(m.envoyerRappels)
+	// Pièces jointes : vues par ceux qui voient la tâche, ajoutées par ceux
+	// qui peuvent la modifier.
+	a.AjouterJoints(mod, func(ctx context.Context, c *appli.Contexte, id int64) (bool, bool) {
+		t, err := a.Q.TacheParID(ctx, donnees.TacheParIDParams{ID: id, FamilleID: c.Famille.ID})
+		if err != nil || !m.visible(ctx, c, t) {
+			return false, false
+		}
+		return true, modifiable(c, t)
+	})
 
 	a.AjouterResume(mod, m.resume)
 	a.AjouterBloc(appli.BlocAccueil{Module: mod, Ordre: 2, Rendre: m.blocAccueil})
@@ -197,6 +206,7 @@ type ligneTache struct {
 	Categorie  string // « 🧹 Ménage » (vide : sans catégorie)
 	Rappel     string // « ⏰ 18:00 » (vide : pas de rappel)
 	Cachee     bool   // réservée aux parents (la tâche ou sa catégorie)
+	Joints     []appli.Joint
 }
 
 type score struct {
@@ -418,6 +428,10 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 		nomCat[cats[i].ID] = cats[i].Etiquette()
 		catParents[cats[i].ID] = cats[i].Parents
 	}
+	joints, err := m.a.JointsParObjet(ctx, c, mod)
+	if err != nil {
+		return nil, err
+	}
 	v := &vueTaches{Pour: pour, Categorie: cat, Cat: paramCategorie(cat), Voir: voir, Categories: cats, Membres: membres}
 	aujourdhui := repetition.CleJour(c.Maintenant())
 	for _, l := range lignes {
@@ -425,6 +439,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 			continue
 		}
 		l.Categorie = nomCat[l.CategorieID.Int64]
+		l.Joints = joints[l.ID]
 		l.Cachee = l.Privee == 0 && (l.Parents == 1 || catParents[l.CategorieID.Int64])
 		if !dansVoir(l, voir, parID) {
 			continue
@@ -550,6 +565,7 @@ type formTache struct {
 	Categories []Categorie
 	Nouvelle   bool
 	DansTour   map[int64]bool // membres du tour de rôle
+	Joints     appli.VueJoints
 	// PeutPriver : case « Privée » (à la création, puis pour son créateur) ;
 	// PeutCacher : case « Parents seulement » (parents).
 	PeutPriver, PeutCacher bool
@@ -576,6 +592,10 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		f.Tache, f.Regle = t, repetition.Lire(t.Repetition)
 		f.PeutPriver = t.CreePar.Valid && t.CreePar.Int64 == c.Membre.ID
 		f.CacheeParCategorie = m.categorieParents(r.Context(), t.CategorieID)
+		if f.Joints, err = m.a.Joints(r.Context(), c, mod, t.ID, true, "/taches/"+strconv.FormatInt(t.ID, 10)+"/modifier"); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
 		for _, x := range strings.Split(t.Tour, ",") {
 			if id, err := strconv.ParseInt(x, 10, 64); err == nil {
 				f.DansTour[id] = true
