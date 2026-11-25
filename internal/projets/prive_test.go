@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"familycocon/internal/abonnements"
 	"familycocon/internal/appli"
@@ -26,12 +25,12 @@ func TestPriveProjetsAbonnements(t *testing.T) {
 	marie := essai.Famille(t, srv)
 	paul := essai.Parent(t, srv, marie, "Paul")
 	lea := essai.Enfant(t, srv, marie, "Léa")
-	auj := time.Now().Format("2006-01-02")
+	auj := essai.Maintenant().Format("2006-01-02")
 	mois := auj[:7]
 
 	// Paul crée un projet privé, avec une étape datée.
 	paul.Get("/projets/nouveau")
-	_, page := paul.Post("/projets", map[string]string{"nom": "Cadeau surprise", "prive": "1", "objectif": time.Now().AddDate(0, 0, 5).Format("2006-01-02")})
+	_, page := paul.Post("/projets", map[string]string{"nom": "Cadeau surprise", "prive": "1", "objectif": essai.Maintenant().AddDate(0, 0, 5).Format("2006-01-02")})
 	id := essai.Trouver(t, page, `action="/projets/(\d+)/etapes"`)
 	if !strings.Contains(page, "Projet privé") || !strings.Contains(page, `<option value="perso" selected>`) {
 		t.Fatal("projet privé : mention ou budget perso proposé d'abord")
@@ -98,7 +97,7 @@ func TestPriveProjetsAbonnements(t *testing.T) {
 		t.Fatal("prélèvement privé au compte commun")
 	}
 	// Rendu partagé : le prélèvement déjà écrit passe au commun.
-	paul.Post("/abonnements/"+ab, map[string]string{"nom": "Magazine de Paul", "montant": "9,90", "frequence": "mois", "prochain": time.Now().AddDate(0, 1, 0).Format("2006-01-02")})
+	paul.Post("/abonnements/"+ab, map[string]string{"nom": "Magazine de Paul", "montant": "9,90", "frequence": "mois", "prochain": essai.Maintenant().AddDate(0, 1, 0).Format("2006-01-02")})
 	if _, b := marie.Get("/budget?compte=commun&mois=" + mois); !strings.Contains(b, "Magazine de Paul") {
 		t.Fatal("prélèvement non passé au commun")
 	}

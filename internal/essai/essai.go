@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"familycocon/internal/appli"
 	"familycocon/internal/base"
@@ -28,6 +29,17 @@ import (
 
 // NouvelleApp : application complète (modules branchés par brancher) sur
 // une base temporaire, et son serveur HTTP de test.
+// Maintenant : l'heure de la famille d'essai (Europe/Paris, son fuseau par
+// défaut). Les tests qui comparent des jours l'utilisent plutôt que
+// time.Now() (en UTC sur la CI) : entre 23 h et minuit UTC, ce n'est pas le
+// même jour à Paris.
+func Maintenant() time.Time {
+	if l, err := time.LoadLocation("Europe/Paris"); err == nil {
+		return time.Now().In(l)
+	}
+	return time.Now()
+}
+
 func NouvelleApp(t *testing.T, brancher func(a *appli.App)) (*appli.App, *httptest.Server) {
 	t.Helper()
 	cfg, err := config.LireDepuis(func(string) string { return "" })
