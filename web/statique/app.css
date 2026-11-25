@@ -1451,6 +1451,9 @@ details.termines > summary { cursor: pointer; }
 select[multiple] { min-height: 7em; }
 details.vcard > summary { cursor: pointer; }
 details.plus-champs > summary { cursor: pointer; margin-bottom: 10px; }
+/* Nouveau montant prévu (opération qui revient, abonnement). */
+details.nouveau-montant { margin: 4px 0 12px; }
+details.nouveau-montant > summary { cursor: pointer; color: var(--corail); font-weight: 800; margin-bottom: 8px; }
 
 /* ---------- Accessibilité : moins d'animations si demandé ---------- */
 @media (prefers-reduced-motion: reduce) {

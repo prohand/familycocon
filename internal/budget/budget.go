@@ -40,24 +40,35 @@ type Categorie struct {
 var Categories = []Categorie{
 	{"courses", "Courses", "🛒", "depense"},
 	{"logement", "Logement", "🏠", "depense"},
+	{"maison", "Maison, travaux", "🔨", "depense"},
 	{"energie", "Énergie", "⚡", "depense"},
 	{"transport", "Transport", "🚗", "depense"},
 	{"sante", "Santé", "🩺", "depense"},
+	{"beaute", "Beauté, soins", "💇", "depense"},
 	{"ecole", "École", "🎒", "depense"},
 	{"enfants", "Enfants", "🧸", "depense"},
+	{"garde", "Garde d'enfants", "👶", "depense"},
 	{"loisirs", "Loisirs", "🎡", "depense"},
+	{"sport", "Sport", "⚽", "depense"},
+	{"vacances", "Vacances, voyages", "✈️", "depense"},
 	{"restaurants", "Restaurants", "🍕", "depense"},
 	{"vetements", "Vêtements", "👕", "depense"},
 	{"abonnements", "Abonnements", "📱", "depense"},
 	{"cadeaux", "Cadeaux", "🎁", "depense"},
+	{"dons", "Dons", "❤️", "depense"},
 	{"animaux", "Animaux", "🐾", "depense"},
 	{"impots", "Impôts", "🧾", "depense"},
 	{"assurances", "Assurances", "🛡️", "depense"},
 	{"credit", "Crédit", "🏦", "depense"},
+	{"frais-bancaires", "Frais bancaires", "💳", "depense"},
 	{"epargne", "Épargne", "🐷", "depense"},
 	{"autre", "Autre dépense", "💸", "depense"},
 	{"salaire", "Salaire", "💼", "revenu"},
 	{"aides", "Aides, allocations", "🏛️", "revenu"},
+	{"remboursements", "Remboursements", "🔄", "revenu"},
+	{"ventes", "Ventes", "🏷️", "revenu"},
+	{"loyers", "Loyers perçus", "🔑", "revenu"},
+	{"retraite", "Retraite, pension", "👴", "revenu"},
 	{"autre-revenu", "Autre revenu", "💰", "revenu"},
 }
 
@@ -312,19 +323,11 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 	// Côté commun, les virements qui reviennent des budgets perso sont des
 	// revenus à venir.
 	if compte == 0 {
-		tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+		recus, err := m.virementsRecus(ctx, c, parID)
 		if err != nil {
 			return nil, err
 		}
-		for _, r := range tous {
-			if r.Virement == 1 {
-				r.Sens, r.Categorie = "revenu", "virement-recu"
-				if mb, ok := parID[r.PersoDe]; ok {
-					r.Libelle = libelleVirement(mb.Nom)
-				}
-				recs = append(recs, r)
-			}
-		}
+		recs = append(recs, recus...)
 	}
 	for _, p := range Prevues(recs, premier, dernier, maintenant) {
 		cat, ok := CategorieParCle(p.Categorie)
@@ -347,6 +350,23 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 }
 
 // recurrencesCompte : les opérations qui reviennent de ce budget.
+// virementsRecus : les virements qui reviennent des budgets perso vers le
+// commun, vus du côté commun (revenus « Virement de Marie »).
+func (m *Module) virementsRecus(ctx context.Context, c *appli.Contexte, parID map[int64]*donnees.Membre) ([]donnees.Recurrence, error) {
+	tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+	var out []donnees.Recurrence
+	for _, r := range tous {
+		if r.Virement == 1 {
+			r.Sens, r.Categorie = "revenu", "virement-recu"
+			if mb, ok := parID[r.PersoDe]; ok {
+				r.Libelle = libelleVirement(mb.Nom)
+			}
+			out = append(out, r)
+		}
+	}
+	return out, err
+}
+
 func (m *Module) recurrencesCompte(ctx context.Context, c *appli.Contexte, compte int64) ([]donnees.Recurrence, error) {
 	tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
 	var out []donnees.Recurrence

@@ -28,13 +28,20 @@ import (
 type Frequence struct {
 	Cle, Nom string
 	Mois     int // 0 : chaque semaine
+	ParAn    int // nombre de fois par an
 }
+
+// Dix mois : chaque mois de janvier à octobre, rien en novembre et
+// décembre (taxe foncière, taxe d'habitation mensualisées).
+const dixMois = "mois10"
 
 // Frequences proposées.
 var Frequences = []Frequence{
-	{"semaine", "Chaque semaine", 0}, {"mois", "Chaque mois", 1}, {"2mois", "Tous les 2 mois", 2},
-	{"trimestre", "Tous les 3 mois (trimestre)", 3}, {"semestre", "Tous les 6 mois (semestre)", 6},
-	{"annee", "Chaque année", 12},
+	{"semaine", "Chaque semaine", 0, 52}, {"mois", "Chaque mois", 1, 12},
+	{dixMois, "Chaque mois, de janvier à octobre (10 fois par an)", 1, 10},
+	{"2mois", "Tous les 2 mois", 2, 6},
+	{"trimestre", "Tous les 3 mois (trimestre)", 3, 4}, {"semestre", "Tous les 6 mois (semestre)", 6, 2},
+	{"annee", "Chaque année", 12, 1},
 }
 
 func frequence(cle string) (Frequence, bool) {
@@ -67,6 +74,16 @@ func Occurrence(debut, freq string, k int64) (time.Time, error) {
 		return d.AddDate(0, 0, int(7*k)), nil
 	}
 	premier := time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, int(k)*f.Mois, 0)
+	if f.Cle == dixMois {
+		// Les mois comptés de 0 à 9 dans chaque année (janvier à octobre) ;
+		// un début en novembre ou décembre part du janvier suivant.
+		an, mois := d.Year(), int(d.Month())
+		if mois > 10 {
+			an, mois = an+1, 1
+		}
+		n := int64(an)*10 + int64(mois-1) + k
+		premier = time.Date(int(n/10), time.Month(n%10+1), 1, 0, 0, 0, 0, time.UTC)
+	}
 	dernierJour := premier.AddDate(0, 1, -1).Day()
 	return premier.AddDate(0, 0, min(d.Day(), dernierJour)-1), nil
 }
@@ -74,10 +91,7 @@ func Occurrence(debut, freq string, k int64) (time.Time, error) {
 // ParAn : le montant sur une année (exact, sans arrondi).
 func ParAn(montant int64, freq string) int64 {
 	f, _ := frequence(freq)
-	if f.Mois == 0 {
-		return montant * 52
-	}
-	return montant * int64(12/f.Mois)
+	return montant * int64(f.ParAn)
 }
 
 // RecurrencesMax : par famille (garde-fou).
@@ -109,10 +123,7 @@ func ValiderProchaine(prochaine string, rec *donnees.Recurrence, aujourdhui time
 // ParMois : le montant ramené à un mois (pour les totaux).
 func ParMois(montant int64, freq string) int64 {
 	f, _ := frequence(freq)
-	if f.Mois == 0 {
-		return montant * 52 / 12
-	}
-	return montant / int64(f.Mois)
+	return montant * int64(f.ParAn) / 12
 }
 
 // Prochaine : la prochaine occurrence pas encore écrite (ok = faux si la
@@ -123,6 +134,36 @@ func Prochaine(r donnees.Recurrence) (time.Time, bool) {
 		return j, false
 	}
 	return j, true
+}
+
+// MontantDu : le montant de l'occurrence du jour donné (« 2027-01-05 ») :
+// le nouveau montant prévu si sa date est arrivée.
+func MontantDu(r donnees.Recurrence, jour string) int64 {
+	if r.NouveauLe != "" && jour >= r.NouveauLe {
+		return r.NouveauMontant
+	}
+	return r.Montant
+}
+
+// LireNouveauMontant : les champs « nouveau_montant » et « nouveau_le » d'un
+// formulaire. Tous deux vides : rien de prévu (0, « »). msg : « » si tout va
+// bien.
+func LireNouveauMontant(r *http.Request, aujourdhui time.Time) (montant int64, le, msg string) {
+	sm, le := strings.TrimSpace(r.PostFormValue("nouveau_montant")), r.PostFormValue("nouveau_le")
+	if sm == "" && le == "" {
+		return 0, "", ""
+	}
+	if sm == "" || le == "" {
+		return 0, "", "Nouveau montant : indiquez le montant et la date."
+	}
+	montant, err := LireMontant(sm)
+	if err != nil {
+		return 0, "", "Nouveau montant : " + err.Error()
+	}
+	if _, ok := LireJour(le, aujourdhui); !ok || le <= repetition.CleJour(aujourdhui) {
+		return 0, "", "Nouveau montant : la date doit être après aujourd'hui (sinon, changez directement le montant)."
+	}
+	return montant, le, ""
 }
 
 // errDejaFaite : une autre requête a écrit l'occurrence en même temps.
@@ -197,17 +238,24 @@ func Generer(ctx context.Context, a *appli.App, famille int64, aujourdhui time.T
 				if n, err := q.AvancerRecurrence(ctx, donnees.AvancerRecurrenceParams{ID: r.ID, FamilleID: famille, Faites: r.Faites}); err != nil || n == 0 {
 					return errors.Join(err, errDejaFaite)
 				}
+				// Date du nouveau montant arrivée : il devient le montant.
+				montant := MontantDu(r, repetition.CleJour(j))
+				if r.NouveauLe != "" && repetition.CleJour(j) >= r.NouveauLe {
+					if err := q.AppliquerNouveauMontant(ctx, donnees.AppliquerNouveauMontantParams{ID: r.ID, FamilleID: famille}); err != nil {
+						return err
+					}
+				}
 				// Virement qui revient : les deux moitiés (perso et commun).
 				if r.Virement == 1 {
 					qui, err := q.MembreParID(ctx, donnees.MembreParIDParams{ID: r.PersoDe, FamilleID: famille})
 					if err != nil {
 						return err
 					}
-					return ecrireVirement(ctx, q, famille, r.PersoDe, qui.Nom, r.Montant, repetition.CleJour(j), r.Libelle,
+					return ecrireVirement(ctx, q, famille, r.PersoDe, qui.Nom, montant, repetition.CleJour(j), r.Libelle,
 						sql.NullInt64{Int64: r.ID, Valid: true}, r.CreePar)
 				}
 				_, err := q.CreerOccurrence(ctx, donnees.CreerOccurrenceParams{
-					FamilleID: r.FamilleID, PersoDe: r.PersoDe, Sens: r.Sens, Montant: r.Montant, Categorie: r.Categorie, Libelle: r.Libelle,
+					FamilleID: r.FamilleID, PersoDe: r.PersoDe, Sens: r.Sens, Montant: montant, Categorie: r.Categorie, Libelle: r.Libelle,
 					Jour: repetition.CleJour(j), MembreID: r.MembreID, RecurrenceID: sql.NullInt64{Int64: r.ID, Valid: true},
 					CreePar: r.CreePar, CreeLe: time.Now().Unix(),
 				})
@@ -220,6 +268,9 @@ func Generer(ctx context.Context, a *appli.App, famille int64, aujourdhui time.T
 				return err
 			}
 			r.Faites++
+			if r.NouveauLe != "" && repetition.CleJour(j) >= r.NouveauLe {
+				r.Montant, r.NouveauMontant, r.NouveauLe = r.NouveauMontant, 0, ""
+			}
 		}
 	}
 	dejaGenere.Store(cleGenere{a, famille}, limite)
@@ -239,7 +290,7 @@ func Prevues(recs []donnees.Recurrence, premier, dernier, aujourdhui time.Time) 
 				break
 			}
 			if cle >= du && cle > auj {
-				out = append(out, donnees.Operation{FamilleID: r.FamilleID, Sens: r.Sens, Montant: r.Montant, Categorie: r.Categorie,
+				out = append(out, donnees.Operation{FamilleID: r.FamilleID, Sens: r.Sens, Montant: MontantDu(r, cle), Categorie: r.Categorie,
 					Libelle: r.Libelle, Jour: cle, MembreID: r.MembreID, RecurrenceID: sql.NullInt64{Int64: r.ID, Valid: true}})
 			}
 			r.Faites++
@@ -263,6 +314,18 @@ type LigneRecurrence struct {
 	Frequence  string
 	Prochaine  string // « Vendredi 5 décembre », ou « Terminée »
 	Abonnement bool
+	NouveauDes string // « 01/01/2027 » : date du nouveau montant prévu, ou « »
+	SansLien   bool   // virement reçu d'un budget perso : se modifie de ce côté-là
+}
+
+// DateNouveau : la date d'un nouveau montant prévu, à afficher (« 1er
+// janvier » ou « 01/01/2028 »), ou « ».
+func DateNouveau(le string, aujourdhui time.Time) string {
+	j, err := time.Parse("2006-01-02", le)
+	if err != nil {
+		return ""
+	}
+	return appli.DateCourte(j, aujourdhui)
 }
 
 type vueRecurrences struct {
@@ -283,7 +346,7 @@ func (m *Module) abonnees(ctx context.Context, c *appli.Contexte) (map[int64]boo
 	return out, err
 }
 
-func ligneRecurrence(r donnees.Recurrence, abonnees map[int64]bool) LigneRecurrence {
+func ligneRecurrence(r donnees.Recurrence, abonnees map[int64]bool, aujourdhui time.Time) LigneRecurrence {
 	cat, ok := CategorieParCle(r.Categorie)
 	if !ok {
 		cat, _ = CategorieParCle("autre")
@@ -293,6 +356,7 @@ func ligneRecurrence(r donnees.Recurrence, abonnees map[int64]bool) LigneRecurre
 		l.Prochaine = appli.DateLongue(j)
 	}
 	l.Abonnement = abonnees[r.ID]
+	l.NouveauDes = DateNouveau(r.NouveauLe, aujourdhui)
 	return l
 }
 
@@ -314,8 +378,32 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 		return
 	}
 	v := vueRecurrences{Devise: c.Famille.Devise, Perso: compte > 0}
+	// Côté commun, les virements qui reviennent des budgets perso sont des
+	// revenus (sans lien : ils se modifient depuis le budget perso).
+	recus := map[int64]bool{}
+	if compte == 0 {
+		membres, err := m.a.Membres(ctx, c)
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		parID := map[int64]*donnees.Membre{}
+		for i := range membres {
+			parID[membres[i].ID] = &membres[i]
+		}
+		virements, err := m.virementsRecus(ctx, c, parID)
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		for _, x := range virements {
+			recus[x.ID] = true
+		}
+		recs = append(recs, virements...)
+	}
 	for _, x := range recs {
-		l := ligneRecurrence(x, abonnees)
+		l := ligneRecurrence(x, abonnees, c.Maintenant())
+		l.SansLien = recus[x.ID]
 		_, active := Prochaine(x)
 		if x.Sens == "revenu" {
 			v.Revenus = append(v.Revenus, l)
@@ -341,13 +429,14 @@ func (m *Module) recurrence(r *http.Request, c *appli.Contexte) (donnees.Recurre
 }
 
 type formRecurrence struct {
-	R          LigneRecurrence
-	Montant    string
-	ProchaineJ string // date du champ « Prochaine fois »
-	Categories []Categorie
-	Frequences []Frequence
-	Membres    []donnees.Membre
-	Devise     string
+	R              LigneRecurrence
+	Montant        string
+	ProchaineJ     string // date du champ « Prochaine fois »
+	NouveauMontant string // nouveau montant prévu (saisie), ou « »
+	Categories     []Categorie
+	Frequences     []Frequence
+	Membres        []donnees.Membre
+	Devise         string
 }
 
 func (m *Module) formRecurrence(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -361,8 +450,11 @@ func (m *Module) formRecurrence(w http.ResponseWriter, r *http.Request, c *appli
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	f := formRecurrence{R: ligneRecurrence(x, abonnees), Montant: MontantSaisie(x.Montant), Categories: Categories,
+	f := formRecurrence{R: ligneRecurrence(x, abonnees, c.Maintenant()), Montant: MontantSaisie(x.Montant), Categories: Categories,
 		Frequences: Frequences, Devise: c.Famille.Devise}
+	if x.NouveauLe != "" {
+		f.NouveauMontant = MontantSaisie(x.NouveauMontant)
+	}
 	if j, ok := Prochaine(x); ok {
 		f.ProchaineJ = repetition.CleJour(j)
 	}
@@ -408,6 +500,11 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 		m.a.Echec(w, r, http.StatusBadRequest, "La date de fin doit suivre la prochaine date.")
 		return
 	}
+	nouveau, nouveauLe, msgN := LireNouveauMontant(r, c.Maintenant())
+	if msgN != "" {
+		m.a.Echec(w, r, http.StatusBadRequest, msgN)
+		return
+	}
 	var membre sql.NullInt64
 	if id, _ := strconv.ParseInt(r.PostFormValue("membre"), 10, 64); id > 0 {
 		if _, err := m.a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: id, FamilleID: c.Famille.ID}); err == nil {
@@ -433,7 +530,8 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	}
 	n, err := m.a.Q.ModifierRecurrence(r.Context(), donnees.ModifierRecurrenceParams{
 		Sens: cat.Sens, Montant: montant, Categorie: cat.Cle, Libelle: libelle, MembreID: membre, Frequence: freq,
-		Debut: debut, Fin: fin, Faites: faites, ID: x.ID, FamilleID: c.Famille.ID, FaitesAvant: x.Faites,
+		Debut: debut, Fin: fin, Faites: faites, NouveauMontant: nouveau, NouveauLe: nouveauLe,
+		ID: x.ID, FamilleID: c.Famille.ID, FaitesAvant: x.Faites,
 	})
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)

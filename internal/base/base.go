@@ -204,14 +204,43 @@ func Migrer(ctx context.Context, db *sql.DB, dossierSauvegardes string) (string,
 
 // appliquer exécute une migration et note sa version, dans une transaction :
 // en cas d'erreur, rien n'est modifié.
+//
+// Une migration qui commence par « -- sans cles etrangeres » tourne avec
+// foreign_keys=OFF (méthode conseillée par SQLite pour refaire une table :
+// sinon, supprimer l'ancienne table déclencherait les ON DELETE des tables
+// qui pointent vers elle). Les liens sont vérifiés à la fin
+// (foreign_key_check) : un lien cassé annule tout.
 func appliquer(ctx context.Context, db *sql.DB, m migration) error {
-	tx, err := db.BeginTx(ctx, nil)
+	// Une seule connexion : le PRAGMA ne vaut que pour elle.
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	sansCles := strings.HasPrefix(m.sql, "-- sans cles etrangeres")
+	if sansCles {
+		// Hors transaction : SQLite ignore ce PRAGMA dans une transaction.
+		if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys = OFF"); err != nil {
+			return err
+		}
+		defer func() { _, _ = conn.ExecContext(context.Background(), "PRAGMA foreign_keys = ON") }()
+	}
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck // sans effet après Commit
 	if _, err := tx.ExecContext(ctx, m.sql); err != nil {
 		return err
+	}
+	if sansCles {
+		var table string
+		err := tx.QueryRowContext(ctx, "PRAGMA foreign_key_check").Scan(&table, new(any), new(any), new(any))
+		if err == nil {
+			return fmt.Errorf("lien cassé dans la table %s", table)
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_version(version, nom, appliquee_le) VALUES (?, ?, ?)`,
 		m.version, m.nom, time.Now().Unix()); err != nil {

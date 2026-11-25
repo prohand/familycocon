@@ -5,6 +5,7 @@
   <a class="retour" href="/budget/recurrences">‹ Qui reviennent</a>
   <h1>🔁 {{if .R.Libelle}}{{.R.Libelle}}{{else}}{{.R.Cat.Nom}}{{end}}</h1>
   <p>{{.R.Frequence}} · {{if eq .R.Prochaine "Terminée"}}terminée{{else}}prochaine : {{.R.Prochaine}}{{end}}</p>
+  {{if .R.NouveauDes}}<p>📅 {{montant .R.NouveauMontant .Devise}} à partir du {{.R.NouveauDes}}</p>{{end}}
 </section>
 {{if .R.Abonnement}}<p class="aide bloc">C'est un abonnement : vous pouvez aussi le modifier depuis la page <a href="/abonnements">Abonnements</a>.</p>{{end}}
 <form class="carte" method="post" action="/recurrences/{{.R.ID}}">
@@ -33,6 +34,7 @@
         {{- range .Membres}}{{if eq .Role "parent"}}<option value="{{.ID}}"{{if and $.Donnees.R.MembreID.Valid (eq .ID $.Donnees.R.MembreID.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}{{end}}
       </select></label>
   </div>
+  {{template "nouveau-montant" dict "Montant" .NouveauMontant "Le" .R.NouveauLe "Devise" .Devise}}
   <p class="aide">Les changements valent pour les prochaines fois ; les opérations déjà passées ne bougent pas.</p>
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>

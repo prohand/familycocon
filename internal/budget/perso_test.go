@@ -81,9 +81,12 @@ func TestBudgetPerso(t *testing.T) {
 			t.Fatalf("virement mensuel, mois %s", m)
 		}
 	}
-	// La récurrence est dans le perso de Marie, pas dans le commun.
-	if _, r := paul.Get("/budget/recurrences?compte=commun"); strings.Contains(r, "800,00") {
-		t.Fatal("virement mensuel dans les récurrences du commun")
+	// La récurrence est dans le perso de Marie ; côté commun, c'est un
+	// revenu qui revient (compté dans les revenus du mois), sans lien vers
+	// le budget perso de Marie.
+	if _, r := paul.Get("/budget/recurrences?compte=commun"); !strings.Contains(r, "Virement de Marie") ||
+		!strings.Contains(r, `class="montant revenu">800,00`) || !strings.Contains(r, "Revenus <b>800,00") || strings.Contains(r, `href="/recurrences/`) {
+		t.Fatal("virement mensuel : pas compté en revenu dans les récurrences du commun")
 	}
 	if _, r := marie.Get("/budget/recurrences?compte=perso"); !strings.Contains(r, "800,00") {
 		t.Fatal("virement mensuel absent des récurrences perso")

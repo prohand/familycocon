@@ -86,6 +86,7 @@ type Ligne struct {
 	Bientot    bool   // fin d'engagement dans moins de 60 jours
 	Resilie    bool
 	Lien       template.URL // page de gestion
+	NouveauDes string       // date du nouveau montant prévu (« 01/01/2027 »), ou « »
 }
 
 type vueListe struct {
@@ -112,7 +113,7 @@ func (m *Module) lignes(ctx context.Context, c *appli.Contexte) ([]Ligne, error)
 	for _, x := range l {
 		li := Ligne{ListeAbonnementsRow: x, Frequence: budget.NomFrequence(x.Frequence), ParMois: budget.ParMois(x.Montant, x.Frequence),
 			ParAn: budget.ParAn(x.Montant, x.Frequence),
-			Lien:  contacts.SiteSur(x.Site)}
+			Lien:  contacts.SiteSur(x.Site), NouveauDes: budget.DateNouveau(x.NouveauLe, c.Maintenant())}
 		if j, ok := budget.Prochaine(recurrence(x)); ok {
 			li.Prochain = appli.DateLongue(j)
 		} else {
@@ -155,20 +156,21 @@ func (m *Module) liste(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 // ---------- Formulaire ----------
 
 type form struct {
-	Nouveau    bool
-	A          donnees.Abonnement
-	R          donnees.Recurrence
-	Montant    string
-	Prochain   string
-	Resilie    bool
-	Lien       template.URL
-	Emojis     []string
-	Frequences []budget.Frequence
-	Categories []budget.Categorie
-	Membres    []donnees.Membre
-	Devise     string
-	Paye       int64 // payé depuis le début (prélèvements écrits au budget)
-	NbPaye     int64
+	Nouveau        bool
+	A              donnees.Abonnement
+	R              donnees.Recurrence
+	Montant        string
+	Prochain       string
+	Resilie        bool
+	Lien           template.URL
+	Emojis         []string
+	Frequences     []budget.Frequence
+	Categories     []budget.Categorie
+	Membres        []donnees.Membre
+	Devise         string
+	Paye           int64 // payé depuis le début (prélèvements écrits au budget)
+	NbPaye         int64
+	NouveauMontant string // nouveau montant prévu (saisie), ou « »
 }
 
 func (m *Module) abonnement(r *http.Request, c *appli.Contexte) (donnees.Abonnement, donnees.Recurrence, bool) {
@@ -201,6 +203,9 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 			f.Paye, f.NbPaye = t.Total, t.Nombre
 		}
 		f.Montant = budget.MontantSaisie(rec.Montant)
+		if rec.NouveauLe != "" {
+			f.NouveauMontant = budget.MontantSaisie(rec.NouveauMontant)
+		}
 		if j, ok := budget.Prochaine(rec); ok {
 			f.Prochain = repetition.CleJour(j)
 		} else {
@@ -243,6 +248,10 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		msg = "Adresse du site invalide (http ou https)."
 	case utf8.RuneCountInString(notes) > 1000:
 		msg = "Notes : 1000 caractères au plus."
+	}
+	nouveau, nouveauLe, msgN := budget.LireNouveauMontant(r, c.Maintenant())
+	if msg == "" {
+		msg = msgN
 	}
 	if !catOk || cat.Sens != "depense" {
 		cat, _ = budget.CategorieParCle("abonnements")
@@ -305,7 +314,7 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			// Rien n'est écrit si un prélèvement a été ajouté au budget depuis la
 			// lecture (il serait écrit une seconde fois).
 			n, err := q.ModifierRecurrence(ctx, donnees.ModifierRecurrenceParams{Sens: "depense", Montant: montant, Categorie: cat.Cle,
-				Libelle: nom, MembreID: membre, Frequence: freq, Debut: debut, Fin: rec.Fin, Faites: faites, ID: rec.ID, FamilleID: c.Famille.ID,
+				Libelle: nom, MembreID: membre, Frequence: freq, Debut: debut, Fin: rec.Fin, Faites: faites, NouveauMontant: nouveau, NouveauLe: nouveauLe, ID: rec.ID, FamilleID: c.Famille.ID,
 				FaitesAvant: rec.Faites})
 			if err != nil {
 				return err
@@ -388,7 +397,7 @@ func (m *Module) reprendre(w http.ResponseWriter, r *http.Request, c *appli.Cont
 	ctx := r.Context()
 	n, err := m.a.Q.ModifierRecurrence(ctx, donnees.ModifierRecurrenceParams{Sens: rec.Sens, Montant: rec.Montant, Categorie: rec.Categorie,
 		Libelle: rec.Libelle, MembreID: rec.MembreID, Frequence: rec.Frequence, Debut: prochain, Fin: "", Faites: 0,
-		ID: rec.ID, FamilleID: c.Famille.ID, FaitesAvant: rec.Faites})
+		NouveauMontant: rec.NouveauMontant, NouveauLe: rec.NouveauLe, ID: rec.ID, FamilleID: c.Famille.ID, FaitesAvant: rec.Faites})
 	if err == nil && n == 0 {
 		m.a.Echec(w, r, http.StatusConflict, budget.MessageModifiee)
 		return

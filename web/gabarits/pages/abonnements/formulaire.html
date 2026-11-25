@@ -26,6 +26,7 @@
     <label class="champ"><span>Prélevé</span>
       <select name="frequence">{{range .Frequences}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.R.Frequence}} selected{{end}}>{{.Nom}}</option>{{end}}</select></label>
   </div>
+  {{if not .Nouveau}}{{template "nouveau-montant" dict "Montant" .NouveauMontant "Le" .R.NouveauLe "Devise" .Devise}}{{end}}
   <div class="rangee">
     <label class="champ"><span>Prochain prélèvement</span><input type="date" name="prochain" value="{{.Prochain}}" required></label>
     <label class="champ"><span>Fin d'engagement (facultatif)</span><input type="date" name="engagement_fin" value="{{.A.EngagementFin}}"></label>

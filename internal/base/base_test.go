@@ -245,6 +245,67 @@ func TestMigrationPrestataires(t *testing.T) {
 	}
 }
 
+// 0044 : la table recurrences est refaite (nouvelle fréquence) sans casser
+// les liens : opérations et abonnements gardent leur récurrence, et les
+// clés étrangères sont rallumées après.
+func TestMigrationRecurrencesDixMois(t *testing.T) {
+	ctx := context.Background()
+	db, err := Ouvrir(filepath.Join(t.TempDir(), NomFichier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	migs, err := lireMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Version(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range migs[:43] {
+		if err := appliquer(ctx, db, m); err != nil {
+			t.Fatal(m.nom, err)
+		}
+	}
+	for _, q := range []string{
+		`INSERT INTO familles (id, nom, cree_le) VALUES (1, 'Martin', 0)`,
+		`INSERT INTO recurrences (id, famille_id, sens, montant, categorie, frequence, debut, faites, cree_le, perso_de, virement)
+		  VALUES (7, 1, 'depense', 1299, 'abonnements', 'mois', '2026-10-05', 2, 0, 3, 1)`,
+		`INSERT INTO operations (famille_id, sens, montant, categorie, jour, cree_le, recurrence_id) VALUES (1, 'depense', 1299, 'abonnements', '2026-10-05', 0, 7)`,
+		`INSERT INTO abonnements (famille_id, recurrence_id, cree_le) VALUES (1, 7, 0)`,
+	} {
+		if _, err := db.ExecContext(ctx, q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	if _, err := Migrer(ctx, db, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	var ops, abos, perso, vir int
+	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM operations WHERE recurrence_id = 7`).Scan(&ops)
+	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM abonnements WHERE recurrence_id = 7`).Scan(&abos)
+	_ = db.QueryRowContext(ctx, `SELECT perso_de, virement FROM recurrences WHERE id = 7`).Scan(&perso, &vir)
+	if ops != 1 || abos != 1 || perso != 3 || vir != 1 {
+		t.Fatalf("après migration : %d opération, %d abonnement, perso %d, virement %d", ops, abos, perso, vir)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE recurrences SET frequence = 'mois10' WHERE id = 7`); err != nil {
+		t.Fatal("mois10 refusé :", err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE recurrences SET frequence = 'mois11' WHERE id = 7`); err == nil {
+		t.Fatal("fréquence inconnue acceptée")
+	}
+	// Les clés étrangères marchent encore : supprimer la récurrence
+	// supprime l'abonnement et détache l'opération.
+	if _, err := db.ExecContext(ctx, `DELETE FROM recurrences WHERE id = 7`); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM abonnements`).Scan(&abos)
+	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM operations WHERE recurrence_id IS NULL`).Scan(&ops)
+	if abos != 0 || ops != 1 {
+		t.Fatalf("clés étrangères : %d abonnement, %d opération détachée", abos, ops)
+	}
+}
+
 // Une sauvegarde automatique interrompue ne laisse aucun fichier : elle ne
 // prend pas la place d'une bonne copie dans la rotation.
 func TestSauvegardeAutoInterrompue(t *testing.T) {

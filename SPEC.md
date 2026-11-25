@@ -133,6 +133,21 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
 - Modifier une récurrence ne touche que les prochaines fois. Supprimer une
   récurrence garde les opérations passées.
 - Les anciennes opérations « fixes » sont devenues des récurrences mensuelles.
+- Fréquence « Chaque mois, de janvier à octobre » (`mois10`, migration 0044) :
+  10 fois par an, rien en novembre et décembre (taxe foncière mensualisée) ;
+  un départ en novembre ou décembre part du janvier suivant. La migration
+  refait la table (un CHECK ne se modifie pas) : une migration qui commence
+  par `-- sans cles etrangeres` tourne avec `foreign_keys=OFF`, puis
+  `foreign_key_check` (un lien cassé annule tout).
+- Nouveau montant prévu à l'avance (« 📅 Prévoir un nouveau montant », dans
+  la fiche d'une opération qui revient et d'un abonnement) : colonnes
+  `nouveau_montant` et `nouveau_le` (migration 0044). Les fois à partir de
+  cette date prennent ce montant ; à la première, il devient le montant de
+  la récurrence. La date doit être après aujourd'hui. Les prévisions du
+  budget en tiennent compte.
+- Virement qui revient d'un budget perso : côté commun, la page « Opérations
+  qui reviennent » le montre en revenu (« Virement de Marie », compté dans
+  les revenus du mois), sans lien : il se modifie depuis le budget perso.
 - Abonnements : une récurrence + emoji, fin d'engagement, page de gestion,
   notes (jamais de mot de passe). Réservé aux parents ; leurs rappels et
   notifications ne vont jamais aux enfants.
@@ -289,7 +304,9 @@ l'interface. Tout ce qui a été trouvé est fait, en quatre lots, avec des test
   (quantités additionnées) ; « Souvent achetés » ; un parent oublie une
   suggestion.
 - **Budget** : catégories du sens choisi seulement ; impôts, assurances,
-  crédit, épargne ; plafonds par catégorie (`budget_plafonds`, migration
+  crédit, épargne, maison et travaux, vacances, garde d'enfants, beauté,
+  sport, frais bancaires, dons ; revenus : remboursements, ventes, loyers
+  perçus, retraite (liste dans `internal/budget/budget.go`) ; plafonds par catégorie (`budget_plafonds`, migration
   0021) ; payé par ; recherche ; vue de l'année.
 - **Espace enfants** : mission pour plusieurs enfants ; tout valider ; étoiles
   données ou retirées avec un motif (`etoiles_bonus`, migration 0022), jamais

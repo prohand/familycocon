@@ -113,3 +113,16 @@
 </fieldset>
 </details>
 {{end}}
+
+{{/* Nouveau montant prévu à l'avance (opération qui revient, abonnement).
+     dict : Montant (saisie), Le (« 2027-01-01 »), Devise. */}}
+{{define "nouveau-montant"}}
+<details class="nouveau-montant"{{if .Le}} open{{end}}>
+  <summary>📅 Prévoir un nouveau montant</summary>
+  <div class="rangee">
+    <label class="champ"><span>Nouveau montant ({{.Devise}})</span><input name="nouveau_montant" value="{{.Montant}}" inputmode="decimal" placeholder="0,00"></label>
+    <label class="champ"><span>À partir du</span><input type="date" name="nouveau_le" value="{{.Le}}"></label>
+  </div>
+  <p class="aide">Hausse connue d'avance (salaire, taxe, abonnement…) : à partir de cette date, ce montant remplace l'ancien. Videz les deux champs pour l'annuler.</p>
+</details>
+{{end}}

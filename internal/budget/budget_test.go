@@ -5,6 +5,7 @@ package budget
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -105,6 +106,11 @@ func TestOccurrence(t *testing.T) {
 		{"2024-02-29", "annee", 1, "2025-02-28"},
 		{"2026-11-30", "trimestre", 1, "2027-02-28"},
 		{"2026-11-22", "semaine", 2, "2026-12-06"},
+		// Dix mois : janvier à octobre, puis janvier suivant.
+		{"2026-01-15", "mois10", 9, "2026-10-15"},
+		{"2026-01-15", "mois10", 10, "2027-01-15"},
+		{"2026-09-30", "mois10", 3, "2027-02-28"},
+		{"2026-11-15", "mois10", 0, "2027-01-15"},
 	}
 	for _, c := range cas {
 		j, err := Occurrence(c.debut, c.freq, c.k)
@@ -117,6 +123,9 @@ func TestOccurrence(t *testing.T) {
 	}
 	if ParMois(1200, "annee") != 100 || ParMois(1200, "semaine") != 5200 || ParMois(1200, "semestre") != 200 {
 		t.Error("ParMois")
+	}
+	if ParAn(10000, "mois10") != 100000 || ParMois(12000, "mois10") != 10000 || ParAn(100, "2mois") != 600 {
+		t.Error("dix mois")
 	}
 }
 
@@ -169,5 +178,56 @@ func TestSupprimerAvecOccurrences(t *testing.T) {
 	ops, _ := a.Q.OperationsPeriode(context.Background(), donnees.OperationsPeriodeParams{FamilleID: 1, Du: "2000-01-01", Au: "2999-01-01"})
 	if len(ops) != 1 || ops[0].Libelle != "Pain" {
 		t.Fatalf("%d opérations restantes", len(ops))
+	}
+}
+
+// Nouveau montant prévu à l'avance : les fois d'avant gardent l'ancien
+// montant, celles à partir de la date prennent le nouveau, qui devient le
+// montant de la récurrence.
+func TestNouveauMontantPrevu(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	paris, _ := time.LoadLocation("Europe/Paris")
+	auj := time.Now().In(paris)
+	mois := func(n int) string {
+		return time.Date(auj.Year(), auj.Month()+time.Month(n), 1, 0, 0, 0, 0, paris).Format("2006-01-02")
+	}
+	marie.Get("/budget/nouvelle")
+	marie.Post("/budget", map[string]string{"montant": "700", "categorie": "impots", "jour": mois(0), "frequence": "mois", "libelle": "Taxe foncière"})
+	_, page := marie.Get("/budget/recurrences")
+	id := essai.Trouver(t, page, `href="/recurrences/(\d+)"`)
+	if _, page = marie.Get("/recurrences/" + id); !strings.Contains(page, "Prévoir un nouveau montant") {
+		t.Fatal("champ « nouveau montant » absent")
+	}
+	champs := map[string]string{"montant": "700", "categorie": "impots", "libelle": "Taxe foncière", "frequence": "mois",
+		"prochaine": mois(1), "nouveau_montant": "750", "nouveau_le": auj.Format("2006-01-02")}
+	if code, page := marie.Post("/recurrences/"+id, champs); code != http.StatusBadRequest || !strings.Contains(page, "après aujourd") {
+		t.Fatalf("date du jour acceptée : %d", code)
+	}
+	champs["nouveau_le"] = ""
+	if code, _ := marie.Post("/recurrences/"+id, champs); code != http.StatusBadRequest {
+		t.Fatalf("montant sans date accepté : %d", code)
+	}
+	champs["nouveau_le"] = mois(2)
+	marie.Post("/recurrences/"+id, champs)
+	if _, page = marie.Get("/budget/recurrences"); !strings.Contains(page, "dès le") {
+		t.Fatal("nouveau montant non affiché dans la liste")
+	}
+	ctx := context.Background()
+	if err := Generer(ctx, a, 1, time.Date(auj.Year(), auj.Month()+3, 1, 12, 0, 0, 0, paris)); err != nil {
+		t.Fatal(err)
+	}
+	ops, _ := a.Q.OperationsPeriode(ctx, donnees.OperationsPeriodeParams{FamilleID: 1, Du: "2000-01-01", Au: "2999-01-01"})
+	montants := map[string]int64{}
+	for _, o := range ops {
+		montants[o.Jour] = o.Montant
+	}
+	if montants[mois(0)] != 70000 || montants[mois(1)] != 70000 || montants[mois(2)] != 75000 || montants[mois(3)] != 75000 {
+		t.Fatalf("montants : %v", montants)
+	}
+	rid, _ := strconv.ParseInt(id, 10, 64)
+	r, _ := a.Q.RecurrenceParID(ctx, donnees.RecurrenceParIDParams{ID: rid, FamilleID: 1})
+	if r.Montant != 75000 || r.NouveauLe != "" || r.NouveauMontant != 0 {
+		t.Fatalf("récurrence après la date : %d, %q, %d", r.Montant, r.NouveauLe, r.NouveauMontant)
 	}
 }
