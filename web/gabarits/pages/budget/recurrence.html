@@ -31,7 +31,7 @@
   <div class="rangee">
     <label class="champ"><span>Revient</span>
       <select name="frequence">{{range .Frequences}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.R.Recurrence.Frequence}} selected{{end}}>{{.Nom}}</option>{{end}}</select></label>
-    <label class="champ"><span>Prochaine fois</span><input type="date" name="prochaine" value="{{.ProchaineJ}}" required></label>
+    <label class="champ"><span>Prochaine fois</span><input type="date" name="prochaine" value="{{.ProchaineJ}}"{{if .ProchaineJ}} required{{end}}></label>
   </div>
   <div class="rangee">
     <label class="champ"><span>Jusqu'au (facultatif)</span><input type="date" name="fin" value="{{.R.Fin}}"></label>

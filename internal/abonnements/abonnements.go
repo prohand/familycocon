@@ -232,6 +232,17 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 	freq, prochain, engagement := r.PostFormValue("frequence"), r.PostFormValue("prochain"), r.PostFormValue("engagement_fin")
 	_, okP := budget.LireJour(prochain, c.Maintenant())
 	_, okE := budget.LireJour(engagement, c.Maintenant())
+	// Abonnement déjà là : un résilié se modifie sans date (rien ne repart :
+	// « Reprendre » sert à ça).
+	var deja string // nouveau montant déjà prévu (date gardée même passée)
+	if r.PathValue("id") != "" {
+		if _, rec, ok := m.abonnement(r, c); ok {
+			deja = rec.NouveauLe
+			if _, actif := budget.Prochaine(rec); !actif {
+				prochain, okP = "", true
+			}
+		}
+	}
 	site, siteOk := contacts.NormaliserSite(strings.TrimSpace(r.PostFormValue("site")))
 	cat, catOk := budget.CategorieParCle(r.PostFormValue("categorie"))
 	msg := ""
@@ -248,12 +259,6 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		msg = "Adresse du site invalide (http ou https)."
 	case utf8.RuneCountInString(notes) > 1000:
 		msg = "Notes : 1000 caractères au plus."
-	}
-	var deja string // nouveau montant déjà prévu (date gardée même passée)
-	if r.PathValue("id") != "" {
-		if _, rec, ok := m.abonnement(r, c); ok {
-			deja = rec.NouveauLe
-		}
 	}
 	nouveau, nouveauLe, msgN := budget.LireNouveauMontant(r, c.Maintenant(), deja)
 	if msg == "" {
@@ -449,17 +454,17 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 		return appli.Resume{}
 	}
 	var n int
-	var parMois int64
+	var parAn int64 // somme sur l'année, divisée une seule fois (pas de centimes perdus)
 	for _, x := range l {
 		if !x.Resilie {
 			n++
-			parMois += x.ParMois
+			parAn += x.ParAn
 		}
 	}
 	if n == 0 {
 		return appli.Resume{Info: "Aucun abonnement"}
 	}
-	return appli.Resume{Info: appli.Montant(parMois, c.Famille.Devise) + " par mois"}
+	return appli.Resume{Info: appli.Montant(parAn/12, c.Famille.Devise) + " par mois"}
 }
 
 // echeances : renouvellement des abonnements trimestriels, semestriels ou annuels, et fins

@@ -70,7 +70,7 @@ func (m *Module) brancherGaranties() {
 		}
 		n := 0
 		for _, x := range l {
-			if fin, ok := finGarantie(x); ok && !fin.Before(c.Maintenant()) {
+			if fin, ok := finGarantie(x); ok && !finie(fin, c.Maintenant()) {
 				n++
 			}
 		}
@@ -89,6 +89,12 @@ func finGarantie(x donnees.Garantie) (time.Time, bool) {
 	return suivi.AjouterMois(achat, int(x.GarantieMois)), true
 }
 
+// finie : le dernier jour de la garantie est passé (le jour même, elle
+// court encore). Comparé en jours : fin vaut minuit UTC.
+func finie(fin, maintenant time.Time) bool {
+	return fin.Format("2006-01-02") < maintenant.Format("2006-01-02")
+}
+
 func (m *Module) garantie(r *http.Request, c *appli.Contexte) (donnees.Garantie, bool) {
 	x, err := m.a.Q.GarantieParID(r.Context(), donnees.GarantieParIDParams{ID: idDe(r), FamilleID: c.Famille.ID})
 	return x, err == nil
@@ -100,7 +106,7 @@ func etatGarantie(x donnees.Garantie, maintenant time.Time) string {
 	switch {
 	case !ok:
 		return ""
-	case fin.Before(maintenant):
+	case finie(fin, maintenant):
 		return "Garantie finie (" + appli.DateLongue(fin) + " " + strconv.Itoa(fin.Year()) + ")"
 	}
 	return "Garanti jusqu'au " + strings.ToLower(appli.DateLongue(fin)[:1]) + appli.DateLongue(fin)[1:] + " " + strconv.Itoa(fin.Year())

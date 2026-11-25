@@ -28,7 +28,7 @@
   </div>
   {{if not .Nouveau}}{{template "nouveau-montant" dict "Montant" .NouveauMontant "Le" .R.NouveauLe "Devise" .Devise}}{{end}}
   <div class="rangee">
-    <label class="champ"><span>Prochain prélèvement</span><input type="date" name="prochain" value="{{.Prochain}}" required></label>
+    <label class="champ"><span>Prochain prélèvement</span><input type="date" name="prochain" value="{{.Prochain}}"{{if not .Resilie}} required{{end}}></label>
     <label class="champ"><span>Fin d'engagement (facultatif)</span><input type="date" name="engagement_fin" value="{{.A.EngagementFin}}"></label>
   </div>
   <div class="rangee">

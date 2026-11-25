@@ -210,7 +210,13 @@ func PlaceRecurrence(ctx context.Context, a *appli.App, famille int64) (string, 
 // bouge. Sinon on repart de la date donnée (compteur à zéro), après contrôle.
 // msg : « » si tout va bien.
 func Replanifier(rec donnees.Recurrence, prochaine, freq string, aujourdhui time.Time) (debut string, faites int64, msg string) {
-	if j, ok := Prochaine(rec); ok && repetition.CleJour(j) == prochaine && freq == rec.Frequence {
+	j, ok := Prochaine(rec)
+	if ok && repetition.CleJour(j) == prochaine && freq == rec.Frequence {
+		return rec.Debut, rec.Faites, ""
+	}
+	// Terminée (arrêtée, abonnement résilié) et pas de nouvelle date : on
+	// garde tout (sinon elle repartirait de zéro et réécrirait des fois).
+	if !ok && prochaine == "" {
 		return rec.Debut, rec.Faites, ""
 	}
 	if msg := ValiderProchaine(prochaine, &rec, aujourdhui); msg != "" {
@@ -459,6 +465,7 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 		}
 		recs = append(recs, virements...)
 	}
+	var revAn, depAn int64
 	for _, x := range recs {
 		l := ligneRecurrence(x, abonnees, c.Maintenant())
 		l.SansLien = recus[x.ID]
@@ -466,15 +473,17 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 		if x.Sens == "revenu" {
 			v.Revenus = append(v.Revenus, l)
 			if active {
-				v.RevenusMois += ParMois(x.Montant, x.Frequence)
+				revAn += ParAn(x.Montant, x.Frequence)
 			}
 		} else {
 			v.Depenses = append(v.Depenses, l)
 			if active {
-				v.DepensesMois += ParMois(x.Montant, x.Frequence)
+				depAn += ParAn(x.Montant, x.Frequence)
 			}
 		}
 	}
+	// Sommes sur l'année, divisées une seule fois (pas de centimes perdus).
+	v.RevenusMois, v.DepensesMois = revAn/12, depAn/12
 	v.NetMois = v.RevenusMois - v.DepensesMois
 	m.a.Afficher(w, r, c, "budget/recurrences", "Opérations qui reviennent", mod, v)
 }
@@ -543,6 +552,9 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	freq := r.PostFormValue("frequence")
 	prochaine, fin := r.PostFormValue("prochaine"), r.PostFormValue("fin")
 	_, okP := LireJour(prochaine, c.Maintenant())
+	if _, active := Prochaine(x); !active && prochaine == "" {
+		okP = true // terminée : la date reste vide, rien ne repart
+	}
 	_, okF := LireJour(fin, c.Maintenant())
 	switch {
 	case !ok:

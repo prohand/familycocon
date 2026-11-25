@@ -4,6 +4,7 @@ package menus
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -117,8 +118,10 @@ func (m *Module) pageRecettes(w http.ResponseWriter, r *http.Request, c *appli.C
 	m.a.Afficher(w, r, c, "menus/recettes", "Recettes", mod, v)
 }
 
-// modifierRecette : nom et ingrédients d'une recette retenue (la clé, tirée
-// de l'ancien nom, ne change pas : les repas déjà prévus ne bougent pas).
+// modifierRecette : nom et ingrédients d'une recette retenue. Renommée, sa
+// clé suit le nouveau nom (le repas tapé sous ce nom retrouve ses
+// ingrédients) ; si ce nom est déjà une autre recette, les deux fusionnent.
+// Les repas déjà prévus gardent leur texte.
 func (m *Module) modifierRecette(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	cle := r.PostFormValue("cle")
 	nom := strings.TrimSpace(r.PostFormValue("nom"))
@@ -133,7 +136,29 @@ func (m *Module) modifierRecette(w http.ResponseWriter, r *http.Request, c *appl
 			return
 		}
 	}
-	if err := m.a.Q.ModifierRecette(r.Context(), donnees.ModifierRecetteParams{Nom: nom, Ingredients: ingr, FamilleID: c.Famille.ID, Cle: cle}); err != nil {
+	ctx := r.Context()
+	nouvelle := courses.Cle(nom)
+	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		if nouvelle == cle {
+			return q.ModifierRecette(ctx, donnees.ModifierRecetteParams{Nom: nom, Ingredients: ingr, FamilleID: c.Famille.ID, Cle: cle})
+		}
+		if _, err := q.RecetteParCle(ctx, donnees.RecetteParCleParams{FamilleID: c.Famille.ID, Cle: nouvelle}); err == nil {
+			ancienne, err := q.RecetteParCle(ctx, donnees.RecetteParCleParams{FamilleID: c.Famille.ID, Cle: cle})
+			if err != nil {
+				return err
+			}
+			if err := q.FusionnerRecette(ctx, donnees.FusionnerRecetteParams{Nom: nom, Ingredients: ingr, Compte: ancienne.Compte,
+				FamilleID: c.Famille.ID, Cle: nouvelle}); err != nil {
+				return err
+			}
+			return q.OublierRecette(ctx, donnees.OublierRecetteParams{FamilleID: c.Famille.ID, Cle: cle})
+		} else if !errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		return q.RenommerRecette(ctx, donnees.RenommerRecetteParams{Nouvelle: nouvelle, Nom: nom, Ingredients: ingr,
+			FamilleID: c.Famille.ID, Cle: cle})
+	})
+	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
