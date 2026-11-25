@@ -138,7 +138,8 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
   un départ en novembre ou décembre part du janvier suivant. La migration
   refait la table (un CHECK ne se modifie pas) : une migration qui commence
   par `-- sans cles etrangeres` tourne avec `foreign_keys=OFF`, puis
-  `foreign_key_check` (un lien cassé annule tout).
+  `foreign_key_check` : un lien cassé par la migration annule tout (ceux
+  déjà cassés avant ne la bloquent pas).
 - Nouveau montant prévu à l'avance (« 📅 Prévoir un nouveau montant », dans
   la fiche d'une opération qui revient et d'un abonnement) : colonnes
   `nouveau_montant` et `nouveau_le` (migration 0044). Les fois à partir de

@@ -230,6 +230,24 @@ func TestNouveauMontantPrevu(t *testing.T) {
 	if r.Montant != 75000 || r.NouveauLe != "" || r.NouveauMontant != 0 {
 		t.Fatalf("récurrence après la date : %d, %q, %d", r.Montant, r.NouveauLe, r.NouveauMontant)
 	}
+
+	// Date du nouveau montant passée, mais la fois qui en profite pas encore
+	// écrite (paiement en retard) : la fiche s'enregistre encore telle quelle ;
+	// une autre date passée reste refusée.
+	hier := auj.AddDate(0, 0, -1).Format("2006-01-02")
+	if _, err := a.DB.ExecContext(ctx, `UPDATE recurrences SET nouveau_montant = 80000, nouveau_le = ? WHERE id = ?`, hier, rid); err != nil {
+		t.Fatal(err)
+	}
+	_, page = marie.Get("/recurrences/" + id)
+	champs = map[string]string{"montant": "750", "categorie": "impots", "libelle": "Taxe foncière (modifiée)", "frequence": "mois",
+		"prochaine": essai.Trouver(t, page, `name="prochaine" value="([0-9-]+)"`), "nouveau_montant": "800", "nouveau_le": hier}
+	if code, _ := marie.Post("/recurrences/"+id, champs); code != http.StatusOK {
+		t.Fatalf("fiche avec un nouveau montant déjà daté refusée : %d", code)
+	}
+	champs["nouveau_le"] = auj.AddDate(0, 0, -2).Format("2006-01-02")
+	if code, _ := marie.Post("/recurrences/"+id, champs); code != http.StatusBadRequest {
+		t.Fatalf("autre date passée acceptée : %d", code)
+	}
 }
 
 // Opération à date variable : rien n'est écrit tout seul ; elle attend

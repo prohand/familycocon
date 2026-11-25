@@ -249,7 +249,13 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 	case utf8.RuneCountInString(notes) > 1000:
 		msg = "Notes : 1000 caractères au plus."
 	}
-	nouveau, nouveauLe, msgN := budget.LireNouveauMontant(r, c.Maintenant())
+	var deja string // nouveau montant déjà prévu (date gardée même passée)
+	if r.PathValue("id") != "" {
+		if _, rec, ok := m.abonnement(r, c); ok {
+			deja = rec.NouveauLe
+		}
+	}
+	nouveau, nouveauLe, msgN := budget.LireNouveauMontant(r, c.Maintenant(), deja)
 	if msg == "" {
 		msg = msgN
 	}

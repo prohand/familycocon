@@ -278,6 +278,20 @@ func TestMigrationRecurrencesDixMois(t *testing.T) {
 			t.Fatal(q, err)
 		}
 	}
+	// Un lien déjà cassé ailleurs (base réparée à la main) ne bloque pas la
+	// migration : seuls ceux qu'elle casserait l'annulent.
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{`PRAGMA foreign_keys = OFF`,
+		`INSERT INTO operations (famille_id, sens, montant, categorie, jour, cree_le, cree_par) VALUES (1, 'depense', 100, 'courses', '2026-10-05', 0, 999)`,
+		`PRAGMA foreign_keys = ON`} {
+		if _, err := conn.ExecContext(ctx, q); err != nil {
+			t.Fatal(q, err)
+		}
+	}
+	conn.Close()
 	if _, err := Migrer(ctx, db, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
@@ -300,7 +314,7 @@ func TestMigrationRecurrencesDixMois(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM abonnements`).Scan(&abos)
-	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM operations WHERE recurrence_id IS NULL`).Scan(&ops)
+	_ = db.QueryRowContext(ctx, `SELECT count(*) FROM operations WHERE recurrence_id IS NULL AND cree_par IS NULL`).Scan(&ops)
 	if abos != 0 || ops != 1 {
 		t.Fatalf("clés étrangères : %d abonnement, %d opération détachée", abos, ops)
 	}
