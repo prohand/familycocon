@@ -28,13 +28,20 @@ import (
 type Frequence struct {
 	Cle, Nom string
 	Mois     int // 0 : chaque semaine
+	ParAn    int // nombre de fois par an
 }
+
+// Dix mois : chaque mois de janvier à octobre, rien en novembre et
+// décembre (taxe foncière, taxe d'habitation mensualisées).
+const dixMois = "mois10"
 
 // Frequences proposées.
 var Frequences = []Frequence{
-	{"semaine", "Chaque semaine", 0}, {"mois", "Chaque mois", 1}, {"2mois", "Tous les 2 mois", 2},
-	{"trimestre", "Tous les 3 mois (trimestre)", 3}, {"semestre", "Tous les 6 mois (semestre)", 6},
-	{"annee", "Chaque année", 12},
+	{"semaine", "Chaque semaine", 0, 52}, {"mois", "Chaque mois", 1, 12},
+	{dixMois, "Chaque mois, de janvier à octobre (10 fois par an)", 1, 10},
+	{"2mois", "Tous les 2 mois", 2, 6},
+	{"trimestre", "Tous les 3 mois (trimestre)", 3, 4}, {"semestre", "Tous les 6 mois (semestre)", 6, 2},
+	{"annee", "Chaque année", 12, 1},
 }
 
 func frequence(cle string) (Frequence, bool) {
@@ -67,6 +74,16 @@ func Occurrence(debut, freq string, k int64) (time.Time, error) {
 		return d.AddDate(0, 0, int(7*k)), nil
 	}
 	premier := time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, int(k)*f.Mois, 0)
+	if f.Cle == dixMois {
+		// Les mois comptés de 0 à 9 dans chaque année (janvier à octobre) ;
+		// un début en novembre ou décembre part du janvier suivant.
+		an, mois := d.Year(), int(d.Month())
+		if mois > 10 {
+			an, mois = an+1, 1
+		}
+		n := int64(an)*10 + int64(mois-1) + k
+		premier = time.Date(int(n/10), time.Month(n%10+1), 1, 0, 0, 0, 0, time.UTC)
+	}
 	dernierJour := premier.AddDate(0, 1, -1).Day()
 	return premier.AddDate(0, 0, min(d.Day(), dernierJour)-1), nil
 }
@@ -74,10 +91,7 @@ func Occurrence(debut, freq string, k int64) (time.Time, error) {
 // ParAn : le montant sur une année (exact, sans arrondi).
 func ParAn(montant int64, freq string) int64 {
 	f, _ := frequence(freq)
-	if f.Mois == 0 {
-		return montant * 52
-	}
-	return montant * int64(12/f.Mois)
+	return montant * int64(f.ParAn)
 }
 
 // RecurrencesMax : par famille (garde-fou).
@@ -109,10 +123,7 @@ func ValiderProchaine(prochaine string, rec *donnees.Recurrence, aujourdhui time
 // ParMois : le montant ramené à un mois (pour les totaux).
 func ParMois(montant int64, freq string) int64 {
 	f, _ := frequence(freq)
-	if f.Mois == 0 {
-		return montant * 52 / 12
-	}
-	return montant / int64(f.Mois)
+	return montant * int64(f.ParAn) / 12
 }
 
 // Prochaine : la prochaine occurrence pas encore écrite (ok = faux si la

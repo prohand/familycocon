@@ -133,6 +133,12 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
 - Modifier une récurrence ne touche que les prochaines fois. Supprimer une
   récurrence garde les opérations passées.
 - Les anciennes opérations « fixes » sont devenues des récurrences mensuelles.
+- Fréquence « Chaque mois, de janvier à octobre » (`mois10`, migration 0044) :
+  10 fois par an, rien en novembre et décembre (taxe foncière mensualisée) ;
+  un départ en novembre ou décembre part du janvier suivant. La migration
+  refait la table (un CHECK ne se modifie pas) : une migration qui commence
+  par `-- sans cles etrangeres` tourne avec `foreign_keys=OFF`, puis
+  `foreign_key_check` (un lien cassé annule tout).
 - Abonnements : une récurrence + emoji, fin d'engagement, page de gestion,
   notes (jamais de mot de passe). Réservé aux parents ; leurs rappels et
   notifications ne vont jamais aux enfants.
