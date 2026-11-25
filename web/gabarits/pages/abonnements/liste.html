@@ -20,6 +20,7 @@
     <span class="p-emoji">{{.Emoji}}</span>
     <span class="quoi">{{if .PersoDe}}🔒 {{end}}{{.Libelle}}
       <small>{{.Frequence}} · prochain : {{.Prochain}}</small>
+      {{if .NouveauDes}}<small>📅 {{montant .NouveauMontant $.Donnees.Devise}} dès le {{.NouveauDes}}</small>{{end}}
       {{if .Engagement}}<small class="{{if .Bientot}}alerte{{end}}">🔒 {{.Engagement}}</small>{{end}}</span>
     <b class="montant depense">{{montant .Montant $.Donnees.Devise}}{{if ne .ParMois .Montant}}<small>≈ {{montant .ParMois $.Donnees.Devise}}/mois</small>{{end}}</b>
   </a>

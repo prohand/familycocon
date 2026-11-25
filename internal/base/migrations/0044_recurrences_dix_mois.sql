@@ -6,6 +6,11 @@
 -- Budget : nouvelle frequence « mois10 », chaque mois de janvier a octobre
 -- (10 fois par an, comme la taxe fonciere mensualisee). SQLite ne sait pas
 -- changer un CHECK : la table est refaite, colonnes dans le meme ordre.
+--
+-- Et un nouveau montant prevu a l'avance (hausse de salaire, nouvelle taxe,
+-- abonnement plus cher) : nouveau_montant a partir du jour nouveau_le
+-- ('' : rien de prevu). Quand la premiere occurrence a cette date est
+-- ecrite, il devient le montant.
 
 CREATE TABLE recurrences_nouveau (
   id         INTEGER PRIMARY KEY,
@@ -22,7 +27,9 @@ CREATE TABLE recurrences_nouveau (
   cree_par   INTEGER REFERENCES membres(id) ON DELETE SET NULL,
   cree_le    INTEGER NOT NULL,
   perso_de   INTEGER NOT NULL DEFAULT 0,
-  virement   INTEGER NOT NULL DEFAULT 0
+  virement   INTEGER NOT NULL DEFAULT 0,
+  nouveau_montant INTEGER NOT NULL DEFAULT 0,
+  nouveau_le      TEXT    NOT NULL DEFAULT ''
 );
 INSERT INTO recurrences_nouveau (id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement)
   SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement FROM recurrences;

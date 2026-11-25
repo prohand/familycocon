@@ -441,21 +441,23 @@ type Recompense struct {
 }
 
 type Recurrence struct {
-	ID        int64
-	FamilleID int64
-	Sens      string
-	Montant   int64
-	Categorie string
-	Libelle   string
-	MembreID  sql.NullInt64
-	Frequence string
-	Debut     string
-	Fin       string
-	Faites    int64
-	CreePar   sql.NullInt64
-	CreeLe    int64
-	PersoDe   int64
-	Virement  int64
+	ID             int64
+	FamilleID      int64
+	Sens           string
+	Montant        int64
+	Categorie      string
+	Libelle        string
+	MembreID       sql.NullInt64
+	Frequence      string
+	Debut          string
+	Fin            string
+	Faites         int64
+	CreePar        sql.NullInt64
+	CreeLe         int64
+	PersoDe        int64
+	Virement       int64
+	NouveauMontant int64
+	NouveauLe      string
 }
 
 type Repas struct {

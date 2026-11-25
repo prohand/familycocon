@@ -60,6 +60,22 @@ func (q *Queries) AbonnementParID(ctx context.Context, arg AbonnementParIDParams
 	return i, err
 }
 
+const appliquerNouveauMontant = `-- name: AppliquerNouveauMontant :exec
+UPDATE recurrences SET montant = nouveau_montant, nouveau_montant = 0, nouveau_le = ''
+WHERE id = ? AND famille_id = ? AND nouveau_le <> ''
+`
+
+type AppliquerNouveauMontantParams struct {
+	ID        int64
+	FamilleID int64
+}
+
+// La date du nouveau montant est arrivee : il devient le montant.
+func (q *Queries) AppliquerNouveauMontant(ctx context.Context, arg AppliquerNouveauMontantParams) error {
+	_, err := q.db.ExecContext(ctx, appliquerNouveauMontant, arg.ID, arg.FamilleID)
+	return err
+}
+
 const arreterRecurrence = `-- name: ArreterRecurrence :exec
 UPDATE recurrences SET fin = ? WHERE id = ? AND famille_id = ?
 `
@@ -230,7 +246,7 @@ func (q *Queries) CreerOccurrence(ctx context.Context, arg CreerOccurrenceParams
 
 const creerRecurrence = `-- name: CreerRecurrence :one
 INSERT INTO recurrences (famille_id, perso_de, virement, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le
 `
 
 type CreerRecurrenceParams struct {
@@ -282,13 +298,15 @@ func (q *Queries) CreerRecurrence(ctx context.Context, arg CreerRecurrenceParams
 		&i.CreeLe,
 		&i.PersoDe,
 		&i.Virement,
+		&i.NouveauMontant,
+		&i.NouveauLe,
 	)
 	return i, err
 }
 
 const listeAbonnements = `-- name: ListeAbonnements :many
 SELECT a.id, a.emoji, a.engagement_fin, a.site, a.notes, r.id AS recurrence_id, r.montant, r.categorie, r.libelle,
-  r.membre_id, r.frequence, r.debut, r.fin, r.faites, r.perso_de
+  r.membre_id, r.frequence, r.debut, r.fin, r.faites, r.perso_de, r.nouveau_montant, r.nouveau_le
 FROM abonnements a JOIN recurrences r ON r.id = a.recurrence_id
 WHERE a.famille_id = ?1 AND (?2 = -1 OR r.perso_de IN (0, ?2))
 ORDER BY r.libelle COLLATE NOCASE
@@ -300,21 +318,23 @@ type ListeAbonnementsParams struct {
 }
 
 type ListeAbonnementsRow struct {
-	ID            int64
-	Emoji         string
-	EngagementFin string
-	Site          string
-	Notes         string
-	RecurrenceID  int64
-	Montant       int64
-	Categorie     string
-	Libelle       string
-	MembreID      sql.NullInt64
-	Frequence     string
-	Debut         string
-	Fin           string
-	Faites        int64
-	PersoDe       int64
+	ID             int64
+	Emoji          string
+	EngagementFin  string
+	Site           string
+	Notes          string
+	RecurrenceID   int64
+	Montant        int64
+	Categorie      string
+	Libelle        string
+	MembreID       sql.NullInt64
+	Frequence      string
+	Debut          string
+	Fin            string
+	Faites         int64
+	PersoDe        int64
+	NouveauMontant int64
+	NouveauLe      string
 }
 
 // Abonnements vus par un membre (les prives des autres non) ; membre = -1 :
@@ -344,6 +364,8 @@ func (q *Queries) ListeAbonnements(ctx context.Context, arg ListeAbonnementsPara
 			&i.Fin,
 			&i.Faites,
 			&i.PersoDe,
+			&i.NouveauMontant,
+			&i.NouveauLe,
 		); err != nil {
 			return nil, err
 		}
@@ -386,23 +408,26 @@ func (q *Queries) ModifierAbonnement(ctx context.Context, arg ModifierAbonnement
 const modifierRecurrence = `-- name: ModifierRecurrence :execrows
 UPDATE recurrences SET sens = ?1, montant = ?2, categorie = ?3,
   libelle = ?4, membre_id = ?5, frequence = ?6,
-  debut = ?7, fin = ?8, faites = ?9
-WHERE id = ?10 AND famille_id = ?11 AND faites = ?12
+  debut = ?7, fin = ?8, faites = ?9,
+  nouveau_montant = ?10, nouveau_le = ?11
+WHERE id = ?12 AND famille_id = ?13 AND faites = ?14
 `
 
 type ModifierRecurrenceParams struct {
-	Sens        string
-	Montant     int64
-	Categorie   string
-	Libelle     string
-	MembreID    sql.NullInt64
-	Frequence   string
-	Debut       string
-	Fin         string
-	Faites      int64
-	ID          int64
-	FamilleID   int64
-	FaitesAvant int64
+	Sens           string
+	Montant        int64
+	Categorie      string
+	Libelle        string
+	MembreID       sql.NullInt64
+	Frequence      string
+	Debut          string
+	Fin            string
+	Faites         int64
+	NouveauMontant int64
+	NouveauLe      string
+	ID             int64
+	FamilleID      int64
+	FaitesAvant    int64
 }
 
 // Seulement si " faites " n'a pas bouge depuis la lecture (une occurrence
@@ -418,6 +443,8 @@ func (q *Queries) ModifierRecurrence(ctx context.Context, arg ModifierRecurrence
 		arg.Debut,
 		arg.Fin,
 		arg.Faites,
+		arg.NouveauMontant,
+		arg.NouveauLe,
 		arg.ID,
 		arg.FamilleID,
 		arg.FaitesAvant,
@@ -429,7 +456,7 @@ func (q *Queries) ModifierRecurrence(ctx context.Context, arg ModifierRecurrence
 }
 
 const recurrenceParID = `-- name: RecurrenceParID :one
-SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement FROM recurrences WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le FROM recurrences WHERE id = ? AND famille_id = ?
 `
 
 type RecurrenceParIDParams struct {
@@ -456,6 +483,8 @@ func (q *Queries) RecurrenceParID(ctx context.Context, arg RecurrenceParIDParams
 		&i.CreeLe,
 		&i.PersoDe,
 		&i.Virement,
+		&i.NouveauMontant,
+		&i.NouveauLe,
 	)
 	return i, err
 }
@@ -490,7 +519,7 @@ func (q *Queries) RecurrencesAbonnees(ctx context.Context, familleID int64) ([]i
 
 const recurrencesFamille = `-- name: RecurrencesFamille :many
 
-SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement FROM recurrences WHERE famille_id = ? ORDER BY sens DESC, montant DESC
+SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le FROM recurrences WHERE famille_id = ? ORDER BY sens DESC, montant DESC
 `
 
 // Operations qui reviennent, et abonnements.
@@ -520,6 +549,8 @@ func (q *Queries) RecurrencesFamille(ctx context.Context, familleID int64) ([]Re
 			&i.CreeLe,
 			&i.PersoDe,
 			&i.Virement,
+			&i.NouveauMontant,
+			&i.NouveauLe,
 		); err != nil {
 			return nil, err
 		}

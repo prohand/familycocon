@@ -19,7 +19,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 -- name: ModifierRecurrence :execrows
 UPDATE recurrences SET sens = sqlc.arg(sens), montant = sqlc.arg(montant), categorie = sqlc.arg(categorie),
   libelle = sqlc.arg(libelle), membre_id = sqlc.arg(membre_id), frequence = sqlc.arg(frequence),
-  debut = sqlc.arg(debut), fin = sqlc.arg(fin), faites = sqlc.arg(faites)
+  debut = sqlc.arg(debut), fin = sqlc.arg(fin), faites = sqlc.arg(faites),
+  nouveau_montant = sqlc.arg(nouveau_montant), nouveau_le = sqlc.arg(nouveau_le)
 WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND faites = sqlc.arg(faites_avant);
 
 -- name: ArreterRecurrence :exec
@@ -27,6 +28,11 @@ UPDATE recurrences SET fin = ? WHERE id = ? AND famille_id = ?;
 
 -- name: SupprimerRecurrence :exec
 DELETE FROM recurrences WHERE id = ? AND famille_id = ?;
+
+-- La date du nouveau montant est arrivee : il devient le montant.
+-- name: AppliquerNouveauMontant :exec
+UPDATE recurrences SET montant = nouveau_montant, nouveau_montant = 0, nouveau_le = ''
+WHERE id = ? AND famille_id = ? AND nouveau_le <> '';
 
 -- name: AvancerRecurrence :execrows
 UPDATE recurrences SET faites = faites + 1 WHERE id = ? AND famille_id = ? AND faites = ?;
@@ -39,7 +45,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 -- tous (rappels, envoyes a chacun selon ce qu'il voit).
 -- name: ListeAbonnements :many
 SELECT a.id, a.emoji, a.engagement_fin, a.site, a.notes, r.id AS recurrence_id, r.montant, r.categorie, r.libelle,
-  r.membre_id, r.frequence, r.debut, r.fin, r.faites, r.perso_de
+  r.membre_id, r.frequence, r.debut, r.fin, r.faites, r.perso_de, r.nouveau_montant, r.nouveau_le
 FROM abonnements a JOIN recurrences r ON r.id = a.recurrence_id
 WHERE a.famille_id = sqlc.arg(famille_id) AND (sqlc.arg(membre) = -1 OR r.perso_de IN (0, sqlc.arg(membre)))
 ORDER BY r.libelle COLLATE NOCASE;

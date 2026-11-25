@@ -31,7 +31,7 @@
     <a class="ligne op{{if eq .Prochaine "Terminée"}} terminee{{end}}" href="/recurrences/{{.ID}}">
       <span class="p-emoji">{{.Cat.Emoji}}</span>
       <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}{{if .Abonnement}} <span class="pastille-abo">abonnement</span>{{end}}
-        <small>{{.Frequence}} · {{if eq .Prochaine "Terminée"}}terminée{{else}}prochaine : {{.Prochaine}}{{end}}</small></span>
+        <small>{{.Frequence}} · {{if eq .Prochaine "Terminée"}}terminée{{else}}prochaine : {{.Prochaine}}{{end}}{{if .NouveauDes}} · 📅 {{montant .NouveauMontant $.Devise}} dès le {{.NouveauDes}}{{end}}</small></span>
       <b class="montant {{.Sens}}">{{montant .Montant $.Devise}}</b>
     </a>
     {{- end}}
