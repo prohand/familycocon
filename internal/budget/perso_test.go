@@ -110,7 +110,7 @@ func TestBudgetPerso(t *testing.T) {
 		suivant = time.Date(time.Now().Year(), time.Now().Month()+1, 1, 0, 0, 0, 0, time.Local).Format("2006-01")
 	}
 	_, p = paul.Get("/budget?compte=commun&mois=" + suivant)
-	if !strings.Contains(p, "Revenus <b>850,00") || !strings.Contains(p, "dont 850,00") || !strings.Contains(p, "prévu compris") {
+	if !strings.Contains(p, "Revenus <b>850,00") || strings.Contains(p, "à venir</small>") || strings.Contains(p, "Aujourd'hui :") || !strings.Contains(p, "· prévu</small>") {
 		t.Fatal("reste à vivre : le virement à venir n'est pas compté")
 	}
 

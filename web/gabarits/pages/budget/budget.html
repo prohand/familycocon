@@ -18,13 +18,13 @@
 <div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-budget from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*">
 
 <section class="carte reste bloc">
-  <p class="reste-titre">Reste à vivre{{if .Prevues}} <small>· fin du mois, prévu compris</small>{{end}}</p>
+  <p class="reste-titre">Reste à vivre{{if .Futur}} <small>· prévu</small>{{else if and .EnCours .Prevues}} <small>· fin du mois, prévu compris</small>{{end}}</p>
   <p class="reste-montant{{if lt .Reste 0}} negatif{{end}}">{{montant .Reste .Devise}}</p>
   <div class="reste-detail">
-    <span>⬆️ Revenus <b>{{montant .Revenus .Devise}}</b>{{if .PrevuRev}}<small>dont {{montant .PrevuRev .Devise}} à venir</small>{{end}}</span>
-    <span>⬇️ Dépenses <b>{{montant .Depenses .Devise}}</b>{{if .PrevuDep}}<small>dont {{montant .PrevuDep .Devise}} à venir</small>{{end}}</span>
+    <span>⬆️ Revenus <b>{{montant .Revenus .Devise}}</b>{{if and .EnCours .PrevuRev (ne .PrevuRev .Revenus)}}<small>dont {{montant .PrevuRev .Devise}} à venir</small>{{end}}</span>
+    <span>⬇️ Dépenses <b>{{montant .Depenses .Devise}}</b>{{if and .EnCours .PrevuDep (ne .PrevuDep .Depenses)}}<small>dont {{montant .PrevuDep .Devise}} à venir</small>{{end}}</span>
   </div>
-  {{if .Prevues}}<p class="reste-auj">Aujourd'hui : <b>{{montant .ResteAuj .Devise}}</b></p>{{end}}
+  {{if and .EnCours .Prevues}}<p class="reste-auj">Aujourd'hui : <b>{{montant .ResteAuj .Devise}}</b></p>{{end}}
 </section>
 
 <div class="boutons">

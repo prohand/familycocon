@@ -252,6 +252,10 @@ func TestAConfirmer(t *testing.T) {
 	if !strings.Contains(page, "⏳ À confirmer") || !strings.Contains(page, "Dépenses <b>45,00") || !strings.Contains(page, "Revenus <b>30,00") {
 		t.Fatal("à confirmer : absent de la page ou pas compté dans le reste à vivre")
 	}
+	// Tout est encore à venir : « dont … à venir » ne répète pas le total.
+	if strings.Contains(page, "dont 45,00") || !strings.Contains(page, "Aujourd'hui :") {
+		t.Fatal("« dont … à venir » égal au total, ou « Aujourd'hui » absent")
+	}
 	cantine := essai.Trouver(t, page, `Cantine<small>[^<]*</small></span>[\s\S]*?action="/recurrences/(\d+)/confirmer"`)
 	// Mauvais numéro de fois : rien n'est fait.
 	if code, _ := marie.Post("/recurrences/"+cantine+"/confirmer", map[string]string{"n": "3", "montant": "47", "jour": auj}); code != http.StatusConflict {
