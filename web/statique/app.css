@@ -1079,6 +1079,9 @@ button.coche:hover { border-color: var(--taches-t); }
 .reste-montant { margin: 4px 0 10px; font-size: clamp(2.2rem, 11vw, 3.2rem); font-weight: 900; color: var(--budget-t); letter-spacing: -.02em; }
 .reste-montant.negatif { color: var(--rouge); }
 .reste-detail { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; font-weight: 700; font-size: .9rem; }
+.reste-titre small { font-weight: 700; opacity: .75; }
+.reste-detail small { display: block; font-weight: 600; font-size: .75rem; opacity: .75; }
+.reste-auj { margin: 10px 0 0; font-size: .85rem; font-weight: 700; color: var(--budget-t); }
 .section-titre.premier { margin-top: 0; }
 .courbe { width: 100%; height: auto; display: block; }
 .courbe .repere { stroke: var(--bordure); stroke-width: 1; }

@@ -149,22 +149,26 @@ type vueBudget struct {
 	Precedent  string
 	Suivant    string
 	Filtre     string
-	Revenus    int64
-	Depenses   int64
-	Reste      int64
-	Courbe     template.HTML
-	ParCat     []parCategorie
-	MaxCat     int64
-	PayePar    []payePar // au moins deux parents ont payé ce mois-ci
-	Ecart      int64     // différence entre le premier et le second
-	Plafonds   bool      // la famille a fixé au moins un plafond
-	Jours      []jourOps
-	Pilules    []Categorie
-	Prevues    []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
-	PrevuNet   int64     // revenus − dépenses prévus
-	ResteFin   int64     // reste à vivre prévu en fin de mois
-	NbRecur    int       // opérations qui reviennent (lien vers leur page)
-	Devise     string
+	// Revenus, Depenses, Reste : le mois entier, ce qui est prévu compris
+	// (opérations qui reviennent pas encore passées) ; Aujourdhui... :
+	// ce qui est déjà passé.
+	Revenus  int64
+	Depenses int64
+	Reste    int64
+	ResteAuj int64 // reste à vivre de ce qui est déjà passé
+	PrevuRev int64 // revenus encore à venir ce mois-ci
+	PrevuDep int64 // dépenses encore à venir ce mois-ci
+	Courbe   template.HTML
+	ParCat   []parCategorie
+	MaxCat   int64
+	PayePar  []payePar // au moins deux parents ont payé ce mois-ci
+	Ecart    int64     // différence entre le premier et le second
+	Plafonds bool      // la famille a fixé au moins un plafond
+	Jours    []jourOps
+	Pilules  []Categorie
+	Prevues  []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
+	NbRecur  int       // opérations qui reviennent (lien vers leur page)
+	Devise   string
 }
 
 func lireMois(r *http.Request, c *appli.Contexte) time.Time {
@@ -329,6 +333,9 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		}
 		recs = append(recs, recus...)
 	}
+	// Le reste à vivre compte le mois entier : ce qui est passé et ce qui
+	// est prévu (salaire, virement, loyer… pas encore arrivés).
+	v.ResteAuj = v.Reste
 	for _, p := range Prevues(recs, premier, dernier, maintenant) {
 		cat, ok := CategorieParCle(p.Categorie)
 		if !ok {
@@ -340,16 +347,43 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		}
 		v.Prevues = append(v.Prevues, l)
 		if p.Sens == "revenu" {
-			v.PrevuNet += p.Montant
+			v.PrevuRev += p.Montant
 		} else {
-			v.PrevuNet -= p.Montant
+			v.PrevuDep += p.Montant
 		}
 	}
-	v.ResteFin = v.Reste + v.PrevuNet
+	v.Revenus += v.PrevuRev
+	v.Depenses += v.PrevuDep
+	v.Reste = v.Revenus - v.Depenses
 	return v, nil
 }
 
 // recurrencesCompte : les opérations qui reviennent de ce budget.
+// prevuNet : revenus − dépenses encore à venir du mois (opérations qui
+// reviennent, et pour le commun les virements des budgets perso).
+func (m *Module) prevuNet(ctx context.Context, c *appli.Contexte, compte int64, premier, dernier time.Time) (int64, error) {
+	recs, err := m.recurrencesCompte(ctx, c, compte)
+	if err != nil {
+		return 0, err
+	}
+	if compte == 0 {
+		recus, err := m.virementsRecus(ctx, c, nil)
+		if err != nil {
+			return 0, err
+		}
+		recs = append(recs, recus...)
+	}
+	var net int64
+	for _, p := range Prevues(recs, premier, dernier, c.Maintenant()) {
+		if p.Sens == "revenu" {
+			net += p.Montant
+		} else {
+			net -= p.Montant
+		}
+	}
+	return net, nil
+}
+
 // virementsRecus : les virements qui reviennent des budgets perso vers le
 // commun, vus du côté commun (revenus « Virement de Marie »).
 func (m *Module) virementsRecus(ctx context.Context, c *appli.Contexte, parID map[int64]*donnees.Membre) ([]donnees.Recurrence, error) {
@@ -643,9 +677,15 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 			return appli.Resume{Info: alerte, Badge: 1}
 		}
 	}
-	info := "Reste " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise)
-	if p.Revenus+p.Depenses > 0 {
-		info = "Commun : " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise) + " · Moi : " + appli.Montant(p.Revenus-p.Depenses, c.Famille.Devise)
+	// Même reste à vivre que la page : le prévu du mois compris.
+	netCommun, err := m.prevuNet(ctx, c, 0, premier, dernier)
+	netMoi, errM := m.prevuNet(ctx, c, c.Membre.ID, premier, dernier)
+	if err != nil || errM != nil {
+		netCommun, netMoi = 0, 0
+	}
+	info := "Reste " + appli.Montant(t.Revenus-t.Depenses+netCommun, c.Famille.Devise)
+	if p.Revenus+p.Depenses > 0 || netMoi != 0 {
+		info = "Commun : " + appli.Montant(t.Revenus-t.Depenses+netCommun, c.Famille.Devise) + " · Moi : " + appli.Montant(p.Revenus-p.Depenses+netMoi, c.Famille.Devise)
 	}
 	return appli.Resume{Info: info}
 }

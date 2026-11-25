@@ -12,6 +12,11 @@
   {{template "jeton" $c.CSRF}}
   <label class="champ"><span>Montant ({{.Devise}})</span>
     <input class="gros-montant" name="montant" value="{{.Montant}}" inputmode="decimal" required></label>
+  {{if or .R.Virement (eq .R.Categorie "virement") (eq .R.Categorie "virement-recu")}}
+  {{/* Virement : sa catégorie ne change pas (rien à choisir). */}}
+  <input type="hidden" name="categorie" value="{{.R.Categorie}}">
+  <p class="aide">🔁 Virement vers le compte commun : chaque fois, une dépense ici et un revenu au commun.</p>
+  {{else}}
   <fieldset class="categories">
     <legend>Catégorie</legend>
     <div class="grille-cat">
@@ -21,6 +26,7 @@
       {{- end}}
     </div>
   </fieldset>
+  {{end}}
   <label class="champ"><span>Libellé</span><input name="libelle" value="{{.R.Libelle}}" maxlength="80"></label>
   <div class="rangee">
     <label class="champ"><span>Revient</span>
