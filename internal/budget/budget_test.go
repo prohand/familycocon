@@ -231,3 +231,53 @@ func TestNouveauMontantPrevu(t *testing.T) {
 		t.Fatalf("récurrence après la date : %d, %q, %d", r.Montant, r.NouveauLe, r.NouveauMontant)
 	}
 }
+
+// Opération à date variable : rien n'est écrit tout seul ; elle attend
+// « C'est passé » (vraie date, vrai montant) ou « Pas cette fois », et
+// compte dans le reste à vivre en attendant.
+func TestAConfirmer(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	paris, _ := time.LoadLocation("Europe/Paris")
+	auj := time.Now().In(paris).Format("2006-01-02")
+	marie.Get("/budget/nouvelle")
+	marie.Post("/budget", map[string]string{"montant": "45", "categorie": "ecole", "jour": auj, "frequence": "mois", "libelle": "Cantine", "a_confirmer": "1"})
+	marie.Post("/budget", map[string]string{"montant": "30", "categorie": "remboursements", "jour": auj, "frequence": "mois", "libelle": "Mutuelle", "a_confirmer": "1"})
+	ctx := context.Background()
+	ops, _ := a.Q.OperationsPeriode(ctx, donnees.OperationsPeriodeParams{FamilleID: 1, Du: "2000-01-01", Au: "2999-01-01"})
+	if len(ops) != 0 {
+		t.Fatalf("%d opérations écrites toutes seules", len(ops))
+	}
+	_, page := marie.Get("/budget?compte=commun")
+	if !strings.Contains(page, "⏳ À confirmer") || !strings.Contains(page, "Dépenses <b>45,00") || !strings.Contains(page, "Revenus <b>30,00") {
+		t.Fatal("à confirmer : absent de la page ou pas compté dans le reste à vivre")
+	}
+	cantine := essai.Trouver(t, page, `Cantine<small>[^<]*</small></span>[\s\S]*?action="/recurrences/(\d+)/confirmer"`)
+	// Mauvais numéro de fois : rien n'est fait.
+	if code, _ := marie.Post("/recurrences/"+cantine+"/confirmer", map[string]string{"n": "3", "montant": "47", "jour": auj}); code != http.StatusConflict {
+		t.Fatalf("mauvais numéro accepté : %d", code)
+	}
+	if code, p := marie.Post("/recurrences/"+cantine+"/confirmer", map[string]string{"n": "0", "montant": "47,50", "jour": auj}); code != http.StatusOK || !strings.Contains(p, "Ajouté au budget") {
+		t.Fatalf("confirmer : %d", code)
+	}
+	// Deux fois le même envoi : une seule opération.
+	marie.Post("/recurrences/"+cantine+"/confirmer", map[string]string{"n": "0", "montant": "47,50", "jour": auj})
+	_, page = marie.Get("/budget?compte=commun")
+	mutuelle := essai.Trouver(t, page, `Mutuelle<small>[^<]*</small></span>[\s\S]*?action="/recurrences/(\d+)/confirmer"`)
+	if mutuelle == cantine {
+		t.Fatal("la cantine attend encore")
+	}
+	if code, p := marie.Post("/recurrences/"+mutuelle+"/passer", map[string]string{"n": "0"}); code != http.StatusOK || !strings.Contains(p, "Pas cette fois") {
+		t.Fatalf("passer : %d", code)
+	}
+	ops, _ = a.Q.OperationsPeriode(ctx, donnees.OperationsPeriodeParams{FamilleID: 1, Du: "2000-01-01", Au: "2999-01-01"})
+	if len(ops) != 1 || ops[0].Montant != 4750 || ops[0].Libelle != "Cantine" {
+		t.Fatalf("opérations : %+v", ops)
+	}
+	if _, page = marie.Get("/budget?compte=commun"); strings.Contains(page, "⏳ À confirmer") {
+		t.Fatal("encore des opérations à confirmer")
+	}
+	if _, page = marie.Get("/budget/recurrences?compte=commun"); !strings.Contains(page, "⏳ à confirmer ·") {
+		t.Fatal("étiquette « à confirmer » absente de la liste")
+	}
+}

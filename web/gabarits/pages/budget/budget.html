@@ -56,13 +56,41 @@
   <a class="pilule" href="/budget/plafonds?compte={{$.Donnees.Compte}}">🎯 Plafonds</a>
 </nav>
 
+{{if .Attentes}}
+<section class="carte bloc attentes">
+  <div class="section-titre premier"><h2>⏳ À confirmer</h2></div>
+  <p class="aide">Leur date prévue est arrivée : est-ce passé ?</p>
+  {{- range .Attentes}}
+  <details class="attente">
+    <summary class="ligne op">
+      <span class="p-emoji">{{.Cat.Emoji}}</span>
+      <span class="quoi">{{if .R.Libelle}}{{.R.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>prévu le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}/{{slice .Jour 0 4}}</small></span>
+      <b class="montant {{.R.Sens}}">{{montant .Montant $.Donnees.Devise}}</b>
+    </summary>
+    <form method="post" action="/recurrences/{{.R.ID}}/confirmer">
+      {{template "jeton" $c.CSRF}}
+      <input type="hidden" name="n" value="{{.R.Faites}}">
+      <div class="rangee">
+        <label class="champ"><span>Montant</span><input name="montant" value="{{montantSaisie .Montant}}" inputmode="decimal" required></label>
+        <label class="champ"><span>Le</span><input type="date" name="jour" value="{{$.Donnees.Aujourdhui}}" required></label>
+      </div>
+      <div class="boutons">
+        <button class="bouton petit">✓ C'est passé</button>
+        <button class="bouton petit secondaire" formaction="/recurrences/{{.R.ID}}/passer" formnovalidate>Pas cette fois</button>
+      </div>
+    </form>
+  </details>
+  {{- end}}
+</section>
+{{end}}
+
 {{if .Prevues}}
 <section class="carte bloc prevues">
   <div class="section-titre premier"><h2>🔁 À venir ce mois-ci</h2></div>
   {{- range .Prevues}}
   <div class="ligne op prevue">
     <span class="p-emoji">{{.Cat.Emoji}}</span>
-    <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}</small></span>
+    <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>{{if le .Jour $.Donnees.Aujourdhui}}⏳ à confirmer, prévu {{end}}le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}</small></span>
     <b class="montant {{.Sens}}">{{if eq .Sens "depense"}}−{{else}}+{{end}}{{montant .Montant $.Donnees.Devise}}</b>
   </div>
   {{- end}}

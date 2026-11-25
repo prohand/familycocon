@@ -97,6 +97,8 @@ func Brancher(a *appli.App) {
 	a.Route("GET /recurrences/{id}", mod, appli.Parent, m.formRecurrence)
 	a.Route("POST /recurrences/{id}", mod, appli.Parent, m.modifierRecurrence)
 	a.Route("POST /recurrences/{id}/arreter", mod, appli.Parent, m.arreterRecurrence)
+	a.Route("POST /recurrences/{id}/confirmer", mod, appli.Parent, m.confirmerRecurrence)
+	a.Route("POST /recurrences/{id}/passer", mod, appli.Parent, m.confirmerRecurrence)
 	a.Route("POST /recurrences/{id}/supprimer", mod, appli.Parent, m.supprimerRecurrence)
 	a.Route("GET /budget/{id}", mod, appli.Parent, m.formulaire)
 	a.Route("POST /budget/{id}", mod, appli.Parent, m.modifier)
@@ -167,6 +169,7 @@ type vueBudget struct {
 	Jours    []jourOps
 	Pilules  []Categorie
 	Prevues  []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
+	Attentes []Attente // à date variable : à confirmer (date prévue arrivée)
 	NbRecur  int       // opérations qui reviennent (lien vers leur page)
 	Devise   string
 }
@@ -324,6 +327,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		return nil, err
 	}
 	v.NbRecur = len(recs)
+	v.Attentes = EnAttente(recs, c.Maintenant())
 	// Côté commun, les virements qui reviennent des budgets perso sont des
 	// revenus à venir.
 	if compte == 0 {
@@ -359,6 +363,22 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 }
 
 // recurrencesCompte : les opérations qui reviennent de ce budget.
+// nbAttentes : opérations à date variable à confirmer, au commun et dans
+// le budget perso du membre.
+func (m *Module) nbAttentes(ctx context.Context, c *appli.Contexte) int {
+	tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return 0
+	}
+	var siens []donnees.Recurrence
+	for _, r := range tous {
+		if r.PersoDe == 0 || r.PersoDe == c.Membre.ID {
+			siens = append(siens, r)
+		}
+	}
+	return len(EnAttente(siens, c.Maintenant()))
+}
+
 // prevuNet : revenus − dépenses encore à venir du mois (opérations qui
 // reviennent, et pour le commun les virements des budgets perso).
 func (m *Module) prevuNet(ctx context.Context, c *appli.Contexte, compte int64, premier, dernier time.Time) (int64, error) {
@@ -502,6 +522,7 @@ type saisieOp struct {
 	montant                        int64
 	membre                         sql.NullInt64
 	frequence, fin                 string // nouvelle opération qui revient
+	aConfirmer                     int64  // date variable : à confirmer chaque fois
 }
 
 func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisieOp, string) {
@@ -531,6 +552,9 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisieOp, string) {
 	if f := r.PostFormValue("frequence"); FrequenceValide(f) {
 		s.frequence = f
 		s.fin = r.PostFormValue("fin")
+		if r.PostFormValue("a_confirmer") == "1" {
+			s.aConfirmer = 1
+		}
 		if _, ok := LireJour(s.fin, c.Maintenant()); s.fin != "" && (!ok || s.fin < s.jour) {
 			return s, "La date de fin doit suivre la première date."
 		}
@@ -564,6 +588,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		if _, err := m.a.Q.CreerRecurrence(ctx, donnees.CreerRecurrenceParams{
 			FamilleID: c.Famille.ID, PersoDe: compte, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
 			MembreID: s.membre, Frequence: s.frequence, Debut: s.jour, Fin: s.fin, CreePar: auteur, CreeLe: time.Now().Unix(),
+			AConfirmer: s.aConfirmer,
 		}); err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
@@ -660,6 +685,10 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	if err := GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		m.a.Journal.Error("budget : opérations qui reviennent", "erreur", err)
+	}
+	// Des opérations à date variable attendent : on le dit d'abord.
+	if n := m.nbAttentes(ctx, c); n > 0 {
+		return appli.Resume{Info: "⏳ " + strconv.Itoa(n) + " à confirmer", Badge: n}
 	}
 	premier, dernier := mois(c.Maintenant())
 	totaux := func(compte int64) (donnees.TotauxPeriodeRow, error) {

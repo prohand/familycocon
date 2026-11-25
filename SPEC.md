@@ -153,6 +153,13 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
   virements des budgets perso côté commun) ; « dont … à venir » et
   « Aujourd'hui : … » (ce qui est déjà passé) en dessous.
 - Fiche d'un virement qui revient : pas de catégorie à choisir.
+- Opération qui revient à date variable (« ⏳ Date variable : à confirmer
+  chaque fois », `a_confirmer`, migration 0045) : jamais écrite toute seule.
+  Sa date prévue arrivée, elle est dans « ⏳ À confirmer » en haut du budget
+  (et sur la tuile de l'accueil) : « C'est passé » (vraie date, vrai montant)
+  ou « Pas cette fois ». Une seule fois en attente par récurrence ; le
+  numéro de la fois est envoyé (rien n'est fait deux fois). En attendant,
+  elle compte dans le reste à vivre du mois de sa date prévue.
 - Abonnements : une récurrence + emoji, fin d'engagement, page de gestion,
   notes (jamais de mot de passe). Réservé aux parents ; leurs rappels et
   notifications ne vont jamais aux enfants.
