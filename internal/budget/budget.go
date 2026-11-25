@@ -323,19 +323,11 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 	// Côté commun, les virements qui reviennent des budgets perso sont des
 	// revenus à venir.
 	if compte == 0 {
-		tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+		recus, err := m.virementsRecus(ctx, c, parID)
 		if err != nil {
 			return nil, err
 		}
-		for _, r := range tous {
-			if r.Virement == 1 {
-				r.Sens, r.Categorie = "revenu", "virement-recu"
-				if mb, ok := parID[r.PersoDe]; ok {
-					r.Libelle = libelleVirement(mb.Nom)
-				}
-				recs = append(recs, r)
-			}
-		}
+		recs = append(recs, recus...)
 	}
 	for _, p := range Prevues(recs, premier, dernier, maintenant) {
 		cat, ok := CategorieParCle(p.Categorie)
@@ -358,6 +350,23 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 }
 
 // recurrencesCompte : les opérations qui reviennent de ce budget.
+// virementsRecus : les virements qui reviennent des budgets perso vers le
+// commun, vus du côté commun (revenus « Virement de Marie »).
+func (m *Module) virementsRecus(ctx context.Context, c *appli.Contexte, parID map[int64]*donnees.Membre) ([]donnees.Recurrence, error) {
+	tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+	var out []donnees.Recurrence
+	for _, r := range tous {
+		if r.Virement == 1 {
+			r.Sens, r.Categorie = "revenu", "virement-recu"
+			if mb, ok := parID[r.PersoDe]; ok {
+				r.Libelle = libelleVirement(mb.Nom)
+			}
+			out = append(out, r)
+		}
+	}
+	return out, err
+}
+
 func (m *Module) recurrencesCompte(ctx context.Context, c *appli.Contexte, compte int64) ([]donnees.Recurrence, error) {
 	tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
 	var out []donnees.Recurrence

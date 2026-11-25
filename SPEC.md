@@ -145,6 +145,9 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
   cette date prennent ce montant ; à la première, il devient le montant de
   la récurrence. La date doit être après aujourd'hui. Les prévisions du
   budget en tiennent compte.
+- Virement qui revient d'un budget perso : côté commun, la page « Opérations
+  qui reviennent » le montre en revenu (« Virement de Marie », compté dans
+  les revenus du mois), sans lien : il se modifie depuis le budget perso.
 - Abonnements : une récurrence + emoji, fin d'engagement, page de gestion,
   notes (jamais de mot de passe). Réservé aux parents ; leurs rappels et
   notifications ne vont jamais aux enfants.

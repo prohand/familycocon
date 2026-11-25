@@ -315,6 +315,7 @@ type LigneRecurrence struct {
 	Prochaine  string // « Vendredi 5 décembre », ou « Terminée »
 	Abonnement bool
 	NouveauDes string // « 01/01/2027 » : date du nouveau montant prévu, ou « »
+	SansLien   bool   // virement reçu d'un budget perso : se modifie de ce côté-là
 }
 
 // DateNouveau : la date d'un nouveau montant prévu, à afficher (« 1er
@@ -377,8 +378,32 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 		return
 	}
 	v := vueRecurrences{Devise: c.Famille.Devise, Perso: compte > 0}
+	// Côté commun, les virements qui reviennent des budgets perso sont des
+	// revenus (sans lien : ils se modifient depuis le budget perso).
+	recus := map[int64]bool{}
+	if compte == 0 {
+		membres, err := m.a.Membres(ctx, c)
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		parID := map[int64]*donnees.Membre{}
+		for i := range membres {
+			parID[membres[i].ID] = &membres[i]
+		}
+		virements, err := m.virementsRecus(ctx, c, parID)
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		for _, x := range virements {
+			recus[x.ID] = true
+		}
+		recs = append(recs, virements...)
+	}
 	for _, x := range recs {
 		l := ligneRecurrence(x, abonnees, c.Maintenant())
+		l.SansLien = recus[x.ID]
 		_, active := Prochaine(x)
 		if x.Sens == "revenu" {
 			v.Revenus = append(v.Revenus, l)

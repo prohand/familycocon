@@ -28,12 +28,12 @@
   <h2 class="sous-titre">{{.Titre}}</h2>
   <div class="carte">
     {{- range .L}}
-    <a class="ligne op{{if eq .Prochaine "Terminée"}} terminee{{end}}" href="/recurrences/{{.ID}}">
+    {{if .SansLien}}<div class="ligne op{{if eq .Prochaine "Terminée"}} terminee{{end}}">{{else}}<a class="ligne op{{if eq .Prochaine "Terminée"}} terminee{{end}}" href="/recurrences/{{.ID}}">{{end}}
       <span class="p-emoji">{{.Cat.Emoji}}</span>
       <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}{{if .Abonnement}} <span class="pastille-abo">abonnement</span>{{end}}
         <small>{{.Frequence}} · {{if eq .Prochaine "Terminée"}}terminée{{else}}prochaine : {{.Prochaine}}{{end}}{{if .NouveauDes}} · 📅 {{montant .NouveauMontant $.Devise}} dès le {{.NouveauDes}}{{end}}</small></span>
       <b class="montant {{.Sens}}">{{montant .Montant $.Devise}}</b>
-    </a>
+    {{if .SansLien}}</div>{{else}}</a>{{end}}
     {{- end}}
   </div>
 </section>
