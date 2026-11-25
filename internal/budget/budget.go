@@ -158,6 +158,8 @@ type vueBudget struct {
 	Depenses int64
 	Reste    int64
 	ResteAuj int64 // reste à vivre de ce qui est déjà passé
+	EnCours  bool  // le mois d'aujourd'hui
+	Futur    bool  // un mois qui n'a pas commencé : tout est prévu
 	PrevuRev int64 // revenus encore à venir ce mois-ci
 	PrevuDep int64 // dépenses encore à venir ce mois-ci
 	Courbe   template.HTML
@@ -340,6 +342,8 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 	// Le reste à vivre compte le mois entier : ce qui est passé et ce qui
 	// est prévu (salaire, virement, loyer… pas encore arrivés).
 	v.ResteAuj = v.Reste
+	v.EnCours = premier.Year() == maintenant.Year() && premier.Month() == maintenant.Month()
+	v.Futur = premier.After(maintenant)
 	for _, p := range Prevues(recs, premier, dernier, maintenant) {
 		cat, ok := CategorieParCle(p.Categorie)
 		if !ok {

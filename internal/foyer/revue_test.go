@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"familycocon/internal/donnees"
 	"familycocon/internal/essai"
@@ -44,8 +43,8 @@ func TestRevueFoyer(t *testing.T) {
 
 	// Alertes : une seule requête pour la liste, la première échéance de chaque objet.
 	marie.Post("/vehicules", map[string]string{"nom": "Le scooter", "genre": "moto"})
-	proche := time.Now().AddDate(0, 0, 5).Format("2006-01-02")
-	loin := time.Now().AddDate(0, 6, 0).Format("2006-01-02")
+	proche := essai.Maintenant().AddDate(0, 0, 5).Format("2006-01-02")
+	loin := essai.Maintenant().AddDate(0, 6, 0).Format("2006-01-02")
 	marie.Post("/suivi/vehicules/"+id+"/echeances", map[string]string{"libelle": "Vidange", "jour": loin})
 	marie.Post("/suivi/vehicules/"+id+"/echeances", map[string]string{"libelle": "Contrôle technique", "jour": proche})
 	marie.Post("/suivi/vehicules/2/echeances", map[string]string{"libelle": "Assurance", "jour": loin})
