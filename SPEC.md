@@ -289,7 +289,9 @@ l'interface. Tout ce qui a été trouvé est fait, en quatre lots, avec des test
   (quantités additionnées) ; « Souvent achetés » ; un parent oublie une
   suggestion.
 - **Budget** : catégories du sens choisi seulement ; impôts, assurances,
-  crédit, épargne ; plafonds par catégorie (`budget_plafonds`, migration
+  crédit, épargne, maison et travaux, vacances, garde d'enfants, beauté,
+  sport, frais bancaires, dons ; revenus : remboursements, ventes, loyers
+  perçus, retraite (liste dans `internal/budget/budget.go`) ; plafonds par catégorie (`budget_plafonds`, migration
   0021) ; payé par ; recherche ; vue de l'année.
 - **Espace enfants** : mission pour plusieurs enfants ; tout valider ; étoiles
   données ou retirées avec un motif (`etoiles_bonus`, migration 0022), jamais
