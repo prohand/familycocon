@@ -314,7 +314,7 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			// Rien n'est écrit si un prélèvement a été ajouté au budget depuis la
 			// lecture (il serait écrit une seconde fois).
 			n, err := q.ModifierRecurrence(ctx, donnees.ModifierRecurrenceParams{Sens: "depense", Montant: montant, Categorie: cat.Cle,
-				Libelle: nom, MembreID: membre, Frequence: freq, Debut: debut, Fin: rec.Fin, Faites: faites, NouveauMontant: nouveau, NouveauLe: nouveauLe, ID: rec.ID, FamilleID: c.Famille.ID,
+				Libelle: nom, MembreID: membre, Frequence: freq, Debut: debut, Fin: rec.Fin, Faites: faites, NouveauMontant: nouveau, NouveauLe: nouveauLe, AConfirmer: rec.AConfirmer, ID: rec.ID, FamilleID: c.Famille.ID,
 				FaitesAvant: rec.Faites})
 			if err != nil {
 				return err
@@ -397,7 +397,7 @@ func (m *Module) reprendre(w http.ResponseWriter, r *http.Request, c *appli.Cont
 	ctx := r.Context()
 	n, err := m.a.Q.ModifierRecurrence(ctx, donnees.ModifierRecurrenceParams{Sens: rec.Sens, Montant: rec.Montant, Categorie: rec.Categorie,
 		Libelle: rec.Libelle, MembreID: rec.MembreID, Frequence: rec.Frequence, Debut: prochain, Fin: "", Faites: 0,
-		NouveauMontant: rec.NouveauMontant, NouveauLe: rec.NouveauLe, ID: rec.ID, FamilleID: c.Famille.ID, FaitesAvant: rec.Faites})
+		NouveauMontant: rec.NouveauMontant, NouveauLe: rec.NouveauLe, AConfirmer: rec.AConfirmer, ID: rec.ID, FamilleID: c.Famille.ID, FaitesAvant: rec.Faites})
 	if err == nil && n == 0 {
 		m.a.Echec(w, r, http.StatusConflict, budget.MessageModifiee)
 		return

@@ -458,6 +458,7 @@ type Recurrence struct {
 	Virement       int64
 	NouveauMontant int64
 	NouveauLe      string
+	AConfirmer     int64
 }
 
 type Repas struct {

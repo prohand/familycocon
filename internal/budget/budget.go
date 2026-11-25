@@ -97,6 +97,8 @@ func Brancher(a *appli.App) {
 	a.Route("GET /recurrences/{id}", mod, appli.Parent, m.formRecurrence)
 	a.Route("POST /recurrences/{id}", mod, appli.Parent, m.modifierRecurrence)
 	a.Route("POST /recurrences/{id}/arreter", mod, appli.Parent, m.arreterRecurrence)
+	a.Route("POST /recurrences/{id}/confirmer", mod, appli.Parent, m.confirmerRecurrence)
+	a.Route("POST /recurrences/{id}/passer", mod, appli.Parent, m.confirmerRecurrence)
 	a.Route("POST /recurrences/{id}/supprimer", mod, appli.Parent, m.supprimerRecurrence)
 	a.Route("GET /budget/{id}", mod, appli.Parent, m.formulaire)
 	a.Route("POST /budget/{id}", mod, appli.Parent, m.modifier)
@@ -149,22 +151,27 @@ type vueBudget struct {
 	Precedent  string
 	Suivant    string
 	Filtre     string
-	Revenus    int64
-	Depenses   int64
-	Reste      int64
-	Courbe     template.HTML
-	ParCat     []parCategorie
-	MaxCat     int64
-	PayePar    []payePar // au moins deux parents ont payé ce mois-ci
-	Ecart      int64     // différence entre le premier et le second
-	Plafonds   bool      // la famille a fixé au moins un plafond
-	Jours      []jourOps
-	Pilules    []Categorie
-	Prevues    []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
-	PrevuNet   int64     // revenus − dépenses prévus
-	ResteFin   int64     // reste à vivre prévu en fin de mois
-	NbRecur    int       // opérations qui reviennent (lien vers leur page)
-	Devise     string
+	// Revenus, Depenses, Reste : le mois entier, ce qui est prévu compris
+	// (opérations qui reviennent pas encore passées) ; Aujourdhui... :
+	// ce qui est déjà passé.
+	Revenus  int64
+	Depenses int64
+	Reste    int64
+	ResteAuj int64 // reste à vivre de ce qui est déjà passé
+	PrevuRev int64 // revenus encore à venir ce mois-ci
+	PrevuDep int64 // dépenses encore à venir ce mois-ci
+	Courbe   template.HTML
+	ParCat   []parCategorie
+	MaxCat   int64
+	PayePar  []payePar // au moins deux parents ont payé ce mois-ci
+	Ecart    int64     // différence entre le premier et le second
+	Plafonds bool      // la famille a fixé au moins un plafond
+	Jours    []jourOps
+	Pilules  []Categorie
+	Prevues  []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
+	Attentes []Attente // à date variable : à confirmer (date prévue arrivée)
+	NbRecur  int       // opérations qui reviennent (lien vers leur page)
+	Devise   string
 }
 
 func lireMois(r *http.Request, c *appli.Contexte) time.Time {
@@ -320,6 +327,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		return nil, err
 	}
 	v.NbRecur = len(recs)
+	v.Attentes = EnAttente(recs, c.Maintenant())
 	// Côté commun, les virements qui reviennent des budgets perso sont des
 	// revenus à venir.
 	if compte == 0 {
@@ -329,6 +337,9 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		}
 		recs = append(recs, recus...)
 	}
+	// Le reste à vivre compte le mois entier : ce qui est passé et ce qui
+	// est prévu (salaire, virement, loyer… pas encore arrivés).
+	v.ResteAuj = v.Reste
 	for _, p := range Prevues(recs, premier, dernier, maintenant) {
 		cat, ok := CategorieParCle(p.Categorie)
 		if !ok {
@@ -340,16 +351,59 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		}
 		v.Prevues = append(v.Prevues, l)
 		if p.Sens == "revenu" {
-			v.PrevuNet += p.Montant
+			v.PrevuRev += p.Montant
 		} else {
-			v.PrevuNet -= p.Montant
+			v.PrevuDep += p.Montant
 		}
 	}
-	v.ResteFin = v.Reste + v.PrevuNet
+	v.Revenus += v.PrevuRev
+	v.Depenses += v.PrevuDep
+	v.Reste = v.Revenus - v.Depenses
 	return v, nil
 }
 
 // recurrencesCompte : les opérations qui reviennent de ce budget.
+// nbAttentes : opérations à date variable à confirmer, au commun et dans
+// le budget perso du membre.
+func (m *Module) nbAttentes(ctx context.Context, c *appli.Contexte) int {
+	tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return 0
+	}
+	var siens []donnees.Recurrence
+	for _, r := range tous {
+		if r.PersoDe == 0 || r.PersoDe == c.Membre.ID {
+			siens = append(siens, r)
+		}
+	}
+	return len(EnAttente(siens, c.Maintenant()))
+}
+
+// prevuNet : revenus − dépenses encore à venir du mois (opérations qui
+// reviennent, et pour le commun les virements des budgets perso).
+func (m *Module) prevuNet(ctx context.Context, c *appli.Contexte, compte int64, premier, dernier time.Time) (int64, error) {
+	recs, err := m.recurrencesCompte(ctx, c, compte)
+	if err != nil {
+		return 0, err
+	}
+	if compte == 0 {
+		recus, err := m.virementsRecus(ctx, c, nil)
+		if err != nil {
+			return 0, err
+		}
+		recs = append(recs, recus...)
+	}
+	var net int64
+	for _, p := range Prevues(recs, premier, dernier, c.Maintenant()) {
+		if p.Sens == "revenu" {
+			net += p.Montant
+		} else {
+			net -= p.Montant
+		}
+	}
+	return net, nil
+}
+
 // virementsRecus : les virements qui reviennent des budgets perso vers le
 // commun, vus du côté commun (revenus « Virement de Marie »).
 func (m *Module) virementsRecus(ctx context.Context, c *appli.Contexte, parID map[int64]*donnees.Membre) ([]donnees.Recurrence, error) {
@@ -468,6 +522,7 @@ type saisieOp struct {
 	montant                        int64
 	membre                         sql.NullInt64
 	frequence, fin                 string // nouvelle opération qui revient
+	aConfirmer                     int64  // date variable : à confirmer chaque fois
 }
 
 func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisieOp, string) {
@@ -497,6 +552,9 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisieOp, string) {
 	if f := r.PostFormValue("frequence"); FrequenceValide(f) {
 		s.frequence = f
 		s.fin = r.PostFormValue("fin")
+		if r.PostFormValue("a_confirmer") == "1" {
+			s.aConfirmer = 1
+		}
 		if _, ok := LireJour(s.fin, c.Maintenant()); s.fin != "" && (!ok || s.fin < s.jour) {
 			return s, "La date de fin doit suivre la première date."
 		}
@@ -530,6 +588,7 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		if _, err := m.a.Q.CreerRecurrence(ctx, donnees.CreerRecurrenceParams{
 			FamilleID: c.Famille.ID, PersoDe: compte, Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle,
 			MembreID: s.membre, Frequence: s.frequence, Debut: s.jour, Fin: s.fin, CreePar: auteur, CreeLe: time.Now().Unix(),
+			AConfirmer: s.aConfirmer,
 		}); err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
@@ -627,6 +686,10 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	if err := GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		m.a.Journal.Error("budget : opérations qui reviennent", "erreur", err)
 	}
+	// Des opérations à date variable attendent : on le dit d'abord.
+	if n := m.nbAttentes(ctx, c); n > 0 {
+		return appli.Resume{Info: "⏳ " + strconv.Itoa(n) + " à confirmer", Badge: n}
+	}
 	premier, dernier := mois(c.Maintenant())
 	totaux := func(compte int64) (donnees.TotauxPeriodeRow, error) {
 		return m.a.Q.TotauxPeriode(ctx, donnees.TotauxPeriodeParams{FamilleID: c.Famille.ID, Compte: compte,
@@ -643,9 +706,15 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 			return appli.Resume{Info: alerte, Badge: 1}
 		}
 	}
-	info := "Reste " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise)
-	if p.Revenus+p.Depenses > 0 {
-		info = "Commun : " + appli.Montant(t.Revenus-t.Depenses, c.Famille.Devise) + " · Moi : " + appli.Montant(p.Revenus-p.Depenses, c.Famille.Devise)
+	// Même reste à vivre que la page : le prévu du mois compris.
+	netCommun, err := m.prevuNet(ctx, c, 0, premier, dernier)
+	netMoi, errM := m.prevuNet(ctx, c, c.Membre.ID, premier, dernier)
+	if err != nil || errM != nil {
+		netCommun, netMoi = 0, 0
+	}
+	info := "Reste " + appli.Montant(t.Revenus-t.Depenses+netCommun, c.Famille.Devise)
+	if p.Revenus+p.Depenses > 0 || netMoi != 0 {
+		info = "Commun : " + appli.Montant(t.Revenus-t.Depenses+netCommun, c.Famille.Devise) + " · Moi : " + appli.Montant(p.Revenus-p.Depenses+netMoi, c.Famille.Devise)
 	}
 	return appli.Resume{Info: info}
 }

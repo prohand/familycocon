@@ -11,8 +11,8 @@ SELECT * FROM recurrences WHERE id = ? AND famille_id = ?;
 SELECT count(*) FROM recurrences WHERE famille_id = ?;
 
 -- name: CreerRecurrence :one
-INSERT INTO recurrences (famille_id, perso_de, virement, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO recurrences (famille_id, perso_de, virement, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le, a_confirmer)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- Seulement si " faites " n'a pas bouge depuis la lecture (une occurrence
 -- ecrite entre-temps ne doit pas etre ecrite une seconde fois).
@@ -20,7 +20,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 UPDATE recurrences SET sens = sqlc.arg(sens), montant = sqlc.arg(montant), categorie = sqlc.arg(categorie),
   libelle = sqlc.arg(libelle), membre_id = sqlc.arg(membre_id), frequence = sqlc.arg(frequence),
   debut = sqlc.arg(debut), fin = sqlc.arg(fin), faites = sqlc.arg(faites),
-  nouveau_montant = sqlc.arg(nouveau_montant), nouveau_le = sqlc.arg(nouveau_le)
+  nouveau_montant = sqlc.arg(nouveau_montant), nouveau_le = sqlc.arg(nouveau_le), a_confirmer = sqlc.arg(a_confirmer)
 WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND faites = sqlc.arg(faites_avant);
 
 -- name: ArreterRecurrence :exec

@@ -1017,7 +1017,7 @@ func (q *Queries) ExportRecompenses(ctx context.Context, familleID int64) ([]Rec
 }
 
 const exportRecurrences = `-- name: ExportRecurrences :many
-SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le FROM recurrences WHERE famille_id = ? AND perso_de IN (0, ?2)
+SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le, a_confirmer FROM recurrences WHERE famille_id = ? AND perso_de IN (0, ?2)
 `
 
 type ExportRecurrencesParams struct {
@@ -1052,6 +1052,7 @@ func (q *Queries) ExportRecurrences(ctx context.Context, arg ExportRecurrencesPa
 			&i.Virement,
 			&i.NouveauMontant,
 			&i.NouveauLe,
+			&i.AConfirmer,
 		); err != nil {
 			return nil, err
 		}

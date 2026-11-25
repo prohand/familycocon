@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -219,7 +220,43 @@ func Replanifier(rec donnees.Recurrence, prochaine, freq string, aujourdhui time
 // MessageModifiee : la récurrence a changé entre la lecture et l'écriture.
 const MessageModifiee = "Cette opération vient de changer : rechargez la page et recommencez."
 
-// Generer écrit les occurrences dues jusqu'à aujourd'hui (inclus).
+// ecrireOccurrence : l'occurrence n° r.Faites de la récurrence, prévue le
+// jour « prevu », écrite dans le budget au jour « jour » pour « montant »
+// (passer = vrai : « Pas cette fois », rien n'est écrit). Dans une
+// transaction ; errDejaFaite si une autre requête l'a déjà écrite.
+func ecrireOccurrence(ctx context.Context, q *donnees.Queries, r donnees.Recurrence, prevu, jour string, montant int64, passer bool) error {
+	// Avancer d'abord : si une autre requête l'a déjà fait, rien n'est écrit deux fois.
+	if n, err := q.AvancerRecurrence(ctx, donnees.AvancerRecurrenceParams{ID: r.ID, FamilleID: r.FamilleID, Faites: r.Faites}); err != nil || n == 0 {
+		return errors.Join(err, errDejaFaite)
+	}
+	// Date du nouveau montant arrivée : il devient le montant.
+	if r.NouveauLe != "" && prevu >= r.NouveauLe {
+		if err := q.AppliquerNouveauMontant(ctx, donnees.AppliquerNouveauMontantParams{ID: r.ID, FamilleID: r.FamilleID}); err != nil {
+			return err
+		}
+	}
+	if passer {
+		return nil
+	}
+	// Virement qui revient : les deux moitiés (perso et commun).
+	if r.Virement == 1 {
+		qui, err := q.MembreParID(ctx, donnees.MembreParIDParams{ID: r.PersoDe, FamilleID: r.FamilleID})
+		if err != nil {
+			return err
+		}
+		return ecrireVirement(ctx, q, r.FamilleID, r.PersoDe, qui.Nom, montant, jour, r.Libelle,
+			sql.NullInt64{Int64: r.ID, Valid: true}, r.CreePar)
+	}
+	_, err := q.CreerOccurrence(ctx, donnees.CreerOccurrenceParams{
+		FamilleID: r.FamilleID, PersoDe: r.PersoDe, Sens: r.Sens, Montant: montant, Categorie: r.Categorie, Libelle: r.Libelle,
+		Jour: jour, MembreID: r.MembreID, RecurrenceID: sql.NullInt64{Int64: r.ID, Valid: true},
+		CreePar: r.CreePar, CreeLe: time.Now().Unix(),
+	})
+	return err
+}
+
+// Generer écrit les occurrences dues jusqu'à aujourd'hui (inclus). Celles
+// à date variable (a_confirmer) attendent qu'on les confirme.
 func Generer(ctx context.Context, a *appli.App, famille int64, aujourdhui time.Time) error {
 	recs, err := a.Q.RecurrencesFamille(ctx, famille)
 	if err != nil {
@@ -227,39 +264,18 @@ func Generer(ctx context.Context, a *appli.App, famille int64, aujourdhui time.T
 	}
 	limite := repetition.CleJour(aujourdhui)
 	for _, r := range recs {
+		if r.AConfirmer == 1 {
+			continue
+		}
 		// 600 au plus d'un coup : plus de 10 ans d'une récurrence hebdomadaire.
 		for n := 0; n < 600; n++ {
 			j, ok := Prochaine(r)
-			if !ok || repetition.CleJour(j) > limite {
+			cle := repetition.CleJour(j)
+			if !ok || cle > limite {
 				break
 			}
 			err := a.Transaction(ctx, func(q *donnees.Queries) error {
-				// Avancer d'abord : si une autre requête l'a déjà fait, rien n'est écrit deux fois.
-				if n, err := q.AvancerRecurrence(ctx, donnees.AvancerRecurrenceParams{ID: r.ID, FamilleID: famille, Faites: r.Faites}); err != nil || n == 0 {
-					return errors.Join(err, errDejaFaite)
-				}
-				// Date du nouveau montant arrivée : il devient le montant.
-				montant := MontantDu(r, repetition.CleJour(j))
-				if r.NouveauLe != "" && repetition.CleJour(j) >= r.NouveauLe {
-					if err := q.AppliquerNouveauMontant(ctx, donnees.AppliquerNouveauMontantParams{ID: r.ID, FamilleID: famille}); err != nil {
-						return err
-					}
-				}
-				// Virement qui revient : les deux moitiés (perso et commun).
-				if r.Virement == 1 {
-					qui, err := q.MembreParID(ctx, donnees.MembreParIDParams{ID: r.PersoDe, FamilleID: famille})
-					if err != nil {
-						return err
-					}
-					return ecrireVirement(ctx, q, famille, r.PersoDe, qui.Nom, montant, repetition.CleJour(j), r.Libelle,
-						sql.NullInt64{Int64: r.ID, Valid: true}, r.CreePar)
-				}
-				_, err := q.CreerOccurrence(ctx, donnees.CreerOccurrenceParams{
-					FamilleID: r.FamilleID, PersoDe: r.PersoDe, Sens: r.Sens, Montant: montant, Categorie: r.Categorie, Libelle: r.Libelle,
-					Jour: repetition.CleJour(j), MembreID: r.MembreID, RecurrenceID: sql.NullInt64{Int64: r.ID, Valid: true},
-					CreePar: r.CreePar, CreeLe: time.Now().Unix(),
-				})
-				return err
+				return ecrireOccurrence(ctx, q, r, cle, cle, MontantDu(r, cle), false)
 			})
 			if errors.Is(err, errDejaFaite) {
 				break
@@ -268,13 +284,47 @@ func Generer(ctx context.Context, a *appli.App, famille int64, aujourdhui time.T
 				return err
 			}
 			r.Faites++
-			if r.NouveauLe != "" && repetition.CleJour(j) >= r.NouveauLe {
+			if r.NouveauLe != "" && cle >= r.NouveauLe {
 				r.Montant, r.NouveauMontant, r.NouveauLe = r.NouveauMontant, 0, ""
 			}
 		}
 	}
 	dejaGenere.Store(cleGenere{a, famille}, limite)
 	return nil
+}
+
+// Attente : la prochaine fois d'une opération à date variable dont la
+// date prévue est arrivée : elle attend « C'est passé » ou « Pas cette fois ».
+type Attente struct {
+	R       donnees.Recurrence
+	Cat     Categorie
+	Jour    string // date prévue
+	Montant int64  // montant prévu
+}
+
+// EnAttente : les opérations à confirmer (date prévue passée ou du jour),
+// la plus ancienne d'abord. Une seule par récurrence : la suivante vient
+// une fois celle-ci confirmée ou passée.
+func EnAttente(recs []donnees.Recurrence, aujourdhui time.Time) []Attente {
+	auj := repetition.CleJour(aujourdhui)
+	var out []Attente
+	for _, r := range recs {
+		if r.AConfirmer != 1 {
+			continue
+		}
+		j, ok := Prochaine(r)
+		cle := repetition.CleJour(j)
+		if !ok || cle > auj {
+			continue
+		}
+		cat, ok := CategorieParCle(r.Categorie)
+		if !ok {
+			cat, _ = CategorieParCle("autre")
+		}
+		out = append(out, Attente{R: r, Cat: cat, Jour: cle, Montant: MontantDu(r, cle)})
+	}
+	sort.SliceStable(out, func(i, k int) bool { return out[i].Jour < out[k].Jour })
+	return out
 }
 
 // Prevues : les occurrences à venir entre premier et dernier (inclus),
@@ -289,7 +339,9 @@ func Prevues(recs []donnees.Recurrence, premier, dernier, aujourdhui time.Time) 
 			if !ok || cle > au {
 				break
 			}
-			if cle >= du && cle > auj {
+			// À date variable : aussi celles du mois dont la date est passée
+			// (pas encore confirmées).
+			if cle >= du && (cle > auj || r.AConfirmer == 1) {
 				out = append(out, donnees.Operation{FamilleID: r.FamilleID, Sens: r.Sens, Montant: MontantDu(r, cle), Categorie: r.Categorie,
 					Libelle: r.Libelle, Jour: cle, MembreID: r.MembreID, RecurrenceID: sql.NullInt64{Int64: r.ID, Valid: true}})
 			}
@@ -500,6 +552,10 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 		m.a.Echec(w, r, http.StatusBadRequest, "La date de fin doit suivre la prochaine date.")
 		return
 	}
+	var aConfirmer int64
+	if r.PostFormValue("a_confirmer") == "1" {
+		aConfirmer = 1
+	}
 	nouveau, nouveauLe, msgN := LireNouveauMontant(r, c.Maintenant())
 	if msgN != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msgN)
@@ -530,7 +586,7 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	}
 	n, err := m.a.Q.ModifierRecurrence(r.Context(), donnees.ModifierRecurrenceParams{
 		Sens: cat.Sens, Montant: montant, Categorie: cat.Cle, Libelle: libelle, MembreID: membre, Frequence: freq,
-		Debut: debut, Fin: fin, Faites: faites, NouveauMontant: nouveau, NouveauLe: nouveauLe,
+		Debut: debut, Fin: fin, Faites: faites, NouveauMontant: nouveau, NouveauLe: nouveauLe, AConfirmer: aConfirmer,
 		ID: x.ID, FamilleID: c.Famille.ID, FaitesAvant: x.Faites,
 	})
 	if err != nil {
@@ -548,6 +604,57 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	m.a.Publier(c, mod, "")
 	m.a.Flash(w, "Enregistré ✓ (pour les prochaines fois)")
 	m.a.Rediriger(w, r, "/budget/recurrences")
+}
+
+// confirmerRecurrence : POST /recurrences/{id}/confirmer (« C'est passé » :
+// écrite au budget avec la vraie date et le vrai montant) ou
+// /recurrences/{id}/passer (« Pas cette fois » : rien n'est écrit). Pour
+// une opération à date variable dont la date prévue est arrivée. « n » :
+// le numéro de la fois montrée (rien n'est fait si elle a déjà été traitée).
+func (m *Module) confirmerRecurrence(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	x, ok := m.recurrence(r, c)
+	if !ok {
+		m.a.Echec(w, r, http.StatusNotFound, "Introuvable.")
+		return
+	}
+	n, err := strconv.ParseInt(r.PostFormValue("n"), 10, 64)
+	j, actif := Prochaine(x)
+	prevu := repetition.CleJour(j)
+	if err != nil || n != x.Faites || x.AConfirmer != 1 || !actif || prevu > repetition.CleJour(c.Maintenant()) {
+		m.a.Echec(w, r, http.StatusConflict, MessageModifiee)
+		return
+	}
+	passer := strings.HasSuffix(r.URL.Path, "/passer")
+	jour, montant := prevu, MontantDu(x, prevu)
+	if !passer {
+		if montant, err = LireMontant(r.PostFormValue("montant")); err != nil {
+			m.a.Echec(w, r, http.StatusBadRequest, err.Error())
+			return
+		}
+		var okJ bool
+		if jour, okJ = LireJour(r.PostFormValue("jour"), c.Maintenant()); !okJ {
+			m.a.Echec(w, r, http.StatusBadRequest, "Date invalide.")
+			return
+		}
+	}
+	err = m.a.Transaction(r.Context(), func(q *donnees.Queries) error {
+		return ecrireOccurrence(r.Context(), q, x, prevu, jour, montant, passer)
+	})
+	if errors.Is(err, errDejaFaite) {
+		m.a.Echec(w, r, http.StatusConflict, MessageModifiee)
+		return
+	}
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Publier(c, mod, "")
+	if passer {
+		m.a.Flash(w, "Pas cette fois : rien n'est ajouté ✓")
+	} else {
+		m.a.Flash(w, "Ajouté au budget ✓")
+	}
+	m.a.Rediriger(w, r, "/budget")
 }
 
 // arreterRecurrence : plus d'occurrence après aujourd'hui (l'historique reste).

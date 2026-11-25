@@ -88,8 +88,30 @@ func TestBudgetPerso(t *testing.T) {
 		!strings.Contains(r, `class="montant revenu">800,00`) || !strings.Contains(r, "Revenus <b>800,00") || strings.Contains(r, `href="/recurrences/`) {
 		t.Fatal("virement mensuel : pas compté en revenu dans les récurrences du commun")
 	}
-	if _, r := marie.Get("/budget/recurrences?compte=perso"); !strings.Contains(r, "800,00") {
+	_, rp := marie.Get("/budget/recurrences?compte=perso")
+	if !strings.Contains(rp, "800,00") {
 		t.Fatal("virement mensuel absent des récurrences perso")
+	}
+	// Sa fiche ne demande pas de catégorie ; on change le montant sans en choisir.
+	rid := essai.Trouver(t, rp, `href="/recurrences/(\d+)"`)
+	_, fiche := marie.Get("/recurrences/" + rid)
+	if strings.Contains(fiche, `type="radio" name="categorie"`) || !strings.Contains(fiche, `type="hidden" name="categorie" value="virement"`) {
+		t.Fatal("virement qui revient : catégorie à choisir")
+	}
+	prochaine := essai.Trouver(t, fiche, `name="prochaine" value="([0-9-]+)"`)
+	if code, _ := marie.Post("/recurrences/"+rid, map[string]string{"montant": "850", "categorie": "virement", "frequence": "mois",
+		"prochaine": prochaine}); code != http.StatusOK {
+		t.Fatalf("virement qui revient non modifié : %d", code)
+	}
+	// Le mois prochain : rien de passé, tout est prévu ; le reste à vivre
+	// du commun compte le virement à venir.
+	suivant := time.Now().AddDate(0, 1, 0).Format("2006-01")
+	if time.Now().Day() > 28 { // 31 janvier + 1 mois : on vise le mois d'après le 1er
+		suivant = time.Date(time.Now().Year(), time.Now().Month()+1, 1, 0, 0, 0, 0, time.Local).Format("2006-01")
+	}
+	_, p = paul.Get("/budget?compte=commun&mois=" + suivant)
+	if !strings.Contains(p, "Revenus <b>850,00") || !strings.Contains(p, "dont 850,00") || !strings.Contains(p, "prévu compris") {
+		t.Fatal("reste à vivre : le virement à venir n'est pas compté")
 	}
 
 	// Plafonds séparés.

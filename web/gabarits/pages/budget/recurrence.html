@@ -12,6 +12,11 @@
   {{template "jeton" $c.CSRF}}
   <label class="champ"><span>Montant ({{.Devise}})</span>
     <input class="gros-montant" name="montant" value="{{.Montant}}" inputmode="decimal" required></label>
+  {{if or .R.Virement (eq .R.Categorie "virement") (eq .R.Categorie "virement-recu")}}
+  {{/* Virement : sa catégorie ne change pas (rien à choisir). */}}
+  <input type="hidden" name="categorie" value="{{.R.Categorie}}">
+  <p class="aide">🔁 Virement vers le compte commun : chaque fois, une dépense ici et un revenu au commun.</p>
+  {{else}}
   <fieldset class="categories">
     <legend>Catégorie</legend>
     <div class="grille-cat">
@@ -21,6 +26,7 @@
       {{- end}}
     </div>
   </fieldset>
+  {{end}}
   <label class="champ"><span>Libellé</span><input name="libelle" value="{{.R.Libelle}}" maxlength="80"></label>
   <div class="rangee">
     <label class="champ"><span>Revient</span>
@@ -34,6 +40,8 @@
         {{- range .Membres}}{{if eq .Role "parent"}}<option value="{{.ID}}"{{if and $.Donnees.R.MembreID.Valid (eq .ID $.Donnees.R.MembreID.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}{{end}}
       </select></label>
   </div>
+  <label class="case-a-cocher"><input type="checkbox" name="a_confirmer" value="1"{{if .R.AConfirmer}} checked{{end}}> ⏳ Date variable : à confirmer chaque fois</label>
+  <p class="aide">Cantine, facture, remboursement… : rien n'est ajouté tout seul. À la date prévue, vous dites « C'est passé » (vraie date, vrai montant) ou « Pas cette fois ». En attendant, c'est compté dans le reste à vivre.</p>
   {{template "nouveau-montant" dict "Montant" .NouveauMontant "Le" .R.NouveauLe "Devise" .Devise}}
   <p class="aide">Les changements valent pour les prochaines fois ; les opérations déjà passées ne bougent pas.</p>
   <div class="boutons"><button class="bouton">Enregistrer</button></div>

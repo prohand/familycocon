@@ -245,24 +245,25 @@ func (q *Queries) CreerOccurrence(ctx context.Context, arg CreerOccurrenceParams
 }
 
 const creerRecurrence = `-- name: CreerRecurrence :one
-INSERT INTO recurrences (famille_id, perso_de, virement, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le
+INSERT INTO recurrences (famille_id, perso_de, virement, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, cree_par, cree_le, a_confirmer)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le, a_confirmer
 `
 
 type CreerRecurrenceParams struct {
-	FamilleID int64
-	PersoDe   int64
-	Virement  int64
-	Sens      string
-	Montant   int64
-	Categorie string
-	Libelle   string
-	MembreID  sql.NullInt64
-	Frequence string
-	Debut     string
-	Fin       string
-	CreePar   sql.NullInt64
-	CreeLe    int64
+	FamilleID  int64
+	PersoDe    int64
+	Virement   int64
+	Sens       string
+	Montant    int64
+	Categorie  string
+	Libelle    string
+	MembreID   sql.NullInt64
+	Frequence  string
+	Debut      string
+	Fin        string
+	CreePar    sql.NullInt64
+	CreeLe     int64
+	AConfirmer int64
 }
 
 func (q *Queries) CreerRecurrence(ctx context.Context, arg CreerRecurrenceParams) (Recurrence, error) {
@@ -280,6 +281,7 @@ func (q *Queries) CreerRecurrence(ctx context.Context, arg CreerRecurrenceParams
 		arg.Fin,
 		arg.CreePar,
 		arg.CreeLe,
+		arg.AConfirmer,
 	)
 	var i Recurrence
 	err := row.Scan(
@@ -300,6 +302,7 @@ func (q *Queries) CreerRecurrence(ctx context.Context, arg CreerRecurrenceParams
 		&i.Virement,
 		&i.NouveauMontant,
 		&i.NouveauLe,
+		&i.AConfirmer,
 	)
 	return i, err
 }
@@ -409,8 +412,8 @@ const modifierRecurrence = `-- name: ModifierRecurrence :execrows
 UPDATE recurrences SET sens = ?1, montant = ?2, categorie = ?3,
   libelle = ?4, membre_id = ?5, frequence = ?6,
   debut = ?7, fin = ?8, faites = ?9,
-  nouveau_montant = ?10, nouveau_le = ?11
-WHERE id = ?12 AND famille_id = ?13 AND faites = ?14
+  nouveau_montant = ?10, nouveau_le = ?11, a_confirmer = ?12
+WHERE id = ?13 AND famille_id = ?14 AND faites = ?15
 `
 
 type ModifierRecurrenceParams struct {
@@ -425,6 +428,7 @@ type ModifierRecurrenceParams struct {
 	Faites         int64
 	NouveauMontant int64
 	NouveauLe      string
+	AConfirmer     int64
 	ID             int64
 	FamilleID      int64
 	FaitesAvant    int64
@@ -445,6 +449,7 @@ func (q *Queries) ModifierRecurrence(ctx context.Context, arg ModifierRecurrence
 		arg.Faites,
 		arg.NouveauMontant,
 		arg.NouveauLe,
+		arg.AConfirmer,
 		arg.ID,
 		arg.FamilleID,
 		arg.FaitesAvant,
@@ -456,7 +461,7 @@ func (q *Queries) ModifierRecurrence(ctx context.Context, arg ModifierRecurrence
 }
 
 const recurrenceParID = `-- name: RecurrenceParID :one
-SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le FROM recurrences WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le, a_confirmer FROM recurrences WHERE id = ? AND famille_id = ?
 `
 
 type RecurrenceParIDParams struct {
@@ -485,6 +490,7 @@ func (q *Queries) RecurrenceParID(ctx context.Context, arg RecurrenceParIDParams
 		&i.Virement,
 		&i.NouveauMontant,
 		&i.NouveauLe,
+		&i.AConfirmer,
 	)
 	return i, err
 }
@@ -519,7 +525,7 @@ func (q *Queries) RecurrencesAbonnees(ctx context.Context, familleID int64) ([]i
 
 const recurrencesFamille = `-- name: RecurrencesFamille :many
 
-SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le FROM recurrences WHERE famille_id = ? ORDER BY sens DESC, montant DESC
+SELECT id, famille_id, sens, montant, categorie, libelle, membre_id, frequence, debut, fin, faites, cree_par, cree_le, perso_de, virement, nouveau_montant, nouveau_le, a_confirmer FROM recurrences WHERE famille_id = ? ORDER BY sens DESC, montant DESC
 `
 
 // Operations qui reviennent, et abonnements.
@@ -551,6 +557,7 @@ func (q *Queries) RecurrencesFamille(ctx context.Context, familleID int64) ([]Re
 			&i.Virement,
 			&i.NouveauMontant,
 			&i.NouveauLe,
+			&i.AConfirmer,
 		); err != nil {
 			return nil, err
 		}

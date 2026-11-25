@@ -148,6 +148,18 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
 - Virement qui revient d'un budget perso : côté commun, la page « Opérations
   qui reviennent » le montre en revenu (« Virement de Marie », compté dans
   les revenus du mois), sans lien : il se modifie depuis le budget perso.
+- Reste à vivre (page du budget et tuile de l'accueil) : le mois entier,
+  ce qui est prévu compris (opérations qui reviennent pas encore passées,
+  virements des budgets perso côté commun) ; « dont … à venir » et
+  « Aujourd'hui : … » (ce qui est déjà passé) en dessous.
+- Fiche d'un virement qui revient : pas de catégorie à choisir.
+- Opération qui revient à date variable (« ⏳ Date variable : à confirmer
+  chaque fois », `a_confirmer`, migration 0045) : jamais écrite toute seule.
+  Sa date prévue arrivée, elle est dans « ⏳ À confirmer » en haut du budget
+  (et sur la tuile de l'accueil) : « C'est passé » (vraie date, vrai montant)
+  ou « Pas cette fois ». Une seule fois en attente par récurrence ; le
+  numéro de la fois est envoyé (rien n'est fait deux fois). En attendant,
+  elle compte dans le reste à vivre du mois de sa date prévue.
 - Abonnements : une récurrence + emoji, fin d'engagement, page de gestion,
   notes (jamais de mot de passe). Réservé aux parents ; leurs rappels et
   notifications ne vont jamais aux enfants.
