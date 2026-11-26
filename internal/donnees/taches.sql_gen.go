@@ -327,6 +327,67 @@ func (q *Queries) HistoriqueTaches(ctx context.Context, arg HistoriqueTachesPara
 	return items, nil
 }
 
+const historiqueToursPasses = `-- name: HistoriqueToursPasses :many
+SELECT taches.titre, taches.emoji, p.passe_le, p.de_membre, p.a_membre, p.passe_par
+FROM taches_tours_passes p JOIN taches ON taches.id = p.tache_id
+WHERE taches.famille_id = ?1 AND p.passe_le >= ?2
+  AND (taches.cree_par = ?3 OR (taches.privee = 0 AND (taches.assigne_a = ?3 OR instr(',' || taches.tour || ',', ',' || ?3 || ',') > 0 OR CAST(?4 AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
+ORDER BY p.passe_le DESC LIMIT 50
+`
+
+type HistoriqueToursPassesParams struct {
+	FamilleID int64
+	Depuis    int64
+	MembreID  sql.NullInt64
+	Parent    int64
+}
+
+type HistoriqueToursPassesRow struct {
+	Titre    string
+	Emoji    string
+	PasseLe  int64
+	DeMembre sql.NullInt64
+	AMembre  sql.NullInt64
+	PassePar sql.NullInt64
+}
+
+// Tours passes recents, pour l'historique " Qui a fait quoi " (seulement
+// ceux des taches que ce membre voit, comme HistoriqueTaches).
+func (q *Queries) HistoriqueToursPasses(ctx context.Context, arg HistoriqueToursPassesParams) ([]HistoriqueToursPassesRow, error) {
+	rows, err := q.db.QueryContext(ctx, historiqueToursPasses,
+		arg.FamilleID,
+		arg.Depuis,
+		arg.MembreID,
+		arg.Parent,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HistoriqueToursPassesRow{}
+	for rows.Next() {
+		var i HistoriqueToursPassesRow
+		if err := rows.Scan(
+			&i.Titre,
+			&i.Emoji,
+			&i.PasseLe,
+			&i.DeMembre,
+			&i.AMembre,
+			&i.PassePar,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const libererTachesMembre = `-- name: LibererTachesMembre :exec
 UPDATE taches SET assigne_a = NULL WHERE famille_id = ? AND assigne_a = ?
 `
@@ -462,6 +523,43 @@ DELETE FROM taches_rappels WHERE envoye_le < ?
 func (q *Queries) OublierRappelsTaches(ctx context.Context, envoyeLe int64) error {
 	_, err := q.db.ExecContext(ctx, oublierRappelsTaches, envoyeLe)
 	return err
+}
+
+const passerTour = `-- name: PasserTour :execrows
+INSERT INTO taches_tours_passes (tache_id, numero, de_membre, a_membre, passe_par, passe_le)
+SELECT t.id, ?1, ?2, ?3, ?4, ?5
+FROM taches t WHERE t.id = ?6 AND t.famille_id = ?7
+  AND (SELECT count(*) FROM taches_tours_passes x WHERE x.tache_id = t.id) = CAST(?8 AS INTEGER)
+`
+
+type PasserTourParams struct {
+	Numero    int64
+	DeMembre  sql.NullInt64
+	AMembre   sql.NullInt64
+	PassePar  sql.NullInt64
+	PasseLe   int64
+	TacheID   int64
+	FamilleID int64
+	Deja      int64
+}
+
+// Passer le tour. deja : le nombre de decalages vus par celui qui passe ;
+// 0 ligne si un autre l'a passe entre-temps (double envoi, deux membres).
+func (q *Queries) PasserTour(ctx context.Context, arg PasserTourParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, passerTour,
+		arg.Numero,
+		arg.DeMembre,
+		arg.AMembre,
+		arg.PassePar,
+		arg.PasseLe,
+		arg.TacheID,
+		arg.FamilleID,
+		arg.Deja,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const retirerTache = `-- name: RetirerTache :exec
@@ -767,6 +865,71 @@ func (q *Queries) TachesFaitesOccurrences(ctx context.Context, arg TachesFaitesO
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const toursPassesFamille = `-- name: ToursPassesFamille :many
+
+SELECT p.tache_id, p.numero FROM taches_tours_passes p JOIN taches t ON t.id = p.tache_id
+WHERE t.famille_id = ? AND t.active = 1 AND t.tour <> ''
+ORDER BY p.tache_id, p.numero
+`
+
+type ToursPassesFamilleRow struct {
+	TacheID int64
+	Numero  int64
+}
+
+// Tour de role : " Passer au suivant " (voir migration 0048).
+// Decalages du tour des taches en cours de la famille.
+func (q *Queries) ToursPassesFamille(ctx context.Context, familleID int64) ([]ToursPassesFamilleRow, error) {
+	rows, err := q.db.QueryContext(ctx, toursPassesFamille, familleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ToursPassesFamilleRow{}
+	for rows.Next() {
+		var i ToursPassesFamilleRow
+		if err := rows.Scan(&i.TacheID, &i.Numero); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const toursPassesTache = `-- name: ToursPassesTache :many
+SELECT numero FROM taches_tours_passes WHERE tache_id = ? ORDER BY numero
+`
+
+// Decalages du tour d'une tache (rappels).
+func (q *Queries) ToursPassesTache(ctx context.Context, tacheID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, toursPassesTache, tacheID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var numero int64
+		if err := rows.Scan(&numero); err != nil {
+			return nil, err
+		}
+		items = append(items, numero)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

@@ -20,7 +20,21 @@
       {{template "jeton" $c.CSRF}}<input type="hidden" name="faite" value="{{if .FaiteLe}}0{{else}}1{{end}}">
       <button class="coche{{if .FaiteLe}} cochee{{end}}" aria-label="{{if .FaiteLe}}À refaire : {{else}}Fait : {{end}}{{.Texte}}"></button>
     </form>
-    <span class="quoi">{{.Texte}}{{if .Quand}}<small class="{{if .Retard}}alerte{{end}}">{{.Quand}}</small>{{end}}</span>
+    {{/* Touchée, l'étape s'ouvre pour être modifiée (texte, date, qui). */}}
+    {{$e := .}}
+    <details class="etape-modif">
+      <summary class="quoi" title="Modifier l'étape">{{.Texte}}{{if .Quand}}<small class="{{if .Retard}}alerte{{end}}">{{.Quand}}</small>{{end}}</summary>
+      <form method="post" action="/projets/etapes/{{.ID}}/modifier">
+        {{template "jeton" $c.CSRF}}
+        <label class="champ"><span>Quoi ?</span><input name="texte" value="{{.Texte}}" maxlength="120" required></label>
+        <div class="rangee">
+          <label class="champ"><span>Pour le (facultatif)</span><input type="date" name="jour" value="{{.Jour}}"></label>
+          <label class="champ"><span>Qui ?</span>
+            <select name="membre"><option value="0">Quelqu'un</option>{{range $d.Membres}}<option value="{{.ID}}"{{if and $e.MembreID.Valid (eq .ID $e.MembreID.Int64)}} selected{{end}}>{{.Nom}}</option>{{end}}</select></label>
+        </div>
+        <button class="bouton petit">Enregistrer</button>
+      </form>
+    </details>
     {{if .Membre}}{{template "avatar-petit" .Membre}}{{end}}
     {{if $c.EstParent}}<form method="post" action="/projets/etapes/{{.ID}}/supprimer" hx-confirm="Supprimer cette étape ?">{{template "jeton" $c.CSRF}}<button class="crayon" aria-label="Supprimer">🗑️</button></form>{{end}}
   </div>

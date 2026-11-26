@@ -284,17 +284,18 @@ type Membre struct {
 }
 
 type Mission struct {
-	ID         int64
-	FamilleID  int64
-	EnfantID   int64
-	Titre      string
-	Emoji      string
-	Etoiles    int64
-	Categorie  string
-	Repetition string
-	Active     int64
-	CreePar    sql.NullInt64
-	CreeLe     int64
+	ID               int64
+	FamilleID        int64
+	EnfantID         int64
+	Titre            string
+	Emoji            string
+	Etoiles          int64
+	Categorie        string
+	Repetition       string
+	Active           int64
+	CreePar          sql.NullInt64
+	CreeLe           int64
+	SansVerification int64
 }
 
 type MissionFaite struct {
@@ -538,6 +539,16 @@ type TachesRappel struct {
 	TacheID  int64
 	Jour     string
 	EnvoyeLe int64
+}
+
+type TachesToursPass struct {
+	ID       int64
+	TacheID  int64
+	Numero   int64
+	DeMembre sql.NullInt64
+	AMembre  sql.NullInt64
+	PassePar sql.NullInt64
+	PasseLe  int64
 }
 
 type Vehicule struct {

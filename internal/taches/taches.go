@@ -48,6 +48,8 @@ func Brancher(a *appli.App) {
 	a.Route("POST /taches/{id}", mod, appli.Membre, m.modifier)
 	a.Route("POST /taches/{id}/faire", mod, appli.Membre, m.faire)
 	a.Route("POST /taches/{id}/defaire", mod, appli.Membre, m.defaire)
+	a.Route("POST /taches/{id}/passer", mod, appli.Membre, m.passer)
+	a.Route("POST /taches/rapide", mod, appli.Membre, m.ajoutRapide)
 	a.Route("POST /taches/{id}/supprimer", mod, appli.Parent, m.supprimer)
 	a.Route("GET /taches/categories", mod, appli.Membre, m.pageCategories)
 	a.Route("POST /taches/categories", mod, appli.Membre, m.categoriesPost)
@@ -88,6 +90,10 @@ func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin t
 		return nil, err
 	}
 	parID := appli.MembresParID(membres)
+	dec, err := m.decalagesFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return nil, err
+	}
 	// Règle et jour de création : calculés une fois par tâche (et pas une
 	// fois par jour affiché).
 	type tacheDuJour struct {
@@ -139,7 +145,7 @@ func (m *Module) calendrier(ctx context.Context, c *appli.Contexte, debut, fin t
 			if x.t.Rappel != "" {
 				e.Titre += " · ⏰ " + x.t.Rappel
 			}
-			e.Membre = assigneLe(x.t, x.regle, j, parID)
+			e.Membre = assigneLe(x.t, x.regle, j, parID, dec)
 			e.PourParents = e.Membre == nil && x.t.PourParents == 1
 			out = append(out, e)
 			ids = append(ids, x.t.ID)
@@ -214,6 +220,10 @@ type ligneTache struct {
 	Cachee     bool   // réservée aux parents (la tâche ou sa catégorie)
 	Joints     []appli.Joint
 	Resume     string // première ligne de la description, en texte simple
+	// Tour de rôle : le membre suivant, et « ⏭️ Passer au suivant » permis
+	// (tâche du jour pas faite ; celui dont c'est le tour, ou un parent).
+	Suivant    *donnees.Membre
+	PeutPasser bool
 }
 
 type score struct {
@@ -224,6 +234,9 @@ type score struct {
 type ligneHisto struct {
 	Titre, Emoji, Heure string
 	ParQui              *donnees.Membre
+	// Passe : un tour passé (de De à A, par ParQui), pas une tâche faite.
+	Passe bool
+	De, A *donnees.Membre
 }
 
 type jourHisto struct {
@@ -245,6 +258,11 @@ type vueTaches struct {
 	Scores     []score
 	Histo      []jourHisto
 	Formulaire *formTache
+	// Filtres repliés dans « 🔎 Filtrer » : ouverts quand un filtre vient
+	// d'être choisi (il est dans l'adresse) ; Resume : les filtres actifs.
+	FiltresOuverts bool
+	Resume         string
+	NomPour        string // membre filtré (« Ajouter une tâche pour Léa… »)
 }
 
 // tachesMax : tâches en cours par famille ; descriptionMax : caractères
@@ -280,15 +298,12 @@ func membresTour(t donnees.Tache, parID map[int64]*donnees.Membre) []*donnees.Me
 	return out
 }
 
-// assigneLe : à qui revient la tâche le jour j (tour de rôle, ou membre
-// choisi ; nil : tout le monde).
-func assigneLe(t donnees.Tache, regle repetition.Regle, j time.Time, parID map[int64]*donnees.Membre) *donnees.Membre {
+// assigneLe : à qui revient la tâche le jour j (tour de rôle, avec ses
+// tours passés, ou membre choisi ; nil : tout le monde).
+func assigneLe(t donnees.Tache, regle repetition.Regle, j time.Time, parID map[int64]*donnees.Membre, d decalages) *donnees.Membre {
 	if tour := membresTour(t, parID); len(tour) > 0 {
-		n := regle.Numero(j) % int64(len(tour))
-		if n < 0 {
-			n += int64(len(tour))
-		}
-		return tour[n]
+		numero := regle.Numero(j)
+		return tour[rang(numero, d.avant(t.ID, numero), len(tour))]
 	}
 	if t.AssigneA.Valid {
 		return parID[t.AssigneA.Int64]
@@ -308,6 +323,10 @@ func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map
 		return nil, nil, nil, err
 	}
 	parID := appli.MembresParID(membres)
+	dec, err := m.decalagesFamille(ctx, c.Famille.ID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	maintenant := c.Maintenant()
 	var lignes []ligneTache
 	cles := map[string]bool{}
@@ -319,7 +338,11 @@ func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map
 		l.AVenir = l.Regle.Type == repetition.Unique && t.DateRappel > repetition.CleJour(maintenant)
 		cles[cle] = true
 		clesLignes = append(clesLignes, cle)
-		l.Assigne, l.Tour = assigneLe(t, l.Regle, maintenant, parID), membresTour(t, parID)
+		l.Assigne, l.Tour = assigneLe(t, l.Regle, maintenant, parID, dec), membresTour(t, parID)
+		if len(l.Tour) > 1 {
+			numero := l.Regle.Numero(maintenant)
+			l.Suivant = l.Tour[rang(numero, dec.avant(t.ID, numero)+1, len(l.Tour))]
+		}
 		l.Modifiable = modifiable(c, t)
 		l.Rappel = texteRappel(t, maintenant)
 		lignes = append(lignes, l)
@@ -357,6 +380,12 @@ func (m *Module) etat(ctx context.Context, c *appli.Contexte) ([]ligneTache, map
 				lignes[i].Decochable = c.EstParent()
 			}
 		}
+	}
+	// « ⏭️ Passer au suivant » : tâche du jour à tour de rôle, pas faite.
+	for i := range lignes {
+		l := &lignes[i]
+		l.PeutPasser = l.Suivant != nil && l.Assigne != nil && l.AFaire && !l.AVenir && !l.Faite &&
+			(c.EstParent() || l.Assigne.ID == c.Membre.ID)
 	}
 	return lignes, parID, membres, nil
 }
@@ -504,17 +533,32 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 	for _, sc := range scores {
 		compte[sc.FaitPar.Int64] = int(sc.Nombre)
 	}
-	for _, h := range histo {
-		quand := c.Heure(h.FaitLe)
-		jour := jourLisible(quand, maintenant)
+	// Tours passés : mêlés aux tâches faites, du plus récent au plus ancien.
+	passes, quandPasses, err := m.histoPasses(ctx, c, debut.Unix(), parID)
+	if err != nil {
+		return nil, err
+	}
+	ajouter := func(quand int64, lh ligneHisto) {
+		jour := jourLisible(c.Heure(quand), maintenant)
 		if len(v.Histo) == 0 || v.Histo[len(v.Histo)-1].Jour != jour {
 			v.Histo = append(v.Histo, jourHisto{Jour: jour})
 		}
-		lh := ligneHisto{Titre: h.Titre, Emoji: h.Emoji, Heure: quand.Format("15:04")}
+		v.Histo[len(v.Histo)-1].Lignes = append(v.Histo[len(v.Histo)-1].Lignes, lh)
+	}
+	k := 0
+	for _, h := range histo {
+		for k < len(passes) && quandPasses[k] >= h.FaitLe {
+			ajouter(quandPasses[k], passes[k])
+			k++
+		}
+		lh := ligneHisto{Titre: h.Titre, Emoji: h.Emoji, Heure: c.Heure(h.FaitLe).Format("15:04")}
 		if h.FaitPar.Valid {
 			lh.ParQui = parID[h.FaitPar.Int64]
 		}
-		v.Histo[len(v.Histo)-1].Lignes = append(v.Histo[len(v.Histo)-1].Lignes, lh)
+		ajouter(h.FaitLe, lh)
+	}
+	for ; k < len(passes); k++ {
+		ajouter(quandPasses[k], passes[k])
 	}
 	for _, mb := range membres {
 		if n := compte[mb.ID]; n > 0 {
@@ -522,6 +566,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 		}
 	}
 	sort.SliceStable(v.Scores, func(i, j int) bool { return v.Scores[i].Nombre > v.Scores[j].Nombre })
+	v.resumer()
 	return v, nil
 }
 
@@ -555,6 +600,7 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	v.FiltresOuverts = filtreDansAdresse(r.URL.Query())
 	m.a.Afficher(w, r, c, "taches/liste", "Tâches", mod, v)
 }
 

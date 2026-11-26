@@ -143,7 +143,17 @@ func (m *Module) envoyerRappels(ctx context.Context, maintenant time.Time) {
 		}
 		tache := donnees.Tache{ID: t.ID, FamilleID: t.FamilleID, AssigneA: t.AssigneA, Tour: t.Tour, Repetition: t.Repetition, CreePar: t.CreePar}
 		var pour []int64 // vide : toute la famille
-		qui := assigneLe(tache, repetition.Lire(t.Repetition), ici, appli.MembresParID(membres))
+		// Tour de rôle : avec les tours passés (« ⏭️ Passer au suivant »).
+		var dec decalages
+		if t.Tour != "" {
+			passes, err := m.a.Q.ToursPassesTache(ctx, t.ID)
+			if err != nil {
+				m.a.Journal.Error("rappel d'une tâche", "tache", t.ID, "erreur", err)
+				continue
+			}
+			dec = decalages{t.ID: passes}
+		}
+		qui := assigneLe(tache, repetition.Lire(t.Repetition), ici, appli.MembresParID(membres), dec)
 		switch {
 		case t.Privee == 1:
 			// Privée : son créateur seul.

@@ -616,7 +616,7 @@ func (q *Queries) ExportMembres(ctx context.Context, familleID int64) ([]ExportM
 }
 
 const exportMissions = `-- name: ExportMissions :many
-SELECT id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le FROM missions WHERE famille_id = ?
+SELECT id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le, sans_verification FROM missions WHERE famille_id = ?
 `
 
 func (q *Queries) ExportMissions(ctx context.Context, familleID int64) ([]Mission, error) {
@@ -640,6 +640,7 @@ func (q *Queries) ExportMissions(ctx context.Context, familleID int64) ([]Missio
 			&i.Active,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.SansVerification,
 		); err != nil {
 			return nil, err
 		}

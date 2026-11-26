@@ -8,33 +8,47 @@
   </div>
   <p>Qui fait quoi à la maison</p>
 </section>
-<div class="barre-actions">
-  <nav class="pilules" aria-label="Filtrer">
+{{/* Filtres repliés : ouverts quand un filtre vient d'être choisi ; le
+     résumé dit ceux qui sont actifs (le membre gardé par l'appareil aussi). */}}
+<details class="filtres-taches bloc"{{if .FiltresOuverts}} open{{end}}>
+  <summary class="sous-titre">🔎 Filtrer{{with .Resume}} <small>· {{.}}</small>{{end}}</summary>
+  <nav class="pilules petites voir" aria-label="Pour qui">
+    <span class="aide">Pour :</span>
     <a class="pilule{{if eq .Pour 0}} active{{end}}" href="{{.Adresse 0 .Cat .Voir}}">Toutes</a>
     {{- range .Membres}}
     <a class="pilule{{if eq .ID $.Donnees.Pour}} active{{end}}" href="{{$.Donnees.Adresse .ID $.Donnees.Cat $.Donnees.Voir}}">{{.Nom}}</a>
     {{- end}}
   </nav>
-</div>
-{{/* Catégories : un second filtre (gardé avec celui des membres). */}}
-<nav class="pilules defile filtre-categories" aria-label="Catégories">
-  {{- if .Categories}}
-  <a class="pilule{{if eq .Categorie 0}} active{{end}}" href="{{.Adresse .Pour "" .Voir}}">Toutes catégories</a>
-  {{- range .Categories}}
-  <a class="pilule{{if .Active}} active{{end}}" href="{{$.Donnees.Adresse $.Donnees.Pour (print .ID) $.Donnees.Voir}}">{{.Etiquette}}{{if .Nombre}} <small>{{.Nombre}}</small>{{end}}</a>
-  {{- end}}
-  <a class="pilule{{if eq .Categorie -1}} active{{end}}" href="{{.Adresse .Pour "sans" .Voir}}">Sans catégorie</a>
-  {{- end}}
-  <a class="pilule" href="/taches/categories" title="Gérer les catégories">⚙️ Catégories</a>
-</nav>
-{{/* Qui la voit (gardé avec les autres filtres). */}}
-<nav class="pilules petites voir" aria-label="Qui voit les tâches">
-  <span class="aide">Voir :</span>
-  <a class="pilule{{if eq .Voir ""}} active{{end}}" href="{{.Adresse .Pour .Cat ""}}">Toutes{{with index .Nombres ""}} <small>{{.}}</small>{{end}}</a>
-  <a class="pilule{{if eq .Voir "partagees"}} active{{end}}" href="{{.Adresse .Pour .Cat "partagees"}}">👪 Partagées{{with index .Nombres "partagees"}} <small>{{.}}</small>{{end}}</a>
-  <a class="pilule{{if eq .Voir "privees"}} active{{end}}" href="{{.Adresse .Pour .Cat "privees"}}">🔒 Privées{{with index .Nombres "privees"}} <small>{{.}}</small>{{end}}</a>
-  {{if $.C.EstParent}}<a class="pilule{{if eq .Voir "enfants"}} active{{end}}" href="{{.Adresse .Pour .Cat "enfants"}}" title="Ce que les enfants voient">🧒 Vues des enfants{{with index .Nombres "enfants"}} <small>{{.}}</small>{{end}}</a>{{end}}
-</nav>
+  {{/* Catégories (gardé avec le membre). */}}
+  <nav class="pilules petites voir" aria-label="Catégories">
+    <span class="aide">Catégorie :</span>
+    {{- if .Categories}}
+    <a class="pilule{{if eq .Categorie 0}} active{{end}}" href="{{.Adresse .Pour "" .Voir}}">Toutes</a>
+    {{- range .Categories}}
+    <a class="pilule{{if .Active}} active{{end}}" href="{{$.Donnees.Adresse $.Donnees.Pour (print .ID) $.Donnees.Voir}}">{{.Etiquette}}{{if .Nombre}} <small>{{.Nombre}}</small>{{end}}</a>
+    {{- end}}
+    <a class="pilule{{if eq .Categorie -1}} active{{end}}" href="{{.Adresse .Pour "sans" .Voir}}">Sans catégorie</a>
+    {{- end}}
+    <a class="pilule" href="/taches/categories" title="Gérer les catégories">⚙️ Catégories</a>
+  </nav>
+  {{/* Qui la voit (gardé avec les autres filtres). */}}
+  <nav class="pilules petites voir" aria-label="Qui voit les tâches">
+    <span class="aide">Voir :</span>
+    <a class="pilule{{if eq .Voir ""}} active{{end}}" href="{{.Adresse .Pour .Cat ""}}">Toutes{{with index .Nombres ""}} <small>{{.}}</small>{{end}}</a>
+    <a class="pilule{{if eq .Voir "partagees"}} active{{end}}" href="{{.Adresse .Pour .Cat "partagees"}}">👪 Partagées{{with index .Nombres "partagees"}} <small>{{.}}</small>{{end}}</a>
+    <a class="pilule{{if eq .Voir "privees"}} active{{end}}" href="{{.Adresse .Pour .Cat "privees"}}">🔒 Privées{{with index .Nombres "privees"}} <small>{{.}}</small>{{end}}</a>
+    {{if $.C.EstParent}}<a class="pilule{{if eq .Voir "enfants"}} active{{end}}" href="{{.Adresse .Pour .Cat "enfants"}}" title="Ce que les enfants voient">🧒 Vues des enfants{{with index .Nombres "enfants"}} <small>{{.}}</small>{{end}}</a>{{end}}
+  </nav>
+  {{if .Resume}}<p class="centre-petit"><a href="{{.Adresse 0 "" ""}}">✕ Retirer les filtres</a></p>{{end}}
+</details>
+{{/* Ajout rapide (une fois ; pour le membre et dans la catégorie filtrés). */}}
+<form class="ajout ajout-tache" method="post" action="/taches/rapide"
+      hx-post="/taches/rapide" hx-target="#taches" hx-swap="outerHTML" data-vider>
+  {{template "jeton" $.C.CSRF}}
+  <input type="hidden" name="pour" value="{{.Pour}}"><input type="hidden" name="cat" value="{{.Cat}}"><input type="hidden" name="voir" value="{{.Voir}}">
+  <input name="titre" placeholder="Ajouter une tâche{{with .NomPour}} pour {{.}}{{end}}…" aria-label="Tâche à ajouter (une fois)" maxlength="80" autocomplete="off" required>
+  <button class="bouton">Ajouter</button>
+</form>
 {{template "taches" $}}
 {{end}}
 {{end}}
@@ -79,7 +93,11 @@
       {{- range .Histo}}
       <h3 class="jour-histo">{{.Jour}}</h3>
       {{- range .Lignes}}
+      {{- if .Passe}}
+      <div class="ligne tour-passe"><span class="heure">{{.Heure}}</span><span>⏭️</span><span class="quoi">{{.Titre}}<small>{{with .De}}tour de {{.Nom}} {{end}}passé{{with .A}} à {{.Nom}}{{end}}</small></span>{{template "avatar-petit" .ParQui}}</div>
+      {{- else}}
       <div class="ligne"><span class="heure">{{.Heure}}</span><span>{{.Emoji}}</span><span class="quoi">{{.Titre}}</span>{{template "avatar-petit" .ParQui}}</div>
+      {{- end}}
       {{- end}}
       {{- end}}
     </div>
@@ -103,7 +121,8 @@
   <span class="quoi">{{if eq $l.Privee 1}}<span title="Privée">🔒</span> {{else if $l.Cachee}}<span title="Parents seulement">👥</span> {{end}}{{$l.Titre}}
     <small>{{if $l.Faite}}{{with $l.ParQui}}par {{.Nom}} {{end}}à {{$l.FaiteLe}}{{else}}{{with $l.Assigne}}{{.Nom}}{{else}}{{if eq $l.PourParents 1}}Parents{{else}}Tout le monde{{end}}{{end}}{{if $l.Tour}} 🔄{{end}} · {{$l.Regle.Texte}}{{with $l.Rappel}} · {{.}}{{end}}{{end}}{{with $l.Categorie}} <span class="etiquette-categorie">{{.}}</span>{{end}}</small>
     {{- if $l.Description}}<details class="description-tache"><summary>{{or $l.Resume "Description"}}</summary><div class="contenu-note">{{riche $l.Description}}</div></details>{{end}}
-    {{- with $l.Joints}}<span class="joints-tache">{{range .}}<a href="/joints/{{.ID}}/{{segment .Nom}}" target="_blank" rel="noopener">📎 {{.Nom}}</a>{{end}}</span>{{end}}</span>
+    {{- with $l.Joints}}<span class="joints-tache">{{range .}}<a href="/joints/{{.ID}}/{{segment .Nom}}" target="_blank" rel="noopener">📎 {{.Nom}}</a>{{end}}</span>{{end}}
+    {{- if $l.PeutPasser}}<button class="passer-tour" hx-post="/taches/{{$l.ID}}/passer" hx-vals='{"de": "{{$l.Assigne.ID}}", "pour": "{{$.Pour}}", "cat": "{{$.Cat}}", "voir": "{{$.Voir}}"}' hx-target="#taches" hx-swap="outerHTML" hx-confirm="Passer le tour à {{$l.Suivant.Nom}} pour cette fois ?" aria-label="Passer le tour à {{$l.Suivant.Nom}}">⏭️ <span class="passer-mot">Passer à </span>{{$l.Suivant.Nom}}</button>{{end}}</span>
   {{if and (not $l.Assigne) (eq $l.PourParents 1)}}{{template "avatar-parents"}}{{else}}{{template "avatar-petit" $l.Assigne}}{{end}}
   {{if $l.Modifiable}}<a class="crayon" href="/taches/{{$l.ID}}/modifier" aria-label="Modifier {{$l.Titre}}">✏️</a>{{end}}
 </div>

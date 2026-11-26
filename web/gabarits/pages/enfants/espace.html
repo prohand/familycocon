@@ -49,7 +49,7 @@
           {{if eq .Etat "refusee"}}<p class="etat">💪 À refaire</p>{{end}}
           {{- if not $.Donnees.ParParent}}
           <button class="gros-bouton" hx-post="/enfants/missions/{{.ID}}/faire" hx-target="#espace" hx-swap="outerHTML">C'est fait ! ✋</button>
-          {{- else}}<p class="etat">À faire</p>{{end}}
+          {{- else}}<p class="etat">À faire{{if eq .Mission.SansVerification 1}} · sans vérification{{end}}</p>{{end}}
         {{- end}}
         {{if $.Donnees.ParParent}}<a class="crayon" href="/enfants/missions/{{.ID}}" aria-label="Modifier {{.Titre}}">✏️</a>{{end}}
       </article>
