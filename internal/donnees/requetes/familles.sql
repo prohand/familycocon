@@ -73,3 +73,9 @@ DELETE FROM invitations WHERE famille_id = ? AND cree_par = ?;
 
 -- name: ModifierAccueil :exec
 UPDATE membres SET accueil = ? WHERE id = ? AND famille_id = ?;
+
+-- name: ModifierAccueilReglages :exec
+UPDATE membres SET accueil_jour_haut = ?, accueil_compact = ? WHERE id = ? AND famille_id = ?;
+
+-- name: ModifierHeuresCalmes :exec
+UPDATE membres SET calme_debut = ?, calme_fin = ? WHERE id = ? AND famille_id = ?;

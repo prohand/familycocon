@@ -32,6 +32,9 @@ WHERE (j.module = 'notes' AND NOT EXISTS (SELECT 1 FROM notes n WHERE n.id = j.o
    OR (j.module = 'taches' AND NOT EXISTS (SELECT 1 FROM taches t WHERE t.id = j.objet_id AND t.famille_id = j.famille_id AND t.active = 1))
    OR (j.module = 'projets' AND NOT EXISTS (SELECT 1 FROM projets p WHERE p.id = j.objet_id AND p.famille_id = j.famille_id))
    OR (j.module = 'carnet' AND NOT EXISTS (SELECT 1 FROM carnet c WHERE c.id = j.objet_id AND c.famille_id = j.famille_id))
+   OR (j.module = 'vehicules' AND NOT EXISTS (SELECT 1 FROM vehicules v WHERE v.id = j.objet_id AND v.famille_id = j.famille_id))
+   OR (j.module = 'animaux' AND NOT EXISTS (SELECT 1 FROM animaux a WHERE a.id = j.objet_id AND a.famille_id = j.famille_id))
+   OR (j.module = 'garanties' AND NOT EXISTS (SELECT 1 FROM garanties g WHERE g.id = j.objet_id AND g.famille_id = j.famille_id))
 LIMIT 500;
 
 -- Export : sans les pieces des notes, taches et projets prives des autres membres

@@ -3,14 +3,23 @@
 <section class="titre-page">
   <a class="retour" href="/moi">‹ Moi</a>
   <h1>🏠 Mon accueil</h1>
-  <p>L'ordre des tuiles et celles qui sont masquées (pour vous seul).</p>
+  <p>L'ordre des tuiles, celles qui sont masquées et la présentation (pour vous seul).</p>
 </section>
 {{with .Donnees}}
 <form class="carte bloc" method="post" action="/moi/accueil">
   {{template "jeton" $c.CSRF}}
-  <input type="hidden" name="ordre" value="{{range $i, $m := .}}{{if $i}},{{end}}{{$m.Cle}}{{end}}">
-  {{- $dernier := len .}}
-  {{- range $i, $m := .}}
+  <label class="interrupteur">
+    <span class="emoji">📅</span><span class="nom">Le programme du jour en haut <small class="aide">(Aujourd'hui, tâches, À venir avant les tuiles)</small></span>
+    <input type="checkbox" name="jour_haut" value="1"{{if .JourHaut}} checked{{end}}><span class="glissiere"></span>
+  </label>
+  <label class="interrupteur">
+    <span class="emoji">▫️</span><span class="nom">Tuiles compactes <small class="aide">(3 par ligne, sans résumé)</small></span>
+    <input type="checkbox" name="compact" value="1"{{if .Compact}} checked{{end}}><span class="glissiere"></span>
+  </label>
+  <h2 class="sous-titre">Les tuiles</h2>
+  <input type="hidden" name="ordre" value="{{range $i, $m := .Modules}}{{if $i}},{{end}}{{$m.Cle}}{{end}}">
+  {{- $dernier := len .Modules}}
+  {{- range $i, $m := .Modules}}
   <div class="ligne-accueil">
     <label class="interrupteur">
       <span class="emoji">{{emoji $m.Emoji}}</span><span class="nom">{{$m.Nom}}</span>

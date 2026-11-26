@@ -972,3 +972,23 @@ reviennent.
 - **Les prochains mois** : colonnes de largeur fixe (barres alignées) ;
   l'aide « Ajoutez le salaire… » seulement s'il n'y a encore aucune
   opération qui revient.
+
+## Accueil, documents, heures calmes, anniversaires (26/11/2026)
+- **Mon accueil** (migration 0049 : `membres.accueil_jour_haut`,
+  `accueil_compact`) : « 📅 Le programme du jour en haut » (blocs Aujourd'hui,
+  tâches, À venir avant les tuiles) et « ▫️ Tuiles compactes » (3 par ligne
+  sur téléphone, sans résumé ; le badge reste). « Remettre l'ordre de
+  départ » ne touche pas à ces réglages.
+- **Documents des fiches** (véhicule, animal, garantie) : pièces jointes
+  communes (`AjouterJoints`), bloc « 📎 Documents » sur la fiche. Vus par
+  tous ceux qui voient le module, ajoutés et retirés par les parents ;
+  effacés au ménage quand la fiche n'existe plus (`JointsOrphelins`).
+- **Heures calmes** (`membres.calme_debut`, `calme_fin`, « HH:MM ») : Moi ›
+  Notifications. Pendant la plage (elle peut passer minuit, heure de la
+  famille), pas de notification d'activité (ce que font les autres ; elle
+  reste visible dans l'appli). Les rappels à heure choisie (`Rappeler`) et
+  celui du matin partent quand même. `EnHeuresCalmes`, POST `/moi/calme`.
+- **Anniversaires** : pour un anniversaire dans les 7 jours d'un contact
+  qui a un numéro, boutons 📞 (premier numéro) et 💬 (portable seulement,
+  SMS déjà écrit « Joyeux anniversaire Paul ! 🎂 », `sms:…?&body=…` compris
+  par l'iPhone et Android).

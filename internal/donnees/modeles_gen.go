@@ -247,23 +247,27 @@ type Liste struct {
 }
 
 type Membre struct {
-	ID          int64
-	FamilleID   int64
-	Nom         string
-	Role        string
-	Couleur     int64
-	Identifiant sql.NullString
-	Mdp         sql.NullString
-	Pin         sql.NullString
-	Raccourcis  string
-	Actif       int64
-	CreeLe      int64
-	PushModules string
-	Totp        string
-	TotpDernier int64
-	Naissance   string
-	Avatar      string
-	Accueil     string
+	ID              int64
+	FamilleID       int64
+	Nom             string
+	Role            string
+	Couleur         int64
+	Identifiant     sql.NullString
+	Mdp             sql.NullString
+	Pin             sql.NullString
+	Raccourcis      string
+	Actif           int64
+	CreeLe          int64
+	PushModules     string
+	Totp            string
+	TotpDernier     int64
+	Naissance       string
+	Avatar          string
+	Accueil         string
+	AccueilJourHaut int64
+	AccueilCompact  int64
+	CalmeDebut      string
+	CalmeFin        string
 }
 
 type Mission struct {

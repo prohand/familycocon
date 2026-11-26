@@ -17,7 +17,10 @@
      (événement « maj » envoyé par app.js à chaque message temps réel). */}}
 <div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj from:body delay:1s, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*">
 {{if .Donnees.Tuiles}}
-<div class="tuiles">
+<div class="tuiles{{if .Donnees.Compact}} compactes{{end}}">
+  {{- if .Donnees.JourHaut}}{{range .Donnees.Blocs}}
+  <div class="bloc-accueil en-haut">{{.}}</div>
+  {{- end}}{{end}}
   {{- range .Donnees.Tuiles}}
   <a class="tuile {{.Cle}}" href="{{.URL}}">
     {{- if .Badge}}<span class="badge">{{.Badge}}</span>{{end}}
@@ -25,9 +28,9 @@
     <span><span class="nom">{{.Nom}}</span>{{if .Info}}<br><span class="info">{{.Info}}</span>{{end}}</span>
   </a>
   {{- end}}
-  {{- range .Donnees.Blocs}}
+  {{- if not .Donnees.JourHaut}}{{range .Donnees.Blocs}}
   <div class="bloc-accueil">{{.}}</div>
-  {{- end}}
+  {{- end}}{{end}}
 </div>
 <a class="lien-organiser" href="/moi/accueil">✏️ Organiser l'accueil</a>
 {{else}}

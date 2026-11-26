@@ -42,6 +42,7 @@ func Brancher(a *appli.App, s *suivi.Suivi) {
 	m.brancherAnimaux()
 	m.brancherPrestataires()
 	m.brancherGaranties()
+	m.brancherDocuments()
 }
 
 // Element : une ligne de la liste d'un module.
@@ -80,8 +81,11 @@ type vueFiche struct {
 	FuelioBudget        []OptionBudget // « 💶 Ajouter aussi au budget » de la reprise (parents, budget activé)
 	Kilometrage         int64          // compteur noté sur le véhicule
 	Ouvrir              string         // fenêtre d'ajout à ouvrir (« plein », « entretien »)
-	Autres              []Lien         // les autres véhicules (fenêtre « Ajouter un plein »)
-	Contacts            []ContactCite
+	// Documents de la fiche (carte grise, carnet de vaccins, facture…) :
+	// véhicules, animaux, garanties.
+	Joints   *appli.VueJoints
+	Autres   []Lien // les autres véhicules (fenêtre « Ajouter un plein »)
+	Contacts []ContactCite
 }
 
 // ContactCite : un contact du carnet cité par la fiche (vétérinaire, garage…).
@@ -144,6 +148,35 @@ func idDe(r *http.Request) int64 {
 	return id
 }
 
+// modulesDocuments : les fiches qui ont des documents joints (carte grise,
+// assurance, passeport et vaccins, facture et notice). Tout le monde les
+// voit (comme la fiche) ; les parents seuls en ajoutent ou en retirent.
+var modulesDocuments = map[string]bool{modVehicules: true, modAnimaux: true, modGaranties: true}
+
+// brancherDocuments : droits des documents de ces fiches.
+func (m *Module) brancherDocuments() {
+	existe := map[string]func(ctx context.Context, famille, id int64) bool{
+		modVehicules: func(ctx context.Context, famille, id int64) bool {
+			_, err := m.a.Q.VehiculeParID(ctx, donnees.VehiculeParIDParams{ID: id, FamilleID: famille})
+			return err == nil
+		},
+		modAnimaux: func(ctx context.Context, famille, id int64) bool {
+			_, err := m.a.Q.AnimalParID(ctx, donnees.AnimalParIDParams{ID: id, FamilleID: famille})
+			return err == nil
+		},
+		modGaranties: func(ctx context.Context, famille, id int64) bool {
+			_, err := m.a.Q.GarantieParID(ctx, donnees.GarantieParIDParams{ID: id, FamilleID: famille})
+			return err == nil
+		},
+	}
+	for module, f := range existe {
+		m.a.AjouterJoints(module, func(ctx context.Context, c *appli.Contexte, id int64) (bool, bool) {
+			voir := c.Voit(module) && f(ctx, c.Famille.ID, id)
+			return voir, voir && c.EstParent()
+		})
+	}
+}
+
 func (m *Module) afficherFiche(w http.ResponseWriter, r *http.Request, c *appli.Contexte, module string, objet int64, v vueFiche) {
 	b, err := m.s.Bloc(r.Context(), c, module, objet)
 	if err != nil {
@@ -173,6 +206,14 @@ func (m *Module) afficherFiche(w http.ResponseWriter, r *http.Request, c *appli.
 		v.Ouvrir = q.Get("ajout") // « plein » ou « entretien » : fenêtre ouverte tout de suite
 	}
 	v.Suivi = b
+	if modulesDocuments[module] {
+		j, err := m.a.Joints(r.Context(), c, module, objet, c.EstParent(), r.URL.Path)
+		if err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+		v.Joints = &j
+	}
 	m.a.Afficher(w, r, c, "foyer/fiche", v.Nom, module, v)
 }
 

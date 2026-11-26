@@ -237,7 +237,7 @@ func (q *Queries) PurgerSessions(ctx context.Context, expireLe int64) (int64, er
 }
 
 const sessionParEmpreinte = `-- name: SessionParEmpreinte :one
-SELECT sessions.empreinte, sessions.membre_id, sessions.jeton_csrf, sessions.cree_le, sessions.vue_le, sessions.expire_le, membres.id, membres.famille_id, membres.nom, membres.role, membres.couleur, membres.identifiant, membres.mdp, membres.pin, membres.raccourcis, membres.actif, membres.cree_le, membres.push_modules, membres.totp, membres.totp_dernier, membres.naissance, membres.avatar, membres.accueil, familles.id, familles.nom, familles.fuseau, familles.devise, familles.modules, familles.cree_le
+SELECT sessions.empreinte, sessions.membre_id, sessions.jeton_csrf, sessions.cree_le, sessions.vue_le, sessions.expire_le, membres.id, membres.famille_id, membres.nom, membres.role, membres.couleur, membres.identifiant, membres.mdp, membres.pin, membres.raccourcis, membres.actif, membres.cree_le, membres.push_modules, membres.totp, membres.totp_dernier, membres.naissance, membres.avatar, membres.accueil, membres.accueil_jour_haut, membres.accueil_compact, membres.calme_debut, membres.calme_fin, familles.id, familles.nom, familles.fuseau, familles.devise, familles.modules, familles.cree_le
 FROM sessions
 JOIN membres ON membres.id = sessions.membre_id
 JOIN familles ON familles.id = membres.famille_id
@@ -282,6 +282,10 @@ func (q *Queries) SessionParEmpreinte(ctx context.Context, arg SessionParEmprein
 		&i.Membre.Naissance,
 		&i.Membre.Avatar,
 		&i.Membre.Accueil,
+		&i.Membre.AccueilJourHaut,
+		&i.Membre.AccueilCompact,
+		&i.Membre.CalmeDebut,
+		&i.Membre.CalmeFin,
 		&i.Famille.ID,
 		&i.Famille.Nom,
 		&i.Famille.Fuseau,

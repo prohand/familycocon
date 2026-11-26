@@ -81,6 +81,9 @@ type donneesAccueil struct {
 	// Compte à mot de passe sans double authentification ni passkey : un
 	// conseil s'affiche pour le protéger.
 	ConseilSecurite bool
+	// Réglages du membre (« Mon accueil ») : blocs du jour au-dessus des
+	// tuiles ; tuiles compactes (3 par ligne, sans résumé).
+	JourHaut, Compact bool
 }
 
 func (a *App) routesAccueil() {
@@ -93,7 +96,7 @@ func (a *App) routesAccueil() {
 
 func (a *App) pageAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	ctx := r.Context()
-	d := donneesAccueil{Date: DateLongue(c.Maintenant())}
+	d := donneesAccueil{Date: DateLongue(c.Maintenant()), JourHaut: c.Membre.AccueilJourHaut == 1, Compact: c.Membre.AccueilCompact == 1}
 	if c.Membre.Mdp.Valid && c.Membre.Totp == "" {
 		n, err := a.Q.CompterPasskeys(ctx, c.Membre.ID)
 		d.ConseilSecurite = err == nil && n == 0

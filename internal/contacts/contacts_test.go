@@ -88,3 +88,25 @@ func TestAnniversairesEtAdresses(t *testing.T) {
 		t.Fatalf("fiche accessible modules désactivés : %d", code)
 	}
 }
+
+// Anniversaire proche d'un contact qui a un portable : appeler et SMS déjà
+// écrit ; sans numéro, rien ; loin, rien.
+func TestAnniversaireSouhaiter(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	auj := essai.Maintenant()
+	marie.Get("/contacts/nouveau")
+	marie.Post("/contacts", map[string]string{"nom": "Paul Martin", "naissance": auj.AddDate(-30, 0, 2).Format("2006-01-02"), "telephone": "06 12 34 56 78"})
+	marie.Post("/contacts", map[string]string{"nom": "Mamie", "naissance": auj.AddDate(-80, 0, 1).Format("2006-01-02")})
+	marie.Post("/contacts", map[string]string{"nom": "Loin", "naissance": auj.AddDate(-20, 3, 0).Format("2006-01-02"), "telephone": "0699999999"})
+	_, page := marie.Get("/anniversaires")
+	if !strings.Contains(page, `href="sms:0612345678?&amp;body=Joyeux%20anniversaire%20Paul%20%21%20%F0%9F%8E%82"`) || !strings.Contains(page, `href="tel:0612345678"`) {
+		t.Fatalf("boutons de Paul absents :\n%s", page)
+	}
+	if strings.Contains(page, "0699999999") {
+		t.Fatal("boutons montrés pour un anniversaire lointain")
+	}
+	if n := strings.Count(page, `class="appel"`); n != 2 {
+		t.Fatalf("%d boutons, attendu 2 (Paul seulement)", n)
+	}
+}

@@ -300,6 +300,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .bloc-accueil { grid-column: 1 / -1; }
 @media (min-width: 900px) { .bloc-accueil { grid-column: span 2; } }
 .bloc-accueil .section-titre { margin-top: 6px; }
+/* Programme du jour en haut (« Mon accueil ») : toute la largeur, avant
+   les tuiles. */
+.bloc-accueil.en-haut { grid-column: 1 / -1; }
+.bloc-accueil.en-haut + .tuile { margin-top: 4px; }
+/* Tuiles compactes : 3 par ligne sur téléphone, sans le résumé. */
+.tuiles.compactes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 600px) { .tuiles.compactes { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .tuiles.compactes { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.tuiles.compactes .tuile { min-height: 76px; padding: 10px; border-radius: 16px; gap: 4px; }
+.tuiles.compactes .tuile .emoji { font-size: 1.55rem; }
+.tuiles.compactes .tuile .nom { font-size: .82rem; overflow-wrap: anywhere; }
+.tuiles.compactes .tuile .info, .tuiles.compactes .tuile br { display: none; }
+.tuiles.compactes .tuile .badge { top: 6px; right: 6px; min-width: 22px; height: 22px; font-size: .72rem; }
+.tuiles.compactes .bloc-accueil { grid-column: 1 / -1; }
 
 .tuile.courses { --bg: var(--courses); --t: var(--courses-t); }
 .tuile.agenda  { --bg: var(--agenda);  --t: var(--agenda-t); }
@@ -1952,3 +1966,11 @@ details.partie[open] { padding-bottom: 16px; }
 /* Budget : catégorie choisie d'après le libellé. */
 .cat-auto { display: block; margin: 4px 0 0; }
 .cat-auto[hidden] { display: none; }
+.heures-calmes { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--bordure); }
+/* Anniversaires : souhaiter en un geste (SMS, appel). */
+.ligne.anniv { gap: 6px; }
+.ligne.anniv .quoi-lien { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; color: inherit; }
+.ligne.anniv .appel { font-size: 1.2rem; padding: 6px 8px; border-radius: 12px; }
+.ligne.anniv .appel:hover { background: var(--fond); }
+.ligne.anniv .age { white-space: nowrap; }
+.documents > .sous-titre { margin-top: 0; }

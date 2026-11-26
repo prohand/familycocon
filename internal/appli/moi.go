@@ -148,7 +148,14 @@ func (a *App) raccourcisMoi(w http.ResponseWriter, r *http.Request, c *Contexte)
 
 // pageMonAccueil : l'ordre des modules de l'accueil et ceux qui sont masqués.
 func (a *App) pageMonAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
-	a.Afficher(w, r, c, "mon-accueil", "Mon accueil", "", ModulesAccueil(c))
+	a.Afficher(w, r, c, "mon-accueil", "Mon accueil", "", vueMonAccueil{Modules: ModulesAccueil(c),
+		JourHaut: c.Membre.AccueilJourHaut == 1, Compact: c.Membre.AccueilCompact == 1})
+}
+
+// vueMonAccueil : les modules dans l'ordre du membre et ses deux réglages.
+type vueMonAccueil struct {
+	Modules           []ModuleAccueil
+	JourHaut, Compact bool
 }
 
 // monAccueil : POST /moi/accueil. « ordre » : les modules dans l'ordre
@@ -191,6 +198,22 @@ func (a *App) monAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	if err := a.Q.ModifierAccueil(r.Context(), donnees.ModifierAccueilParams{Accueil: valeur, ID: c.Membre.ID, FamilleID: c.Famille.ID}); err != nil {
 		a.ErreurInterne(w, r, err)
 		return
+	}
+	// Les deux réglages (cases du même formulaire ; « Remettre l'ordre de
+	// départ » ne touche qu'à l'ordre).
+	if action != "defaut" {
+		var haut, compact int64
+		if r.PostFormValue("jour_haut") == "1" {
+			haut = 1
+		}
+		if r.PostFormValue("compact") == "1" {
+			compact = 1
+		}
+		if err := a.Q.ModifierAccueilReglages(r.Context(), donnees.ModifierAccueilReglagesParams{AccueilJourHaut: haut, AccueilCompact: compact,
+			ID: c.Membre.ID, FamilleID: c.Famille.ID}); err != nil {
+			a.ErreurInterne(w, r, err)
+			return
+		}
 	}
 	if action == "" || action == "defaut" {
 		a.Flash(w, "Accueil enregistré ✓")

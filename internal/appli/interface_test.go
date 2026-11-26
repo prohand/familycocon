@@ -3,6 +3,8 @@
 package appli
 
 import (
+	"context"
+	"html/template"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -133,5 +135,33 @@ func TestMonAccueil(t *testing.T) {
 	n.post("/moi/accueil", map[string]string{"ordre": ordre[1], "action": "defaut"})
 	if _, accueil = n.get("/"); strings.Index(accueil, `class="tuile courses"`) > strings.Index(accueil, `class="tuile agenda"`) {
 		t.Fatal("ordre de départ non remis")
+	}
+}
+
+// Mon accueil : programme du jour en haut et tuiles compactes.
+func TestAccueilJourHautCompact(t *testing.T) {
+	a, _, n := familleTest(t)
+	a.AjouterBloc(BlocAccueil{Rendre: func(context.Context, *Contexte) (template.HTML, error) { return "<p>Programme du jour</p>", nil }})
+	_, page := n.get("/moi/accueil")
+	ordre := regexp.MustCompile(`name="ordre" value="([a-z,]+)"`).FindStringSubmatch(page)
+	champs := map[string]string{"ordre": ordre[1], "jour_haut": "1", "compact": "1"}
+	for _, cle := range strings.Split(ordre[1], ",") {
+		champs["affiche_"+cle] = "1"
+	}
+	if code, _ := n.post("/moi/accueil", champs); code != 200 {
+		t.Fatalf("enregistrer : %d", code)
+	}
+	_, accueil := n.get("/")
+	if !strings.Contains(accueil, `class="tuiles compactes"`) {
+		t.Fatal("tuiles compactes absentes")
+	}
+	if i, j := strings.Index(accueil, "Programme du jour"), strings.Index(accueil, `class="tuile `); i < 0 || j < 0 || i > j ||
+		!strings.Contains(accueil, "bloc-accueil en-haut") {
+		t.Fatalf("programme du jour pas au-dessus des tuiles (%d, %d)", i, j)
+	}
+	// « Remettre l'ordre de départ » garde les réglages.
+	n.post("/moi/accueil", map[string]string{"ordre": ordre[1], "action": "defaut"})
+	if _, accueil = n.get("/"); !strings.Contains(accueil, "compactes") {
+		t.Fatal("réglage perdu avec l'ordre de départ")
 	}
 }
