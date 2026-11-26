@@ -131,6 +131,12 @@ func TestNotificationsPush(t *testing.T) {
 	if len(attendre(2)) != 2 {
 		t.Fatal("push envoyé alors que la page est ouverte")
 	}
+	// Appel voulu (« Je pars faire les courses ») : envoyé même sans le
+	// module Courses choisi, et même page ouverte.
+	a.Appeler(cMarie, "courses", "Marie part faire les courses", "/courses/liste/1")
+	if l := attendre(3); len(l) != 3 || !strings.Contains(l[2], "fcm/send/thomas") || !strings.Contains(l[2], `"url":"/courses/liste/1"`) {
+		t.Fatalf("appel voulu : %v", l)
+	}
 	a.Direct.desabonner(1, ch)
 
 	// Abonnement expiré : supprimé.
@@ -138,7 +144,7 @@ func TestNotificationsPush(t *testing.T) {
 	expire = true
 	mu.Unlock()
 	a.Publier(cMarie, "taches", "Marie a ajouté une tâche")
-	attendre(3)
+	attendre(4)
 	for i := 0; i < 100; i++ {
 		if n, _ := a.Q.CompterAbonnements(context.Background(), membreID(t, a, "thomas")); n == 0 {
 			return

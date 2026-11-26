@@ -65,6 +65,7 @@ type jourMenu struct {
 	Cle        string
 	Titre      string
 	Aujourdhui bool
+	Passe      bool // jour déjà passé de la semaine en cours (replié sur téléphone)
 	Midi, Soir Creneau
 }
 
@@ -78,6 +79,7 @@ type vueMenus struct {
 	Courses       bool            // module Courses activé
 	Listes        []donnees.Liste // listes de courses (s'il y en a plusieurs)
 	Liste         int64           // la dernière choisie sur cet appareil
+	Passes        string          // « Lundi, mardi : passés » : jours repliés (semaine en cours)
 }
 
 func lignes(s string) []string {
@@ -118,12 +120,27 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, ref time.Time) (*vu
 		return cr
 	}
 	aujourdhui := repetition.CleJour(c.Maintenant())
+	// Semaine en cours : les jours déjà passés se replient (« Lundi, mardi :
+	// passés ▸ ») pour que le jour courant se voie sans défiler. Une semaine
+	// passée, ouverte exprès, reste entière.
+	enCours := aujourdhui >= v.Ref && aujourdhui <= repetition.CleJour(dimanche)
+	var passes []string
 	for j := lundi; !j.After(dimanche); j = j.AddDate(0, 0, 1) {
 		cle := repetition.CleJour(j)
-		v.Jours = append(v.Jours, jourMenu{
-			Cle: cle, Titre: appli.TitreJour(j), Aujourdhui: cle == aujourdhui,
+		jm := jourMenu{
+			Cle: cle, Titre: appli.TitreJour(j), Aujourdhui: cle == aujourdhui, Passe: enCours && cle < aujourdhui,
 			Midi: trouver(cle, "midi"), Soir: trouver(cle, "soir"),
-		})
+		}
+		if jm.Passe {
+			passes = append(passes, appli.JourFR(j))
+		}
+		v.Jours = append(v.Jours, jm)
+	}
+	if len(passes) > 0 {
+		v.Passes = strings.ToUpper(passes[0][:1]) + strings.Join(passes, ", ")[1:] + " : passé"
+		if len(passes) > 1 {
+			v.Passes += "s"
+		}
 	}
 	return v, nil
 }
@@ -189,6 +206,7 @@ type formRepas struct {
 	Ingredients string
 	Listes      []donnees.Liste // listes de courses (choix s'il y en a plusieurs)
 	Liste       int64           // la dernière choisie sur cet appareil
+	Preparation string          // préparation de la recette du plat (texte mis en forme)
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -203,6 +221,10 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 		f.Creneau.Repas = &rp
 		f.Lignes, f.Ingredients = lignes(rp.Ingredients), rp.Ingredients
 		f.Listes, f.Liste = m.listes(r, c)
+		// La préparation de la recette, sous la main pour cuisiner.
+		if rec, err := m.a.Q.RecetteParCle(ctx, donnees.RecetteParCleParams{FamilleID: c.Famille.ID, Cle: courses.Cle(rp.Nom)}); err == nil {
+			f.Preparation = rec.Preparation
+		}
 	}
 	f.Titre = appli.TitreJour(j) + ", " + moment
 	var err error

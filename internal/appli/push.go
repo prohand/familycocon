@@ -48,6 +48,7 @@ type annonce struct {
 	pour            []int64 // membres visés (vide : toute la famille)
 	sauf            []int64 // membres exclus (ils ont reçu leur propre version)
 	toujours        bool    // même aux membres qui ont l'appli ouverte (rappel à une heure dite)
+	voulu           bool    // même aux membres qui n'ont pas choisi ce module (appel voulu, voir Appeler)
 }
 
 // tailleFile : au-delà, les annonces sont perdues (elles restent visibles
@@ -154,7 +155,9 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 	// Heures calmes : une notification d'activité n'est pas envoyée pendant
 	// celles du membre (elle reste visible dans l'appli). Les rappels à une
 	// heure choisie et celui du matin partent quand même.
-	calmePermis := !an.toujours && an.module != moduleRappels
+	// « Je pars faire les courses » (appel voulu) est de l'activité : il se
+	// tait aussi.
+	calmePermis := (!an.toujours || an.voulu) && an.module != moduleRappels
 	var heure time.Time // heure de la famille, lue au premier besoin
 	calme := func(debut, fin string) bool {
 		if !calmePermis || debut == "" || fin == "" {
@@ -178,7 +181,8 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		// Un rappel du matin ne s'affiche nulle part ailleurs : il part même si
 		// le membre a une page ouverte (un onglet oublié sur l'ordinateur).
 		enLigne := an.module != moduleRappels && !an.toujours && p.a.Direct.EnLigne(an.famille, ab.MembreID)
-		if !contient(strings.Split(ab.PushModules, ","), an.module) || enLigne ||
+		choisi := an.voulu || contient(strings.Split(ab.PushModules, ","), an.module)
+		if !choisi || enLigne ||
 			(an.parents && ab.Role != RoleParent) || (an.sansParents && ab.Role == RoleParent) ||
 			(len(an.pour) > 0 && !slices.Contains(an.pour, ab.MembreID)) || slices.Contains(an.sauf, ab.MembreID) ||
 			calme(ab.CalmeDebut, ab.CalmeFin) {

@@ -34,6 +34,12 @@
 </form>
 <datalist id="suggestions-produits">{{range .Suggestions}}<option value="{{.}}">{{end}}</datalist>
 
+<form class="centre-petit depart" method="post" action="/courses/liste/{{.Liste.ID}}/depart"
+      hx-post="/courses/liste/{{.Liste.ID}}/depart" hx-swap="none">
+  {{template "jeton" $c.CSRF}}
+  <button class="bouton petit secondaire" title="Prévient toute la famille (une fois toutes les 30 minutes)">🚶 Je pars faire les courses</button>
+</form>
+
 {{template "liste" $}}
 
 {{if $c.EstParent}}
@@ -68,12 +74,15 @@
   <p class="avancement">{{.Pris}} pris sur {{.Total}}</p>
   <progress class="progres" max="{{.Total}}" value="{{.Pris}}">{{.Pris}} / {{.Total}}</progress>
   {{- range .Rayons}}
-  <details class="rayon" data-rayon="{{.Cle}}" open>
-    <summary><span class="r-emoji">{{.Emoji}}</span>{{.Nom}}<span class="compte">{{.Pris}} / {{.Total}}</span></summary>
+  {{- /* Rayon fini (tout est pris) : replié, en bas, « ✓ Boulangerie 2/2 » ;
+         ouvert quand même si un de ses produits est en modification. */}}
+  {{- $fini := .Fini}}
+  <details class="rayon{{if $fini}} fini{{end}}" data-rayon="{{.Cle}}"{{if $fini}} data-fini{{end}}{{if or (not $fini) (.Contient $.Donnees.Edition)}} open{{end}}>
+    <summary><span class="r-emoji">{{if $fini}}✓{{else}}{{.Emoji}}{{end}}</span>{{.Nom}}<span class="compte">{{.Pris}}/{{.Total}}</span></summary>
     <ul>
       {{- range .Produits}}
       {{- if eq .ID $.Donnees.Edition}}
-      <li>{{template "edition-produit" dict "P" . "Rayons" $.Donnees.TousRayons "C" $c}}</li>
+      <li>{{template "edition-produit" dict "P" . "Rayons" $.Donnees.TousRayons "Listes" $.Donnees.Listes "C" $c}}</li>
       {{- else}}
       <li class="ligne-produit">
         <label class="produit">
@@ -127,6 +136,10 @@
   </div>
   <label class="champ"><span>Rayon</span>
     <select name="rayon">{{range .Rayons}}<option value="{{.Cle}}"{{if eq .Cle $.P.Rayon}} selected{{end}}>{{.Emoji}} {{.Nom}}</option>{{end}}</select></label>
+  {{- if gt (len .Listes) 1}}
+  <label class="champ"><span>Liste</span>
+    <select name="liste">{{range .Listes}}<option value="{{.ID}}"{{if eq .ID $.P.ListeID}} selected{{end}}>{{.Nom}}</option>{{end}}</select></label>
+  {{- end}}
   <div class="boutons">
     <button class="bouton petit">Enregistrer</button>
     <button class="bouton petit secondaire" type="button" hx-get="/courses/liste/{{.P.ListeID}}/contenu" hx-target="#liste-courses" hx-swap="outerHTML">Annuler</button>

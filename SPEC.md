@@ -992,3 +992,44 @@ reviennent.
   qui a un numéro, boutons 📞 (premier numéro) et 💬 (portable seulement,
   SMS déjà écrit « Joyeux anniversaire Paul ! 🎂 », `sms:…?&body=…` compris
   par l'iPhone et Android).
+
+## Courses et menus : départ aux courses, rayons finis, recettes (26/11/2026)
+
+- **« 🚶 Je pars faire les courses »** (page d'une liste,
+  `POST /courses/liste/{id}/depart`, tout membre) : une notification à toute
+  la famille sauf soi, « Paul part faire les courses : ajoutez vite ce qui
+  manque 🛒 » (avec le nom de la liste quand la famille en a plusieurs),
+  qui ouvre la liste. Choix : c'est un appel voulu, pas du bruit
+  (`App.Appeler`) : il part même chez ceux qui n'ont pas choisi « Courses »
+  dans Moi › Notifications (non par défaut, et on ne distingue pas « jamais
+  réglé » de « coupé exprès »), et même à ceux qui ont une page ouverte
+  (un onglet oublié sur l'ordinateur ne fait pas taire le téléphone).
+  Couper les notifications de l'appareil reste possible. Garde-fou : un
+  appel par liste toutes les 30 minutes, gardé en mémoire (oublié au
+  redémarrage) ; sinon « Déjà annoncé il y a 12 minutes par Marie : un seul
+  message toutes les 30 minutes. »
+- **Rayon fini** (tous ses produits pris) : envoyé replié et en bas de la
+  liste, « ✓ Boulangerie 2/2 » (`data-fini`). Décocher un produit le rend
+  normal (ouvert, à sa place). Rechargements htmx (un autre membre coche) :
+  un rayon fini rouvert à la main reste ouvert tant qu'il est fini (mémoire
+  de la page) ; le replier ne s'écrit pas dans les rayons repliés de
+  l'appareil. Ouvert aussi pendant la modification d'un de ses produits.
+- **Déplacer un produit** : choix « Liste » dans sa modification quand la
+  famille a plusieurs listes (mêmes droits : tout le monde). Déjà sur
+  l'autre liste : une seule ligne, quantités réunies (comme un ajout).
+  Liste pleine (2000) : refus.
+- **Menus, semaine en cours** : les jours passés sont repliés sur téléphone
+  (« Lundi, mardi : passés ▸ », CSS seulement : `.jours-passes:not([open])
+  + .semaine .passe`) ; une semaine passée reste entière ; grand écran :
+  les 7 colonnes, sans repli (plat sous le moment, rien ne déborde).
+  Boutons « Reprendre la semaine dernière » et « Recettes » sur deux lignes
+  au besoin (320 px).
+- **Recettes** : « ＋ Recette » (`/menus/recettes/nouvelle`) crée une
+  recette sans prévoir de repas (compte 0 : « jamais prévu » ; nom déjà
+  connu : refusé). Modification sur sa propre page
+  (`/menus/recettes/modifier?cle=…`, un seul éditeur riche). Champ
+  facultatif « Préparation » (éditeur riche, 5000 caractères, migration
+  `recettes.preparation`), affiché sur la recette et sur la page du repas
+  du même nom. « 📅 Prévoir ce plat » : jour et repas, proposés au premier
+  repas libre des deux semaines à venir ; un repas déjà prévu n'est jamais
+  écrasé (message clair).

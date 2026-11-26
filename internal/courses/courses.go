@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +24,10 @@ import (
 )
 
 // Module : le module Courses.
-type Module struct{ a *appli.App }
+type Module struct {
+	a       *appli.App
+	departs departs // « Je pars faire les courses » : dernier appel par liste
+}
 
 // Brancher ajoute les routes du module.
 func Brancher(a *appli.App) {
@@ -37,6 +41,7 @@ func Brancher(a *appli.App) {
 	a.Route("POST /courses/liste/{id}/vider", mod, appli.Parent, m.vider)
 	a.Route("POST /courses/liste/{id}/renommer", mod, appli.Parent, m.renommer)
 	a.Route("POST /courses/liste/{id}/supprimer", mod, appli.Parent, m.supprimerListe)
+	a.Route("POST /courses/liste/{id}/depart", mod, appli.Membre, m.partir)
 	a.Route("POST /courses/produit/{pid}/cocher", mod, appli.Membre, m.cocher)
 	a.Route("GET /courses/produit/{pid}/modifier", mod, appli.Membre, m.edition)
 	a.Route("POST /courses/produit/{pid}", mod, appli.Membre, m.modifier)
@@ -165,6 +170,20 @@ type groupeRayon struct {
 	Pris, Total int
 }
 
+// Fini : tous les produits du rayon sont pris (il se replie et passe en bas).
+func (g groupeRayon) Fini() bool { return g.Total > 0 && g.Pris == g.Total }
+
+// Contient : le produit id est-il dans ce rayon ? (un rayon fini reste
+// ouvert pendant la modification d'un de ses produits)
+func (g groupeRayon) Contient(id int64) bool {
+	for _, p := range g.Produits {
+		if p.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 type vueListe struct {
 	Liste       donnees.Liste
 	Listes      []donnees.Liste
@@ -224,6 +243,16 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, liste donnees.Liste
 	for _, g := range groupes { // rayon inconnu (ne devrait pas arriver)
 		v.Rayons = append(v.Rayons, *g)
 	}
+	// Rayons finis (tout est pris) en bas, dans le même ordre.
+	slices.SortStableFunc(v.Rayons, func(x, y groupeRayon) int {
+		switch {
+		case x.Fini() == y.Fini():
+			return 0
+		case x.Fini():
+			return 1
+		}
+		return -1
+	})
 	// Souvent achetés : un toucher pour les remettre sur la liste.
 	surListe := map[string]bool{}
 	for _, p := range produits {
@@ -275,6 +304,13 @@ func (m *Module) renvoyerContenu(w http.ResponseWriter, r *http.Request, c *appl
 	}
 	v.Edition = edition
 	v.Rafraichir = edition == 0 // pas de rechargement pendant une modification
+	// Choix « Liste » dans la modification d'un produit.
+	if edition != 0 {
+		if v.Listes, err = m.a.Q.ListesDeFamille(r.Context(), c.Famille.ID); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		}
+	}
 	m.a.Fragment(w, r, c, "courses/liste", "liste", v)
 }
 
@@ -529,9 +565,41 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 			emoji = ray.Emoji
 		}
 	}
-	if err := m.a.Q.ModifierProduit(ctx, donnees.ModifierProduitParams{Nom: nom, Quantite: quantite, Rayon: ray.Cle, Emoji: emoji, ID: p.ID}); err != nil {
+	// Autre liste choisie (« Courses » → « Drive ») : elle doit être à la famille.
+	var vers *donnees.Liste
+	if id, err := strconv.ParseInt(r.PostFormValue("liste"), 10, 64); err == nil && id != p.ListeID {
+		l, err := m.a.Q.ListeParID(ctx, donnees.ListeParIDParams{ID: id, FamilleID: c.Famille.ID})
+		if err != nil {
+			m.a.Echec(w, r, http.StatusBadRequest, "Liste introuvable.")
+			return
+		}
+		vers = &l
+	}
+	fusionne := false
+	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
+		if err := q.ModifierProduit(ctx, donnees.ModifierProduitParams{Nom: nom, Quantite: quantite, Rayon: ray.Cle, Emoji: emoji, ID: p.ID}); err != nil {
+			return err
+		}
+		if vers == nil {
+			return nil
+		}
+		fusionne, err = deplacer(ctx, q, p.ID, nom, quantite, vers.ID)
+		return err
+	})
+	if errors.Is(err, errListePleine) {
+		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("La liste « %s » est pleine (%d produits).", vers.Nom, produitsMax))
+		return
+	}
+	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
+	}
+	if vers != nil {
+		texte := "« " + nom + " » déplacé vers « " + vers.Nom + " »"
+		if fusionne {
+			texte = "« " + nom + " » était déjà sur « " + vers.Nom + " » : quantités réunies"
+		}
+		appli.Notifier(w, texte, false)
 	}
 	// Le rayon choisi est retenu pour la prochaine fois (s'il reste de la place).
 	_, errConnu := m.a.Q.ProduitConnu(ctx, donnees.ProduitConnuParams{FamilleID: c.Famille.ID, Cle: Cle(nom)})
@@ -542,6 +610,33 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 	}
 	m.a.Publier(c, "courses", "")
 	m.renvoyerListeDuProduit(w, r, c, p, 0)
+}
+
+// deplacer : le produit id passe dans la liste vers. S'il y est déjà (même
+// nom), il ne fait pas une seconde ligne : la quantité est complétée,
+// comme pour un ajout, et le produit déplacé disparaît (fusionne : vrai).
+func deplacer(ctx context.Context, q *donnees.Queries, id int64, nom, quantite string, vers int64) (fusionne bool, err error) {
+	existants, err := q.ProduitsCles(ctx, vers)
+	if err != nil {
+		return false, err
+	}
+	for _, x := range existants {
+		if Cle(x.Nom) != Cle(nom) {
+			continue
+		}
+		qte := quantite
+		if x.Pris == 0 {
+			qte = Additionner(x.Quantite, quantite)
+		}
+		if err := q.ReprendreProduit(ctx, donnees.ReprendreProduitParams{Quantite: qte, ID: x.ID}); err != nil {
+			return true, err
+		}
+		return true, q.SupprimerProduit(ctx, id)
+	}
+	if int64(len(existants)) >= produitsMax {
+		return false, errListePleine
+	}
+	return false, q.DeplacerProduit(ctx, donnees.DeplacerProduitParams{ListeID: vers, ID: id})
 }
 
 func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {

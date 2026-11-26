@@ -1,26 +1,40 @@
 {{define "contenu"}}
 {{$c := .C}}
+{{with .Donnees}}
 <section class="titre-page">
   <a class="retour" href="/menus">‹ Menus</a>
   <h1>📖 Recettes</h1>
-  <p>Les plats déjà prévus et leurs ingrédients</p>
+  <p>Les plats de la famille, leurs ingrédients et leur préparation</p>
 </section>
-{{- range .Donnees}}
-<details class="carte bloc">
-  <summary><b>{{.Nom}}</b> <small class="aide">{{pluriel .NbIngr "ingrédient" "ingrédients"}} · prévu {{pluriel .Compte "fois" "fois"}}</small></summary>
-  <form method="post" action="/menus/recettes/modifier">
+<p class="entete-recettes"><a class="bouton petit" href="/menus/recettes/nouvelle">＋ Recette</a></p>
+{{- range .Recettes}}
+<details class="carte bloc recette">
+  <summary><b>{{.Nom}}</b> <small class="aide">{{pluriel .NbIngr "ingrédient" "ingrédients"}} · {{if .Compte}}prévu {{pluriel .Compte "fois" "fois"}}{{else}}jamais prévu{{end}}{{if .Preparation}} · 📝 préparation{{end}}</small></summary>
+  {{- if .Lignes}}
+  <p class="ingredients-titre">Ingrédients</p>
+  <ul class="ingredients-recette">{{range .Lignes}}<li>{{.}}</li>{{end}}</ul>
+  {{- end}}
+  {{- if .Preparation}}
+  <section class="preparation"><h3>Préparation</h3><div class="contenu-note">{{riche .Preparation}}</div></section>
+  {{- end}}
+  <form class="prevoir" method="post" action="/menus/recettes/prevoir">
     {{template "jeton" $c.CSRF}}<input type="hidden" name="cle" value="{{.Cle}}">
-    <label class="champ"><span>Nom</span><input name="nom" value="{{.Nom}}" maxlength="80" required></label>
-    <label class="champ"><span>Ingrédients (un par ligne)</span><textarea name="ingredients" rows="6">{{.Ingredients}}</textarea></label>
-    <div class="boutons"><button class="bouton petit">Enregistrer</button></div>
+    <label class="champ"><span>Jour</span><input type="date" name="jour" value="{{$.Donnees.Jour}}" min="{{$.Donnees.Min}}" required></label>
+    <label class="champ"><span>Repas</span>
+      <select name="moment"><option value="midi"{{if eq $.Donnees.Moment "midi"}} selected{{end}}>☀️ Midi</option><option value="soir"{{if eq $.Donnees.Moment "soir"}} selected{{end}}>🌙 Soir</option></select></label>
+    <button class="bouton petit">📅 Prévoir ce plat</button>
   </form>
-  {{if $c.EstParent}}
-  <form method="post" action="/menus/recettes/oublier" hx-confirm="Oublier « {{.Nom}} » ? Elle ne sera plus proposée (les repas prévus restent).">
-    {{template "jeton" $c.CSRF}}<input type="hidden" name="cle" value="{{.Cle}}"><button class="bouton petit danger">Oublier</button>
-  </form>
-  {{end}}
+  <div class="boutons">
+    <a class="bouton petit secondaire" href="/menus/recettes/modifier?cle={{.Cle}}">✏️ Modifier</a>
+    {{if $c.EstParent}}
+    <form method="post" action="/menus/recettes/oublier" hx-confirm="Oublier « {{.Nom}} » ? Elle ne sera plus proposée (les repas prévus restent).">
+      {{template "jeton" $c.CSRF}}<input type="hidden" name="cle" value="{{.Cle}}"><button class="bouton petit danger">Oublier</button>
+    </form>
+    {{end}}
+  </div>
 </details>
 {{- else}}
-<div class="carte vide bloc"><span class="emoji">📖</span>Les plats prévus dans les menus seront retenus ici, avec leurs ingrédients.</div>
+<div class="carte vide bloc"><span class="emoji">📖</span>Les plats prévus dans les menus seront retenus ici, avec leurs ingrédients. Ou ajoutez une recette avec « ＋ Recette ».</div>
 {{- end}}
+{{end}}
 {{end}}

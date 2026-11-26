@@ -657,25 +657,46 @@ document.addEventListener("change", function (e) {
 
 // Rayons repliés : gardés en mémoire sur cet appareil (la liste est
 // rechargée à chaque changement, les rayons repliés le restent).
+// Rayon fini (data-fini : tout est pris) : le serveur l'envoie replié, en
+// bas. Rouvert à la main, il reste ouvert aux rechargements (un autre
+// membre coche) tant qu'il est fini ; le replier ne touche pas à la mémoire
+// de l'appareil (sinon il resterait replié une fois de nouveau à remplir).
 (function () {
   "use strict";
   var CLE = "fc-rayons-replies";
+  var finisOuverts = {}; // rayons finis rouverts à la main (cette visite)
   function lire() {
     try { return JSON.parse(localStorage.getItem(CLE) || "{}"); } catch (_) { return {}; }
+  }
+  function ecrire(replies) {
+    try { localStorage.setItem(CLE, JSON.stringify(replies)); } catch (_) {}
   }
   function appliquer() {
     var replies = lire();
     document.querySelectorAll("details[data-rayon]").forEach(function (d) {
-      if (replies[d.getAttribute("data-rayon")]) d.removeAttribute("open");
+      var cle = d.getAttribute("data-rayon");
+      if (d.hasAttribute("data-fini")) {
+        if (finisOuverts[cle]) d.setAttribute("open", "");
+        return;
+      }
+      delete finisOuverts[cle]; // plus fini : la prochaine fois, il se repliera
+      if (replies[cle]) d.removeAttribute("open");
     });
   }
   document.addEventListener("toggle", function (e) {
     var d = e.target;
     if (!d.matches || !d.matches("details[data-rayon]")) return;
+    var cle = d.getAttribute("data-rayon");
     var replies = lire();
-    if (d.open) delete replies[d.getAttribute("data-rayon")];
-    else replies[d.getAttribute("data-rayon")] = 1;
-    try { localStorage.setItem(CLE, JSON.stringify(replies)); } catch (_) {}
+    if (d.hasAttribute("data-fini")) {
+      if (!d.open) { delete finisOuverts[cle]; return; }
+      finisOuverts[cle] = 1;
+      if (replies[cle]) { delete replies[cle]; ecrire(replies); } // ouvert exprès
+      return;
+    }
+    if (d.open) delete replies[cle];
+    else replies[cle] = 1;
+    ecrire(replies);
   }, true);
   document.addEventListener("DOMContentLoaded", appliquer);
   document.addEventListener("htmx:afterSettle", appliquer);
