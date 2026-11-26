@@ -1,18 +1,33 @@
 {{define "contenu"}}
 {{with .Donnees}}
 <section class="titre-page">
-  <a class="retour" href="/budget?compte={{if .Perso}}perso{{else}}commun{{end}}">‹ Budget</a>
+  <a class="retour" href="/budget?compte={{.Compte}}">‹ Budget</a>
   <h1>🔎 Chercher</h1>{{if .Perso}}<p>🔒 Dans votre budget perso</p>{{end}}
-  <p>Dans les libellés des 12 derniers mois</p>
+  <p>Par libellé et/ou par catégorie</p>
 </section>
-{{template "vues-budget" dict "Compte" (or (and .Perso "perso") "commun") "Active" "chercher" "An" ""}}
-<form class="ajout" method="get" action="/budget/chercher" role="search">
-  <input name="q" value="{{.Q}}" placeholder="Ex. : dentiste, cantine…" maxlength="60" aria-label="Texte à chercher" autofocus>
-  <button class="bouton">Chercher</button>
+{{template "vues-budget" dict "Compte" .Compte "Active" "chercher" "An" ""}}
+<form class="recherche-budget bloc" method="get" action="/budget/chercher" role="search">
+  <input type="hidden" name="compte" value="{{.Compte}}">
+  {{with .Periode}}<input type="hidden" name="periode" value="{{.}}">{{end}}
+  <div class="ajout">
+    <input name="q" value="{{.Q}}" placeholder="Ex. : dentiste, cantine…" maxlength="60" aria-label="Texte à chercher"{{if not .Cherche}} autofocus{{end}}>
+    <button class="bouton">Chercher</button>
+  </div>
+  <label class="champ"><span>Catégorie</span>
+    <select name="cat" data-envoi-auto>
+      <option value="">Toutes</option>
+      {{- range .Categories}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.Cat}} selected{{end}}>{{.Emoji}} {{.Nom}}</option>{{end}}
+    </select></label>
 </form>
-{{if .Q}}
+<nav class="pilules petites voir" aria-label="Période">
+  <span class="aide">Période :</span>
+  {{- range .Periodes}}
+  <a class="pilule{{if .Actif}} active{{end}}" href="{{.URL}}"{{if .Actif}} aria-current="page"{{end}}>{{.Texte}}</a>
+  {{- end}}
+</nav>
+{{if .Cherche}}
 <section class="carte reste bloc">
-  <p class="reste-titre">{{pluriel .Nombre "opération trouvée" "opérations trouvées"}}{{if .Tronquee}} (les 200 plus récentes){{end}}</p>
+  <p class="reste-titre">{{pluriel .Nombre "opération trouvée" "opérations trouvées"}}{{if .Tronquee}} <small>(les 300 plus récentes montrées)</small>{{end}}</p>
   <p class="reste-montant">{{montant .Total .Devise}}</p>
   {{if .Revenus}}<div class="reste-detail"><span>⬆️ Revenus <b>{{montant .Revenus .Devise}}</b></span></div>{{end}}
 </section>
@@ -28,7 +43,7 @@
   {{- end}}
 </div>
 {{- else}}
-<div class="carte vide bloc"><span class="emoji">🔎</span>Rien trouvé pour « {{.Q}} ».</div>
+<div class="carte vide bloc"><span class="emoji">🔎</span>Rien trouvé{{with .Q}} pour « {{.}} »{{end}} sur cette période.{{if ne .Periode "tout"}} Essayez « Tout ».{{end}}</div>
 {{- end}}
 {{end}}
 {{end}}

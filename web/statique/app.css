@@ -1147,15 +1147,20 @@ details.attente + details.attente { border-top: 1px solid var(--bordure); }
 .cle-prevu .prelev::before { background: var(--corail); }
 .cle-prevu .r::before, .cle-prevu .rev::before { background: color-mix(in srgb, var(--budget-t) 35%, var(--carte)); }
 .liste-prevu { padding: 0; overflow: hidden; }
-.mois-prevu { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: center; padding: 12px 16px; color: inherit; }
+/* Colonnes de largeur fixe : les barres de tous les mois s'alignent. */
+.mois-prevu { display: grid; grid-template-columns: 5.6rem minmax(0, 1fr) 7.4rem; gap: 4px 10px; align-items: center; padding: 12px 16px; color: inherit; }
 .mois-prevu + .mois-prevu { border-top: 1px solid var(--bordure); }
 .mois-prevu.en-cours { background: color-mix(in srgb, var(--budget) 55%, transparent); }
-.nom-mois { font-weight: 800; min-width: 78px; }
+.nom-mois { font-weight: 800; min-width: 0; }
 .nom-mois small, .reste-mois small { display: block; font-weight: 600; font-size: .72rem; color: var(--texte-doux); }
 .barre-prevu { width: 100%; height: 10px; }
 .barre-prevu .fond-reste { fill: color-mix(in srgb, var(--budget-t) 35%, var(--carte)); }
 .barre-prevu .prelev { fill: var(--corail); }
-.reste-mois { font-weight: 900; font-size: 1.02rem; color: var(--budget-t); text-align: right; }
+.reste-mois { font-weight: 900; font-size: 1.02rem; color: var(--budget-t); text-align: right; white-space: nowrap; }
+@media (max-width: 359px) {
+  .mois-prevu { grid-template-columns: 5rem minmax(0, 1fr) 6.6rem; gap: 4px 8px; padding: 12px; }
+  .reste-mois { font-size: .92rem; }
+}
 .mois-prevu.charge .reste-mois { color: var(--corail); }
 .note-mois { grid-column: 1 / -1; font-size: .75rem; font-weight: 600; color: var(--texte-doux); }
 .tableau-prevu { display: none; }
@@ -1944,3 +1949,6 @@ details.partie[open] { padding-bottom: 16px; }
 @media (max-width: 360px) { .ligne-accueil .fleches .bouton { padding: 5px 7px; } .ligne-accueil .interrupteur .emoji { display: none; } }
 .lien-organiser { display: inline-block; margin-top: 14px; font-weight: 800; color: var(--corail); }
 .ligne-accueil .fleches .bouton:disabled { opacity: .3; cursor: default; }
+/* Budget : catégorie choisie d'après le libellé. */
+.cat-auto { display: block; margin: 4px 0 0; }
+.cat-auto[hidden] { display: none; }

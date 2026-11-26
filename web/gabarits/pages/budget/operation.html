@@ -23,7 +23,8 @@
     </div>
   </fieldset>{{end}}
   <div class="rangee">
-    <label class="champ"><span>Libellé (facultatif)</span><input name="libelle" value="{{.Op.Libelle}}" maxlength="80" placeholder="Ex. : Supermarché" list="libelles" autocomplete="off"></label>
+    <label class="champ"><span>Libellé (facultatif)</span><input name="libelle" value="{{.Op.Libelle}}" maxlength="80" placeholder="Ex. : Supermarché" list="libelles" autocomplete="off"{{if and .Nouvelle (not .Virement)}} data-cat-auto{{end}}>
+      <small class="aide cat-auto" hidden></small></label>
     <label class="champ"><span>Date</span><input type="date" name="jour" value="{{.Op.Jour}}"{{if not .Nouvelle}} required{{end}}></label>
   </div>
   <label class="champ"><span>Qui ?</span>
@@ -44,7 +45,8 @@
   {{end}}
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>
-<datalist id="libelles">{{range .Libelles}}<option value="{{.}}">{{end}}</datalist>
+{{/* data-cat : la catégorie de la dernière fois (choisie toute seule, voir app.js). */}}
+<datalist id="libelles">{{range .Libelles}}<option value="{{.Libelle}}" data-cat="{{.Categorie}}">{{end}}</datalist>
 {{if not .Nouvelle}}
 <form class="bloc" method="post" action="/budget/{{.Op.ID}}/supprimer" hx-confirm="Supprimer cette opération ?">
   {{template "jeton" $c.CSRF}}

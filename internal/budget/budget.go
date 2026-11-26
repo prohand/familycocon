@@ -472,9 +472,9 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 }
 
 type formOp struct {
-	Compte     string   // « commun » ou « perso »
-	Virement   bool     // moitié d'un virement : montant et date seulement
-	Libelles   []string // déjà tapés (suggestions)
+	Compte     string                       // « commun » ou « perso »
+	Virement   bool                         // moitié d'un virement : montant et date seulement
+	Libelles   []donnees.LibellesRecentsRow // déjà tapés (suggestions), avec leur dernière catégorie
 	Nouvelle   bool
 	Op         donnees.Operation
 	Montant    string

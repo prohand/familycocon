@@ -958,3 +958,17 @@ reviennent.
 - Fréquences « certains mois » : date calculée directement (plus mois par
   mois) ; le prévu saute aux fois de la période ; années affichables de
   1970 à dans 30 ans (`anPermis`, aussi pour `?mois=`).
+
+## Budget : catégorie d'après le libellé, recherche, prochains mois (26/11/2026)
+- **Catégorie d'après le libellé** (nouvelle opération) : la liste des
+  libellés déjà tapés (`LibellesRecents`, 100 derniers) porte la catégorie
+  de la dernière fois (`data-cat`) ; app.js la coche quand le libellé tapé
+  est le même (majuscules et accents à part) et l'écrit sous le champ
+  (« 🚗 Transport : comme la dernière fois »), tant qu'on n'a pas touché
+  soi-même une catégorie.
+- **Chercher** : par libellé et/ou par catégorie (liste qui s'envoie seule) ;
+  période : 12 derniers mois, cette année, l'année d'avant, tout. Totaux sur
+  tout ce qui est trouvé (`TotauxRecherche`), 300 lignes montrées au plus.
+- **Les prochains mois** : colonnes de largeur fixe (barres alignées) ;
+  l'aide « Ajoutez le salaire… » seulement s'il n'y a encore aucune
+  opération qui revient.

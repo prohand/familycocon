@@ -295,6 +295,36 @@ document.addEventListener("keydown", function (e) {
   t.selectionStart = t.selectionEnd = pos + 1 + marque.length;
 });
 
+// Budget, nouvelle opération : un libellé déjà tapé (« Carrefour ») choisit
+// tout seul sa catégorie de la dernière fois (option data-cat de la liste),
+// tant qu'on n'a pas touché soi-même une catégorie. Majuscules et accents
+// à part.
+(function () {
+  function plier(t) { return (t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim(); }
+  document.addEventListener("change", function (e) {
+    var r = e.target;
+    if (r.matches && r.matches("input[name=categorie]") && e.isTrusted && r.form) r.form.setAttribute("data-cat-choisie", "");
+  });
+  document.addEventListener("input", function (e) {
+    var champ = e.target;
+    if (!champ.matches || !champ.matches("input[data-cat-auto]") || !champ.form || champ.form.hasAttribute("data-cat-choisie")) return;
+    var liste = champ.list, info = champ.parentNode.querySelector(".cat-auto");
+    if (!liste) return;
+    var v = plier(champ.value), cat = "";
+    for (var i = 0; i < liste.options.length; i++) {
+      if (plier(liste.options[i].value) === v) { cat = liste.options[i].getAttribute("data-cat"); break; }
+    }
+    var radio = cat && champ.form.querySelector('input[name=categorie][value="' + cat + '"]');
+    if (!radio || !radio.parentNode.offsetParent) { if (info) info.hidden = true; return; }
+    radio.checked = true;
+    if (info) {
+      var emoji = radio.parentNode.querySelector("b"), e2 = emoji ? emoji.textContent : "";
+      info.textContent = e2 + " " + radio.parentNode.textContent.replace(e2, "").trim() + " : comme la dernière fois";
+      info.hidden = false;
+    }
+  });
+})();
+
 // Véhicule : reprise d'une sauvegarde Fuelio (input[data-fuelio] = adresse
 // d'envoi). Le fichier part tel quel (il peut peser des centaines de Mo,
 // photos comprises) ; l'avancement s'affiche, puis la fiche est rechargée
@@ -1655,10 +1685,12 @@ if ("serviceWorker" in navigator) {
 })();
 
 // Pièces jointes : le fichier choisi part aussitôt (le formulaire est
-// envoyé par htmx, avec le fichier).
+// envoyé par htmx, avec le fichier). Une liste data-envoi-auto aussi
+// (filtre de la recherche du budget).
 document.addEventListener("change", function (e) {
   var f = e.target;
   if (f.matches && f.matches("input[type=file][data-envoi-auto]") && f.files.length && f.form) f.form.requestSubmit();
+  if (f.matches && f.matches("select[data-envoi-auto]") && f.form) f.form.requestSubmit();
 });
 
 

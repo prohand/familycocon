@@ -41,16 +41,33 @@ WHERE famille_id = ? AND perso_de = ? AND sens = ? AND montant = ? AND categorie
   AND cree_par = ? AND recurrence_id IS NULL AND cree_le >= ?;
 
 -- Libelles deja tapes (suggestions du formulaire), les plus recents d'abord.
+-- Libelles deja tapes, avec la categorie de la derniere fois (SQLite : avec
+-- max(), les autres colonnes viennent de la ligne du max).
 -- name: LibellesRecents :many
-SELECT libelle FROM operations WHERE famille_id = ? AND perso_de = ? AND libelle <> ''
-GROUP BY libelle ORDER BY max(jour) DESC LIMIT 30;
+SELECT libelle, categorie, CAST(max(jour) AS TEXT) AS dernier FROM operations
+WHERE famille_id = ? AND perso_de = ? AND libelle <> ''
+GROUP BY libelle ORDER BY dernier DESC LIMIT 100;
 
 -- Recherche dans les libelles, sans majuscules ni accents, depuis une date.
+-- Motif ou categorie vides : pas de filtre. Periode : du, au (compris).
 -- name: ChercherOperations :many
 SELECT * FROM operations
-WHERE famille_id = sqlc.arg(famille_id) AND perso_de = sqlc.arg(compte) AND jour >= sqlc.arg(depuis)
-  AND instr(plier(libelle), plier(sqlc.arg(motif))) > 0
-ORDER BY jour DESC, id DESC LIMIT 200;
+WHERE famille_id = sqlc.arg(famille_id) AND perso_de = sqlc.arg(compte)
+  AND jour >= sqlc.arg(du) AND jour <= sqlc.arg(au)
+  AND (sqlc.arg(categorie) = '' OR categorie = sqlc.arg(categorie))
+  AND (sqlc.arg(motif) = '' OR instr(plier(libelle), plier(sqlc.arg(motif))) > 0)
+ORDER BY jour DESC, id DESC LIMIT 300;
+
+-- Totaux de la meme recherche (sur tout, pas seulement les lignes montrees).
+-- name: TotauxRecherche :one
+SELECT count(*) AS nombre,
+  CAST(coalesce(sum(CASE WHEN sens = 'depense' THEN montant ELSE 0 END), 0) AS INTEGER) AS depenses,
+  CAST(coalesce(sum(CASE WHEN sens = 'revenu' THEN montant ELSE 0 END), 0) AS INTEGER) AS revenus
+FROM operations
+WHERE famille_id = sqlc.arg(famille_id) AND perso_de = sqlc.arg(compte)
+  AND jour >= sqlc.arg(du) AND jour <= sqlc.arg(au)
+  AND (sqlc.arg(categorie) = '' OR categorie = sqlc.arg(categorie))
+  AND (sqlc.arg(motif) = '' OR instr(plier(libelle), plier(sqlc.arg(motif))) > 0);
 
 -- Totaux par mois, sens et categorie (vue de l'annee).
 -- name: TotauxParMois :many

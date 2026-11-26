@@ -42,8 +42,9 @@ func TestOutilsBudget(t *testing.T) {
 	marie.Post("/budget", map[string]string{"montant": "40", "categorie": "sante", "libelle": "Dentiste Hélène", "jour": auj, "membre": strconv.FormatInt(idLea, 10)})
 
 	// Libellés proposés.
-	if _, form = marie.Get("/budget/nouvelle"); !strings.Contains(form, `<option value="Supermarché">`) {
-		t.Fatal("libellés déjà tapés non proposés")
+	if _, form = marie.Get("/budget/nouvelle"); !strings.Contains(form, `<option value="Supermarché" data-cat="courses">`) ||
+		!strings.Contains(form, `<option value="Dentiste Hélène" data-cat="sante">`) || !strings.Contains(form, "data-cat-auto") {
+		t.Fatalf("libellés déjà tapés non proposés avec leur catégorie :\n%s", form)
 	}
 	// Payé par : deux personnes, écart de 55 €.
 	_, page := marie.Get("/budget")
@@ -53,6 +54,15 @@ func TestOutilsBudget(t *testing.T) {
 	// Recherche sans accents.
 	if _, page = marie.Get("/budget/chercher?q=" + url.QueryEscape("HELENE")); !strings.Contains(page, "Dentiste Hélène") || strings.Contains(page, "Supermarché") || !strings.Contains(page, "40,00") {
 		t.Fatalf("recherche :\n%s", page)
+	}
+	// Chercher par catégorie seule, sur tout l'historique.
+	if _, page = marie.Get("/budget/chercher?cat=sante&periode=tout"); !strings.Contains(page, "Dentiste Hélène") || strings.Contains(page, "Supermarché") ||
+		!strings.Contains(page, "1 opération trouvée") {
+		t.Fatalf("recherche par catégorie :\n%s", page)
+	}
+	// Texte et catégorie qui ne vont pas ensemble : rien.
+	if _, page = marie.Get("/budget/chercher?q=super&cat=sante"); !strings.Contains(page, "Rien trouvé pour") {
+		t.Fatalf("recherche texte + catégorie :\n%s", page)
 	}
 	// Année : le mois en cours a 135 € de dépenses.
 	if _, page = marie.Get("/budget/annee"); !strings.Contains(page, "135,00") || !strings.Contains(page, "Mois par mois") || !strings.Contains(page, `class="graphique"`) || strings.Contains(page, "<progress") {
