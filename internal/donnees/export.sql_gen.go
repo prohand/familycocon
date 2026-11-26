@@ -948,7 +948,7 @@ func (q *Queries) ExportProjets(ctx context.Context, arg ExportProjetsParams) ([
 }
 
 const exportRecettes = `-- name: ExportRecettes :many
-SELECT famille_id, cle, nom, ingredients, compte, vu_le FROM recettes WHERE famille_id = ?
+SELECT famille_id, cle, nom, ingredients, compte, vu_le, preparation FROM recettes WHERE famille_id = ?
 `
 
 func (q *Queries) ExportRecettes(ctx context.Context, familleID int64) ([]Recette, error) {
@@ -967,6 +967,7 @@ func (q *Queries) ExportRecettes(ctx context.Context, familleID int64) ([]Recett
 			&i.Ingredients,
 			&i.Compte,
 			&i.VuLe,
+			&i.Preparation,
 		); err != nil {
 			return nil, err
 		}

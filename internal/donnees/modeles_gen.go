@@ -429,6 +429,7 @@ type Recette struct {
 	Ingredients string
 	Compte      int64
 	VuLe        int64
+	Preparation string
 }
 
 type Recompense struct {

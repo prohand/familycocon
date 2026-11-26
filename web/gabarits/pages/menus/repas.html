@@ -15,6 +15,12 @@
   <p class="aide">Un plat déjà fait ? Choisissez-le : ses ingrédients reviennent. <a href="/menus/recettes">📖 Les recettes</a></p>
   <div class="boutons"><button class="bouton">Enregistrer</button></div>
 </form>
+{{if .Preparation}}
+<details class="carte bloc recette">
+  <summary><b>📝 Préparation</b></summary>
+  <div class="contenu-note">{{riche .Preparation}}</div>
+</details>
+{{end}}
 {{if and .Courses .Lignes .Creneau.Repas (eq .Creneau.Repas.DansCourses 0)}}
 <form class="carte bloc" method="post" action="/menus/{{.Creneau.Jour}}/{{.Creneau.Moment}}/courses">
   {{template "jeton" $c.CSRF}}<input type="hidden" name="choix" value="1">

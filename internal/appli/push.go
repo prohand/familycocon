@@ -48,6 +48,7 @@ type annonce struct {
 	pour            []int64 // membres visés (vide : toute la famille)
 	sauf            []int64 // membres exclus (ils ont reçu leur propre version)
 	toujours        bool    // même aux membres qui ont l'appli ouverte (rappel à une heure dite)
+	voulu           bool    // même aux membres qui n'ont pas choisi ce module (appel voulu, voir Appeler)
 }
 
 // tailleFile : au-delà, les annonces sont perdues (elles restent visibles
@@ -159,7 +160,8 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		// Un rappel du matin ne s'affiche nulle part ailleurs : il part même si
 		// le membre a une page ouverte (un onglet oublié sur l'ordinateur).
 		enLigne := an.module != moduleRappels && !an.toujours && p.a.Direct.EnLigne(an.famille, ab.MembreID)
-		if !contient(strings.Split(ab.PushModules, ","), an.module) || enLigne ||
+		choisi := an.voulu || contient(strings.Split(ab.PushModules, ","), an.module)
+		if !choisi || enLigne ||
 			(an.parents && ab.Role != RoleParent) || (an.sansParents && ab.Role == RoleParent) ||
 			(len(an.pour) > 0 && !slices.Contains(an.pour, ab.MembreID)) || slices.Contains(an.sauf, ab.MembreID) {
 			continue

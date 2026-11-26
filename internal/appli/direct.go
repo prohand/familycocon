@@ -202,6 +202,22 @@ func (a *App) PublierLien(c *Contexte, module, texte, url string, pour []int64) 
 	}
 }
 
+// Appeler : un appel voulu par un membre (« Je pars faire les courses »),
+// pas une simple nouvelle. Il va à toute la famille sauf l'auteur, même aux
+// membres qui n'ont pas choisi ce module dans Moi › Notifications, et même
+// à ceux qui ont une page ouverte (un onglet oublié sur l'ordinateur ne
+// doit pas faire taire le téléphone). Au module de le limiter (pas plus
+// d'un appel toutes les 30 minutes pour les courses).
+func (a *App) Appeler(c *Contexte, module, texte, url string) {
+	a.Direct.PublierPour(c.Famille.ID, Message{
+		Module: module, Texte: texte, Auteur: c.Membre.ID,
+		Couleur: c.Membre.Couleur, Initiale: Visage(c.Membre),
+	}, nil)
+	if texte != "" && a.Push != nil {
+		a.Push.annoncer(annonce{famille: c.Famille.ID, auteur: c.Membre.ID, module: module, texte: texte, url: url, voulu: true, toujours: true})
+	}
+}
+
 // Parents : les identifiants des parents de la famille (destinataires
 // d'une notification « à valider »).
 func (a *App) Parents(ctx context.Context, c *Contexte) []int64 {
