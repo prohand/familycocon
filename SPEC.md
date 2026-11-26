@@ -848,3 +848,14 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - Code 93 : avec ses deux caractères de contrôle (obligatoires). Codabar : le
   numéro est gardé sans ses lettres de début et de fin (A à D), remises au
   dessin. UPC-E reste lu en « détecté tout seul » (pas de dessin UPC-E).
+
+## Barre de gauche sur grand écran (26/11/2026)
+
+- Au-dessus de 1 000 px, la barre du bas se pose à gauche : le « + » en
+  haut, les 4 raccourcis de chacun, « Chercher » en bas. Pas de liste des
+  modules (les tuiles de l'accueil y sont déjà).
+- « « » la réduit aux icônes (64 px, nom en infobulle) ; réglage de
+  l'appareil (préférence `rail`, cookie, comme le thème) posé par
+  POST /moi/rail : la page arrive déjà dans le bon état.
+- Entre 900 et 1 000 px : la pilule flottante en bas, comme avant ; sur
+  téléphone, rien ne change.

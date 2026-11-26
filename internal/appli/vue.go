@@ -153,6 +153,9 @@ type Vue struct {
 	// Theme : « clair » ou « sombre » choisi dans Moi ; vide : celui du
 	// téléphone (attribut data-theme de la page).
 	Theme string
+	// RailReduit : sur grand écran, la barre de gauche réduite aux icônes
+	// (réglage de cet appareil, attribut data-rail de la page).
+	RailReduit bool
 }
 
 // Gauche, Droite : les deux moitiés de la barre du bas.
@@ -172,7 +175,8 @@ func (v *Vue) Actif(r Raccourci) bool {
 // NouvelleVue prépare la mise en page. w peut être nil (fragment : pas de
 // notification « flash » à lire).
 func (a *App) NouvelleVue(w http.ResponseWriter, r *http.Request, c *Contexte, titre, module string) *Vue {
-	v := &Vue{Titre: titre, Module: module, C: c, Chemin: r.URL.Path, Adresse: r.URL.RequestURI(), Theme: a.theme(r)}
+	v := &Vue{Titre: titre, Module: module, C: c, Chemin: r.URL.Path, Adresse: r.URL.RequestURI(), Theme: a.theme(r),
+		RailReduit: a.LirePreference(r, "rail") == "reduite"}
 	if w == nil {
 		return v // fragment : ni en-tête ni barre
 	}
