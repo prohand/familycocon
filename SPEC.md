@@ -161,6 +161,9 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
   ou « Pas cette fois ». Une seule fois en attente par récurrence ; le
   numéro de la fois est envoyé (rien n'est fait deux fois). En attendant,
   elle compte dans le reste à vivre du mois de sa date prévue.
+- Date variable : la date peut rester vide à la création (ce mois-ci, dès
+  le 1er) ; elle est montrée avec son mois (« attendu en décembre », « à
+  confirmer · en décembre »), pas un jour précis.
 - Abonnements : une récurrence + emoji, fin d'engagement, page de gestion,
   notes (jamais de mot de passe). Réservé aux parents ; leurs rappels et
   notifications ne vont jamais aux enfants.

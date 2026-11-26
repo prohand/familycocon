@@ -64,7 +64,7 @@
   <details class="attente">
     <summary class="ligne op">
       <span class="p-emoji">{{.Cat.Emoji}}</span>
-      <span class="quoi">{{if .R.Libelle}}{{.R.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>prévu le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}/{{slice .Jour 0 4}}</small></span>
+      <span class="quoi">{{if .R.Libelle}}{{.R.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>attendu en {{.Mois}}</small></span>
       <b class="montant {{.R.Sens}}">{{montant .Montant $.Donnees.Devise}}</b>
     </summary>
     <form method="post" action="/recurrences/{{.R.ID}}/confirmer">
@@ -90,7 +90,7 @@
   {{- range .Prevues}}
   <div class="ligne op prevue">
     <span class="p-emoji">{{.Cat.Emoji}}</span>
-    <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>{{if le .Jour $.Donnees.Aujourdhui}}⏳ à confirmer, prévu {{end}}le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}</small></span>
+    <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>{{if .AConfirmer}}⏳ à confirmer · en {{.Mois}}{{else}}le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}{{end}}</small></span>
     <b class="montant {{.Sens}}">{{if eq .Sens "depense"}}−{{else}}+{{end}}{{montant .Montant $.Donnees.Devise}}</b>
   </div>
   {{- end}}
