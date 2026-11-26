@@ -18,16 +18,17 @@
     <span>⬇️ Dépenses <b>{{montant .Depenses .Devise}}</b></span>
   </div>
 </section>
-<section class="carte bloc">
+<section class="carte bloc graphe annee">
   <div class="section-titre premier"><h2>Mois par mois</h2></div>
-  {{- range .Mois}}
+  {{with .Graphe}}{{.}}
+  <p class="legende"><span class="pastille g-s0"></span> Revenus <span class="pastille g-s1"></span> Dépenses</p>
+  {{else}}<p class="aide">Rien de noté en {{.An}}.</p>{{end}}
+  {{- range .Mois}}{{if or .Revenus .Depenses}}
   <a class="barre-mois" href="/budget?compte={{if $.Donnees.Perso}}perso{{else}}commun{{end}}&amp;mois={{.Mois}}">
     <span class="nom-cat">{{.Nom}}</span>
-    <span class="chiffres"><span class="revenu">+{{montant .Revenus $.Donnees.Devise}}</span> <span class="depense">−{{montant .Depenses $.Donnees.Devise}}</span></span>
-    <progress class="jauge revenu" max="{{if $.Donnees.Max}}{{$.Donnees.Max}}{{else}}1{{end}}" value="{{.Revenus}}" aria-label="Revenus de {{.Nom}}"></progress>
-    <progress class="jauge depense" max="{{if $.Donnees.Max}}{{$.Donnees.Max}}{{else}}1{{end}}" value="{{.Depenses}}" aria-label="Dépenses de {{.Nom}}"></progress>
+    <span class="montants-mois"><span class="revenu">+{{montant .Revenus $.Donnees.Devise}}</span><span class="depense">−{{montant .Depenses $.Donnees.Devise}}</span><span class="fleche-droite">›</span></span>
   </a>
-  {{- end}}
+  {{- end}}{{end}}
 </section>
 {{if .Categories}}
 <section class="carte bloc">

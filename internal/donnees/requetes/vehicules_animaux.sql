@@ -78,3 +78,8 @@ SELECT id, nom FROM garanties WHERE famille_id = ?;
 
 -- name: CompterGaranties :one
 SELECT count(*) FROM garanties WHERE famille_id = ?;
+
+-- Ou vont les depenses du vehicule dans le budget ('', 'commun', 'perso').
+-- name: ChangerBudgetVehicule :exec
+UPDATE vehicules SET budget = sqlc.arg(budget), budget_perso_de = sqlc.arg(budget_perso_de)
+WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id);

@@ -58,6 +58,10 @@ type Objet struct {
 	// Voit (facultatif) : ce membre voit-il l'objet {id} ? (projet privé :
 	// son propriétaire seul). Absent : tous ceux qui ouvrent le module.
 	Voit func(ctx context.Context, c *appli.Contexte, id int64) bool
+	// Budget (facultatif) : le réglage de l'objet {id} (BudgetNon,
+	// BudgetCommun, BudgetPerso et le parent du budget perso). Il pré-règle
+	// « Ajouter aussi au budget » des formulaires d'ajout.
+	Budget func(ctx context.Context, famille, id int64) (compte string, persoDe int64)
 }
 
 // permis : le membre voit-il cet objet (module ouvert, objet non privé à
@@ -168,6 +172,7 @@ type Bloc struct {
 	Aujourdhui    string
 	PeutBudget    bool                      // case « Ajouter aussi au budget » (parent, budget activé)
 	BudgetPerso   bool                      // proposer le budget perso d'abord (projet privé)
+	BudgetDefaut  string                    // choix pré-réglé : « » (non), « 1 » (commun), « perso »
 	Pieces        map[int64][]donnees.Piece // photos (tickets) par ligne, parents seulement
 	Joints        map[int64][]appli.Joint   // documents par ligne, parents seulement
 	Retour        string                    // la page de l'objet (après l'envoi d'un document)
@@ -227,6 +232,16 @@ func (s *Suivi) Bloc(ctx context.Context, c *appli.Contexte, module string, obje
 	}
 	b.Total, b.TotalAnnee = t.Total, t.Annee
 	b.PeutBudget = o.Categorie != "" && c.EstParent() && c.Actif("budget")
+	// Réglage de l'objet (véhicule) : le choix est déjà fait. Le budget perso
+	// d'un autre parent n'est pas proposé (il n'y écrit pas).
+	if b.PeutBudget && o.Budget != nil {
+		switch compte, perso := o.Budget(ctx, c.Famille.ID, objet); {
+		case compte == BudgetCommun:
+			b.BudgetDefaut = "1"
+		case compte == BudgetPerso && perso == c.Membre.ID:
+			b.BudgetDefaut = "perso"
+		}
+	}
 	if c.EstParent() {
 		if b.Pieces, err = s.piecesParLigne(ctx, c, module, objet); err != nil {
 			return nil, err
@@ -481,13 +496,7 @@ func lireCarnet(r *http.Request, c *appli.Contexte) (jour, libelle, note string,
 func (s *Suivi) ecrireCarnet(ctx context.Context, q *donnees.Queries, c *appli.Contexte, o Objet, objet int64, x saisieCarnet) (int64, error) {
 	var op sql.NullInt64
 	if x.budget && x.montant > 0 && o.Categorie != "" && c.EstParent() && c.Actif("budget") {
-		libelle := x.libelle
-		if x.nom != "" {
-			libelle += " · " + x.nom
-		}
-		if utf8.RuneCountInString(libelle) > 80 {
-			libelle = string([]rune(libelle)[:80])
-		}
+		libelle := libelleBudget(x.libelle, x.nom)
 		var perso int64
 		if x.budgetPerso {
 			perso = c.Membre.ID

@@ -170,6 +170,12 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
 - Abonnements : une récurrence + emoji, fin d'engagement, page de gestion,
   notes (jamais de mot de passe). Réservé aux parents ; leurs rappels et
   notifications ne vont jamais aux enfants.
+  **Filtres** (bloc « 🔎 Filtrer », replié, ouvert quand un filtre est
+  choisi) : catégorie, pour qui, budget commun ou perso, fréquence. Dans
+  l'adresse (`?cat=&pour=&compte=&freq=`, lien gardable) ; une rangée n'est
+  montrée que s'il y a au moins deux choix ; chaque pastille compte les
+  abonnements en cours avec les autres filtres ; les totaux (par mois, par
+  an) suivent le filtre (« Chaque mois (filtre) »).
 - Agenda : les modules peuvent y montrer des éléments discrets (`AjouterCalendrier`).
   Les tâches « chaque jour » et « certains jours » y sont, à partir de leur
   création. Filtre « Toutes / Les miennes / Masquées » gardé dans un cookie.
@@ -897,3 +903,30 @@ reviennent.
   worker garde la cible (cache `familycocon-pages`, adresse
   `/__cible-notification`, jamais demandée au serveur) ; app.js la lit au
   chargement (une seule fois, moins d'une minute) et y va.
+
+## Véhicules : dépenses au budget (26/11/2026)
+- Réglage par véhicule (migration 0048 : `vehicules.budget` = '', 'commun'
+  ou 'perso', et `budget_perso_de`) : « 💶 Dépenses au budget (pleins,
+  entretiens) » dans le formulaire du véhicule, et « 💶 Pleins et dépenses
+  au budget » au-dessus de la reprise Fuelio (fiche et liste). Parents
+  seulement, module Budget activé.
+- **Rétroactif** (`suivi.RangerBudget`) : quand le réglage change, toutes
+  les lignes du carnet avec un coût (déjà notées ou reprises de Fuelio)
+  vont dans ce budget ; celles déjà au budget changent de budget ;
+  « Non » retire du budget les dépenses du véhicule (le carnet garde les
+  lignes et leur coût). Jamais en double (lien `carnet.operation_id`).
+- La reprise Fuelio envoie le choix (`?budget=`, app.js) : il devient le
+  réglage du véhicule ; « Selon le réglage de chaque véhicule » (liste) ou
+  un choix inchangé ajoute seulement les lignes qui manquent.
+- Le budget perso d'un autre parent n'est jamais touché : il voit
+  « 🔒 Budget perso de Marie », et le garder ne change rien.
+- Les formulaires d'ajout (plein, entretien, échéance faite) sont
+  pré-réglés sur le budget du véhicule (`Objet.Budget`, `Bloc.BudgetDefaut`).
+- La fiche montre « 💶 Dépenses au budget : Compte commun » (parents).
+
+## Budget, l'année : graphique en SVG (26/11/2026)
+- « Mois par mois » : les barres `<progress>` ne s'affichaient pas sur
+  iPhone ; remplacées par un graphique dessiné par le serveur
+  (`graphique.BarresCote` : revenus et dépenses côte à côte, chaque mois,
+  bulle au toucher). Sous le graphique, seuls les mois avec des opérations
+  (lien vers le mois).

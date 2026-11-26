@@ -172,3 +172,43 @@ func Barres(titre string, barres []Barre, format func(float64) string) template.
 	b.WriteString(`</svg>`)
 	return template.HTML(b.String()) // #nosec G203 -- dessin produit ici, textes échappés
 }
+
+// BarresCote : comme Barres, mais les valeurs de chaque colonne côte à
+// côte (revenus et dépenses d'un mois), et non empilées.
+func BarresCote(titre string, barres []Barre, format func(float64) string) template.HTML {
+	maxi, n := 0.0, 1
+	for _, br := range barres {
+		n = max(n, len(br.Valeurs))
+		for _, v := range br.Valeurs {
+			maxi = math.Max(maxi, v)
+		}
+	}
+	if len(barres) == 0 || maxi == 0 {
+		return ""
+	}
+	ymin, ymax, pas := bornes(0, maxi, true)
+	var b strings.Builder
+	y := cadre(&b, titre, ymin, ymax, pas, format)
+	case_ := float64(largeur-gauche-droite) / float64(len(barres))
+	l := math.Max(1, case_*0.8) // largeur du groupe de la colonne
+	une := l / float64(n)       // largeur d'une valeur
+	tous := int(math.Ceil(28 / case_))
+	for i, br := range barres {
+		x := float64(gauche) + case_*float64(i) + (case_-l)/2
+		fmt.Fprintf(&b, `<g class="g-barre" data-x="%.1f" data-info="%s"><title>%s</title>`, x+l/2, esc(br.Detail), esc(br.Detail))
+		// Fond invisible : toute la colonne se touche, même un mois vide.
+		fmt.Fprintf(&b, `<rect class="g-zone" x="%.1f" y="%.1f" width="%.1f" height="%.1f"/>`, x, y(ymax), l, y(ymin)-y(ymax))
+		for s, v := range br.Valeurs {
+			if v <= 0 {
+				continue
+			}
+			fmt.Fprintf(&b, `<rect class="g-s%d" x="%.1f" y="%.1f" width="%.1f" height="%.1f"/>`, s, x+une*float64(s), y(v), math.Max(1, une-1), y(ymin)-y(v))
+		}
+		b.WriteString(`</g>`)
+		if i%tous == 0 && br.Etiquette != "" {
+			fmt.Fprintf(&b, `<text class="g-date milieu" x="%.1f" y="%d">%s</text>`, x+l/2, hauteur-6, esc(br.Etiquette))
+		}
+	}
+	b.WriteString(`</svg>`)
+	return template.HTML(b.String()) // #nosec G203 -- dessin produit ici, textes échappés
+}

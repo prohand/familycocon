@@ -179,3 +179,17 @@ ORDER BY cree_le DESC, id DESC LIMIT 1;
 -- name: PremierJourObjet :one
 SELECT CAST(coalesce(min(jour), '') AS TEXT) FROM carnet
 WHERE famille_id = sqlc.arg(famille_id) AND module = sqlc.arg(module) AND objet_id = sqlc.arg(objet_id);
+
+-- Lignes avec un cout qui ne sont pas encore au budget.
+-- name: CarnetSansBudget :many
+SELECT * FROM carnet
+WHERE famille_id = ? AND module = ? AND objet_id = ? AND montant > 0 AND operation_id IS NULL
+ORDER BY jour, id;
+
+-- Lignes deja au budget, avec le budget de leur depense (0 : commun).
+-- name: CarnetAuBudget :many
+SELECT c.id, o.id AS operation_id, o.perso_de FROM carnet c JOIN operations o ON o.id = c.operation_id
+WHERE c.famille_id = ? AND c.module = ? AND c.objet_id = ?;
+
+-- name: LierCarnetOperation :exec
+UPDATE carnet SET operation_id = ? WHERE id = ? AND famille_id = ?;

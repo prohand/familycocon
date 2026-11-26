@@ -31,7 +31,9 @@ import (
 //   - une ligne déjà présente (même jour, libellé, montant, kilométrage)
 //     n'est pas ajoutée deux fois : on peut reprendre la sauvegarde
 //     suivante sans doublons ;
-//   - rien n'est ajouté au budget (ce sont des dépenses passées).
+//   - budget : le choix envoyé avec le fichier (?budget=, voir app.js)
+//     devient le réglage du véhicule, et les lignes du carnet (reprises
+//     maintenant ou avant) vont dans ce budget (voir vehicules_budget.go).
 
 // fuelioUn : une reprise à la fois (lecture des photos gourmande en mémoire).
 var fuelioUn sync.Mutex
@@ -171,8 +173,15 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	msg := ret.message()
+	if rb, err := m.reglerBudget(context.WithoutCancel(r.Context()), c, x, r.URL.Query().Get("budget")); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	} else if t := rb.Message(); t != "" {
+		msg += " · " + t
+	}
 	m.a.Publier(c, modVehicules, "")
-	m.a.Flash(w, ret.message())
+	m.a.Flash(w, msg)
 	m.a.Rediriger(w, r, fmt.Sprintf("/vehicules/%d", x.ID))
 }
 
@@ -246,7 +255,18 @@ func (m *Module) importerFuelioTous(w http.ResponseWriter, r *http.Request, c *a
 			}
 			ligne += ")"
 		}
-		bilan = append(bilan, ligne+" : "+strings.TrimPrefix(ret.message(), "Fuelio : "))
+		ligne += " : " + strings.TrimPrefix(ret.message(), "Fuelio : ")
+		// Le kilométrage et le reste de la fiche ont pu changer : relue.
+		if y, err := m.a.Q.VehiculeParID(ctx, donnees.VehiculeParIDParams{ID: x.ID, FamilleID: c.Famille.ID}); err == nil {
+			x = y
+		}
+		if rb, err := m.reglerBudget(context.WithoutCancel(ctx), c, x, r.URL.Query().Get("budget")); err != nil {
+			m.a.ErreurInterne(w, r, err)
+			return
+		} else if t := rb.Message(); t != "" {
+			ligne += " · " + t
+		}
+		bilan = append(bilan, ligne)
 	}
 	m.a.Publier(c, modVehicules, "")
 	m.a.Flash(w, "Fuelio · "+strings.Join(bilan, " — "))

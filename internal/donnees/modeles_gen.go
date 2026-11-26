@@ -535,4 +535,6 @@ type Vehicule struct {
 	GarageID        sql.NullInt64
 	AssureurID      sql.NullInt64
 	VenduLe         string
+	Budget          string
+	BudgetPersoDe   int64
 }

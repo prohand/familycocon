@@ -78,3 +78,7 @@ DELETE FROM budget_plafonds WHERE famille_id = ? AND perso_de = ?;
 -- Depense du carnet modifiee : la ligne du budget suit.
 -- name: ModifierOperationCarnet :exec
 UPDATE operations SET montant = ?, libelle = ?, jour = ? WHERE id = ? AND famille_id = ?;
+
+-- Depense du carnet passee au compte commun (0) ou a un budget perso.
+-- name: ChangerCompteOperation :exec
+UPDATE operations SET perso_de = ? WHERE id = ? AND famille_id = ?;

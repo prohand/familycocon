@@ -306,7 +306,12 @@ document.addEventListener("change", function (e) {
   try { jeton = JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) {}
   var x = new XMLHttpRequest();
   var palier = -1;
-  x.open("POST", p.getAttribute("data-fuelio"));
+  // Budget choisi dans le même bloc (« 💶 Pleins et dépenses au budget »).
+  var adresse = p.getAttribute("data-fuelio");
+  var bloc = p.closest("details");
+  var budget = bloc && bloc.querySelector("select[data-fuelio-budget]");
+  if (budget) adresse += "?budget=" + encodeURIComponent(budget.value);
+  x.open("POST", adresse);
   x.setRequestHeader("X-Jeton", jeton);
   x.setRequestHeader("HX-Request", "true");
   x.setRequestHeader("Content-Type", "application/octet-stream");

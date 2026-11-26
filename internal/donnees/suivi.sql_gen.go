@@ -104,6 +104,47 @@ func (q *Queries) AjouterPiece(ctx context.Context, arg AjouterPieceParams) (Pie
 	return i, err
 }
 
+const carnetAuBudget = `-- name: CarnetAuBudget :many
+SELECT c.id, o.id AS operation_id, o.perso_de FROM carnet c JOIN operations o ON o.id = c.operation_id
+WHERE c.famille_id = ? AND c.module = ? AND c.objet_id = ?
+`
+
+type CarnetAuBudgetParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+type CarnetAuBudgetRow struct {
+	ID          int64
+	OperationID int64
+	PersoDe     int64
+}
+
+// Lignes deja au budget, avec le budget de leur depense (0 : commun).
+func (q *Queries) CarnetAuBudget(ctx context.Context, arg CarnetAuBudgetParams) ([]CarnetAuBudgetRow, error) {
+	rows, err := q.db.QueryContext(ctx, carnetAuBudget, arg.FamilleID, arg.Module, arg.ObjetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CarnetAuBudgetRow{}
+	for rows.Next() {
+		var i CarnetAuBudgetRow
+		if err := rows.Scan(&i.ID, &i.OperationID, &i.PersoDe); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const carnetExiste = `-- name: CarnetExiste :one
 SELECT count(*) FROM carnet
 WHERE famille_id = ? AND module = ? AND objet_id = ? AND jour = ? AND libelle = ? AND montant = ? AND km = ?
@@ -185,6 +226,57 @@ type CarnetObjetParams struct {
 
 func (q *Queries) CarnetObjet(ctx context.Context, arg CarnetObjetParams) ([]Carnet, error) {
 	rows, err := q.db.QueryContext(ctx, carnetObjet, arg.FamilleID, arg.Module, arg.ObjetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Carnet{}
+	for rows.Next() {
+		var i Carnet
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Module,
+			&i.ObjetID,
+			&i.Jour,
+			&i.Libelle,
+			&i.Montant,
+			&i.Km,
+			&i.Note,
+			&i.CreePar,
+			&i.CreeLe,
+			&i.OperationID,
+			&i.Litres,
+			&i.Carburant,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const carnetSansBudget = `-- name: CarnetSansBudget :many
+SELECT id, famille_id, module, objet_id, jour, libelle, montant, km, note, cree_par, cree_le, operation_id, litres, carburant FROM carnet
+WHERE famille_id = ? AND module = ? AND objet_id = ? AND montant > 0 AND operation_id IS NULL
+ORDER BY jour, id
+`
+
+type CarnetSansBudgetParams struct {
+	FamilleID int64
+	Module    string
+	ObjetID   int64
+}
+
+// Lignes avec un cout qui ne sont pas encore au budget.
+func (q *Queries) CarnetSansBudget(ctx context.Context, arg CarnetSansBudgetParams) ([]Carnet, error) {
+	rows, err := q.db.QueryContext(ctx, carnetSansBudget, arg.FamilleID, arg.Module, arg.ObjetID)
 	if err != nil {
 		return nil, err
 	}
@@ -636,6 +728,21 @@ func (q *Queries) KmMoisObjet(ctx context.Context, arg KmMoisObjetParams) ([]KmM
 		return nil, err
 	}
 	return items, nil
+}
+
+const lierCarnetOperation = `-- name: LierCarnetOperation :exec
+UPDATE carnet SET operation_id = ? WHERE id = ? AND famille_id = ?
+`
+
+type LierCarnetOperationParams struct {
+	OperationID sql.NullInt64
+	ID          int64
+	FamilleID   int64
+}
+
+func (q *Queries) LierCarnetOperation(ctx context.Context, arg LierCarnetOperationParams) error {
+	_, err := q.db.ExecContext(ctx, lierCarnetOperation, arg.OperationID, arg.ID, arg.FamilleID)
+	return err
 }
 
 const ligneCarnetParID = `-- name: LigneCarnetParID :one

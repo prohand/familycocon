@@ -391,8 +391,8 @@
 <label class="champ choix-budget"><span>💶 Ajouter aussi au budget</span>
   <select name="budget">
     <option value="">Non</option>
-    <option value="1">Compte commun</option>
-    <option value="perso"{{if .BudgetPerso}} selected{{end}}>🔒 Mon budget perso</option>
+    <option value="1"{{if eq .BudgetDefaut "1"}} selected{{end}}>Compte commun</option>
+    <option value="perso"{{if or .BudgetPerso (eq .BudgetDefaut "perso")}} selected{{end}}>🔒 Mon budget perso</option>
   </select></label>
 {{end}}
 

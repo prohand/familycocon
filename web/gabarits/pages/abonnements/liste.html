@@ -8,11 +8,26 @@
 {{/* Bloc rechargé tout seul quand un autre membre change quelque chose (voir Vue.Adresse). */}}
 <div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-abonnements from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*">
 <section class="carte reste bloc">
-  <p class="reste-titre">Chaque mois</p>
+  <p class="reste-titre">Chaque mois{{if .Filtre}} <small>(filtre)</small>{{end}}</p>
   <p class="reste-montant">{{montant .ParMois .Devise}}</p>
   <div class="reste-detail"><span>Par an <b>{{montant .ParAn .Devise}}</b></span><span>{{pluriel (len .Actifs) "abonnement" "abonnements"}}</span></div>
 </section>
 <div class="boutons"><a class="bouton" href="/abonnements/nouveau">＋ Abonnement</a></div>
+{{/* Filtres : repliés, ouverts quand un filtre est choisi. */}}
+{{if .Filtres}}
+<details class="filtres-abo bloc"{{if .Filtre}} open{{end}}>
+  <summary class="sous-titre">🔎 Filtrer{{with .Resume}} <small>· {{.}}</small>{{end}}</summary>
+  {{- range .Filtres}}
+  <nav class="pilules petites voir" aria-label="{{.Nom}}">
+    <span class="aide">{{.Nom}} :</span>
+    {{- range .Choix}}
+    <a class="pilule{{if .Actif}} active{{end}}" href="{{.URL}}"{{if .Actif}} aria-current="page"{{end}}>{{.Texte}}{{if .Nombre}} <small>{{.Nombre}}</small>{{end}}</a>
+    {{- end}}
+  </nav>
+  {{- end}}
+  {{if .Filtre}}<p class="centre-petit"><a href="/abonnements">✕ Retirer les filtres</a></p>{{end}}
+</details>
+{{end}}
 {{if .Actifs}}
 <div class="carte bloc">
   {{- range .Actifs}}
@@ -26,6 +41,8 @@
   </a>
   {{- end}}
 </div>
+{{else if .NbTous}}
+<div class="carte vide bloc"><span class="emoji">🔎</span>Aucun abonnement en cours pour ce filtre. <a href="/abonnements">Tout voir</a></div>
 {{else}}
 <div class="carte vide bloc"><span class="emoji">📺</span>Aucun abonnement. Ajoutez la box, les téléphones, la musique, les vidéos… pour voir ce qu'ils coûtent par an.</div>
 {{end}}
