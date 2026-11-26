@@ -7,8 +7,10 @@ import (
 	"context"
 	"html/template"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -20,6 +22,9 @@ import (
 type Resume struct {
 	Info  string // sous le nom du module
 	Badge int    // pastille en haut à droite (0 : pas de pastille)
+	// Vide : rien encore dans ce module (« Aucune note ») : il passe en
+	// petite pastille en bas de l'accueil, sous « Pas encore utilisés ».
+	Vide bool
 }
 
 // ResumeFunc calcule le résumé d'un module pour ce membre.
@@ -73,9 +78,10 @@ type tuile struct {
 }
 
 type donneesAccueil struct {
-	Date   string
-	Tuiles []tuile
-	Blocs  []template.HTML
+	Date      string
+	Tuiles    []tuile
+	Pastilles []tuile // modules pas encore utilisés
+	Blocs     []template.HTML
 	// Compte à mot de passe sans double authentification ni passkey : un
 	// conseil s'affiche pour le protéger.
 	ConseilSecurite bool
@@ -96,12 +102,21 @@ func (a *App) pageAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		n, err := a.Q.CompterPasskeys(ctx, c.Membre.ID)
 		d.ConseilSecurite = err == nil && n == 0
 	}
-	for _, m := range ModulesVisibles(c) {
-		t := tuile{ModuleDef: m}
+	// Dans l'ordre choisi par le membre (« Mon accueil »), sans ceux qu'il
+	// a masqués ; ceux qui sont encore vides passent en pastilles.
+	for _, m := range ModulesAccueil(c) {
+		if m.Masque {
+			continue
+		}
+		t := tuile{ModuleDef: m.ModuleDef}
 		if f, ok := a.resumes[m.Cle]; ok {
 			t.Resume = f(ctx, c)
 		}
-		d.Tuiles = append(d.Tuiles, t)
+		if t.Vide && t.Badge == 0 {
+			d.Pastilles = append(d.Pastilles, t)
+		} else {
+			d.Tuiles = append(d.Tuiles, t)
+		}
 	}
 	for _, b := range a.blocs {
 		if b.Module != "" && !c.Actif(b.Module) { // "" : bloc commun (« À venir »)
@@ -119,6 +134,24 @@ func (a *App) pageAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	a.Afficher(w, r, c, "accueil", "Accueil", "accueil", d)
 }
 
+// groupesAjout : la page « Ajouter » rangée par groupes (un module absent
+// d'ici va dans « Autres »).
+var groupesAjout = []struct {
+	Nom     string
+	Modules []string
+}{
+	{"🏠 Au quotidien", []string{"courses", "taches", "agenda", "menus", "notes"}},
+	{"💶 Argent", []string{"budget", "abonnements", "fidelite"}},
+	{"👨‍👩‍👧 Famille", []string{"enfants", "contacts", "anniversaires", "adresses"}},
+	{"🔧 Maison et véhicules", []string{"vehicules", "animaux", "prestataires", "garanties", "projets"}},
+}
+
+// GroupeAjout : un groupe de la page « Ajouter ».
+type GroupeAjout struct {
+	Nom     string
+	Actions []Ajout
+}
+
 func (a *App) pageAjouter(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	var actions []Ajout
 	for _, aj := range a.ajouts {
@@ -127,7 +160,31 @@ func (a *App) pageAjouter(w http.ResponseWriter, r *http.Request, c *Contexte) {
 			actions = append(actions, aj)
 		}
 	}
-	a.Afficher(w, r, c, "ajouter", "Ajouter", "", actions)
+	// Rangées par groupes, dans l'ordre des groupes puis de l'enregistrement.
+	pris := make([]bool, len(actions))
+	var groupes []GroupeAjout
+	for _, g := range groupesAjout {
+		ga := GroupeAjout{Nom: g.Nom}
+		for i, aj := range actions {
+			if !pris[i] && slices.Contains(g.Modules, aj.Module) {
+				pris[i] = true
+				ga.Actions = append(ga.Actions, aj)
+			}
+		}
+		if len(ga.Actions) > 0 {
+			groupes = append(groupes, ga)
+		}
+	}
+	autres := GroupeAjout{Nom: "Autres"}
+	for i, aj := range actions {
+		if !pris[i] {
+			autres.Actions = append(autres.Actions, aj)
+		}
+	}
+	if len(autres.Actions) > 0 {
+		groupes = append(groupes, autres)
+	}
+	a.Afficher(w, r, c, "ajouter", "Ajouter", "", groupes)
 }
 
 var (
@@ -154,4 +211,35 @@ func MoisFR(m time.Month) string { return moisFR[m-1] }
 func DateLongue(t time.Time) string {
 	j := JourFR(t)
 	return string(j[0]-32) + j[1:] + " " + strconv.Itoa(t.Day()) + " " + MoisFR(t.Month())
+}
+
+// ModuleAccueil : un module de l'accueil d'un membre, masqué ou non.
+type ModuleAccueil struct {
+	ModuleDef
+	Masque bool
+}
+
+// ModulesAccueil : les modules visibles du membre, dans l'ordre qu'il a
+// choisi (membres.accueil : « agenda,courses,-animaux » ; « - » : masqué).
+// Les modules absents de son choix (nouveaux) suivent, dans l'ordre du
+// catalogue.
+func ModulesAccueil(c *Contexte) []ModuleAccueil {
+	visibles := ModulesVisibles(c)
+	var out []ModuleAccueil
+	pris := map[string]bool{}
+	for _, x := range strings.Split(c.Membre.Accueil, ",") {
+		cle, masque := strings.CutPrefix(strings.TrimSpace(x), "-")
+		for _, m := range visibles {
+			if m.Cle == cle && !pris[cle] {
+				pris[cle] = true
+				out = append(out, ModuleAccueil{ModuleDef: m, Masque: masque})
+			}
+		}
+	}
+	for _, m := range visibles {
+		if !pris[m.Cle] {
+			out = append(out, ModuleAccueil{ModuleDef: m})
+		}
+	}
+	return out
 }

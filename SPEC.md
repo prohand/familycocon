@@ -820,3 +820,20 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   `sauvegardes/pieces` pour `sauvegardes/pieces-effacees/AAAA-MM-JJ`,
   effacé après `FC_SAUVEGARDE_GARDER` jours.
 - Liens de téléchargement (vCard, export) : `download hx-boost="false"`.
+
+## Affichage (26/11/2026, maquettes 1 à 6)
+
+- Budget : sur grand écran (≥ 900 px), reste à vivre et courbe côte à côte
+  (`.budget-grille`), courbe de 260 px de haut au plus. Mois sans
+  opération : ni courbe ni filtre, un seul message.
+- Accueil : un module encore vide (`Resume.Vide`, « Aucune note »…) passe en
+  petite pastille sous « Pas encore utilisés ». « Mon accueil »
+  (`/moi/accueil`, colonne `membres.accueil`, migration 0046 :
+  « agenda,courses,-animaux », « - » masqué) : ordre des tuiles et tuiles
+  masquées, pour chaque membre. Un module nouveau se met à la fin.
+- Ajouter : rangé en 4 groupes (Au quotidien, Argent, Famille, Maison et
+  véhicules), 3 cases par ligne sur téléphone, 6 sur grand écran.
+- Agenda : un jour sans rien tient sur une ligne (« rien de prévu ») ; sur
+  grand écran (≥ 1000 px), la semaine en 7 colonnes.
+- Moi : chaque partie est repliée avec un résumé (thème choisi, barre du
+  bas, notifications activées).

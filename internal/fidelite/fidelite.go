@@ -347,7 +347,7 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	n, err := m.a.Q.CompterCartes(ctx, c.Famille.ID)
 	if err != nil || n == 0 {
-		return appli.Resume{Info: "Aucune carte"}
+		return appli.Resume{Info: "Aucune carte", Vide: true}
 	}
 	return appli.Resume{Info: appli.Pluriel(n, "carte", "cartes")}
 }

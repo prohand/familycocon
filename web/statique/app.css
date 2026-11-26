@@ -858,6 +858,13 @@ body.sans-barre { padding-bottom: 24px; }
 .actions form { display: contents; }
 button.action { border: 0; font: inherit; font-weight: 800; color: inherit; text-align: left; cursor: pointer; align-items: flex-start; }
 .action .emoji { font-size: 2.2rem; }
+/* Page « Ajouter » : par groupes, 3 petites cases par ligne sur téléphone
+   (tout tient presque sur un écran). */
+.groupe-ajout h2 { font-size: 1rem; margin: 18px 0 8px; }
+.groupe-ajout .actions { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (min-width: 900px) { .groupe-ajout .actions { grid-template-columns: repeat(6, 1fr); } }
+.groupe-ajout .action { align-items: center; text-align: center; padding: 12px 4px; gap: 4px; font-size: .78rem; line-height: 1.2; }
+.groupe-ajout .action .emoji { font-size: 1.7rem; }
 
 .vide { text-align: center; color: var(--texte-doux); font-weight: 700; padding: 26px 10px; }
 .vide .emoji { display: block; font-size: 2.6rem; margin-bottom: 6px; }
@@ -983,7 +990,26 @@ button.coche:hover { border-color: var(--taches-t); }
 }
 .centre-petit { text-align: center; margin: 4px 0 8px; }
 .semaine { display: grid; gap: 12px; }
-@media (min-width: 900px) { .semaine { grid-template-columns: repeat(2, 1fr); } }
+/* Jour sans rien : une ligne fine. */
+.jour-semaine.vide { padding: 8px 18px; }
+.jour-semaine.vide h3 { font-size: .92rem; color: var(--texte-doux); }
+.jour-semaine.vide .ajout-jour { width: 26px; height: 26px; font-size: .85rem; }
+.rien-jour { margin-left: auto; margin-right: 10px; font-size: .8rem; font-weight: 600; color: var(--texte-doux); }
+.pilules.petites .aide { white-space: nowrap; }
+/* Grand écran : la semaine en 7 colonnes, comme un agenda papier. */
+@media (min-width: 1000px) {
+  .semaine { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+  .jour-semaine, .jour-semaine.vide { padding: 10px; min-height: 200px; }
+  .jour-semaine .jour-entete h3 { font-size: .85rem; }
+  .jour-semaine .jour-entete .etiquette { display: block; width: fit-content; margin-top: 2px; }
+  .jour-semaine .rien-jour { display: none; }
+  .jour-semaine .ligne.evt { flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 0; }
+  .jour-semaine .ligne.evt .heure { width: auto; font-size: .75rem; }
+  .jour-semaine .ligne.evt .heure small { display: inline; }
+  .jour-semaine .ligne.evt .heure small::before { content: " – "; }
+  .jour-semaine .ligne.evt .quoi { font-size: .85rem; }
+  .jour-semaine .pastilles { max-width: 100%; justify-content: flex-start; }
+}
 .jour-semaine { padding: 14px 18px; }
 .jour-semaine.aujourdhui { box-shadow: 0 0 0 2.5px var(--agenda-t), var(--ombre); }
 .jour-entete { display: flex; align-items: center; justify-content: space-between; }
@@ -1088,6 +1114,16 @@ details.attente > summary::-webkit-details-marker { display: none; }
 details.attente[open] { padding-bottom: 10px; }
 details.attente + details.attente { border-top: 1px solid var(--bordure); }
 .section-titre.premier { margin-top: 0; }
+/* Grand écran : reste à vivre et courbe côte à côte ; la courbe garde une
+   taille raisonnable (sinon ses textes grossissent avec l'écran). */
+@media (min-width: 900px) {
+  .budget-grille { display: grid; grid-template-columns: 1fr 1.5fr; column-gap: 16px; align-items: stretch; }
+  .budget-grille > * { grid-column: 1 / -1; }
+  .budget-grille > .reste { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; justify-content: center; }
+  .budget-grille > .bloc-courbe { grid-column: 2; grid-row: 1; }
+  .budget-grille > .reste, .budget-grille > .bloc-courbe { margin-bottom: 16px; }
+  .bloc-courbe .courbe { max-height: 260px; }
+}
 .courbe { width: 100%; height: auto; display: block; }
 .courbe .repere { stroke: var(--bordure); stroke-width: 1; }
 .courbe .etiquette-axe { fill: var(--texte-doux); font-size: 12px; font-weight: 700; font-family: var(--police); }
@@ -1817,3 +1853,31 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .description-tache .contenu-note > :first-child { margin-top: 0; }
 .description-tache .contenu-note > :last-child { margin-bottom: 0; }
 
+
+/* Page « Moi » : chaque partie repliée, avec un résumé ; s'ouvre d'un toucher. */
+details.partie { padding: 0; }
+details.partie > summary, .partie-lien { list-style: none; display: flex; align-items: center; gap: 10px; padding: 14px 18px; font-weight: 800; cursor: pointer; }
+details.partie > summary::-webkit-details-marker { display: none; }
+details.partie > summary small, .partie-lien small { display: block; font-weight: 600; font-size: .8rem; color: var(--texte-doux); margin-top: 2px; }
+details.partie > summary::after { content: "›"; margin-left: auto; color: var(--texte-doux); font-size: 1.3rem; transition: transform .15s; }
+details.partie[open] > summary::after { transform: rotate(90deg); }
+details.partie > :not(summary) { margin-left: 18px; margin-right: 18px; }
+details.partie[open] { padding-bottom: 16px; }
+.partie-lien { color: inherit; }
+.partie-lien .fleche-droite { margin-left: auto; }
+
+/* Mon accueil : un module par ligne, interrupteur et flèches. */
+.ligne-accueil { display: flex; align-items: center; gap: 10px; }
+.ligne-accueil + .ligne-accueil { border-top: 1px solid var(--bordure); }
+.ligne-accueil .interrupteur { flex: 1; min-width: 0; border: 0; gap: 8px; }
+.ligne-accueil .interrupteur .nom { min-width: 0; overflow-wrap: anywhere; }
+.ligne-accueil .fleches { display: flex; gap: 4px; }
+.ligne-accueil .fleches .bouton { padding: 6px 10px; }
+@media (max-width: 360px) { .ligne-accueil .fleches .bouton { padding: 5px 7px; } .ligne-accueil .interrupteur .emoji { display: none; } }
+/* Accueil : modules pas encore utilisés, en petites pastilles. */
+.pas-utilises { margin-top: 18px; }
+.pas-utilises h2 { font-size: 1rem; color: var(--texte-doux); margin: 0 0 8px; }
+.pastilles-modules { display: flex; flex-wrap: wrap; gap: 8px; }
+.pastilles-modules a { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: var(--carte); box-shadow: var(--ombre); font-weight: 700; font-size: .85rem; }
+.lien-organiser { display: inline-block; margin-top: 14px; font-weight: 800; color: var(--corail); }
+.ligne-accueil .fleches .bouton:disabled { opacity: .3; cursor: default; }

@@ -47,7 +47,7 @@ func (m *Module) brancherPrestataires() {
 	a.AjouterResume(modPrestataires, func(ctx context.Context, c *appli.Contexte) appli.Resume {
 		n, err := a.Q.CompterPrestataires(ctx, c.Famille.ID)
 		if err != nil || n == 0 {
-			return appli.Resume{Info: "Aucun prestataire"}
+			return appli.Resume{Info: "Aucun prestataire", Vide: true}
 		}
 		return appli.Resume{Info: appli.Pluriel(n, "prestataire", "prestataires")}
 	})

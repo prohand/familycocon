@@ -63,7 +63,7 @@ func (m *Module) brancherAnimaux() {
 	a.AjouterResume(modAnimaux, func(ctx context.Context, c *appli.Contexte) appli.Resume {
 		l, err := a.Q.AnimauxFamille(ctx, c.Famille.ID)
 		if err != nil || len(l) == 0 {
-			return appli.Resume{Info: "Aucun animal"}
+			return appli.Resume{Info: "Aucun animal", Vide: true}
 		}
 		alertes := m.alertes(ctx, c, modAnimaux)
 		for _, x := range l {

@@ -462,7 +462,7 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 		}
 	}
 	if n == 0 {
-		return appli.Resume{Info: "Aucun abonnement"}
+		return appli.Resume{Info: "Aucun abonnement", Vide: len(l) == 0} // tous résiliés : déjà utilisé
 	}
 	return appli.Resume{Info: appli.Montant(parAn/12, c.Famille.Devise) + " par mois"}
 }

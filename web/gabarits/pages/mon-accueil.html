@@ -1,0 +1,33 @@
+{{define "contenu"}}
+{{$c := .C}}
+<section class="titre-page">
+  <a class="retour" href="/moi">‹ Moi</a>
+  <h1>🏠 Mon accueil</h1>
+  <p>L'ordre des tuiles et celles qui sont masquées (pour vous seul).</p>
+</section>
+{{with .Donnees}}
+<form class="carte bloc" method="post" action="/moi/accueil">
+  {{template "jeton" $c.CSRF}}
+  <input type="hidden" name="ordre" value="{{range $i, $m := .}}{{if $i}},{{end}}{{$m.Cle}}{{end}}">
+  {{- $dernier := len .}}
+  {{- range $i, $m := .}}
+  <div class="ligne-accueil">
+    <label class="interrupteur">
+      <span class="emoji">{{emoji $m.Emoji}}</span><span class="nom">{{$m.Nom}}</span>
+      <input type="checkbox" name="affiche_{{$m.Cle}}" value="1"{{if not $m.Masque}} checked{{end}}>
+      <span class="glissiere"></span>
+    </label>
+    <span class="fleches">
+      <button class="bouton petit secondaire" name="action" value="monter:{{$m.Cle}}" aria-label="Monter {{$m.Nom}}"{{if eq $i 0}} disabled{{end}}>↑</button>
+      <button class="bouton petit secondaire" name="action" value="descendre:{{$m.Cle}}" aria-label="Descendre {{$m.Nom}}"{{if eq (ajouter $i 1) $dernier}} disabled{{end}}>↓</button>
+    </span>
+  </div>
+  {{- end}}
+  <p class="aide">Une tuile masquée reste dans « Ajouter », la recherche et les notifications.</p>
+  <div class="boutons">
+    <button class="bouton" name="action" value="">Enregistrer</button>
+    <button class="bouton secondaire" name="action" value="defaut">Remettre l'ordre de départ</button>
+  </div>
+</form>
+{{end}}
+{{end}}

@@ -26,6 +26,10 @@ type donneesMoi struct {
 	Appareils   int64       // appareils abonnés
 	TOTP        bool        // double authentification active
 	NbPasskeys  int64
+	// Résumés des parties repliées.
+	BarreTexte string // « Accueil, Agenda, Courses, Moi »
+	NbPush     int    // notifications choisies
+	NbPushMax  int
 }
 
 func (a *App) routesMoi() {
@@ -34,6 +38,8 @@ func (a *App) routesMoi() {
 	a.Route("POST /moi/raccourcis", "", Membre, a.raccourcisMoi)
 	a.Route("POST /moi/theme", "", Membre, a.themeMoi)
 	a.Route("POST /moi/mdp", "", Membre, a.mdpMoi)
+	a.Route("GET /moi/accueil", "", Membre, a.pageMonAccueil)
+	a.Route("POST /moi/accueil", "", Membre, a.monAccueil)
 }
 
 func (a *App) pageMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
@@ -47,10 +53,28 @@ func (a *App) pageMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	d.Appareils, _ = a.Q.CompterAbonnements(r.Context(), c.Membre.ID)
 	d.TOTP = c.Membre.Totp != ""
 	d.NbPasskeys, _ = a.Q.CompterPasskeys(r.Context(), c.Membre.ID)
+	var noms []string
 	for _, rc := range Raccourcis(c) {
 		d.Choisis = append(d.Choisis, rc.Cle)
+		noms = append(noms, rc.Nom)
+	}
+	d.BarreTexte = strings.Join(noms, ", ")
+	d.NbPushMax = len(d.Modules) + 1 // + les rappels
+	for _, cle := range append([]string{"rappels"}, cleModules(d.Modules)...) {
+		if slices.Contains(d.Push, cle) {
+			d.NbPush++
+		}
 	}
 	a.Afficher(w, r, c, "moi", "Moi", "", d)
+}
+
+// cleModules : les clés des modules.
+func cleModules(l []ModuleDef) []string {
+	var out []string
+	for _, m := range l {
+		out = append(out, m.Cle)
+	}
+	return out
 }
 
 func (a *App) profilMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
@@ -120,6 +144,58 @@ func (a *App) raccourcisMoi(w http.ResponseWriter, r *http.Request, c *Contexte)
 	}
 	a.Flash(w, "Barre du bas enregistrée ✓")
 	a.Rediriger(w, r, "/moi")
+}
+
+// pageMonAccueil : l'ordre des modules de l'accueil et ceux qui sont masqués.
+func (a *App) pageMonAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
+	a.Afficher(w, r, c, "mon-accueil", "Mon accueil", "", ModulesAccueil(c))
+}
+
+// monAccueil : POST /moi/accueil. « ordre » : les modules dans l'ordre
+// affiché ; « affiche_<module> » coché : la tuile est montrée ; « action » :
+// « monter:courses », « descendre:courses », « defaut » ou rien
+// (enregistrer). Chaque flèche enregistre aussi les cases.
+func (a *App) monAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
+	permis := map[string]bool{}
+	for _, m := range ModulesVisibles(c) {
+		permis[m.Cle] = true
+	}
+	var ordre []string
+	vus := map[string]bool{}
+	for _, cle := range strings.Split(r.PostFormValue("ordre"), ",") {
+		if permis[cle] && !vus[cle] {
+			vus[cle] = true
+			ordre = append(ordre, cle)
+		}
+	}
+	action, cible, _ := strings.Cut(r.PostFormValue("action"), ":")
+	if i := slices.Index(ordre, cible); i >= 0 {
+		switch {
+		case action == "monter" && i > 0:
+			ordre[i-1], ordre[i] = ordre[i], ordre[i-1]
+		case action == "descendre" && i < len(ordre)-1:
+			ordre[i+1], ordre[i] = ordre[i], ordre[i+1]
+		}
+	}
+	valeur := ""
+	if action != "defaut" {
+		var l []string
+		for _, cle := range ordre {
+			if r.PostFormValue("affiche_"+cle) != "1" {
+				cle = "-" + cle
+			}
+			l = append(l, cle)
+		}
+		valeur = strings.Join(l, ",")
+	}
+	if err := a.Q.ModifierAccueil(r.Context(), donnees.ModifierAccueilParams{Accueil: valeur, ID: c.Membre.ID, FamilleID: c.Famille.ID}); err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
+	if action == "" || action == "defaut" {
+		a.Flash(w, "Accueil enregistré ✓")
+	}
+	a.Rediriger(w, r, "/moi/accueil")
 }
 
 func (a *App) mdpMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {

@@ -70,3 +70,6 @@ WHERE id = ? AND famille_id = ?;
 -- reviendrait par l'un d'eux).
 -- name: SupprimerInvitationsDe :exec
 DELETE FROM invitations WHERE famille_id = ? AND cree_par = ?;
+
+-- name: ModifierAccueil :exec
+UPDATE membres SET accueil = ? WHERE id = ? AND famille_id = ?;

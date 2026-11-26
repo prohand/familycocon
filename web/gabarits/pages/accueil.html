@@ -16,7 +16,7 @@
 {{/* Tuiles et blocs rechargés quand un autre membre change quelque chose
      (événement « maj » envoyé par app.js à chaque message temps réel). */}}
 <div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj from:body delay:1s, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*">
-{{if .Donnees.Tuiles}}
+{{if or .Donnees.Tuiles .Donnees.Pastilles}}
 <div class="tuiles">
   {{- range .Donnees.Tuiles}}
   <a class="tuile {{.Cle}}" href="{{.URL}}">
@@ -29,6 +29,15 @@
   <div class="bloc-accueil">{{.}}</div>
   {{- end}}
 </div>
+{{with .Donnees.Pastilles}}
+<section class="pas-utilises">
+  <h2>Pas encore utilisés</h2>
+  <div class="pastilles-modules">
+    {{- range .}}<a href="{{.URL}}">{{emoji .Emoji}} {{.Nom}}</a>{{end}}
+  </div>
+</section>
+{{end}}
+<a class="lien-organiser" href="/moi/accueil">✏️ Organiser l'accueil</a>
 {{else}}
 <div class="carte vide"><span class="emoji">🧺</span>Aucun module n'est activé.
   {{if .C.EstParent}}<p><a class="bouton" href="/famille">Activer des modules</a></p>{{end}}</div>

@@ -5,6 +5,7 @@ package appli
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -100,5 +101,37 @@ func TestCopierNouveaux(t *testing.T) {
 	}
 	if n, err := CopierNouveaux(filepath.Join(src, "absent"), dst); err != nil || n != 0 {
 		t.Fatalf("dossier absent : %d %v", n, err)
+	}
+}
+
+// Mon accueil : une flèche change l'ordre des tuiles, une case décochée
+// masque la tuile ; « Remettre l'ordre de départ » efface tout.
+func TestMonAccueil(t *testing.T) {
+	_, _, n := familleTest(t)
+	_, page := n.get("/moi/accueil")
+	ordre := regexp.MustCompile(`name="ordre" value="([a-z,]+)"`).FindStringSubmatch(page)
+	if ordre == nil || !strings.HasPrefix(ordre[1], "courses,agenda") {
+		t.Fatalf("ordre de départ : %v", ordre)
+	}
+	champs := map[string]string{"ordre": ordre[1], "action": "descendre:courses"}
+	for _, cle := range strings.Split(ordre[1], ",") {
+		if cle != "animaux" {
+			champs["affiche_"+cle] = "1"
+		}
+	}
+	if code, _ := n.post("/moi/accueil", champs); code != 200 {
+		t.Fatalf("enregistrer : %d", code)
+	}
+	_, accueil := n.get("/")
+	iAgenda, iCourses := strings.Index(accueil, `class="tuile agenda"`), strings.Index(accueil, `class="tuile courses"`)
+	if iAgenda < 0 || iCourses < 0 || iAgenda > iCourses {
+		t.Fatal("Courses n'est pas descendue après Agenda")
+	}
+	if strings.Contains(accueil, `tuile animaux`) || strings.Contains(accueil, `href="/animaux"`) {
+		t.Fatal("Animaux masqué mais affiché")
+	}
+	n.post("/moi/accueil", map[string]string{"ordre": ordre[1], "action": "defaut"})
+	if _, accueil = n.get("/"); strings.Index(accueil, `class="tuile courses"`) > strings.Index(accueil, `class="tuile agenda"`) {
+		t.Fatal("ordre de départ non remis")
 	}
 }

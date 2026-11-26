@@ -60,7 +60,7 @@ func (m *Module) brancherGaranties() {
 	a.AjouterResume(modGaranties, func(ctx context.Context, c *appli.Contexte) appli.Resume {
 		l, err := a.Q.GarantiesFamille(ctx, c.Famille.ID)
 		if err != nil || len(l) == 0 {
-			return appli.Resume{Info: "Aucun appareil"}
+			return appli.Resume{Info: "Aucun appareil", Vide: true}
 		}
 		alertes := m.alertes(ctx, c, modGaranties)
 		for _, x := range l {
