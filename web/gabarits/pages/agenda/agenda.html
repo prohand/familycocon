@@ -102,8 +102,11 @@
 
 {{/* Bloc de l'accueil : les événements du jour. */}}
 {{define "accueil-agenda"}}
-<div class="section-titre"><h2>Aujourd'hui</h2><a href="/agenda">Agenda ›</a></div>
+{{/* Repliable ; le choix est gardé (voir app.js, /moi/accueil/replie). */}}
+<details class="bloc-pliable" data-bloc="agenda"{{if $.C.Replie "agenda"}} data-etat="0"{{else}} data-etat="1" open{{end}}>
+<summary class="section-titre"><h2>Aujourd'hui <small class="nb-replie">{{len .Donnees}}</small></h2><a href="/agenda">Agenda ›</a></summary>
 <div class="carte">
   {{- range .Donnees}}{{template "ligne-evt" .}}{{end}}
 </div>
+</details>
 {{end}}

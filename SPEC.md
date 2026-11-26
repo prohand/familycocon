@@ -933,7 +933,7 @@ reviennent.
 - Les mois à venir comptent le **prévu** (opérations qui reviennent pas
   encore passées, `Prevues`) : une année future n'est plus vide. Barres
   du prévu plus claires (`Barre.Prevus`, classes g-p0, g-p1) ; « Reste
-  prévu sur l'année » et « Dont prévu : +… · −… » ; mois marqués
+  prévu sur l'année » et « Encore à venir : +… de revenus et −… de dépenses » (ou « Rien n'est encore passé » quand tout est prévu) ; mois marqués
   « prévu » ou « en partie prévu » ; catégories prévu compris.
 
 ## Budget : revue du 26/11/2026 (8 corrections)
@@ -1111,3 +1111,13 @@ reviennent.
   texte, sa date et qui s'en occupe (`POST /projets/etapes/{id}/modifier`,
   requête `ModifierEtape`) ; tous ceux qui voient le projet (projet privé :
   son propriétaire seul).
+
+## Accueil : blocs du jour repliables (26/11/2026)
+- « À venir », « Aujourd'hui » et « Tâches du jour » se replient en
+  touchant leur titre (▾ / ▸) ; replié, le nombre d'éléments s'affiche à
+  côté du titre. Le choix est gardé pour le membre, d'un appareil à l'autre
+  (migration 0055 : `membres.accueil_replies`, POST `/moi/accueil/replie`
+  envoyé par app.js ; `data-etat` évite un envoi au chargement).
+- Budget › L'année : « Encore à venir, d'après les opérations qui
+  reviennent : +… de revenus et −… de dépenses. Le reste est déjà passé »
+  (ou « Rien n'est encore passé… » quand toute l'année est prévue).

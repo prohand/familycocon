@@ -40,6 +40,7 @@ func (a *App) routesMoi() {
 	a.Route("POST /moi/mdp", "", Membre, a.mdpMoi)
 	a.Route("GET /moi/accueil", "", Membre, a.pageMonAccueil)
 	a.Route("POST /moi/accueil", "", Membre, a.monAccueil)
+	a.Route("POST /moi/accueil/replie", "", Membre, a.blocReplie)
 }
 
 func (a *App) pageMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
@@ -150,6 +151,31 @@ func (a *App) raccourcisMoi(w http.ResponseWriter, r *http.Request, c *Contexte)
 func (a *App) pageMonAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	a.Afficher(w, r, c, "mon-accueil", "Mon accueil", "", vueMonAccueil{Modules: ModulesAccueil(c),
 		JourHaut: c.Membre.AccueilJourHaut == 1, Compact: c.Membre.AccueilCompact == 1})
+}
+
+// BlocsRepliables : les blocs de l'accueil qu'on peut replier.
+var BlocsRepliables = []string{"a-venir", "agenda", "taches"}
+
+// blocReplie : POST /moi/accueil/replie (« bloc », « replie » = 1 ou 0),
+// envoyé par app.js quand on replie ou déplie un bloc de l'accueil.
+func (a *App) blocReplie(w http.ResponseWriter, r *http.Request, c *Contexte) {
+	bloc := r.PostFormValue("bloc")
+	if !slices.Contains(BlocsRepliables, bloc) {
+		a.Echec(w, r, http.StatusBadRequest, "Bloc inconnu.")
+		return
+	}
+	var l []string
+	for _, b := range BlocsRepliables {
+		if (b == bloc && r.PostFormValue("replie") == "1") || (b != bloc && c.Replie(b)) {
+			l = append(l, b)
+		}
+	}
+	if err := a.Q.ModifierBlocsReplies(r.Context(), donnees.ModifierBlocsRepliesParams{AccueilReplies: strings.Join(l, ","),
+		ID: c.Membre.ID, FamilleID: c.Famille.ID}); err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // vueMonAccueil : les modules dans l'ordre du membre et ses deux réglages.

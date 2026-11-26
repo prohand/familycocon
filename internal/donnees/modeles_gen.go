@@ -281,6 +281,7 @@ type Membre struct {
 	AccueilCompact  int64
 	CalmeDebut      string
 	CalmeFin        string
+	AccueilReplies  string
 }
 
 type Mission struct {

@@ -70,7 +70,7 @@ func (q *Queries) CreerFamille(ctx context.Context, arg CreerFamilleParams) (Fam
 const creerMembre = `-- name: CreerMembre :one
 INSERT INTO membres (famille_id, nom, role, couleur, identifiant, mdp, pin, push_modules, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin
+RETURNING id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin, accueil_replies
 `
 
 type CreerMembreParams struct {
@@ -120,12 +120,13 @@ func (q *Queries) CreerMembre(ctx context.Context, arg CreerMembreParams) (Membr
 		&i.AccueilCompact,
 		&i.CalmeDebut,
 		&i.CalmeFin,
+		&i.AccueilReplies,
 	)
 	return i, err
 }
 
 const enfantsAvecPin = `-- name: EnfantsAvecPin :many
-SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'enfant' AND pin IS NOT NULL
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin, accueil_replies FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'enfant' AND pin IS NOT NULL
 ORDER BY id
 `
 
@@ -160,6 +161,7 @@ func (q *Queries) EnfantsAvecPin(ctx context.Context, familleID int64) ([]Membre
 			&i.AccueilCompact,
 			&i.CalmeDebut,
 			&i.CalmeFin,
+			&i.AccueilReplies,
 		); err != nil {
 			return nil, err
 		}
@@ -193,7 +195,7 @@ func (q *Queries) FamilleParID(ctx context.Context, id int64) (Famille, error) {
 }
 
 const membreParID = `-- name: MembreParID :one
-SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin FROM membres WHERE id = ? AND famille_id = ? AND actif = 1
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin, accueil_replies FROM membres WHERE id = ? AND famille_id = ? AND actif = 1
 `
 
 type MembreParIDParams struct {
@@ -226,12 +228,13 @@ func (q *Queries) MembreParID(ctx context.Context, arg MembreParIDParams) (Membr
 		&i.AccueilCompact,
 		&i.CalmeDebut,
 		&i.CalmeFin,
+		&i.AccueilReplies,
 	)
 	return i, err
 }
 
 const membreParIdentifiant = `-- name: MembreParIdentifiant :one
-SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin FROM membres WHERE identifiant = ? AND actif = 1
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin, accueil_replies FROM membres WHERE identifiant = ? AND actif = 1
 `
 
 func (q *Queries) MembreParIdentifiant(ctx context.Context, identifiant sql.NullString) (Membre, error) {
@@ -259,12 +262,13 @@ func (q *Queries) MembreParIdentifiant(ctx context.Context, identifiant sql.Null
 		&i.AccueilCompact,
 		&i.CalmeDebut,
 		&i.CalmeFin,
+		&i.AccueilReplies,
 	)
 	return i, err
 }
 
 const membresDeFamille = `-- name: MembresDeFamille :many
-SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin FROM membres WHERE famille_id = ? AND actif = 1
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil, accueil_jour_haut, accueil_compact, calme_debut, calme_fin, accueil_replies FROM membres WHERE famille_id = ? AND actif = 1
 ORDER BY CASE role WHEN 'parent' THEN 0 ELSE 1 END, id
 `
 
@@ -299,6 +303,7 @@ func (q *Queries) MembresDeFamille(ctx context.Context, familleID int64) ([]Memb
 			&i.AccueilCompact,
 			&i.CalmeDebut,
 			&i.CalmeFin,
+			&i.AccueilReplies,
 		); err != nil {
 			return nil, err
 		}
@@ -346,6 +351,21 @@ func (q *Queries) ModifierAccueilReglages(ctx context.Context, arg ModifierAccue
 		arg.ID,
 		arg.FamilleID,
 	)
+	return err
+}
+
+const modifierBlocsReplies = `-- name: ModifierBlocsReplies :exec
+UPDATE membres SET accueil_replies = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierBlocsRepliesParams struct {
+	AccueilReplies string
+	ID             int64
+	FamilleID      int64
+}
+
+func (q *Queries) ModifierBlocsReplies(ctx context.Context, arg ModifierBlocsRepliesParams) error {
+	_, err := q.db.ExecContext(ctx, modifierBlocsReplies, arg.AccueilReplies, arg.ID, arg.FamilleID)
 	return err
 }
 

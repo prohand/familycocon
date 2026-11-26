@@ -42,7 +42,9 @@
 
 {{/* Bloc « À venir » : anniversaires, échéances (rappels). */}}
 {{define "a-venir"}}
-<div class="section-titre"><h2>⏰ À venir</h2></div>
+{{/* Repliable ; le choix est gardé (voir app.js, /moi/accueil/replie). */}}
+<details class="bloc-pliable" data-bloc="a-venir"{{if $.C.Replie "a-venir"}} data-etat="0"{{else}} data-etat="1" open{{end}}>
+<summary class="section-titre"><h2>⏰ À venir <small class="nb-replie">{{len .Donnees}}</small></h2></summary>
 <div class="carte">
   {{- range .Donnees}}
   <a class="ligne{{if .Proche}} proche{{end}}" href="{{.URL}}">
@@ -51,4 +53,5 @@
   </a>
   {{- end}}
 </div>
+</details>
 {{end}}
