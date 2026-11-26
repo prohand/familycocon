@@ -35,6 +35,9 @@ type Barre struct {
 	Etiquette string    // sous la colonne (« janv. »)
 	Detail    string    // bulle au survol (« janvier 2025 : 120 € »)
 	Valeurs   []float64 // de bas en haut
+	// Prevus (BarresCote seulement) : posé sur la valeur de même rang,
+	// plus clair (classe g-p0, g-p1…) : ce qui est attendu, pas encore là.
+	Prevus []float64
 }
 
 // esc : texte sûr dans le SVG.
@@ -176,11 +179,19 @@ func Barres(titre string, barres []Barre, format func(float64) string) template.
 // BarresCote : comme Barres, mais les valeurs de chaque colonne côte à
 // côte (revenus et dépenses d'un mois), et non empilées.
 func BarresCote(titre string, barres []Barre, format func(float64) string) template.HTML {
+	// haut : la valeur s de la colonne, avec son prévu.
+	haut := func(br Barre, s int) float64 {
+		v := math.Max(0, br.Valeurs[s])
+		if s < len(br.Prevus) {
+			v += math.Max(0, br.Prevus[s])
+		}
+		return v
+	}
 	maxi, n := 0.0, 1
 	for _, br := range barres {
 		n = max(n, len(br.Valeurs))
-		for _, v := range br.Valeurs {
-			maxi = math.Max(maxi, v)
+		for s := range br.Valeurs {
+			maxi = math.Max(maxi, haut(br, s))
 		}
 	}
 	if len(barres) == 0 || maxi == 0 {
@@ -199,10 +210,14 @@ func BarresCote(titre string, barres []Barre, format func(float64) string) templ
 		// Fond invisible : toute la colonne se touche, même un mois vide.
 		fmt.Fprintf(&b, `<rect class="g-zone" x="%.1f" y="%.1f" width="%.1f" height="%.1f"/>`, x, y(ymax), l, y(ymin)-y(ymax))
 		for s, v := range br.Valeurs {
-			if v <= 0 {
-				continue
+			xs, ls := x+une*float64(s), math.Max(1, une-1)
+			v = math.Max(0, v)
+			if v > 0 {
+				fmt.Fprintf(&b, `<rect class="g-s%d" x="%.1f" y="%.1f" width="%.1f" height="%.1f"/>`, s, xs, y(v), ls, y(ymin)-y(v))
 			}
-			fmt.Fprintf(&b, `<rect class="g-s%d" x="%.1f" y="%.1f" width="%.1f" height="%.1f"/>`, s, x+une*float64(s), y(v), math.Max(1, une-1), y(ymin)-y(v))
+			if t := haut(br, s); t > v {
+				fmt.Fprintf(&b, `<rect class="g-p%d" x="%.1f" y="%.1f" width="%.1f" height="%.1f"/>`, s, xs, y(t), ls, y(v)-y(t))
+			}
 		}
 		b.WriteString(`</g>`)
 		if i%tous == 0 && br.Etiquette != "" {

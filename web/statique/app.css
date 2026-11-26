@@ -1796,6 +1796,10 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 /* Budget, l'année : revenus (vert du budget) et dépenses (corail). */
 .graphe.annee .g-s0 { fill: var(--budget-t); background: var(--budget-t); }
 .graphe.annee .g-s1 { fill: var(--corail); background: var(--corail); }
+/* Le prévu (pas encore passé) : même couleur, plus claire. */
+.graphe.annee .g-p0 { fill: color-mix(in srgb, var(--budget-t) 40%, var(--carte)); }
+.graphe.annee .g-p1 { fill: color-mix(in srgb, var(--corail) 40%, var(--carte)); background: color-mix(in srgb, var(--corail) 40%, var(--carte)); }
+.barre-mois .nom-cat small { color: var(--texte-doux); font-weight: 600; font-size: .75rem; }
 .graphe.annee .graphique { margin-bottom: 4px; }
 .graphique { touch-action: pan-y; cursor: crosshair; }
 .graphique .g-point.cache { display: none; }

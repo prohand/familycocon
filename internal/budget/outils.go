@@ -75,8 +75,11 @@ func (m *Module) chercher(w http.ResponseWriter, r *http.Request, c *appli.Conte
 type moisAnnee struct {
 	Mois     string // 2026-03
 	Nom      string // Mars
-	Revenus  int64
-	Depenses int64
+	Revenus  int64  // prévu compris
+	Depenses int64  // prévu compris
+	// Prévu : les opérations qui reviennent pas encore passées (salaire,
+	// abonnements… des mois à venir), comptées dans Revenus et Depenses.
+	RevenusPrevus, DepensesPrevues int64
 }
 
 type catAnnee struct {
@@ -89,16 +92,19 @@ type catAnnee struct {
 type vueAnnee struct {
 	An, Precedent, Suivant int
 	Mois                   []moisAnnee
-	Revenus, Depenses      int64
+	Revenus, Depenses      int64 // prévu compris
 	Reste                  int64
-	Categories             []catAnnee
-	Devise                 string
-	Perso                  bool          // budget perso
-	Graphe                 template.HTML // revenus et dépenses, mois par mois (SVG)
+	// Prévu de l'année (opérations qui reviennent, pas encore passées).
+	RevenusPrevus, DepensesPrevues int64
+	Categories                     []catAnnee
+	Devise                         string
+	Perso                          bool          // budget perso
+	Graphe                         template.HTML // revenus et dépenses, mois par mois (SVG)
 }
 
 // annee : les 12 mois (revenus, dépenses) et les dépenses par catégorie,
-// comparées à l'année d'avant.
+// comparées à l'année d'avant. Les mois à venir comptent le prévu (les
+// opérations qui reviennent pas encore passées), dessiné plus clair.
 func (m *Module) annee(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
 	an := c.Maintenant().Year()
@@ -107,6 +113,25 @@ func (m *Module) annee(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	compte := m.compteDe(w, r, c)
 	v := vueAnnee{An: an, Precedent: an - 1, Suivant: an + 1, Devise: c.Famille.Devise, Perso: compte > 0}
+	// Le prévu : les opérations qui reviennent des mois à venir (une année
+	// future n'est pas vide : salaire, loyer, abonnements y sont déjà).
+	if err := GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	recs, err := m.recurrencesCompte(ctx, c, compte)
+	if err == nil && compte == 0 {
+		var recus []donnees.Recurrence
+		if recus, err = m.virementsRecus(ctx, c, nil); err == nil {
+			recs = append(recs, recus...)
+		}
+	}
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	loc := c.Maintenant().Location()
+	prevues := Prevues(recs, time.Date(an, 1, 1, 0, 0, 0, 0, loc), time.Date(an, 12, 31, 0, 0, 0, 0, loc), c.Maintenant())
 	lire := func(a int) ([]donnees.TotauxParMoisRow, error) {
 		return m.a.Q.TotauxParMois(ctx, donnees.TotauxParMoisParams{FamilleID: c.Famille.ID, Compte: compte,
 			Du: strconv.Itoa(a) + "-01-01", Au: strconv.Itoa(a) + "-12-31"})
@@ -115,7 +140,7 @@ func (m *Module) annee(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	if err == nil {
 		var avant []donnees.TotauxParMoisRow
 		if avant, err = lire(an - 1); err == nil {
-			v.remplir(cette, avant)
+			v.remplir(cette, avant, prevues)
 		}
 	}
 	if err != nil {
@@ -125,7 +150,7 @@ func (m *Module) annee(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	m.a.Afficher(w, r, c, "budget/annee", "Budget "+strconv.Itoa(an), mod, v)
 }
 
-func (v *vueAnnee) remplir(cette, avant []donnees.TotauxParMoisRow) {
+func (v *vueAnnee) remplir(cette, avant []donnees.TotauxParMoisRow, prevues []donnees.Operation) {
 	parMois := map[string]*moisAnnee{}
 	for i := 1; i <= 12; i++ {
 		nom := appli.MoisFR(time.Month(i))
@@ -162,6 +187,24 @@ func (v *vueAnnee) remplir(cette, avant []donnees.TotauxParMoisRow) {
 			cat(t.Categorie).Montant += t.Total
 		}
 	}
+	for _, p := range prevues {
+		mo := parMois[p.Jour[:7]]
+		if mo == nil {
+			continue
+		}
+		if p.Sens == "revenu" {
+			mo.Revenus += p.Montant
+			mo.RevenusPrevus += p.Montant
+			v.Revenus += p.Montant
+			v.RevenusPrevus += p.Montant
+			continue
+		}
+		mo.Depenses += p.Montant
+		mo.DepensesPrevues += p.Montant
+		v.Depenses += p.Montant
+		v.DepensesPrevues += p.Montant
+		cat(p.Categorie).Montant += p.Montant
+	}
 	for _, t := range avant {
 		if t.Sens == "depense" {
 			cat(t.Categorie).Precedent += t.Total
@@ -174,9 +217,13 @@ func (v *vueAnnee) remplir(cette, avant []donnees.TotauxParMoisRow) {
 	euros := func(f float64) string { return appli.Milliers(int64(math.Round(f))) + " " + symbole }
 	var barres []graphique.Barre
 	for _, mo := range v.Mois {
-		barres = append(barres, graphique.Barre{Etiquette: moisCourts[len(barres)],
-			Valeurs: []float64{float64(mo.Revenus) / 100, float64(mo.Depenses) / 100},
-			Detail:  mo.Nom + " : revenus " + appli.Montant(mo.Revenus, v.Devise) + ", dépenses " + appli.Montant(mo.Depenses, v.Devise)})
+		detail := mo.Nom + " : revenus " + appli.Montant(mo.Revenus, v.Devise) + ", dépenses " + appli.Montant(mo.Depenses, v.Devise)
+		if mo.RevenusPrevus+mo.DepensesPrevues > 0 {
+			detail += " (prévu compris)"
+		}
+		barres = append(barres, graphique.Barre{Etiquette: moisCourts[len(barres)], Detail: detail,
+			Valeurs: []float64{float64(mo.Revenus-mo.RevenusPrevus) / 100, float64(mo.Depenses-mo.DepensesPrevues) / 100},
+			Prevus:  []float64{float64(mo.RevenusPrevus) / 100, float64(mo.DepensesPrevues) / 100}})
 	}
 	v.Graphe = graphique.BarresCote("Revenus et dépenses de "+strconv.Itoa(v.An)+", mois par mois", barres, euros)
 	for _, x := range parCat {

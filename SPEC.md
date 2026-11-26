@@ -930,3 +930,8 @@ reviennent.
   (`graphique.BarresCote` : revenus et dépenses côte à côte, chaque mois,
   bulle au toucher). Sous le graphique, seuls les mois avec des opérations
   (lien vers le mois).
+- Les mois à venir comptent le **prévu** (opérations qui reviennent pas
+  encore passées, `Prevues`) : une année future n'est plus vide. Barres
+  du prévu plus claires (`Barre.Prevus`, classes g-p0, g-p1) ; « Reste
+  prévu sur l'année » et « Dont prévu : +… · −… » ; mois marqués
+  « prévu » ou « en partie prévu » ; catégories prévu compris.
