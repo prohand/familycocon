@@ -10,6 +10,22 @@ import (
 	"database/sql"
 )
 
+const changerCompteOperation = `-- name: ChangerCompteOperation :exec
+UPDATE operations SET perso_de = ? WHERE id = ? AND famille_id = ?
+`
+
+type ChangerCompteOperationParams struct {
+	PersoDe   int64
+	ID        int64
+	FamilleID int64
+}
+
+// Depense du carnet passee au compte commun (0) ou a un budget perso.
+func (q *Queries) ChangerCompteOperation(ctx context.Context, arg ChangerCompteOperationParams) error {
+	_, err := q.db.ExecContext(ctx, changerCompteOperation, arg.PersoDe, arg.ID, arg.FamilleID)
+	return err
+}
+
 const chercherOperations = `-- name: ChercherOperations :many
 SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id, perso_de, virement_id FROM operations
 WHERE famille_id = ?1 AND perso_de = ?2 AND jour >= ?3

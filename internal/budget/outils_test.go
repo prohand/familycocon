@@ -55,7 +55,7 @@ func TestOutilsBudget(t *testing.T) {
 		t.Fatalf("recherche :\n%s", page)
 	}
 	// Année : le mois en cours a 135 € de dépenses.
-	if _, page = marie.Get("/budget/annee"); !strings.Contains(page, "135,00") || !strings.Contains(page, "Mois par mois") {
+	if _, page = marie.Get("/budget/annee"); !strings.Contains(page, "135,00") || !strings.Contains(page, "Mois par mois") || !strings.Contains(page, `class="graphique"`) || strings.Contains(page, "<progress") {
 		t.Fatalf("vue de l'année :\n%s", page)
 	}
 }

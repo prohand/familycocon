@@ -42,7 +42,12 @@
 {{if .FuelioURL}}
 <details class="bloc carte fuelio">
   <summary class="lien-ajout">📥 Reprendre depuis Fuelio</summary>
-  <p class="aide">Dans Fuelio : Sauvegarde › sauvegarde complète (fichier .fuelio, avec les photos), ou l'export CSV. Envoyez ce fichier ici : les pleins et les dépenses vont dans le carnet, avec les photos des tickets et factures. Rien n'est ajouté deux fois, ni au budget.</p>
+  <p class="aide">Dans Fuelio : Sauvegarde › sauvegarde complète (fichier .fuelio, avec les photos), ou l'export CSV. Envoyez ce fichier ici : les pleins et les dépenses vont dans le carnet, avec les photos des tickets et factures. Rien n'est ajouté deux fois.</p>
+  {{if .FuelioBudget}}
+  <label class="champ"><span>💶 Pleins et dépenses au budget</span>
+    <select data-fuelio-budget>{{range .FuelioBudget}}<option value="{{.Valeur}}"{{if .Actif}} selected{{end}}>{{.Texte}}</option>{{end}}</select></label>
+  {{end}}
+  {{if .FuelioBudget}}<p class="aide">Ce choix devient le réglage du véhicule et vaut aussi pour ce qui est déjà au carnet.</p>{{end}}
   <label class="bouton secondaire petit ajout-fuelio">Choisir le fichier
     <input type="file" data-fuelio="{{.FuelioURL}}" accept=".fuelio,.zip,.csv,application/zip,text/csv" hidden>
   </label>

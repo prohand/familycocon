@@ -55,6 +55,7 @@ type vueListe struct {
 	Elements                                          []Element
 	Anciens                                           []Element // véhicules qui ne sont plus à la famille
 	Fuelio                                            string    // import Fuelio de tous les véhicules (adresse)
+	FuelioBudget                                      []OptionBudget
 }
 
 // Lien : un bouton de la fiche (appeler, écrire, site…).
@@ -74,11 +75,12 @@ type vueFiche struct {
 	TitreSuivi          string
 	TitreCarnet         string
 	Modifier, Supprimer string
-	KmURL               string // formulaire « kilométrage » (véhicules)
-	FuelioURL           string // reprise d'une sauvegarde Fuelio (véhicules, parents)
-	Kilometrage         int64  // compteur noté sur le véhicule
-	Ouvrir              string // fenêtre d'ajout à ouvrir (« plein », « entretien »)
-	Autres              []Lien // les autres véhicules (fenêtre « Ajouter un plein »)
+	KmURL               string         // formulaire « kilométrage » (véhicules)
+	FuelioURL           string         // reprise d'une sauvegarde Fuelio (véhicules, parents)
+	FuelioBudget        []OptionBudget // « 💶 Ajouter aussi au budget » de la reprise (parents, budget activé)
+	Kilometrage         int64          // compteur noté sur le véhicule
+	Ouvrir              string         // fenêtre d'ajout à ouvrir (« plein », « entretien »)
+	Autres              []Lien         // les autres véhicules (fenêtre « Ajouter un plein »)
 	Contacts            []ContactCite
 }
 

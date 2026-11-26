@@ -64,6 +64,13 @@ func (m *Module) brancherVehicules() {
 			}
 			return noms, err
 		},
+		Budget: func(ctx context.Context, famille, id int64) (string, int64) {
+			v, err := a.Q.VehiculeParID(ctx, donnees.VehiculeParIDParams{ID: id, FamilleID: famille})
+			if err != nil {
+				return suivi.BudgetNon, 0
+			}
+			return v.Budget, v.BudgetPersoDe
+		},
 		NoterKm: func(ctx context.Context, famille, id, km int64) error {
 			return a.Q.NoterKilometrage(ctx, donnees.NoterKilometrageParams{Kilometrage: km, ID: id, FamilleID: famille, Kilometrage_2: km})
 		},
@@ -154,6 +161,9 @@ func (m *Module) listeVehicules(w http.ResponseWriter, r *http.Request, c *appli
 	}
 	if c.EstParent() {
 		v.Fuelio = "/vehicules/fuelio"
+		if peutBudget(c) {
+			v.FuelioBudget = m.optionsBudget(r.Context(), c, nil)
+		}
 	}
 	m.a.Afficher(w, r, c, "foyer/liste", "Véhicules", modVehicules, v)
 }
@@ -195,6 +205,12 @@ func (m *Module) ficheVehicule(w http.ResponseWriter, r *http.Request, c *appli.
 	if c.EstParent() {
 		v.FuelioURL = fmt.Sprintf("/vehicules/%d/fuelio", x.ID)
 	}
+	if peutBudget(c) {
+		v.FuelioBudget = m.optionsBudget(r.Context(), c, &x)
+		if t := m.texteBudget(r.Context(), c, x); t != "" {
+			v.Infos = append(v.Infos, "💶 Dépenses au budget : "+t)
+		}
+	}
 	m.afficherFiche(w, r, c, modVehicules, x.ID, v)
 }
 
@@ -203,6 +219,7 @@ type formVehicule struct {
 	V        donnees.Vehicule
 	Genres   any
 	Contacts []donnees.ContactsChoixRow
+	Budget   []OptionBudget // « 💶 Dépenses au budget » (parents, budget activé)
 }
 
 func (m *Module) formVehicule(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -216,6 +233,9 @@ func (m *Module) formVehicule(w http.ResponseWriter, r *http.Request, c *appli.C
 		f.V = x
 	}
 	f.Contacts = m.contactsChoix(r.Context(), c)
+	if peutBudget(c) {
+		f.Budget = m.optionsBudget(r.Context(), c, &f.V)
+	}
 	m.a.Afficher(w, r, c, "foyer/vehicule", "Véhicule", modVehicules, f)
 }
 
@@ -282,8 +302,19 @@ func (m *Module) enregistrerVehicule(w http.ResponseWriter, r *http.Request, c *
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
+	// Dépenses au budget : le réglage vaut aussi pour le carnet déjà noté.
+	msg := "Véhicule enregistré ✓"
+	if x, err := m.a.Q.VehiculeParID(ctx, donnees.VehiculeParIDParams{ID: id, FamilleID: c.Famille.ID}); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	} else if ret, err := m.reglerBudget(ctx, c, x, r.PostFormValue("budget")); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	} else if t := ret.Message(); t != "" {
+		msg += " · " + t
+	}
 	m.a.Publier(c, modVehicules, "")
-	m.a.Flash(w, "Véhicule enregistré ✓")
+	m.a.Flash(w, msg)
 	m.a.Rediriger(w, r, fmt.Sprintf("/vehicules/%d", id))
 }
 

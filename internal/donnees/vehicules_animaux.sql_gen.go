@@ -77,6 +77,29 @@ func (q *Queries) AnimauxFamille(ctx context.Context, familleID int64) ([]Animal
 	return items, nil
 }
 
+const changerBudgetVehicule = `-- name: ChangerBudgetVehicule :exec
+UPDATE vehicules SET budget = ?1, budget_perso_de = ?2
+WHERE id = ?3 AND famille_id = ?4
+`
+
+type ChangerBudgetVehiculeParams struct {
+	Budget        string
+	BudgetPersoDe int64
+	ID            int64
+	FamilleID     int64
+}
+
+// Ou vont les depenses du vehicule dans le budget (”, 'commun', 'perso').
+func (q *Queries) ChangerBudgetVehicule(ctx context.Context, arg ChangerBudgetVehiculeParams) error {
+	_, err := q.db.ExecContext(ctx, changerBudgetVehicule,
+		arg.Budget,
+		arg.BudgetPersoDe,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
+}
+
 const changerVenduVehicule = `-- name: ChangerVenduVehicule :exec
 UPDATE vehicules SET vendu_le = ?1 WHERE id = ?2 AND famille_id = ?3
 `
@@ -226,7 +249,7 @@ func (q *Queries) CreerGarantie(ctx context.Context, arg CreerGarantieParams) (G
 
 const creerVehicule = `-- name: CreerVehicule :one
 INSERT INTO vehicules (famille_id, nom, genre, immatriculation, modele, kilometrage, notes, garage_id, assureur_id, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id, vendu_le
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id, vendu_le, budget, budget_perso_de
 `
 
 type CreerVehiculeParams struct {
@@ -269,6 +292,8 @@ func (q *Queries) CreerVehicule(ctx context.Context, arg CreerVehiculeParams) (V
 		&i.GarageID,
 		&i.AssureurID,
 		&i.VenduLe,
+		&i.Budget,
+		&i.BudgetPersoDe,
 	)
 	return i, err
 }
@@ -610,7 +635,7 @@ func (q *Queries) SupprimerVehicule(ctx context.Context, arg SupprimerVehiculePa
 }
 
 const vehiculeParID = `-- name: VehiculeParID :one
-SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id, vendu_le FROM vehicules WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id, vendu_le, budget, budget_perso_de FROM vehicules WHERE id = ? AND famille_id = ?
 `
 
 type VehiculeParIDParams struct {
@@ -634,13 +659,15 @@ func (q *Queries) VehiculeParID(ctx context.Context, arg VehiculeParIDParams) (V
 		&i.GarageID,
 		&i.AssureurID,
 		&i.VenduLe,
+		&i.Budget,
+		&i.BudgetPersoDe,
 	)
 	return i, err
 }
 
 const vehiculesFamille = `-- name: VehiculesFamille :many
 
-SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id, vendu_le FROM vehicules WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
+SELECT id, famille_id, nom, genre, immatriculation, modele, kilometrage, notes, cree_le, garage_id, assureur_id, vendu_le, budget, budget_perso_de FROM vehicules WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
 `
 
 // Vehicules, animaux, prestataires.
@@ -666,6 +693,8 @@ func (q *Queries) VehiculesFamille(ctx context.Context, familleID int64) ([]Vehi
 			&i.GarageID,
 			&i.AssureurID,
 			&i.VenduLe,
+			&i.Budget,
+			&i.BudgetPersoDe,
 		); err != nil {
 			return nil, err
 		}

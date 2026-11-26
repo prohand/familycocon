@@ -4,6 +4,8 @@ package budget
 
 import (
 	"context"
+	"html/template"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -13,6 +15,7 @@ import (
 
 	"familycocon/internal/appli"
 	"familycocon/internal/donnees"
+	"familycocon/internal/graphique"
 	"familycocon/internal/repetition"
 )
 
@@ -86,12 +89,12 @@ type catAnnee struct {
 type vueAnnee struct {
 	An, Precedent, Suivant int
 	Mois                   []moisAnnee
-	Max                    int64 // échelle des barres
 	Revenus, Depenses      int64
 	Reste                  int64
 	Categories             []catAnnee
 	Devise                 string
-	Perso                  bool // budget perso
+	Perso                  bool          // budget perso
+	Graphe                 template.HTML // revenus et dépenses, mois par mois (SVG)
 }
 
 // annee : les 12 mois (revenus, dépenses) et les dépenses par catégorie,
@@ -165,9 +168,17 @@ func (v *vueAnnee) remplir(cette, avant []donnees.TotauxParMoisRow) {
 		}
 	}
 	v.Reste = v.Revenus - v.Depenses
+	// Graphique en SVG dessiné ici (les barres <progress> ne s'affichaient
+	// pas sur iPhone) : revenus et dépenses côte à côte, chaque mois.
+	symbole := appli.Symbole(v.Devise)
+	euros := func(f float64) string { return appli.Milliers(int64(math.Round(f))) + " " + symbole }
+	var barres []graphique.Barre
 	for _, mo := range v.Mois {
-		v.Max = max(v.Max, mo.Revenus, mo.Depenses)
+		barres = append(barres, graphique.Barre{Etiquette: moisCourts[len(barres)],
+			Valeurs: []float64{float64(mo.Revenus) / 100, float64(mo.Depenses) / 100},
+			Detail:  mo.Nom + " : revenus " + appli.Montant(mo.Revenus, v.Devise) + ", dépenses " + appli.Montant(mo.Depenses, v.Devise)})
 	}
+	v.Graphe = graphique.BarresCote("Revenus et dépenses de "+strconv.Itoa(v.An)+", mois par mois", barres, euros)
 	for _, x := range parCat {
 		x.Ecart = x.Montant - x.Precedent
 		v.Categories = append(v.Categories, *x)
