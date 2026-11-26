@@ -126,3 +126,13 @@
   <p class="aide">Hausse connue d'avance (salaire, taxe, abonnement…) : à partir de cette date, ce montant remplace l'ancien. Videz les deux champs pour l'annuler.</p>
 </details>
 {{end}}
+
+{{/* Les vues du budget : le mois, les prochains mois, l'année, chercher. */}}
+{{define "vues-budget"}}
+<nav class="pilules bloc" aria-label="Vues du budget">
+  <a class="pilule{{if eq .Active "mois"}} active{{end}}" href="/budget?compte={{.Compte}}">📅 Le mois</a>
+  <a class="pilule{{if eq .Active "prochains"}} active{{end}}" href="/budget/prochains?compte={{.Compte}}">🔮 Les prochains mois</a>
+  <a class="pilule{{if eq .Active "annee"}} active{{end}}" href="/budget/annee?compte={{.Compte}}&amp;an={{.An}}">📊 L'année</a>
+  <a class="pilule{{if eq .Active "chercher"}} active{{end}}" href="/budget/chercher?compte={{.Compte}}">🔎 Chercher</a>
+</nav>
+{{end}}

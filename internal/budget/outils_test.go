@@ -50,22 +50,6 @@ func TestOutilsBudget(t *testing.T) {
 	if !strings.Contains(page, "Payé par") || !strings.Contains(page, "55,00") {
 		t.Fatalf("bloc « Payé par » :\n%s", page)
 	}
-	// Plafond des courses à 100 € : 95 % → alerte, et sur l'accueil.
-	if code, _ := marie.Post("/budget/plafonds", map[string]string{"plafond_courses": "100", "plafond_sante": "abc"}); code != 400 {
-		t.Fatal("plafond illisible accepté")
-	}
-	if code, p := marie.Post("/budget/plafonds", map[string]string{"plafond_courses": "100"}); code != 200 {
-		t.Fatalf("plafonds : %d\n%s", code, p)
-	}
-	if _, page = marie.Get("/budget"); !strings.Contains(page, "95 % de 100,00") || !strings.Contains(page, `jauge alerte`) {
-		t.Fatalf("plafond non affiché :\n%s", page)
-	}
-	if _, page = marie.Get("/"); !strings.Contains(page, "Courses : 95 % du plafond") {
-		t.Fatal("alerte de plafond absente de l'accueil")
-	}
-	if _, page = marie.Get("/budget/plafonds"); !strings.Contains(page, `name="plafond_courses" value="100,00"`) {
-		t.Fatal("plafond non relu")
-	}
 	// Recherche sans accents.
 	if _, page = marie.Get("/budget/chercher?q=" + url.QueryEscape("HELENE")); !strings.Contains(page, "Dentiste Hélène") || strings.Contains(page, "Supermarché") || !strings.Contains(page, "40,00") {
 		t.Fatalf("recherche :\n%s", page)

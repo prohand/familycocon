@@ -10,21 +10,25 @@
   <a class="pilule{{if not .Perso}} active{{end}}" href="/budget?compte=commun&amp;mois={{.Mois}}">👥‍👧 Compte commun</a>
   <a class="pilule{{if .Perso}} active{{end}}" href="/budget?compte=perso&amp;mois={{.Mois}}">🔒 Mon budget</a>
 </nav>
+{{template "vues-budget" dict "Compte" .Compte "Active" "mois" "An" (slice .Mois 0 4)}}
 <div class="navigation-periode">
   <a class="fleche" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Precedent}}" aria-label="Mois précédent">‹</a>
   <h2>{{.Titre}}</h2>
   <a class="fleche" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Suivant}}" aria-label="Mois suivant">›</a>
 </div>
-<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-budget from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*" data-maj-prudent{{if not .Vide}} class="budget-grille"{{end}}>
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-budget from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*" data-maj-prudent>
 
-<section class="carte reste bloc">
-  <p class="reste-titre">Reste à vivre{{if .Futur}} <small>· prévu</small>{{else if and .EnCours .Prevues}} <small>· fin du mois, prévu compris</small>{{end}}</p>
-  <p class="reste-montant{{if lt .Reste 0}} negatif{{end}}">{{montant .Reste .Devise}}</p>
-  <div class="reste-detail">
-    <span>⬆️ Revenus <b>{{montant .Revenus .Devise}}</b>{{if and .EnCours .PrevuRev (ne .PrevuRev .Revenus)}}<small>dont {{montant .PrevuRev .Devise}} à venir</small>{{end}}</span>
-    <span>⬇️ Dépenses <b>{{montant .Depenses .Devise}}</b>{{if and .EnCours .PrevuDep (ne .PrevuDep .Depenses)}}<small>dont {{montant .PrevuDep .Devise}} à venir</small>{{end}}</span>
+{{/* Le mois : ce qui rentre, ce qui est prélevé, ce qui est dépensé au quotidien, et ce qui reste. */}}
+<section class="carte bloc carte-dispo">
+  <p class="dispo-titre">{{if .Futur}}Prévu pour ce mois{{else if .EnCours}}Disponible ce mois-ci{{else}}Il est resté{{end}}</p>
+  <p class="dispo-montant{{if lt .Disponible 0}} negatif{{end}}">{{montant .Disponible .Devise}}</p>
+  {{.Jauge}}
+  <div class="cle-jauge">
+    {{if .DejaPreleve}}<span class="deja">{{if .APrelever}}Déjà prélevé{{else}}Prélevé{{end}} {{montant .DejaPreleve .Devise}}</span>{{end}}
+    {{if .APrelever}}<span class="avenir">À prélever {{montant .APrelever .Devise}}</span>{{end}}
+    {{if .Quotidien}}<span class="quotidien">Dépenses du quotidien {{montant .Quotidien .Devise}}</span>{{end}}
   </div>
-  {{if and .EnCours .Prevues}}<p class="reste-auj">Aujourd'hui : <b>{{montant .ResteAuj .Devise}}</b></p>{{end}}
+  <p class="aide">Revenus du mois : <b>{{montant .Revenus .Devise}}</b></p>
 </section>
 
 <div class="boutons">
@@ -49,12 +53,6 @@
   </form>
 </details>
 {{end}}
-<a class="lien-recurrences bloc" href="/budget/recurrences?compte={{$.Donnees.Compte}}">🔁 Opérations qui reviennent{{if .NbRecur}} ({{.NbRecur}}){{end}} <span class="fleche-droite">›</span></a>
-<nav class="pilules bloc" aria-label="Outils du budget">
-  <a class="pilule" href="/budget/annee?compte={{$.Donnees.Compte}}&amp;an={{slice .Mois 0 4}}">📊 L'année</a>
-  <a class="pilule" href="/budget/chercher?compte={{$.Donnees.Compte}}">🔎 Chercher</a>
-  <a class="pilule" href="/budget/plafonds?compte={{$.Donnees.Compte}}">🎯 Plafonds</a>
-</nav>
 
 {{if .Attentes}}
 <section class="carte bloc attentes">
@@ -84,37 +82,28 @@
 </section>
 {{end}}
 
-{{if .Prevues}}
-<section class="carte bloc prevues">
-  <div class="section-titre premier"><h2>🔁 À venir ce mois-ci</h2></div>
-  {{- range .Prevues}}
-  <div class="ligne op prevue">
-    <span class="p-emoji">{{.Cat.Emoji}}</span>
-    <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}<small>{{if .AConfirmer}}⏳ à confirmer · en {{.Mois}}{{else}}le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}{{end}}</small></span>
-    <b class="montant {{.Sens}}">{{if eq .Sens "depense"}}−{{else}}+{{end}}{{montant .Montant $.Donnees.Devise}}</b>
-  </div>
-  {{- end}}
+{{if .RevenusL}}
+<section class="carte bloc liste-mois">
+  <h3>⬆️ Revenus du mois</h3>
+  {{- range .RevenusL}}{{template "ligne-mois" dict "L" . "Devise" $.Donnees.Devise}}{{end}}
 </section>
 {{end}}
 
-{{/* Sur grand écran, la courbe se met à droite du reste à vivre (app.css, .budget-grille). Mois vide : pas de courbe. */}}
-{{if not .Vide}}
-<section class="carte bloc bloc-courbe">
-  <div class="section-titre premier"><h2>Dépenses du mois{{with .Filtre}} · filtrées{{end}}</h2></div>
-  {{if .Filtre}}<p class="aide">Le reste à vivre et « À venir » comptent toutes les catégories.</p>{{end}}
-  {{.Courbe}}
-  <p class="legende"><span class="trait actuel"></span>Ce mois-ci <span class="trait precedent"></span>Mois précédent</p>
+<section class="carte bloc liste-mois">
+  <h3>⬇️ Prélèvements du mois</h3>
+  {{- range .PrelevL}}{{template "ligne-mois" dict "L" . "Devise" $.Donnees.Devise}}{{else}}
+  <p class="aide">Aucun. Loyer, crédit, abonnements… : ajoutez-les avec « Revient » pour les voir ici chaque mois.</p>{{end}}
+  <a class="lien-recurrences" href="/budget/recurrences?compte={{$.Donnees.Compte}}">🔁 Opérations qui reviennent{{if .NbRecur}} ({{.NbRecur}}){{end}} <span class="fleche-droite">›</span></a>
 </section>
-{{end}}
 
 {{if .ParCat}}
-<section class="carte bloc">
-  <div class="section-titre premier"><h2>Par catégorie</h2>{{if .Plafonds}}<a href="/budget/plafonds?compte={{$.Donnees.Compte}}">Plafonds ›</a>{{end}}</div>
+<section class="carte bloc liste-mois">
+  <h3>🛒 Dépenses du quotidien</h3>
   {{- range .ParCat}}
-  <a class="barre-cat{{if .Alerte}} alerte{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{$.Donnees.Mois}}&amp;cat={{.Cat.Cle}}">
-    <span class="nom-cat">{{.Cat.Emoji}} {{.Cat.Nom}}{{if .Plafond}} <small>{{.Pour100}} % de {{montant .Plafond $.Donnees.Devise}}</small>{{end}}</span>
-    <b>{{montant .Montant $.Donnees.Devise}}</b>
-    <progress class="jauge{{if .Alerte}} alerte{{end}}" max="{{if .Max}}{{.Max}}{{else}}1{{end}}" value="{{.Montant}}"></progress>
+  <a class="m-ligne" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{$.Donnees.Mois}}&amp;cat={{.Cat.Cle}}#operations">
+    <span class="p-emoji">{{.Cat.Emoji}}</span>
+    <span class="quoi">{{.Cat.Nom}}<small>{{pluriel .Nombre "opération" "opérations"}}</small></span>
+    <b class="montant depense">−{{montant .Montant $.Donnees.Devise}}</b>
   </a>
   {{- end}}
 </section>
@@ -130,12 +119,14 @@
 </section>
 {{end}}
 
-<section class="bloc">
+{{/* Toutes les opérations enregistrées (pour les corriger), repliées. */}}
+<details class="bloc toutes-ops" id="operations"{{if .Filtre}} open{{end}}>
+  <summary class="lien-ajout">📋 Toutes les opérations du mois ({{.NbOps}}){{with .Filtre}} · filtrées{{end}}</summary>
   {{if not .Vide}}
   <nav class="pilules" aria-label="Filtrer par catégorie">
-    <a class="pilule{{if not .Filtre}} active{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Mois}}">Tout</a>
+    <a class="pilule{{if not .Filtre}} active{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Mois}}#operations">Tout</a>
     {{- range .Pilules}}
-    <a class="pilule{{if eq .Cle $.Donnees.Filtre}} active{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{$.Donnees.Mois}}&amp;cat={{.Cle}}">{{.Emoji}} {{.Nom}}</a>
+    <a class="pilule{{if eq .Cle $.Donnees.Filtre}} active{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{$.Donnees.Mois}}&amp;cat={{.Cle}}#operations">{{.Emoji}} {{.Nom}}</a>
     {{- end}}
   </nav>
   {{end}}
@@ -152,9 +143,21 @@
     {{- end}}
   </div>
   {{- else}}
-  <div class="carte vide"><span class="emoji">🪙</span>Aucune opération ce mois-ci.{{if .Vide}}<br><small>La courbe du mois apparaîtra avec la première dépense.</small>{{end}}</div>
+  <div class="carte vide"><span class="emoji">🪙</span>Aucune opération enregistrée ce mois-ci.</div>
   {{- end}}
-</section>
+</details>
 </div>
 {{end}}
+{{end}}
+
+{{/* Une ligne de revenu ou de prélèvement du mois : déjà passé (✓) ou à venir. */}}
+{{define "ligne-mois"}}
+{{- with .L}}
+<a class="m-ligne{{if not .AVenir}} passe{{end}}" href="{{if and .AVenir (eq .Categorie "virement-recu")}}/budget/recurrences?compte=commun{{else if .AVenir}}/recurrences/{{.RecurrenceID.Int64}}{{else}}/budget/{{.ID}}{{end}}">
+  <span class="p-emoji">{{.Cat.Emoji}}</span>
+  <span class="quoi">{{if .Libelle}}{{.Libelle}}{{else}}{{.Cat.Nom}}{{end}}
+    <small>{{if .AConfirmer}}⏳ à confirmer · en {{.Mois}}{{else if .AVenir}}à venir · le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}{{else}}✓ {{if eq .Sens "revenu"}}reçu{{else}}prélevé{{end}} le {{slice .Jour 8 10}}/{{slice .Jour 5 7}}{{end}}</small></span>
+  <b class="montant {{.Sens}}">{{if eq .Sens "depense"}}−{{else}}+{{end}}{{montant .Montant $.Devise}}</b>
+</a>
+{{- end}}
 {{end}}

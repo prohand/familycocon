@@ -1114,15 +1114,64 @@ details.attente > summary::-webkit-details-marker { display: none; }
 details.attente[open] { padding-bottom: 10px; }
 details.attente + details.attente { border-top: 1px solid var(--bordure); }
 .section-titre.premier { margin-top: 0; }
-/* Grand écran : reste à vivre et courbe côte à côte ; la courbe garde une
-   taille raisonnable (sinon ses textes grossissent avec l'écran). */
+/* Budget : le mois suivi (revenus, prélèvements, dépenses du quotidien). */
+.carte-dispo { background: var(--budget); }
+.dispo-titre { margin: 0; font-weight: 800; color: var(--budget-t); }
+.dispo-montant { margin: 2px 0 10px; font-size: clamp(2.1rem, 10vw, 3rem); font-weight: 900; color: var(--budget-t); letter-spacing: -.02em; }
+.dispo-montant.negatif { color: var(--rouge); }
+.jauge-mois { display: block; width: 100%; height: 14px; border-radius: 7px; }
+.jauge-mois .fond { fill: var(--carte); }
+.jauge-mois .deja { fill: var(--corail); }
+.jauge-mois .avenir { fill: color-mix(in srgb, var(--corail) 40%, var(--carte)); }
+.jauge-mois .quotidien { fill: #f2b84b; }
+.cle-jauge { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: .8rem; font-weight: 700; color: var(--texte-doux); }
+.cle-jauge span::before { content: "●"; margin-right: 5px; }
+.cle-jauge .deja::before { color: var(--corail); }
+.cle-jauge .avenir::before { color: color-mix(in srgb, var(--corail) 40%, var(--carte)); }
+.cle-jauge .quotidien::before { color: #f2b84b; }
+.carte-dispo .aide { margin: 8px 0 0; }
+.liste-mois h3 { font-size: .8rem; color: var(--texte-doux); text-transform: uppercase; letter-spacing: .04em; margin: 0 0 4px; }
+.m-ligne { display: flex; align-items: center; gap: 10px; padding: 9px 0; color: inherit; }
+.m-ligne + .m-ligne { border-top: 1px solid var(--bordure); }
+.m-ligne .quoi { flex: 1; font-weight: 700; min-width: 0; }
+.m-ligne .quoi small { display: block; font-weight: 600; font-size: .78rem; color: var(--texte-doux); }
+.m-ligne.passe .quoi, .m-ligne.passe .montant { opacity: .6; }
+.liste-mois .lien-recurrences { margin-top: 8px; box-shadow: none; padding-left: 0; padding-right: 0; }
+.toutes-ops > summary { cursor: pointer; margin-bottom: 10px; }
+/* Budget : les prochains mois. Téléphone : une ligne par mois ; grand
+   écran : barres et tableau. */
+.cle-prevu { display: flex; gap: 14px; font-size: .8rem; font-weight: 700; color: var(--texte-doux); margin: 4px 2px 10px; }
+.cle-prevu span::before { content: ""; display: inline-block; width: 12px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.cle-prevu .prelev::before { background: var(--corail); }
+.cle-prevu .r::before, .cle-prevu .rev::before { background: color-mix(in srgb, var(--budget-t) 35%, var(--carte)); }
+.liste-prevu { padding: 0; overflow: hidden; }
+.mois-prevu { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: center; padding: 12px 16px; color: inherit; }
+.mois-prevu + .mois-prevu { border-top: 1px solid var(--bordure); }
+.mois-prevu.en-cours { background: color-mix(in srgb, var(--budget) 55%, transparent); }
+.nom-mois { font-weight: 800; min-width: 78px; }
+.nom-mois small, .reste-mois small { display: block; font-weight: 600; font-size: .72rem; color: var(--texte-doux); }
+.barre-prevu { width: 100%; height: 10px; }
+.barre-prevu .fond-reste { fill: color-mix(in srgb, var(--budget-t) 35%, var(--carte)); }
+.barre-prevu .prelev { fill: var(--corail); }
+.reste-mois { font-weight: 900; font-size: 1.02rem; color: var(--budget-t); text-align: right; }
+.mois-prevu.charge .reste-mois { color: var(--corail); }
+.note-mois { grid-column: 1 / -1; font-size: .75rem; font-weight: 600; color: var(--texte-doux); }
+.tableau-prevu { display: none; }
+.graphe-prevu { width: 100%; height: auto; max-height: 240px; display: block; }
+.graphe-prevu .rev { fill: color-mix(in srgb, var(--budget-t) 45%, var(--carte)); }
+.graphe-prevu .prelev { fill: var(--corail); }
+.graphe-prevu text { fill: var(--texte-doux); font-size: 11px; font-weight: 800; font-family: var(--police); }
+.tableau-prevu table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.tableau-prevu th, .tableau-prevu td { padding: 7px 8px; text-align: right; border-bottom: 1px solid var(--bordure); }
+.tableau-prevu th:first-child, .tableau-prevu td:first-child { text-align: left; font-weight: 800; }
+.tableau-prevu td.c-reste { color: var(--budget-t); font-weight: 800; }
+.tableau-prevu th:last-child { text-align: left; }
+.tableau-prevu td.c-note { text-align: left; color: var(--texte-doux); }
+.tableau-prevu tr.charge td { background: color-mix(in srgb, var(--corail) 10%, transparent); }
+.tableau-prevu tr.total td { font-weight: 800; border-bottom: 0; }
 @media (min-width: 900px) {
-  .budget-grille { display: grid; grid-template-columns: 1fr 1.5fr; column-gap: 16px; align-items: stretch; }
-  .budget-grille > * { grid-column: 1 / -1; }
-  .budget-grille > .reste { grid-column: 1; grid-row: 1; display: flex; flex-direction: column; justify-content: center; }
-  .budget-grille > .bloc-courbe { grid-column: 2; grid-row: 1; }
-  .budget-grille > .reste, .budget-grille > .bloc-courbe { margin-bottom: 16px; }
-  .bloc-courbe .courbe { max-height: 260px; }
+  .liste-prevu, .cle-liste { display: none; }
+  .tableau-prevu { display: block; }
 }
 .courbe { width: 100%; height: auto; display: block; }
 .courbe .repere { stroke: var(--bordure); stroke-width: 1; }

@@ -10,6 +10,7 @@ package budget
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"html/template"
 	"net/http"
 	"sort"
@@ -90,10 +91,9 @@ func Brancher(a *appli.App) {
 	a.Route("POST /budget", mod, appli.Parent, m.creer)
 	a.Route("POST /budget/virement", mod, appli.Parent, m.virer)
 	a.Route("GET /budget/recurrences", mod, appli.Parent, m.pageRecurrences)
+	a.Route("GET /budget/prochains", mod, appli.Parent, m.pageProchains)
 	a.Route("GET /budget/chercher", mod, appli.Parent, m.chercher)
 	a.Route("GET /budget/annee", mod, appli.Parent, m.annee)
-	a.Route("GET /budget/plafonds", mod, appli.Parent, m.pagePlafonds)
-	a.Route("POST /budget/plafonds", mod, appli.Parent, m.enregistrerPlafonds)
 	a.Route("GET /recurrences/{id}", mod, appli.Parent, m.formRecurrence)
 	a.Route("POST /recurrences/{id}", mod, appli.Parent, m.modifierRecurrence)
 	a.Route("POST /recurrences/{id}/arreter", mod, appli.Parent, m.arreterRecurrence)
@@ -119,6 +119,8 @@ type ligneOp struct {
 	donnees.Operation
 	Cat    Categorie
 	Membre *donnees.Membre
+	// AVenir : prévue (opération qui revient, pas encore passée).
+	AVenir bool
 	// Prévue, à date variable : montrée avec son mois (« en décembre »),
 	// pas un jour précis.
 	AConfirmer bool
@@ -130,13 +132,12 @@ type jourOps struct {
 	Ops   []ligneOp
 }
 
+// parCategorie : les dépenses du quotidien d'une catégorie (courses,
+// restaurants…) : nombre d'opérations et total.
 type parCategorie struct {
 	Cat     Categorie
+	Nombre  int
 	Montant int64
-	Plafond int64 // 0 : pas de plafond
-	Max     int64 // échelle de la jauge : le plafond, ou la plus grosse catégorie
-	Alerte  bool  // 90 % du plafond atteints
-	Pour100 int64 // part du plafond dépensée
 }
 
 // payePar : dépenses du mois payées par un parent (« qui a payé quoi »).
@@ -145,6 +146,10 @@ type payePar struct {
 	Montant int64
 }
 
+// vueBudget : un mois suivi. Ce qui rentre (revenus), ce qui est prélevé
+// (opérations qui reviennent : loyer, crédit…, déjà faites ou à venir) et
+// les dépenses du quotidien (le reste : courses, restaurants…) ; le
+// disponible est ce qui reste une fois tout cela retiré.
 type vueBudget struct {
 	Compte     string // « commun » ou « perso »
 	Perso      bool   // budget perso (privé) du membre
@@ -155,27 +160,26 @@ type vueBudget struct {
 	Precedent  string
 	Suivant    string
 	Filtre     string
-	// Revenus, Depenses, Reste : le mois entier, ce qui est prévu compris
-	// (opérations qui reviennent pas encore passées) ; Aujourdhui... :
-	// ce qui est déjà passé.
-	Revenus  int64
-	Depenses int64
-	Reste    int64
-	ResteAuj int64 // reste à vivre de ce qui est déjà passé
-	EnCours  bool  // le mois d'aujourd'hui
-	Vide     bool  // aucune opération ce mois-ci : ni courbe ni filtre
-	Futur    bool  // un mois qui n'a pas commencé : tout est prévu
-	PrevuRev int64 // revenus encore à venir ce mois-ci
-	PrevuDep int64 // dépenses encore à venir ce mois-ci
-	Courbe   template.HTML
-	ParCat   []parCategorie
-	MaxCat   int64
-	PayePar  []payePar // au moins deux parents ont payé ce mois-ci
-	Ecart    int64     // différence entre le premier et le second
-	Plafonds bool      // la famille a fixé au moins un plafond
-	Jours    []jourOps
+	EnCours    bool // le mois d'aujourd'hui
+	Futur      bool // un mois qui n'a pas commencé : tout est prévu
+	Vide       bool // aucune opération enregistrée ce mois-ci
+
+	Revenus     int64 // reçus et à venir
+	Prelev      int64 // prélèvements du mois (faits et à venir)
+	DejaPreleve int64
+	APrelever   int64
+	Quotidien   int64 // dépenses du quotidien
+	Disponible  int64 // Revenus − Prelev − Quotidien
+	Jauge       template.HTML
+
+	RevenusL []ligneOp      // revenus du mois (reçus puis à venir)
+	PrelevL  []ligneOp      // prélèvements du mois
+	ParCat   []parCategorie // dépenses du quotidien par catégorie
+	PayePar  []payePar      // au moins deux parents ont payé ce mois-ci
+	Ecart    int64          // différence entre le premier et le second
+	Jours    []jourOps      // toutes les opérations enregistrées
+	NbOps    int
 	Pilules  []Categorie
-	Prevues  []ligneOp // opérations qui reviennent, pas encore passées ce mois-ci
 	Attentes []Attente // à date variable : à confirmer (date prévue arrivée)
 	NbRecur  int       // opérations qui reviennent (lien vers leur page)
 	Devise   string
@@ -192,31 +196,9 @@ func (m *Module) operations(ctx context.Context, c *appli.Contexte, compte int64
 	return m.a.Q.OperationsPeriode(ctx, donnees.OperationsPeriodeParams{FamilleID: c.Famille.ID, Compte: compte, Du: repetition.CleJour(du), Au: repetition.CleJour(au)})
 }
 
-// cumuls : dépenses cumulées par jour du mois (jusqu'au jour « jusqua » inclus).
-func cumuls(ops []donnees.Operation, premier time.Time, jours, jusqua int, filtre string) []int64 {
-	parJour := make([]int64, jours)
-	for _, o := range ops {
-		if o.Sens != "depense" || (filtre != "" && o.Categorie != filtre) {
-			continue
-		}
-		d, err := time.Parse("2006-01-02", o.Jour)
-		if err != nil || d.Day() > jours {
-			continue
-		}
-		parJour[d.Day()-1] += o.Montant
-	}
-	out := make([]int64, 0, jusqua)
-	var total int64
-	for i := 0; i < jusqua && i < jours; i++ {
-		total += parJour[i]
-		out = append(out, total)
-	}
-	return out
-}
-
 func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref time.Time, filtre string) (*vueBudget, error) {
 	premier, dernier := mois(ref)
-	ppremier, pdernier := mois(premier.AddDate(0, -1, 0))
+	ppremier, _ := mois(premier.AddDate(0, -1, 0))
 	nom := appli.MoisFR(premier.Month())
 	v := &vueBudget{
 		Mois: premier.Format("2006-01"), Titre: strings.ToUpper(nom[:1]) + nom[1:] + " " + strconv.Itoa(premier.Year()),
@@ -235,10 +217,6 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 	if err != nil {
 		return nil, err
 	}
-	prec, err := m.operations(ctx, c, compte, ppremier, pdernier)
-	if err != nil {
-		return nil, err
-	}
 	membres, err := m.a.Membres(ctx, c)
 	if err != nil {
 		return nil, err
@@ -247,23 +225,10 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 	for i := range membres {
 		parID[membres[i].ID] = &membres[i]
 	}
-	totaux := map[string]int64{}
 	presentes := map[string]bool{}
 	parMembre := map[int64]int64{}
-	for _, o := range ops {
-		if o.Sens == "revenu" {
-			v.Revenus += o.Montant
-		} else {
-			v.Depenses += o.Montant
-			totaux[o.Categorie] += o.Montant
-			if o.MembreID.Valid {
-				parMembre[o.MembreID.Int64] += o.Montant
-			}
-		}
-		presentes[o.Categorie] = true
-		if v.Filtre != "" && o.Categorie != v.Filtre {
-			continue
-		}
+	parCat := map[string]*parCategorie{}
+	ligne := func(o donnees.Operation) ligneOp {
 		cat, ok := CategorieParCle(o.Categorie)
 		if !ok {
 			cat, _ = CategorieParCle("autre")
@@ -272,31 +237,48 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		if o.MembreID.Valid {
 			l.Membre = parID[o.MembreID.Int64]
 		}
+		return l
+	}
+	for _, o := range ops {
+		l := ligne(o)
+		switch {
+		case o.Sens == "revenu":
+			v.Revenus += o.Montant
+			v.RevenusL = append(v.RevenusL, l)
+		case o.RecurrenceID.Valid: // prélèvement (opération qui revient)
+			v.DejaPreleve += o.Montant
+			v.PrelevL = append(v.PrelevL, l)
+		default: // dépense du quotidien
+			v.Quotidien += o.Montant
+			pc := parCat[l.Cat.Cle]
+			if pc == nil {
+				pc = &parCategorie{Cat: l.Cat}
+				parCat[l.Cat.Cle] = pc
+			}
+			pc.Nombre++
+			pc.Montant += o.Montant
+		}
+		if o.Sens == "depense" && o.MembreID.Valid {
+			parMembre[o.MembreID.Int64] += o.Montant
+		}
+		presentes[o.Categorie] = true
+		if v.Filtre != "" && o.Categorie != v.Filtre {
+			continue
+		}
 		d, _ := time.ParseInLocation("2006-01-02", o.Jour, c.Lieu)
 		titre := strings.ToUpper(appli.JourFR(d)[:1]) + appli.JourFR(d)[1:] + " " + strconv.Itoa(d.Day())
 		if len(v.Jours) == 0 || v.Jours[len(v.Jours)-1].Titre != titre {
 			v.Jours = append(v.Jours, jourOps{Titre: titre})
 		}
 		v.Jours[len(v.Jours)-1].Ops = append(v.Jours[len(v.Jours)-1].Ops, l)
+		v.NbOps++
 	}
-	v.Reste = v.Revenus - v.Depenses
-	plafonds, err := m.plafonds(ctx, c, compte)
-	if err != nil {
-		return nil, err
-	}
-	v.Plafonds = len(plafonds) > 0
 	for _, cat := range Categories {
 		if presentes[cat.Cle] {
 			v.Pilules = append(v.Pilules, cat)
 		}
-		if n := totaux[cat.Cle]; n > 0 || plafonds[cat.Cle] > 0 {
-			v.ParCat = append(v.ParCat, jauge(cat, n, plafonds[cat.Cle]))
-			v.MaxCat = max(v.MaxCat, n)
-		}
-	}
-	for i := range v.ParCat {
-		if v.ParCat[i].Plafond == 0 {
-			v.ParCat[i].Max = v.MaxCat
+		if pc := parCat[cat.Cle]; pc != nil {
+			v.ParCat = append(v.ParCat, *pc)
 		}
 	}
 	sort.SliceStable(v.ParCat, func(i, j int) bool { return v.ParCat[i].Montant > v.ParCat[j].Montant })
@@ -313,28 +295,14 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		v.Ecart = v.PayePar[0].Montant - v.PayePar[1].Montant
 	}
 
-	// Courbe : jusqu'à aujourd'hui pour le mois en cours, le mois entier sinon.
-	jours := dernier.Day()
-	jusqua := jours
-	maintenant := c.Maintenant()
-	if premier.Year() == maintenant.Year() && premier.Month() == maintenant.Month() {
-		jusqua = maintenant.Day()
-	} else if premier.After(maintenant) {
-		jusqua = 0
-	}
-	v.Courbe = Courbe{
-		Actuel:    cumuls(ops, premier, jours, jusqua, v.Filtre),
-		Precedent: cumuls(prec, ppremier, pdernier.Day(), pdernier.Day(), v.Filtre),
-		Jours:     jours, Devise: c.Famille.Devise,
-	}.SVG()
-
 	// Ce qui reviendra d'ici la fin du mois (après aujourd'hui).
+	maintenant := c.Maintenant()
 	recs, err := m.recurrencesCompte(ctx, c, compte)
 	if err != nil {
 		return nil, err
 	}
 	v.NbRecur = len(recs)
-	v.Attentes = EnAttente(recs, c.Maintenant())
+	v.Attentes = EnAttente(recs, maintenant)
 	// Côté commun, les virements qui reviennent des budgets perso sont des
 	// revenus à venir.
 	if compte == 0 {
@@ -344,9 +312,6 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		}
 		recs = append(recs, recus...)
 	}
-	// Le reste à vivre compte le mois entier : ce qui est passé et ce qui
-	// est prévu (salaire, virement, loyer… pas encore arrivés).
-	v.ResteAuj = v.Reste
 	v.Vide = len(ops) == 0
 	v.EnCours = premier.Year() == maintenant.Year() && premier.Month() == maintenant.Month()
 	v.Futur = premier.After(maintenant)
@@ -357,28 +322,59 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 		}
 	}
 	for _, p := range Prevues(recs, premier, dernier, maintenant) {
-		cat, ok := CategorieParCle(p.Categorie)
-		if !ok {
-			cat, _ = CategorieParCle("autre")
-		}
-		l := ligneOp{Operation: p, Cat: cat, AConfirmer: variables[p.RecurrenceID.Int64]}
-		if l.AConfirmer {
+		l := ligne(p)
+		l.AVenir = true
+		if l.AConfirmer = variables[p.RecurrenceID.Int64]; l.AConfirmer {
 			l.Mois = moisDe(p.Jour)
 		}
-		if p.MembreID.Valid {
-			l.Membre = parID[p.MembreID.Int64]
-		}
-		v.Prevues = append(v.Prevues, l)
 		if p.Sens == "revenu" {
-			v.PrevuRev += p.Montant
+			v.Revenus += p.Montant
+			v.RevenusL = append(v.RevenusL, l)
 		} else {
-			v.PrevuDep += p.Montant
+			v.APrelever += p.Montant
+			v.PrelevL = append(v.PrelevL, l)
 		}
 	}
-	v.Revenus += v.PrevuRev
-	v.Depenses += v.PrevuDep
-	v.Reste = v.Revenus - v.Depenses
+	// Les plus gros d'abord, ceux déjà passés avant ceux à venir.
+	trier := func(l []ligneOp) {
+		sort.SliceStable(l, func(i, j int) bool {
+			if l[i].AVenir != l[j].AVenir {
+				return !l[i].AVenir
+			}
+			return l[i].Montant > l[j].Montant
+		})
+	}
+	trier(v.RevenusL)
+	trier(v.PrelevL)
+	v.Prelev = v.DejaPreleve + v.APrelever
+	v.Disponible = v.Revenus - v.Prelev - v.Quotidien
+	v.Jauge = jaugeMois(v.DejaPreleve, v.APrelever, v.Quotidien, v.Revenus)
 	return v, nil
+}
+
+// jaugeMois : la barre du mois (SVG : pas de style écrit dans la page) :
+// déjà prélevé, à prélever, dépenses du quotidien, sur la largeur des
+// revenus (ou des sorties si elles les dépassent).
+func jaugeMois(deja, aVenir, quotidien, revenus int64) template.HTML {
+	total := max(revenus, deja+aVenir+quotidien)
+	if total <= 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(`<svg class="jauge-mois" viewBox="0 0 1000 14" preserveAspectRatio="none" role="img" aria-hidden="true"><rect class="fond" width="1000" height="14" rx="7"/>`)
+	x := int64(0)
+	for _, s := range []struct {
+		classe string
+		v      int64
+	}{{"deja", deja}, {"avenir", aVenir}, {"quotidien", quotidien}} {
+		w := s.v * 1000 / total
+		if w > 0 {
+			fmt.Fprintf(&b, `<rect class="%s" x="%d" width="%d" height="14"/>`, s.classe, x, w)
+		}
+		x += w
+	}
+	b.WriteString(`</svg>`)
+	return template.HTML(b.String()) // #nosec G203 -- construit ici, sans texte
 }
 
 // nbAttentes : opérations à date variable à confirmer, au commun et dans
@@ -723,8 +719,7 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	if err := GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		m.a.Journal.Error("budget : opérations qui reviennent", "erreur", err)
 	}
-	// Opérations à date variable qui attendent (badge, après une alerte
-	// de plafond).
+	// Opérations à date variable qui attendent : on le dit d'abord (badge).
 	n := m.nbAttentes(ctx, c)
 	attente := ""
 	if n > 0 {
@@ -737,7 +732,7 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	}
 	t, err := totaux(0)
 	p, errP := totaux(c.Membre.ID)
-	// Même reste à vivre que la page : le prévu du mois compris.
+	// Même disponible que la page : le prévu du mois compris.
 	netCommun, errC := m.prevuNet(ctx, c, 0, premier, dernier)
 	netMoi, errM := m.prevuNet(ctx, c, c.Membre.ID, premier, dernier)
 	if errC != nil || errM != nil {
@@ -749,19 +744,10 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 		}
 		return appli.Resume{Info: "Rien ce mois-ci"}
 	}
-	// Un plafond presque atteint passe en premier (les attentes suivent).
-	for _, compte := range []int64{0, c.Membre.ID} {
-		if alerte := m.alertePlafond(ctx, c, compte, premier, dernier); alerte != "" {
-			if attente != "" {
-				alerte += " · " + attente
-			}
-			return appli.Resume{Info: alerte, Badge: 1 + n}
-		}
-	}
 	if attente != "" {
 		return appli.Resume{Info: attente, Badge: n}
 	}
-	info := "Reste " + appli.Montant(t.Revenus-t.Depenses+netCommun, c.Famille.Devise)
+	info := "Disponible " + appli.Montant(t.Revenus-t.Depenses+netCommun, c.Famille.Devise)
 	if p.Revenus+p.Depenses > 0 || netMoi != 0 {
 		info = "Commun : " + appli.Montant(t.Revenus-t.Depenses+netCommun, c.Famille.Devise) + " · Moi : " + appli.Montant(p.Revenus-p.Depenses+netMoi, c.Famille.Devise)
 	}

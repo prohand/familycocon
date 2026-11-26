@@ -152,7 +152,7 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
 - Virement qui revient d'un budget perso : côté commun, la page « Opérations
   qui reviennent » le montre en revenu (« Virement de Marie », compté dans
   les revenus du mois), sans lien : il se modifie depuis le budget perso.
-- Reste à vivre (page du budget et tuile de l'accueil) : le mois entier,
+- (Remplacé le 26/11 par « Disponible », voir « Budget : suivi par mois ».) Reste à vivre (page du budget et tuile de l'accueil) : le mois entier,
   ce qui est prévu compris (opérations qui reviennent pas encore passées,
   virements des budgets perso côté commun) ; « dont … à venir » et
   « Aujourd'hui : … » (ce qui est déjà passé) en dessous.
@@ -861,3 +861,28 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   pilule flottante en bas).
 - Thème : « Automatique » (le réglage de l'appareil, téléphone ou
   ordinateur) au lieu de « Comme le téléphone ».
+
+## Budget : suivi par mois (26/11/2026)
+
+Le budget n'est plus une gestion par enveloppes mais un suivi : ce qui
+rentre et ce qui sera prélevé chaque mois, d'après les opérations qui
+reviennent.
+
+- Page du mois : « Disponible ce mois-ci » = revenus − prélèvements −
+  dépenses du quotidien. Prélèvement : une dépense d'une opération qui
+  revient (déjà faite ✓, ou à venir, ou ⏳ à confirmer) ; dépense du
+  quotidien : toute autre dépense (regroupées par catégorie). Jauge SVG à
+  trois couleurs (déjà prélevé, à prélever, quotidien). Mois futur :
+  « Prévu pour ce mois » ; mois passé : « Il est resté ». Toutes les
+  opérations du mois restent en bas, repliées, avec le filtre par
+  catégorie. Ce chiffre remplace le « reste à vivre » (tuile de l'accueil :
+  « Disponible … »).
+- « Les prochains mois » (`/budget/prochains`) : le mois en cours et les
+  11 suivants, revenus, prélèvements, reste, et ce qui change (« +
+  Assurance habitation » : présent au plus 6 mois sur 12 ; « pas de
+  cantine » : habituel, absent ce mois-là). Un mois touché ouvre sa page.
+  Grand écran : barres (SVG) et tableau, avec le total sur 12 mois.
+- Onglets du budget (partiel `vues-budget`) : Le mois, Les prochains mois,
+  L'année (le passé), Chercher.
+- Plafonds retirés (page, alertes, jauges). La table `budget_plafonds` reste
+  (aucune donnée effacée) mais ne sert plus.
