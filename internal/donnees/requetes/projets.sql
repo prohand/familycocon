@@ -67,3 +67,8 @@ SELECT id FROM projets WHERE famille_id = ? AND perso_de = ?;
 
 -- name: CompterEtapesProjet :one
 SELECT count(*) FROM projet_etapes WHERE projet_id = ? AND famille_id = ?;
+
+-- Modifier une etape (texte, date, qui).
+-- name: ModifierEtape :exec
+UPDATE projet_etapes SET texte = sqlc.arg(texte), jour = sqlc.arg(jour), membre_id = sqlc.arg(membre_id)
+WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id);

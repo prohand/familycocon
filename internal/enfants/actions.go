@@ -52,7 +52,8 @@ func (m *Module) mission(r *http.Request, c *appli.Contexte) (donnees.Mission, e
 	return m.a.Q.MissionParID(r.Context(), donnees.MissionParIDParams{ID: id, FamilleID: c.Famille.ID})
 }
 
-// faire : l'enfant coche sa mission (elle attend la validation d'un parent).
+// faire : l'enfant coche sa mission (elle attend la validation d'un parent,
+// sauf si elle est « Pas besoin de vérifier » : validée tout de suite).
 func (m *Module) faire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	mi, err := m.mission(r, c)
 	if err != nil {
@@ -76,7 +77,13 @@ func (m *Module) faire(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	// Déjà cochée ou déjà validée (double envoi) : rien n'a changé, les
 	// parents ne sont pas notifiés une seconde fois.
-	if n > 0 {
+	switch {
+	case n > 0 && mi.SansVerification == 1:
+		// « Pas besoin de vérifier » : validée tout de suite (en SQL), les
+		// étoiles sont gagnées ; les parents l'apprennent.
+		m.a.PublierPour(c, mod, fmt.Sprintf("%s a fini « %s » %s : +%d ⭐", c.Membre.Nom, mi.Titre, mi.Emoji, mi.Etoiles), m.a.Parents(r.Context(), c))
+		appli.Notifier(w, fmt.Sprintf("Bravo ! +%d ⭐", mi.Etoiles), false)
+	case n > 0:
 		// « À valider » : pour les parents seulement.
 		m.a.PublierPour(c, mod, fmt.Sprintf("%s a fini « %s » %s : à valider", c.Membre.Nom, mi.Titre, mi.Emoji), m.a.Parents(r.Context(), c))
 		appli.Notifier(w, "Super ! Un parent va vérifier 👀", false)
@@ -403,6 +410,9 @@ type saisieMission struct {
 	etoiles      int64
 	categorie    string
 	regle        repetition.Regle
+	// sansVerification : « Pas besoin de vérifier » (1) : cochée par
+	// l'enfant, la mission est validée tout de suite.
+	sansVerification int64
 }
 
 func (m *Module) lireMission(r *http.Request, c *appli.Contexte) (saisieMission, string) {
@@ -446,6 +456,9 @@ func (m *Module) lireMission(r *http.Request, c *appli.Contexte) (saisieMission,
 	if s.emoji == "✅" {
 		s.emoji = defaut
 	}
+	if f.Get("sans_verification") == "1" {
+		s.sansVerification = 1
+	}
 	var err error
 	if s.regle, err = repetition.DepuisFormulaire(f); err != nil {
 		return s, err.Error()
@@ -466,7 +479,7 @@ func (m *Module) creerMission(w http.ResponseWriter, r *http.Request, c *appli.C
 			var err error
 			mi, err = q.CreerMission(ctx, donnees.CreerMissionParams{
 				FamilleID: c.Famille.ID, EnfantID: enfant, Titre: s.titre, Emoji: s.emoji, Etoiles: s.etoiles,
-				Categorie: s.categorie, Repetition: s.regle.String(), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+				Categorie: s.categorie, Repetition: s.regle.String(), SansVerification: s.sansVerification, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 			})
 			if err != nil {
 				return err
@@ -511,14 +524,14 @@ func (m *Module) modifierMission(w http.ResponseWriter, r *http.Request, c *appl
 			}
 			_, err := q.CreerMission(ctx, donnees.CreerMissionParams{
 				FamilleID: c.Famille.ID, EnfantID: s.enfant, Titre: s.titre, Emoji: s.emoji, Etoiles: s.etoiles,
-				Categorie: s.categorie, Repetition: s.regle.String(), CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
+				Categorie: s.categorie, Repetition: s.regle.String(), SansVerification: s.sansVerification, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix(),
 			})
 			return err
 		})
 	} else {
 		err2 = m.a.Q.ModifierMission(ctx, donnees.ModifierMissionParams{
 			EnfantID: s.enfant, Titre: s.titre, Emoji: s.emoji, Etoiles: s.etoiles, Categorie: s.categorie,
-			Repetition: s.regle.String(), ID: mi.ID, FamilleID: c.Famille.ID,
+			Repetition: s.regle.String(), SansVerification: s.sansVerification, ID: mi.ID, FamilleID: c.Famille.ID,
 		})
 	}
 	if err2 != nil {

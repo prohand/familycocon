@@ -127,3 +127,32 @@ WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND (parents = 0 O
 -- name: SupprimerCategorieTache :exec
 DELETE FROM categories_taches
 WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND (parents = 0 OR CAST(sqlc.arg(parent) AS INTEGER) = 1);
+
+-- Tour de role : " Passer au suivant " (voir migration 0048).
+
+-- Decalages du tour des taches en cours de la famille.
+-- name: ToursPassesFamille :many
+SELECT p.tache_id, p.numero FROM taches_tours_passes p JOIN taches t ON t.id = p.tache_id
+WHERE t.famille_id = ? AND t.active = 1 AND t.tour <> ''
+ORDER BY p.tache_id, p.numero;
+
+-- Decalages du tour d'une tache (rappels).
+-- name: ToursPassesTache :many
+SELECT numero FROM taches_tours_passes WHERE tache_id = ? ORDER BY numero;
+
+-- Passer le tour. deja : le nombre de decalages vus par celui qui passe ;
+-- 0 ligne si un autre l'a passe entre-temps (double envoi, deux membres).
+-- name: PasserTour :execrows
+INSERT INTO taches_tours_passes (tache_id, numero, de_membre, a_membre, passe_par, passe_le)
+SELECT t.id, sqlc.arg(numero), sqlc.arg(de_membre), sqlc.arg(a_membre), sqlc.arg(passe_par), sqlc.arg(passe_le)
+FROM taches t WHERE t.id = sqlc.arg(tache_id) AND t.famille_id = sqlc.arg(famille_id)
+  AND (SELECT count(*) FROM taches_tours_passes x WHERE x.tache_id = t.id) = CAST(sqlc.arg(deja) AS INTEGER);
+
+-- Tours passes recents, pour l'historique " Qui a fait quoi " (seulement
+-- ceux des taches que ce membre voit, comme HistoriqueTaches).
+-- name: HistoriqueToursPasses :many
+SELECT taches.titre, taches.emoji, p.passe_le, p.de_membre, p.a_membre, p.passe_par
+FROM taches_tours_passes p JOIN taches ON taches.id = p.tache_id
+WHERE taches.famille_id = sqlc.arg(famille_id) AND p.passe_le >= sqlc.arg(depuis)
+  AND (taches.cree_par = sqlc.arg(membre_id) OR (taches.privee = 0 AND (taches.assigne_a = sqlc.arg(membre_id) OR instr(',' || taches.tour || ',', ',' || sqlc.arg(membre_id) || ',') > 0 OR CAST(sqlc.arg(parent) AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
+ORDER BY p.passe_le DESC LIMIT 50;

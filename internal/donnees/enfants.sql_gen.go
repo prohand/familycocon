@@ -112,11 +112,12 @@ func (q *Queries) BonusRecents(ctx context.Context, enfantID int64) ([]BonusRece
 }
 
 const cocherMission = `-- name: CocherMission :execrows
-INSERT INTO missions_faites (mission_id, occurrence, etat, etoiles, coche_le)
-SELECT m.id, ?1, 'attente', ?2, ?3
+INSERT INTO missions_faites (mission_id, occurrence, etat, etoiles, coche_le, decide_le)
+SELECT m.id, ?1, CASE WHEN m.sans_verification = 1 THEN 'validee' ELSE 'attente' END,
+  ?2, ?3, CASE WHEN m.sans_verification = 1 THEN ?3 ELSE NULL END
 FROM missions m WHERE m.id = ?4 AND m.famille_id = ?5
 ON CONFLICT (mission_id, occurrence) DO UPDATE SET
-  etat = 'attente', etoiles = excluded.etoiles, coche_le = excluded.coche_le, decide_par = NULL, decide_le = NULL
+  etat = excluded.etat, etoiles = excluded.etoiles, coche_le = excluded.coche_le, decide_par = NULL, decide_le = excluded.decide_le
 WHERE missions_faites.etat = 'refusee'
 `
 
@@ -130,6 +131,8 @@ type CocherMissionParams struct {
 
 // Une mission refusee peut etre recochee ; une mission validee ne bouge plus.
 // La mission doit etre a la famille ; 0 ligne si elle est deja cochee.
+// Mission " pas besoin de verifier " (sans_verification) : validee tout de
+// suite (decide_le = coche_le, decide_par vide : personne n'a decide).
 func (q *Queries) CocherMission(ctx context.Context, arg CocherMissionParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, cocherMission,
 		arg.Occurrence,
@@ -177,20 +180,21 @@ func (q *Queries) CreerEchange(ctx context.Context, arg CreerEchangeParams) (Ech
 }
 
 const creerMission = `-- name: CreerMission :one
-INSERT INTO missions (famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le
+INSERT INTO missions (famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, sans_verification, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le, sans_verification
 `
 
 type CreerMissionParams struct {
-	FamilleID  int64
-	EnfantID   int64
-	Titre      string
-	Emoji      string
-	Etoiles    int64
-	Categorie  string
-	Repetition string
-	CreePar    sql.NullInt64
-	CreeLe     int64
+	FamilleID        int64
+	EnfantID         int64
+	Titre            string
+	Emoji            string
+	Etoiles          int64
+	Categorie        string
+	Repetition       string
+	SansVerification int64
+	CreePar          sql.NullInt64
+	CreeLe           int64
 }
 
 func (q *Queries) CreerMission(ctx context.Context, arg CreerMissionParams) (Mission, error) {
@@ -202,6 +206,7 @@ func (q *Queries) CreerMission(ctx context.Context, arg CreerMissionParams) (Mis
 		arg.Etoiles,
 		arg.Categorie,
 		arg.Repetition,
+		arg.SansVerification,
 		arg.CreePar,
 		arg.CreeLe,
 	)
@@ -218,6 +223,7 @@ func (q *Queries) CreerMission(ctx context.Context, arg CreerMissionParams) (Mis
 		&i.Active,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.SansVerification,
 	)
 	return i, err
 }
@@ -562,7 +568,7 @@ func (q *Queries) FaiteMissionParID(ctx context.Context, arg FaiteMissionParIDPa
 }
 
 const missionParID = `-- name: MissionParID :one
-SELECT id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le FROM missions WHERE id = ? AND famille_id = ? AND active = 1
+SELECT id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le, sans_verification FROM missions WHERE id = ? AND famille_id = ? AND active = 1
 `
 
 type MissionParIDParams struct {
@@ -585,13 +591,14 @@ func (q *Queries) MissionParID(ctx context.Context, arg MissionParIDParams) (Mis
 		&i.Active,
 		&i.CreePar,
 		&i.CreeLe,
+		&i.SansVerification,
 	)
 	return i, err
 }
 
 const missionsActives = `-- name: MissionsActives :many
 
-SELECT id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le FROM missions WHERE famille_id = ? AND active = 1 ORDER BY enfant_id, id
+SELECT id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le, sans_verification FROM missions WHERE famille_id = ? AND active = 1 ORDER BY enfant_id, id
 `
 
 // Espace enfants.
@@ -616,6 +623,7 @@ func (q *Queries) MissionsActives(ctx context.Context, familleID int64) ([]Missi
 			&i.Active,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.SansVerification,
 		); err != nil {
 			return nil, err
 		}
@@ -777,19 +785,20 @@ func (q *Queries) MissionsValideesDepuis(ctx context.Context, arg MissionsValide
 }
 
 const modifierMission = `-- name: ModifierMission :exec
-UPDATE missions SET enfant_id = ?, titre = ?, emoji = ?, etoiles = ?, categorie = ?, repetition = ?
+UPDATE missions SET enfant_id = ?, titre = ?, emoji = ?, etoiles = ?, categorie = ?, repetition = ?, sans_verification = ?
 WHERE id = ? AND famille_id = ?
 `
 
 type ModifierMissionParams struct {
-	EnfantID   int64
-	Titre      string
-	Emoji      string
-	Etoiles    int64
-	Categorie  string
-	Repetition string
-	ID         int64
-	FamilleID  int64
+	EnfantID         int64
+	Titre            string
+	Emoji            string
+	Etoiles          int64
+	Categorie        string
+	Repetition       string
+	SansVerification int64
+	ID               int64
+	FamilleID        int64
 }
 
 func (q *Queries) ModifierMission(ctx context.Context, arg ModifierMissionParams) error {
@@ -800,6 +809,7 @@ func (q *Queries) ModifierMission(ctx context.Context, arg ModifierMissionParams
 		arg.Etoiles,
 		arg.Categorie,
 		arg.Repetition,
+		arg.SansVerification,
 		arg.ID,
 		arg.FamilleID,
 	)

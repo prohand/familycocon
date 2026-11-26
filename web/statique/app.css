@@ -1903,6 +1903,28 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .description-tache[open] > .contenu-note { margin-top: 2px; }
 .description-tache .contenu-note > :first-child { margin-top: 0; }
 .description-tache .contenu-note > :last-child { margin-bottom: 0; }
+/* Tâches : filtres repliés (« 🔎 Filtrer »), ajout rapide, tour passé. */
+.filtres-taches { margin-bottom: 4px; }
+.filtres-taches > summary { cursor: pointer; margin: 6px 0 8px; }
+.filtres-taches > summary small { font-weight: 600; }
+.filtres-taches .pilules.petites.voir { margin: 0 0 6px; }
+.filtres-taches .pilules .aide { margin: 0; }
+.ajout-tache { margin: 6px 0 14px; }
+.passer-tour { display: inline-block; margin-top: 4px; padding: 3px 10px; border: 1.5px solid var(--bordure); border-radius: 999px; background: none; color: var(--texte-doux); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; min-height: 30px; }
+.passer-tour:hover { color: var(--texte); border-color: var(--texte-doux); }
+.tour-passe .quoi { color: var(--texte-doux); }
+/* Projets : une étape touchée s'ouvre pour être modifiée. */
+.etape-modif { flex: 1; min-width: 0; }
+.etape-modif > summary { display: block; list-style: none; cursor: pointer; overflow-wrap: anywhere; }
+.etape-modif > summary::-webkit-details-marker { display: none; }
+.etape-modif > form { margin-top: 6px; }
+.ligne.etape:has(.etape-modif[open]) { align-items: flex-start; }
+/* Pendant la modification : la place au formulaire (le responsable est dans « Qui ? »). */
+.ligne.etape:has(.etape-modif[open]) > .avatar,
+.ligne.etape:has(.etape-modif[open]) > form[action$="/supprimer"] { display: none; }
+/* Tâches : « ⏭️ Passer à Tom » ; « Tom » seul sur un petit écran. */
+.passer-tour { white-space: nowrap; }
+@media (max-width: 360px) { .passer-tour .passer-mot { display: none; } }
 
 
 /* Page « Moi » : chaque partie repliée, avec un résumé ; s'ouvre d'un toucher. */

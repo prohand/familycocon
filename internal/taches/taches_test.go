@@ -203,7 +203,7 @@ func TestTourDeRole(t *testing.T) {
 	}
 	regle := repetition.Lire(tache[0].Repetition)
 	auj := essai.Maintenant()
-	a1, a2 := assigneLe(tache[0], regle, auj, parID), assigneLe(tache[0], regle, auj.AddDate(0, 0, 1), parID)
+	a1, a2 := assigneLe(tache[0], regle, auj, parID, nil), assigneLe(tache[0], regle, auj.AddDate(0, 0, 1), parID, nil)
 	if a1 == nil || a2 == nil || a1.ID == a2.ID {
 		t.Fatalf("pas de relais d'un jour à l'autre : %v %v", a1, a2)
 	}

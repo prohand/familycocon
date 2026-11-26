@@ -897,3 +897,40 @@ reviennent.
   worker garde la cible (cache `familycocon-pages`, adresse
   `/__cible-notification`, jamais demandée au serveur) ; app.js la lit au
   chargement (une seule fois, moins d'une minute) et y va.
+
+## Tâches, enfants, projets : filtres repliés, ajout rapide, tour de rôle, missions sans vérification, étapes modifiables (26/11/2026)
+
+- Tâches, liste : les trois rangées de filtres (pour qui, catégorie,
+  « Voir ») sont dans un bloc « 🔎 Filtrer » replié, avec le résumé des
+  filtres actifs (« · Léa · 🧹 Ménage »). Il s'ouvre quand un filtre vient
+  d'être choisi (il est dans l'adresse). Le membre gardé par l'appareil
+  (cookie `taches_pour`, inchangé) est seulement rappelé dans le résumé :
+  le bloc reste fermé en revenant. « ✕ Retirer les filtres ».
+- Ajout rapide « Ajouter une tâche… » en haut de la liste (comme les
+  courses ; `POST /taches/rapide`, htmx, champ vidé) : une tâche « une
+  fois », pour le membre filtré (« Ajouter une tâche pour Léa… ») sinon
+  tout le monde, dans la catégorie filtrée (si ce membre peut s'en
+  servir). Annonce comme une création. Le formulaire complet reste à
+  « ＋ Tâche ».
+- Tour de rôle : « ⏭️ Passer à Tom » sur la tâche du jour pas faite, pour
+  celui dont c'est le tour et les parents (`POST /taches/{id}/passer`).
+  Migration 0048 (`taches_tours_passes` : numéro d'occurrence, de, à, par,
+  quand). Le membre d'une occurrence n est tour[(n + d) mod nombre], d =
+  tours passés de numéro ≤ n : la tâche du jour passe au suivant, la suite
+  continue à partir de lui, les jours d'avant gardent leur membre (agenda).
+  Liste, accueil, agenda et rappels en tiennent compte. Double envoi :
+  refusé (membre vu par la page, et nombre de tours passés vérifié à
+  l'écriture). Annonce à celui qui la reçoit (et à celui dont c'était le
+  tour si un parent l'a passé) ; ligne « ⏭️ … tour de Léa passé à Tom »
+  dans « Qui a fait quoi » (pas dans les scores).
+- Missions : interrupteur « Pas besoin de vérifier » (parent, migration
+  0049, `missions.sans_verification`). Cochée par l'enfant, la mission est
+  écrite « validée » tout de suite (décidée à l'heure de la coche, sans
+  parent) : étoiles gagnées, semaine et récompenses comme une mission
+  validée ; les parents sont prévenus (« +2 ⭐ »). Il n'existe pas
+  d'action pour annuler une mission validée : un parent retire des étoiles
+  avec le bonus négatif, comme avant.
+- Projets : une étape touchée s'ouvre (`<details>`) pour modifier son
+  texte, sa date et qui s'en occupe (`POST /projets/etapes/{id}/modifier`,
+  requête `ModifierEtape`) ; tous ceux qui voient le projet (projet privé :
+  son propriétaire seul).
