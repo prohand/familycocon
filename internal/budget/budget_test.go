@@ -302,4 +302,26 @@ func TestAConfirmer(t *testing.T) {
 	if _, page = marie.Get("/budget/recurrences?compte=commun"); !strings.Contains(page, "⏳ à confirmer ·") {
 		t.Fatal("étiquette « à confirmer » absente de la liste")
 	}
+	// Date variable : la date peut rester vide (ce mois-ci, dès le 1er) ;
+	// sans « Date variable », elle est demandée.
+	if code, _ := marie.Post("/budget", map[string]string{"montant": "20", "categorie": "beaute", "jour": "", "frequence": "mois", "libelle": "Coiffeur", "a_confirmer": "1"}); code != 200 {
+		t.Fatalf("date variable sans date : %d", code)
+	}
+	if code, p := marie.Post("/budget", map[string]string{"montant": "20", "categorie": "beaute", "jour": "", "libelle": "Sans date"}); code != 400 || !strings.Contains(p, "Date variable") {
+		t.Fatalf("opération sans date acceptée : %d", code)
+	}
+	recs, _ := a.Q.RecurrencesFamille(ctx, 1)
+	premier := time.Now().In(paris).Format("2006-01") + "-01"
+	trouve := false
+	for _, r := range recs {
+		if r.Libelle == "Coiffeur" && r.Debut == premier && r.AConfirmer == 1 {
+			trouve = true
+		}
+	}
+	if !trouve {
+		t.Fatal("date variable sans date : pas au 1er du mois")
+	}
+	if _, page = marie.Get("/budget?compte=commun"); !strings.Contains(page, "attendu en ") {
+		t.Fatal("« attendu en <mois> » absent")
+	}
 }

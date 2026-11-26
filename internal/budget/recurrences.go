@@ -312,6 +312,7 @@ type Attente struct {
 	Cat     Categorie
 	Jour    string // date prévue
 	Montant int64  // montant prévu
+	Mois    string // « décembre » (date variable : le mois suffit)
 }
 
 // EnAttente : les opérations à confirmer (date prévue passée ou du jour),
@@ -333,7 +334,7 @@ func EnAttente(recs []donnees.Recurrence, aujourdhui time.Time) []Attente {
 		if !ok {
 			cat, _ = CategorieParCle("autre")
 		}
-		out = append(out, Attente{R: r, Cat: cat, Jour: cle, Montant: MontantDu(r, cle)})
+		out = append(out, Attente{R: r, Cat: cat, Jour: cle, Montant: MontantDu(r, cle), Mois: moisDe(cle) + " " + cle[:4]})
 	}
 	sort.SliceStable(out, func(i, k int) bool { return out[i].Jour < out[k].Jour })
 	return out

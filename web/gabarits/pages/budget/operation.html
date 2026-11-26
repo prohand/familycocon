@@ -24,7 +24,7 @@
   </fieldset>{{end}}
   <div class="rangee">
     <label class="champ"><span>Libellé (facultatif)</span><input name="libelle" value="{{.Op.Libelle}}" maxlength="80" placeholder="Ex. : Supermarché" list="libelles" autocomplete="off"></label>
-    <label class="champ"><span>Date</span><input type="date" name="jour" value="{{.Op.Jour}}" required></label>
+    <label class="champ"><span>Date</span><input type="date" name="jour" value="{{.Op.Jour}}"{{if not .Nouvelle}} required{{end}}></label>
   </div>
   <label class="champ"><span>Qui ?</span>
     <select name="membre"><option value="0">—</option>
@@ -38,7 +38,7 @@
   </div>
   <p class="aide">Salaire, loyer, crédit… : elle sera ajoutée toute seule à chaque date.</p>
   <label class="case-a-cocher"><input type="checkbox" name="a_confirmer" value="1"> ⏳ Date variable : à confirmer chaque fois</label>
-  <p class="aide">Cantine, facture, remboursement… : rien n'est ajouté tout seul. À la date prévue, vous dites « C'est passé » (vraie date, vrai montant) ou « Pas cette fois ». En attendant, c'est compté dans le reste à vivre.</p>
+  <p class="aide">Cantine, facture, remboursement… : la date peut rester vide (ce mois-ci). Rien n'est ajouté tout seul. À la date prévue, vous dites « C'est passé » (vraie date, vrai montant) ou « Pas cette fois ». En attendant, c'est compté dans le reste à vivre.</p>
   {{else if .Recurrence}}
   <p class="aide">🔁 Revient {{.Recurrence}} : cette modification ne touche que cette fois-ci. <a href="/recurrences/{{.Op.RecurrenceID.Int64}}">Modifier les prochaines fois ›</a></p>
   {{end}}

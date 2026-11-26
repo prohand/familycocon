@@ -119,6 +119,10 @@ type ligneOp struct {
 	donnees.Operation
 	Cat    Categorie
 	Membre *donnees.Membre
+	// Prévue, à date variable : montrée avec son mois (« en décembre »),
+	// pas un jour précis.
+	AConfirmer bool
+	Mois       string
 }
 
 type jourOps struct {
@@ -346,12 +350,21 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 	v.Vide = len(ops) == 0
 	v.EnCours = premier.Year() == maintenant.Year() && premier.Month() == maintenant.Month()
 	v.Futur = premier.After(maintenant)
+	variables := map[int64]bool{} // récurrences à date variable
+	for _, r := range recs {
+		if r.AConfirmer == 1 {
+			variables[r.ID] = true
+		}
+	}
 	for _, p := range Prevues(recs, premier, dernier, maintenant) {
 		cat, ok := CategorieParCle(p.Categorie)
 		if !ok {
 			cat, _ = CategorieParCle("autre")
 		}
-		l := ligneOp{Operation: p, Cat: cat}
+		l := ligneOp{Operation: p, Cat: cat, AConfirmer: variables[p.RecurrenceID.Int64]}
+		if l.AConfirmer {
+			l.Mois = moisDe(p.Jour)
+		}
 		if p.MembreID.Valid {
 			l.Membre = parID[p.MembreID.Int64]
 		}
@@ -424,6 +437,15 @@ func (m *Module) virementsRecus(ctx context.Context, c *appli.Contexte, parID ma
 		}
 	}
 	return out, err
+}
+
+// moisDe : « décembre » pour « 2026-12-05 ».
+func moisDe(jour string) string {
+	t, err := time.Parse("2006-01-02", jour)
+	if err != nil {
+		return ""
+	}
+	return appli.MoisFR(t.Month())
 }
 
 // recurrencesCompte : les opérations qui reviennent de ce budget.
@@ -547,7 +569,16 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisieOp, string) {
 		return s, "Libellé : 80 caractères au plus."
 	}
 	var ok2 bool
-	if s.jour, ok2 = LireJour(r.PostFormValue("jour"), c.Maintenant()); !ok2 {
+	jour := r.PostFormValue("jour")
+	// Date variable (qui revient, à confirmer) : la date peut rester vide,
+	// c'est alors ce mois-ci (attendue dès le 1er).
+	if jour == "" && FrequenceValide(r.PostFormValue("frequence")) && r.PostFormValue("a_confirmer") == "1" {
+		jour = c.Maintenant().Format("2006-01") + "-01"
+	}
+	if s.jour, ok2 = LireJour(jour, c.Maintenant()); !ok2 {
+		if jour == "" {
+			return s, "Indiquez la date (ou, pour une opération qui revient, cochez « Date variable »)."
+		}
 		return s, "Date invalide."
 	}
 	if id, err := strconv.ParseInt(r.PostFormValue("membre"), 10, 64); err == nil && id > 0 {
