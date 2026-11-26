@@ -111,11 +111,16 @@ func TestNotificationsPush(t *testing.T) {
 	if len(l) != 1 || !strings.Contains(l[0], "fcm/send/thomas") || !strings.Contains(l[0], "Piscine") || !strings.Contains(l[0], `"url":"/agenda"`) {
 		t.Fatalf("envois : %v", l)
 	}
+	// Avec un lien : toucher la notification ouvre cette page (pas le module).
+	a.PublierLien(cMarie, "agenda", "Marie a ajouté « Judo »", "/agenda?date=2026-12-01", nil)
+	if l = attendre(2); len(l) != 2 || !strings.Contains(l[1], `"url":"/agenda?date=2026-12-01"`) {
+		t.Fatalf("notification avec un lien : %v", l)
+	}
 
 	// Notification pour Marie seulement : rien pour Thomas.
 	a.PublierPour(cMarie, "agenda", "Pour Marie seulement", []int64{membreID(t, a, "marie")})
 	time.Sleep(100 * time.Millisecond)
-	if l := attendre(1); len(l) != 1 {
+	if l := attendre(2); len(l) != 2 {
 		t.Fatalf("notification ciblée envoyée à un autre membre : %v", l)
 	}
 
@@ -123,7 +128,7 @@ func TestNotificationsPush(t *testing.T) {
 	ch := a.Direct.abonner(1, membreID(t, a, "thomas"))
 	a.Publier(cMarie, "agenda", "Marie a ajouté « Dentiste »")
 	time.Sleep(100 * time.Millisecond)
-	if len(attendre(1)) != 1 {
+	if len(attendre(2)) != 2 {
 		t.Fatal("push envoyé alors que la page est ouverte")
 	}
 	a.Direct.desabonner(1, ch)
@@ -133,7 +138,7 @@ func TestNotificationsPush(t *testing.T) {
 	expire = true
 	mu.Unlock()
 	a.Publier(cMarie, "taches", "Marie a ajouté une tâche")
-	attendre(2)
+	attendre(3)
 	for i := 0; i < 100; i++ {
 		if n, _ := a.Q.CompterAbonnements(context.Background(), membreID(t, a, "thomas")); n == 0 {
 			return

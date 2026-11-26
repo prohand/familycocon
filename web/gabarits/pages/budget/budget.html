@@ -90,10 +90,9 @@
 {{end}}
 
 <section class="carte bloc liste-mois">
-  <h3>⬇️ Prélèvements du mois</h3>
+  <div class="titre-liste"><h3>⬇️ Prélèvements du mois</h3><a href="/budget/recurrences?compte={{$.Donnees.Compte}}">🔁 Gérer{{if .NbRecur}} ({{.NbRecur}}){{end}} ›</a></div>
   {{- range .PrelevL}}{{template "ligne-mois" dict "L" . "Devise" $.Donnees.Devise}}{{else}}
   <p class="aide">Aucun. Loyer, crédit, abonnements… : ajoutez-les avec « Revient » pour les voir ici chaque mois.</p>{{end}}
-  <a class="lien-recurrences" href="/budget/recurrences?compte={{$.Donnees.Compte}}">🔁 Opérations qui reviennent{{if .NbRecur}} ({{.NbRecur}}){{end}} <span class="fleche-droite">›</span></a>
 </section>
 
 {{if .ParCat}}

@@ -1136,7 +1136,9 @@ details.attente + details.attente { border-top: 1px solid var(--bordure); }
 .m-ligne .quoi { flex: 1; font-weight: 700; min-width: 0; }
 .m-ligne .quoi small { display: block; font-weight: 600; font-size: .78rem; color: var(--texte-doux); }
 .m-ligne.passe .quoi, .m-ligne.passe .montant { opacity: .6; }
-.liste-mois .lien-recurrences { margin-top: 8px; box-shadow: none; padding-left: 0; padding-right: 0; }
+.titre-liste { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+.titre-liste h3 { margin: 0; }
+.titre-liste a { font-size: .85rem; font-weight: 800; color: var(--corail); white-space: nowrap; }
 .toutes-ops > summary { cursor: pointer; margin-bottom: 10px; }
 /* Budget : les prochains mois. Téléphone : une ligne par mois ; grand
    écran : barres et tableau. */

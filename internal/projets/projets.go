@@ -322,7 +322,7 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		}
 		id = p.ID
 		if perso == 0 {
-			m.a.Publier(c, mod, "Nouveau projet : "+nom)
+			m.a.PublierLien(c, mod, "Nouveau projet : "+nom, fmt.Sprintf("/projets/%d", p.ID), nil)
 		} else {
 			m.a.Publier(c, mod, "") // privé : rien n'est annoncé
 		}

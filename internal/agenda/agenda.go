@@ -689,7 +689,9 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 	}
 	quand := strings.ToLower(appli.TitreJour(s.debut))
 	// Pour certains membres seulement : eux seuls sont notifiés.
-	m.a.PublierPour(c, mod, fmt.Sprintf("%s a ajouté « %s » (%s) 🗓️", c.Membre.Nom, e.Titre, quand), s.membres)
+	// Toucher la notification ouvre l'agenda au jour de l'événement.
+	m.a.PublierLien(c, mod, fmt.Sprintf("%s a ajouté « %s » (%s) 🗓️", c.Membre.Nom, e.Titre, quand),
+		"/agenda?date="+repetition.CleJour(s.debut), s.membres)
 	m.a.Flash(w, "Événement ajouté ✓")
 	m.a.Rediriger(w, r, "/agenda?date="+repetition.CleJour(s.debut))
 }
