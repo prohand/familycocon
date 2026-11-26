@@ -1033,3 +1033,44 @@ reviennent.
   du même nom. « 📅 Prévoir ce plat » : jour et repas, proposés au premier
   repas libre des deux semaines à venir ; un repas déjà prévu n'est jamais
   écrasé (message clair).
+
+## Agenda : rappel avant l'heure, modifier une seule fois (26/11/2026)
+
+- **Rappel juste avant** (`evenements.rappel_avant`, migration 0051) :
+  « Pas de rappel juste avant », « 15 min avant », « 1 h avant », « La
+  veille à 18 h » (heure de la famille), en plus de « Me le rappeler » (9 h
+  le jour même et 7 jours avant, inchangé). Journée entière : la veille à
+  18 h seulement (le formulaire refuse 15 min / 1 h sans heure).
+- Envoi par la tâche de chaque minute (`AjouterMinute`), avec `Rappeler`
+  (notifications « Rappels », toute la famille : les mêmes que le rappel du
+  matin), lien vers la fiche de la fois (`/agenda/{id}?jour=…`). « 15 min »
+  et « 1 h » sont de vraies durées (même la nuit du changement d'heure) ;
+  « la veille à 18 h » est 18 h d'horloge.
+- Une seule fois par fois de l'événement : table `evenements_rappels`
+  (événement, début de la fois), notée avant l'envoi, oubliée après 60
+  jours. Rien n'est renvoyé après un redémarrage ; un rappel manqué part au
+  retour du serveur s'il a moins de 30 min de retard et que l'événement n'a
+  pas commencé. Rien pour un événement créé après l'heure du rappel, ni pour
+  une fois annulée ; une fois modifiée a son rappel à sa nouvelle heure.
+- Lien du téléphone : l'alarme suit le rappel juste avant (-PT15M, -PT1H,
+  la veille à 18 h) ; sinon « Me le rappeler » comme avant.
+- **Modifier cette fois seulement** (fiche ouverte depuis une date d'un
+  événement qui revient) : date, heures de début et de fin, lieu, titre.
+  Stocké dans `evenements_exceptions` (migration 0052) : `modifiee = 1`,
+  `jour` = date d'origine, `nouveau_debut`, `nouveau_fin`,
+  `nouvelle_journee`, `nouveau_titre` ('' : celui de l'événement),
+  `nouveau_lieu` (NULL : celui de l'événement). Annuler une fois modifiée
+  l'annule ; « Comme les autres fois » (ou les mêmes valeurs) efface la
+  ligne. Une modification dont la date d'origine n'est plus une fois de
+  l'événement (répétition changée) ne compte plus. Le formulaire de
+  l'événement modifie toujours toutes les fois.
+- La fois modifiée quitte sa date d'origine et apparaît à sa nouvelle date
+  (même hors des dates de l'événement) : agenda (« ✏️ modifié cette
+  fois »), « Aujourd'hui » de l'accueil, « À venir » et rappel du matin,
+  rappel juste avant, lien du téléphone. Code commun : `lesFois`
+  (`internal/agenda/fois.go`). Les participants sont prévenus
+  (`PublierLien`, vers le nouveau jour).
+- iCal : chaque fois est déjà un VEVENT à part (pas de RRULE), donc pas de
+  RECURRENCE-ID (il désignerait une série absente du flux) ; la fois
+  modifiée garde l'UID de sa date d'origine (`{id}-AAAAMMJJ`) : le
+  téléphone met à jour la même entrée.

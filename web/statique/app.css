@@ -1604,6 +1604,10 @@ details.termines > summary { cursor: pointer; }
 select[multiple] { min-height: 7em; }
 details.vcard > summary { cursor: pointer; }
 details.plus-champs > summary { cursor: pointer; margin-bottom: 10px; }
+/* Agenda : « Modifier cette fois seulement ». */
+details.fois-seule > summary { cursor: pointer; font-weight: 800; min-height: 44px; display: flex; align-items: center; }
+details.fois-seule[open] > summary { margin-bottom: 8px; }
+details.fois-seule form + form { margin-top: 10px; }
 /* Nouveau montant prévu (opération qui revient, abonnement). */
 details.nouveau-montant { margin: 4px 0 12px; }
 details.nouveau-montant > summary { cursor: pointer; color: var(--corail); font-weight: 800; margin-bottom: 8px; }

@@ -14,12 +14,15 @@ import (
 )
 
 // Fois annulées : un événement qui revient (judo le mardi) peut être annulé
-// une seule fois (vacances, cours annulé) sans toucher aux autres.
+// une seule fois (vacances, cours annulé) sans toucher aux autres. Il peut
+// aussi être modifié une seule fois (fois.go) : même table, la ligne porte
+// alors la nouvelle date.
 
-// exceptionsMax : fois annulées par événement, au plus.
+// exceptionsMax : fois annulées ou modifiées par événement, au plus.
 const exceptionsMax = 200
 
-// exceptions : les fois annulées de ces événements (id → jour → vrai).
+// exceptions : les fois annulées ou modifiées de ces événements (id → jour
+// d'origine → vrai) : elles n'ont plus lieu à leur date d'origine.
 func (m *Module) exceptions(ctx context.Context, ids []int64) (map[int64]map[string]bool, error) {
 	out := map[int64]map[string]bool{}
 	if len(ids) == 0 {
@@ -38,7 +41,7 @@ func (m *Module) exceptions(ctx context.Context, ids []int64) (map[int64]map[str
 	return out, nil
 }
 
-// deplierSans : comme deplier, sans les fois annulées.
+// deplierSans : comme deplier, sans les fois annulées (ni modifiées).
 func deplierSans(e donnees.Evenement, lieu *time.Location, debut, fin time.Time, annulees map[string]bool) [][2]time.Time {
 	l := deplier(e, lieu, debut, fin)
 	if len(annulees) == 0 {

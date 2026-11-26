@@ -189,6 +189,7 @@ type Evenement struct {
 	CreeLe        int64
 	RepetitionFin string
 	Rappel        int64
+	RappelAvant   string
 }
 
 type EvenementsContact struct {
@@ -197,13 +198,25 @@ type EvenementsContact struct {
 }
 
 type EvenementsException struct {
-	EvenementID int64
-	Jour        string
+	EvenementID     int64
+	Jour            string
+	Modifiee        int64
+	NouveauDebut    int64
+	NouveauFin      int64
+	NouvelleJournee int64
+	NouveauTitre    string
+	NouveauLieu     sql.NullString
 }
 
 type EvenementsMembre struct {
 	EvenementID int64
 	MembreID    int64
+}
+
+type EvenementsRappel struct {
+	EvenementID int64
+	Debut       int64
+	EnvoyeLe    int64
 }
 
 type Famille struct {

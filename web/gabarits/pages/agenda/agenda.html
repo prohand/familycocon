@@ -95,7 +95,7 @@
 {{define "ligne-evt"}}
 <a class="ligne evt" href="{{.Lien}}">
   <span class="heure">{{.Heure}}{{with .HeureFin}}<small>{{.}}</small>{{end}}</span>
-  <span class="quoi">{{.Evt.Titre}}{{if .Evt.Lieu}}<small>📍 {{.Evt.Lieu}}</small>{{end}}{{if .Contacts}}<small>👤 {{range $i, $x := .Contacts}}{{if $i}}, {{end}}{{$x.Nom}}{{end}}</small>{{end}}</span>
+  <span class="quoi">{{.Evt.Titre}}{{if .Modifiee}}<small>✏️ modifié cette fois</small>{{end}}{{if .Evt.Lieu}}<small>📍 {{.Evt.Lieu}}</small>{{end}}{{if .Contacts}}<small>👤 {{range $i, $x := .Contacts}}{{if $i}}, {{end}}{{$x.Nom}}{{end}}</small>{{end}}</span>
   <span class="pastilles">{{template "pastilles" .Membres}}</span>
 </a>
 {{end}}
