@@ -25,7 +25,12 @@ import (
 
 	"github.com/boombuler/barcode"
 	"github.com/boombuler/barcode/aztec"
+	"github.com/boombuler/barcode/codabar"
+	"github.com/boombuler/barcode/code39"
+	"github.com/boombuler/barcode/code93"
+	"github.com/boombuler/barcode/datamatrix"
 	"github.com/boombuler/barcode/pdf417"
+	"github.com/boombuler/barcode/twooffive"
 	"rsc.io/qr"
 
 	"familycocon/internal/appli"
@@ -40,7 +45,9 @@ const mod = "fidelite"
 // Formats proposés.
 var Formats = []struct{ Cle, Nom string }{
 	{"auto", "Détecté tout seul"}, {"ean13", "EAN-13 (13 chiffres)"}, {"upca", "UPC-A (12 chiffres)"},
-	{"ean8", "EAN-8 (8 chiffres)"}, {"code128", "Code 128"}, {"qr", "QR code"},
+	{"ean8", "EAN-8 (8 chiffres)"}, {"code128", "Code 128"},
+	{"code39", "Code 39"}, {"code93", "Code 93"}, {"codabar", "Codabar (bibliothèques…)"},
+	{"itf", "ITF (2 parmi 5 entrelacé)"}, {"qr", "QR code"}, {"datamatrix", "Data Matrix"},
 	{"pdf417", "PDF417 (code en blocs, ex. Starbucks)"}, {"aztec", "Aztec"}, {"aucun", "Pas de code (numéro seul)"},
 }
 
@@ -142,6 +149,52 @@ func imagePNG(code barcode.Barcode, fx, fy int) template.URL {
 	return template.URL("data:image/png;base64," + base64.StdEncoding.EncodeToString(tampon.Bytes())) // #nosec G203 -- image produite ici
 }
 
+// lineaire : les codes-barres à une dimension dessinés par boombuler/barcode
+// (Code 39, Code 93, Codabar, ITF).
+func lineaire(numero, format string) (barcode.Barcode, error) {
+	switch format {
+	case "code39":
+		// Sans clé de contrôle (comme sur les cartes) ; minuscules : mode ASCII complet.
+		if code, err := code39.Encode(numero, false, false); err == nil {
+			return code, nil
+		}
+		return code39.Encode(numero, false, true)
+	case "code93":
+		// Ses deux caractères de contrôle sont obligatoires (sinon illisible).
+		if code, err := code93.Encode(numero, true, false); err == nil {
+			return code, nil
+		}
+		return code93.Encode(numero, true, true)
+	case "codabar":
+		// Les lecteurs ne rendent pas les lettres de début et de fin (A à D) :
+		// on les remet s'il le faut.
+		n := strings.ToUpper(numero)
+		if len(n) < 2 || !strings.ContainsRune("ABCD", rune(n[0])) || !strings.ContainsRune("ABCD", rune(n[len(n)-1])) {
+			n = "A" + n + "A"
+		}
+		return codabar.Encode(n)
+	case "itf":
+		return twooffive.Encode(numero, true) // nombre pair de chiffres
+	}
+	return nil, ErrCode
+}
+
+// modules1D : un code à une dimension en « 1101… » (1 : barre noire), pour
+// le dessiner en SVG comme les EAN et Code 128.
+func modules1D(code barcode.Barcode) string {
+	b := code.Bounds()
+	var s strings.Builder
+	for x := b.Min.X; x < b.Max.X; x++ {
+		r, _, _, _ := code.At(x, b.Min.Y).RGBA()
+		if r < 0x8000 {
+			s.WriteByte('1')
+		} else {
+			s.WriteByte('0')
+		}
+	}
+	return s.String()
+}
+
 // Dessin : le code de la carte (SVG ou QR), ou la raison s'il est impossible.
 func Dessin(ct donnees.Carte) vueCarte {
 	v := vueCarte{Carte: ct}
@@ -181,6 +234,20 @@ func Dessin(ct donnees.Carte) vueCarte {
 			break
 		}
 		v.QR = imagePNG(code, 8, 8)
+	case "datamatrix":
+		code, err := datamatrix.Encode(ct.Numero)
+		if err != nil {
+			v.Probleme = "Numéro trop long pour un code Data Matrix."
+			break
+		}
+		v.QR = imagePNG(code, 8, 8)
+	case "code39", "code93", "codabar", "itf":
+		code, err := lineaire(ct.Numero, format)
+		if err != nil {
+			v.Probleme = "Ce numéro ne peut pas être mis dans ce format : essayez « Code 128 »."
+			break
+		}
+		v.SVG = svgBarres(modules1D(code), ct.Numero)
 	default:
 		svg, err := SVG(ct.Numero, format)
 		if err != nil {
@@ -249,7 +316,7 @@ func lire(r *http.Request) (saisie, string) {
 	// un QR code, un PDF417 ou un Aztec, qui peuvent en contenir (le code
 	// redessiné doit être le même que celui de la carte).
 	switch s.format {
-	case "qr", "pdf417", "aztec":
+	case "qr", "pdf417", "aztec", "datamatrix", "code39", "code93":
 		s.numero = strings.TrimSpace(r.PostFormValue("numero"))
 	default:
 		s.numero = strings.Join(strings.Fields(r.PostFormValue("numero")), "")

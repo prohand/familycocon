@@ -837,3 +837,14 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   grand écran (≥ 1000 px), la semaine en 7 colonnes.
 - Moi : chaque partie est repliée avec un résumé (thème choisi, barre du
   bas, notifications activées).
+
+## Cartes : autres formats de code (26/11/2026)
+
+- En plus d'EAN-13, UPC-A, EAN-8, Code 128, QR, PDF417 et Aztec : Code 39,
+  Code 93, Codabar, ITF (2 parmi 5 entrelacé) et Data Matrix. Ils sont lus
+  au scan (BarcodeDetector ou zxing-wasm, qui les lisait déjà) et redessinés
+  dans le même format (boombuler/barcode, déjà là : rien de plus dans le
+  binaire). Aller-retour dessin → lecture vérifié pour chacun.
+- Code 93 : avec ses deux caractères de contrôle (obligatoires). Codabar : le
+  numéro est gardé sans ses lettres de début et de fin (A à D), remises au
+  dessin. UPC-E reste lu en « détecté tout seul » (pas de dessin UPC-E).
