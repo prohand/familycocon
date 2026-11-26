@@ -13,6 +13,9 @@ const CACHE = "familycocon-1";
 // Pages gardées pour une lecture sans réseau (la liste de courses).
 const PAGES = "familycocon-pages";
 const LISTE = /^\/courses\/liste\/\d+$/;
+// Adresse (jamais demandée au serveur) où la page visée par une notification
+// est gardée pour app.js.
+const CIBLE = "/__cible-notification";
 
 self.addEventListener("install", function (e) {
   e.waitUntil(caches.open(CACHE).then(function (c) {
@@ -32,6 +35,17 @@ self.addEventListener("fetch", function (e) {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
+  // La page visée par la dernière notification touchée (voir plus bas) :
+  // lue une seule fois par app.js, puis oubliée.
+  if (url.pathname === CIBLE) {
+    e.respondWith(caches.open(PAGES).then(function (c) {
+      return c.match(CIBLE).then(function (r) {
+        c.delete(CIBLE);
+        return r || new Response(null, { status: 204 });
+      });
+    }));
+    return;
+  }
   if (url.pathname.startsWith("/statique/")) {
     e.respondWith(caches.match(req).then(function (r) {
       return r || fetch(req).then(function (rep) {
@@ -81,7 +95,13 @@ self.addEventListener("push", function (e) {
 self.addEventListener("notificationclick", function (e) {
   e.notification.close();
   const cible = new URL((e.notification.data && e.notification.data.url) || "/", location.origin).href;
-  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(function (fenetres) {
+  // Sur iPhone, l'appli fermée s'ouvre souvent sur sa page de départ (l'accueil)
+  // au lieu de la page demandée : la cible est gardée une minute, et app.js
+  // y va dès que l'appli s'ouvre.
+  const garder = caches.open(PAGES).then(function (c) {
+    return c.put(CIBLE, new Response(JSON.stringify({ url: cible, le: Date.now() }), { headers: { "Content-Type": "application/json" } }));
+  });
+  e.waitUntil(garder.then(function () { return self.clients.matchAll({ type: "window", includeUncontrolled: true }); }).then(function (fenetres) {
     // Une fenêtre déjà sur la bonne page : on la montre.
     for (const f of fenetres) {
       if (f.url === cible && "focus" in f) return f.focus();

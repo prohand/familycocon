@@ -1656,3 +1656,20 @@ document.addEventListener("change", function (e) {
   if (f.matches && f.matches("input[type=file][data-envoi-auto]") && f.files.length && f.form) f.form.requestSubmit();
 });
 
+
+// Notification touchée : si l'appli s'est ouverte ailleurs que sur la page
+// visée (iPhone : souvent l'accueil), on y va. Le service worker garde la
+// cible une minute et ne la donne qu'une fois.
+(function () {
+  "use strict";
+  if (!navigator.serviceWorker || !navigator.serviceWorker.controller || !window.fetch) return;
+  fetch("/__cible-notification", { credentials: "same-origin" }).then(function (r) {
+    return r.status === 200 ? r.json() : null;
+  }).then(function (j) {
+    if (!j || !j.url || Date.now() - j.le > 60000) return;
+    var cible = new URL(j.url, location.origin);
+    if (cible.origin === location.origin && cible.pathname + cible.search !== location.pathname + location.search) {
+      location.replace(cible.pathname + cible.search);
+    }
+  }).catch(function () {});
+})();

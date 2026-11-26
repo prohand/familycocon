@@ -886,3 +886,14 @@ reviennent.
   L'année (le passé), Chercher.
 - Plafonds retirés (page, alertes, jauges). La table `budget_plafonds` reste
   (aucune donnée effacée) mais ne sert plus.
+
+## Notifications : toucher ouvre l'objet (26/11/2026)
+
+- `App.PublierLien(c, module, texte, url, pour)` : la notification ouvre
+  `url` (la note, le jour de l'événement, le projet) ; sinon la page du
+  module. Notes, agenda et projets l'utilisent ; les rappels le faisaient
+  déjà.
+- iPhone : l'appli fermée s'ouvre souvent sur sa page de départ. Le service
+  worker garde la cible (cache `familycocon-pages`, adresse
+  `/__cible-notification`, jamais demandée au serveur) ; app.js la lit au
+  chargement (une seule fois, moins d'une minute) et y va.

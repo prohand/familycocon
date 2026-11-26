@@ -182,6 +182,12 @@ func (a *App) Publier(c *Contexte, module, texte string) { a.PublierPour(c, modu
 // événement, l'enfant d'une mission, les parents pour une validation…
 // Toutes les pages ouvertes se mettent à jour.
 func (a *App) PublierPour(c *Contexte, module, texte string, pour []int64) {
+	a.PublierLien(c, module, texte, "", pour)
+}
+
+// PublierLien : comme PublierPour, et toucher la notification ouvre la page
+// url (la note, le jour de l'événement…) ; vide : la page du module.
+func (a *App) PublierLien(c *Contexte, module, texte, url string, pour []int64) {
 	a.Direct.PublierPour(c.Famille.ID, Message{
 		Module: module, Texte: texte, Auteur: c.Membre.ID,
 		Couleur: c.Membre.Couleur, Initiale: Visage(c.Membre),
@@ -192,7 +198,7 @@ func (a *App) PublierPour(c *Contexte, module, texte string, pour []int64) {
 			// cette notification dans Moi › Notifications.
 			a.Journal.Warn("notification d'un module sans « Notifie »", "module", module)
 		}
-		a.Push.annoncer(annonce{famille: c.Famille.ID, auteur: c.Membre.ID, module: module, texte: texte, pour: pour})
+		a.Push.annoncer(annonce{famille: c.Famille.ID, auteur: c.Membre.ID, module: module, texte: texte, url: url, pour: pour})
 	}
 }
 
