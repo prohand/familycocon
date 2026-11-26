@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -37,6 +38,12 @@ type Contexte struct {
 
 // EstParent : le membre est-il un parent ?
 func (c *Contexte) EstParent() bool { return c.Membre.Role == RoleParent }
+
+// Replie : le membre a-t-il replié ce bloc de l'accueil (« a-venir »,
+// « agenda », « taches ») ? Choix gardé en base (voir blocReplie).
+func (c *Contexte) Replie(bloc string) bool {
+	return slices.Contains(strings.Split(c.Membre.AccueilReplies, ","), bloc)
+}
 
 // Actif : le module est-il activé pour la famille ?
 func (c *Contexte) Actif(module string) bool { return c.Actifs[module] }

@@ -5,6 +5,7 @@ package appli
 import (
 	"context"
 	"html/template"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -163,5 +164,25 @@ func TestAccueilJourHautCompact(t *testing.T) {
 	n.post("/moi/accueil", map[string]string{"ordre": ordre[1], "action": "defaut"})
 	if _, accueil = n.get("/"); !strings.Contains(accueil, "compactes") {
 		t.Fatal("réglage perdu avec l'ordre de départ")
+	}
+}
+
+// Blocs de l'accueil repliés : gardés pour le membre ; bloc inconnu refusé.
+func TestBlocsReplies(t *testing.T) {
+	a, _, n := familleTest(t)
+	n.get("/moi")
+	if code, _ := n.post("/moi/accueil/replie", map[string]string{"bloc": "a-venir", "replie": "1"}); code != http.StatusNoContent {
+		t.Fatalf("replier : %d", code)
+	}
+	n.post("/moi/accueil/replie", map[string]string{"bloc": "taches", "replie": "1"})
+	if c := contexteDe(t, a, "marie"); !c.Replie("a-venir") || !c.Replie("taches") || c.Replie("agenda") {
+		t.Fatalf("blocs repliés : %q", c.Membre.AccueilReplies)
+	}
+	n.post("/moi/accueil/replie", map[string]string{"bloc": "a-venir", "replie": "0"})
+	if c := contexteDe(t, a, "marie"); c.Replie("a-venir") || !c.Replie("taches") {
+		t.Fatalf("bloc déplié : %q", c.Membre.AccueilReplies)
+	}
+	if code, _ := n.post("/moi/accueil/replie", map[string]string{"bloc": "budget", "replie": "1"}); code != http.StatusBadRequest {
+		t.Fatalf("bloc inconnu : %d", code)
 	}
 }

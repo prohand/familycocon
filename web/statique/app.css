@@ -2037,3 +2037,11 @@ details.partie[open] { padding-bottom: 16px; }
 .ligne.anniv .appel:hover { background: var(--fond); }
 .ligne.anniv .age { white-space: nowrap; }
 .documents > .sous-titre { margin-top: 0; }
+/* Accueil : blocs du jour repliables (choix gardé par membre). Replié : le
+   nombre d'éléments à côté du titre. */
+.bloc-pliable > summary { list-style: none; cursor: pointer; }
+.bloc-pliable > summary::-webkit-details-marker { display: none; }
+.bloc-pliable > summary h2::after { content: "▾"; margin-left: 6px; font-size: .8em; color: var(--texte-doux); }
+.bloc-pliable:not([open]) > summary h2::after { content: "▸"; }
+.bloc-pliable .nb-replie { display: none; margin-left: 4px; padding: 1px 8px; border-radius: 999px; background: var(--carte); font-size: .75rem; font-weight: 800; color: var(--texte-doux); vertical-align: 2px; }
+.bloc-pliable:not([open]) .nb-replie { display: inline-block; }

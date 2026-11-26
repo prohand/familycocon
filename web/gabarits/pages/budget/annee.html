@@ -17,7 +17,13 @@
     <span>⬆️ Revenus <b>{{montant .Revenus .Devise}}</b></span>
     <span>⬇️ Dépenses <b>{{montant .Depenses .Devise}}</b></span>
   </div>
-  {{if or .RevenusPrevus .DepensesPrevues}}<p class="aide">Dont prévu (opérations qui reviennent, pas encore passées) : +{{montant .RevenusPrevus .Devise}} · −{{montant .DepensesPrevues .Devise}}</p>{{end}}
+  {{- if or .RevenusPrevus .DepensesPrevues}}
+  {{- if and (eq .RevenusPrevus .Revenus) (eq .DepensesPrevues .Depenses)}}
+  <p class="aide">Rien n'est encore passé : ces montants sont calculés d'après les opérations qui reviennent (salaire, loyer, abonnements…).</p>
+  {{- else}}
+  <p class="aide">Encore à venir, d'après les opérations qui reviennent : +{{montant .RevenusPrevus .Devise}} de revenus et −{{montant .DepensesPrevues .Devise}} de dépenses. Le reste est déjà passé.</p>
+  {{- end}}
+  {{- end}}
 </section>
 <section class="carte bloc graphe annee">
   <div class="section-titre premier"><h2>Mois par mois</h2></div>

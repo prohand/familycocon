@@ -325,6 +325,27 @@ document.addEventListener("keydown", function (e) {
   });
 })();
 
+// Accueil : un bloc du jour replié ou déplié (details.bloc-pliable) est
+// gardé pour le membre (POST /moi/accueil/replie), d'un appareil à l'autre.
+// « toggle » ne remonte pas : écouté à la capture. Le navigateur l'envoie
+// aussi au chargement d'un bloc ouvert : rien n'est envoyé si l'état est
+// celui déjà enregistré (data-etat).
+document.addEventListener("toggle", function (e) {
+  var d = e.target;
+  if (!d.matches || !d.matches("details.bloc-pliable[data-bloc]")) return;
+  // data-etat : l'état enregistré (écrit par le serveur, puis ici).
+  var ouvert = d.open ? "1" : "0";
+  if (d.getAttribute("data-etat") === ouvert) return;
+  d.setAttribute("data-etat", ouvert);
+  var jeton = "";
+  try { jeton = JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) {}
+  fetch("/moi/accueil/replie", {
+    method: "POST", credentials: "same-origin",
+    headers: { "X-Jeton": jeton, "Content-Type": "application/x-www-form-urlencoded" },
+    body: "bloc=" + encodeURIComponent(d.getAttribute("data-bloc")) + "&replie=" + (d.open ? "0" : "1")
+  }).catch(function () {});
+}, true);
+
 // Véhicule : reprise d'une sauvegarde Fuelio (input[data-fuelio] = adresse
 // d'envoi). Le fichier part tel quel (il peut peser des centaines de Mo,
 // photos comprises) ; l'avancement s'affiche, puis la fiche est rechargée
