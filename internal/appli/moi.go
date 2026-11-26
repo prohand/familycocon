@@ -39,7 +39,6 @@ func (a *App) routesMoi() {
 	a.Route("POST /moi/theme", "", Membre, a.themeMoi)
 	a.Route("POST /moi/mdp", "", Membre, a.mdpMoi)
 	a.Route("GET /moi/accueil", "", Membre, a.pageMonAccueil)
-	a.Route("POST /moi/rail", "", Membre, a.railMoi)
 	a.Route("POST /moi/accueil", "", Membre, a.monAccueil)
 }
 
@@ -145,17 +144,6 @@ func (a *App) raccourcisMoi(w http.ResponseWriter, r *http.Request, c *Contexte)
 	}
 	a.Flash(w, "Barre du bas enregistrée ✓")
 	a.Rediriger(w, r, "/moi")
-}
-
-// railMoi : POST /moi/rail (app.js, bouton « « » de la barre de gauche) :
-// barre réduite aux icônes (rail=reduite) ou entière, sur cet appareil.
-func (a *App) railMoi(w http.ResponseWriter, r *http.Request, c *Contexte) {
-	v := ""
-	if r.PostFormValue("rail") == "reduite" {
-		v = "reduite"
-	}
-	a.PoserPreference(w, "rail", v)
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // pageMonAccueil : l'ordre des modules de l'accueil et ceux qui sont masqués.

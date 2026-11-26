@@ -1656,22 +1656,3 @@ document.addEventListener("change", function (e) {
   if (f.matches && f.matches("input[type=file][data-envoi-auto]") && f.files.length && f.form) f.form.requestSubmit();
 });
 
-
-// Barre de gauche (grand écran) : « « » la réduit aux icônes ou l'agrandit.
-// Tout de suite à l'écran, puis gardé par le serveur pour cet appareil
-// (cookie, comme le thème : la page arrive déjà dans le bon état).
-(function () {
-  "use strict";
-  document.addEventListener("click", function (e) {
-    var b = e.target.closest && e.target.closest("[data-rail]");
-    if (!b) return;
-    var racine = document.documentElement;
-    var reduite = racine.getAttribute("data-rail") !== "reduite";
-    if (reduite) racine.setAttribute("data-rail", "reduite"); else racine.removeAttribute("data-rail");
-    var jeton = "";
-    try { jeton = JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) {}
-    fetch("/moi/rail", { method: "POST", credentials: "same-origin",
-      headers: { "X-Jeton": jeton, "Content-Type": "application/x-www-form-urlencoded" },
-      body: "rail=" + (reduite ? "reduite" : "") }).catch(function () {});
-  });
-})();
