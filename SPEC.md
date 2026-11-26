@@ -133,9 +133,12 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
 - Modifier une récurrence ne touche que les prochaines fois. Supprimer une
   récurrence garde les opérations passées.
 - Les anciennes opérations « fixes » sont devenues des récurrences mensuelles.
-- Fréquence « Chaque mois, de janvier à octobre » (`mois10`, migration 0044) :
-  10 fois par an, rien en novembre et décembre (taxe foncière mensualisée) ;
-  un départ en novembre ou décembre part du janvier suivant. La migration
+- Fréquences « Chaque mois, de janvier à octobre » (`mois10`, migration
+  0044) et « de septembre à juin » (`scolaire` : cantine, garderie ;
+  migration 0047, qui retire le CHECK de `frequence` : la liste est vérifiée
+  par le programme). Règle commune (`Frequence.Seulement`) : 10 fois par
+  an, mois par mois en sautant les autres ; un départ dans un mois sauté
+  part du premier mois permis qui suit. La migration 0044
   refait la table (un CHECK ne se modifie pas) : une migration qui commence
   par `-- sans cles etrangeres` tourne avec `foreign_keys=OFF`, puis
   `foreign_key_check` : un lien cassé par la migration annule tout (ceux

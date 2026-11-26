@@ -302,11 +302,10 @@ func TestMigrationRecurrencesDixMois(t *testing.T) {
 	if ops != 1 || abos != 1 || perso != 3 || vir != 1 {
 		t.Fatalf("après migration : %d opération, %d abonnement, perso %d, virement %d", ops, abos, perso, vir)
 	}
-	if _, err := db.ExecContext(ctx, `UPDATE recurrences SET frequence = 'mois10' WHERE id = 7`); err != nil {
-		t.Fatal("mois10 refusé :", err)
-	}
-	if _, err := db.ExecContext(ctx, `UPDATE recurrences SET frequence = 'mois11' WHERE id = 7`); err == nil {
-		t.Fatal("fréquence inconnue acceptée")
+	// 0044 puis 0047 (table refaite deux fois) : les nouvelles fréquences
+	// passent ; depuis 0047, la liste est vérifiée par le programme.
+	if _, err := db.ExecContext(ctx, `UPDATE recurrences SET frequence = 'scolaire' WHERE id = 7`); err != nil {
+		t.Fatal("scolaire refusé :", err)
 	}
 	// Les clés étrangères marchent encore : supprimer la récurrence
 	// supprime l'abonnement et détache l'opération.
