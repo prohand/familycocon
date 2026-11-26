@@ -164,3 +164,46 @@ func TestAbonnementJamaisRevenu(t *testing.T) {
 		t.Fatalf("engagement en 9999 : %d", code)
 	}
 }
+
+// Filtres de la liste : catégorie, budget (commun/perso), fréquence ; les
+// totaux suivent le filtre ; une rangée sans vrai choix n'est pas montrée.
+func TestAbonnementsFiltres(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, brancher)
+	marie := essai.Famille(t, srv)
+	jour := essai.Maintenant().AddDate(0, 0, 5).Format("2006-01-02")
+	marie.Get("/abonnements/nouveau")
+	// Une seule catégorie et une seule fréquence : pas de filtre.
+	marie.Post("/abonnements", map[string]string{"nom": "Musique", "montant": "10", "frequence": "mois", "prochain": jour, "categorie": "abonnements"})
+	if _, page := marie.Get("/abonnements"); strings.Contains(page, "filtres-abo") {
+		t.Fatal("filtres montrés sans choix")
+	}
+	marie.Post("/abonnements", map[string]string{"nom": "Assurance auto", "montant": "120", "frequence": "annee", "prochain": jour, "categorie": "assurances"})
+	marie.Post("/abonnements", map[string]string{"nom": "Salle de sport", "montant": "30", "frequence": "mois", "prochain": jour, "categorie": "abonnements", "prive": "1"})
+	_, page := marie.Get("/abonnements")
+	for _, s := range []string{"Catégorie :", "Budget :", "Fréquence :", "🔒 Perso"} {
+		if !strings.Contains(page, s) {
+			t.Fatalf("filtre %q absent :\n%s", s, page)
+		}
+	}
+	if strings.Contains(page, "Pour :") {
+		t.Fatal("filtre « Pour » sans choix")
+	}
+	// Catégorie : l'assurance seule (120 €/an = 10 €/mois).
+	_, page = marie.Get("/abonnements?cat=assurances")
+	if !strings.Contains(page, "Assurance auto") || strings.Contains(page, "Musique") || !strings.Contains(page, appli.Montant(1000, "EUR")) {
+		t.Fatalf("filtre catégorie :\n%s", page)
+	}
+	if !strings.Contains(page, "Retirer les filtres") {
+		t.Fatal("lien pour retirer les filtres absent")
+	}
+	// Perso et chaque mois : la salle de sport seule.
+	_, page = marie.Get("/abonnements?compte=perso&freq=mois")
+	if !strings.Contains(page, "Salle de sport") || strings.Contains(page, "Musique") || strings.Contains(page, "Assurance auto") {
+		t.Fatalf("filtre perso + mois :\n%s", page)
+	}
+	// Rien pour ce filtre : message, pas « Aucun abonnement. Ajoutez… ».
+	_, page = marie.Get("/abonnements?compte=perso&cat=assurances")
+	if !strings.Contains(page, "Aucun abonnement en cours pour ce filtre") {
+		t.Fatalf("filtre vide :\n%s", page)
+	}
+}

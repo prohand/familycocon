@@ -1649,6 +1649,11 @@ button.lien-ajout { background: none; border: 0; padding: 6px 0; cursor: pointer
 .pilules.petites .pilule { padding: 4px 12px; min-height: 32px; font-size: .85rem; }
 /* « Voir : Toutes · Partagées · Privées · Vues des enfants » : passe à la ligne. */
 .pilules.petites.voir { flex-wrap: wrap; justify-content: flex-start; overflow: visible; gap: 6px; margin-top: 10px; }
+/* Abonnements : rangées de filtres (catégorie, pour qui, budget, fréquence). */
+.filtres-abo { margin-bottom: 4px; }
+.filtres-abo > summary { cursor: pointer; margin-bottom: 8px; }
+.filtres-abo .pilules.petites.voir { margin: 0 0 6px; }
+.filtres-abo .pilules .aide { margin: 0; }
 .chiffres { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .chiffres div { background: var(--fond); border-radius: 12px; padding: 8px 10px; }
 .chiffres small { display: block; color: var(--texte-doux); font-size: .75rem; }

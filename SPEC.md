@@ -170,6 +170,12 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
 - Abonnements : une récurrence + emoji, fin d'engagement, page de gestion,
   notes (jamais de mot de passe). Réservé aux parents ; leurs rappels et
   notifications ne vont jamais aux enfants.
+  **Filtres** (bloc « 🔎 Filtrer », replié, ouvert quand un filtre est
+  choisi) : catégorie, pour qui, budget commun ou perso, fréquence. Dans
+  l'adresse (`?cat=&pour=&compte=&freq=`, lien gardable) ; une rangée n'est
+  montrée que s'il y a au moins deux choix ; chaque pastille compte les
+  abonnements en cours avec les autres filtres ; les totaux (par mois, par
+  an) suivent le filtre (« Chaque mois (filtre) »).
 - Agenda : les modules peuvent y montrer des éléments discrets (`AjouterCalendrier`).
   Les tâches « chaque jour » et « certains jours » y sont, à partir de leur
   création. Filtre « Toutes / Les miennes / Masquées » gardé dans un cookie.

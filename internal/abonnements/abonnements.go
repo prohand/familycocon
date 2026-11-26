@@ -93,6 +93,10 @@ type vueListe struct {
 	Actifs, Resilies []Ligne
 	ParMois, ParAn   int64
 	Devise           string
+	Filtres          []Rangee // rangées de filtres (vide : rien à filtrer)
+	Filtre           bool     // un filtre est choisi (totaux de ce filtre)
+	NbTous           int      // abonnements en cours, tous filtres retirés
+	Resume           string   // filtres choisis (« Assurances · Mois »), pour le titre replié
 }
 
 func recurrence(x donnees.ListeAbonnementsRow) donnees.Recurrence {
@@ -135,8 +139,21 @@ func (m *Module) liste(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 		m.a.ErreurInterne(w, r, err)
 		return
 	}
-	v := vueListe{Devise: c.Famille.Devise}
+	membres, err := m.a.Membres(r.Context(), c)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	f := lireFiltre(r)
+	v := vueListe{Devise: c.Famille.Devise, Filtres: rangees(l, f, membres), Filtre: f.actif()}
+	v.Resume = resumeFiltres(v.Filtres)
 	for _, x := range l {
+		if !x.Resilie {
+			v.NbTous++
+		}
+		if !f.garde(x, "") {
+			continue
+		}
 		if x.Resilie {
 			v.Resilies = append(v.Resilies, x)
 			continue
