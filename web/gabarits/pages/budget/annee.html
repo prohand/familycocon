@@ -26,7 +26,7 @@
   {{else}}<p class="aide">Rien de noté en {{.An}}.</p>{{end}}
   {{- range .Mois}}{{if or .Revenus .Depenses}}
   <a class="barre-mois" href="/budget?compte={{if $.Donnees.Perso}}perso{{else}}commun{{end}}&amp;mois={{.Mois}}">
-    <span class="nom-cat">{{.Nom}}{{if or .RevenusPrevus .DepensesPrevues}} <small>{{if or (eq .RevenusPrevus .Revenus) (eq .DepensesPrevues .Depenses)}}prévu{{else}}en partie prévu{{end}}</small>{{end}}</span>
+    <span class="nom-cat">{{.Nom}}{{if or .RevenusPrevus .DepensesPrevues}} <small>{{if and (or (not .Revenus) (eq .RevenusPrevus .Revenus)) (or (not .Depenses) (eq .DepensesPrevues .Depenses))}}prévu{{else}}en partie prévu{{end}}</small>{{end}}</span>
     <span class="montants-mois"><span class="revenu">+{{montant .Revenus $.Donnees.Devise}}</span><span class="depense">−{{montant .Depenses $.Donnees.Devise}}</span><span class="fleche-droite">›</span></span>
   </a>
   {{- end}}{{end}}

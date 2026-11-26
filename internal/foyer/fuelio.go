@@ -44,6 +44,7 @@ type fuelioRetour struct {
 	corriges                                  int  // pleins déjà là, devenus partiels (ou complets)
 	plein                                     bool // carnet plein : la fin n'est pas reprise
 	ecart                                     fuelio.Ecart
+	lignes                                    []int64 // lignes du carnet écrites par cette reprise
 }
 
 func (x fuelioRetour) message() string {
@@ -174,7 +175,7 @@ func (m *Module) importerFuelio(w http.ResponseWriter, r *http.Request, c *appli
 		return
 	}
 	msg := ret.message()
-	if rb, err := m.reglerBudget(context.WithoutCancel(r.Context()), c, x, r.URL.Query().Get("budget")); err != nil {
+	if rb, err := m.reglerBudget(context.WithoutCancel(r.Context()), c, x, r.URL.Query().Get("budget"), ret.lignes); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	} else if t := rb.Message(); t != "" {
@@ -260,7 +261,7 @@ func (m *Module) importerFuelioTous(w http.ResponseWriter, r *http.Request, c *a
 		if y, err := m.a.Q.VehiculeParID(ctx, donnees.VehiculeParIDParams{ID: x.ID, FamilleID: c.Famille.ID}); err == nil {
 			x = y
 		}
-		if rb, err := m.reglerBudget(context.WithoutCancel(ctx), c, x, r.URL.Query().Get("budget")); err != nil {
+		if rb, err := m.reglerBudget(context.WithoutCancel(ctx), c, x, r.URL.Query().Get("budget"), ret.lignes); err != nil {
 			m.a.ErreurInterne(w, r, err)
 			return
 		} else if t := rb.Message(); t != "" {
@@ -330,6 +331,7 @@ func (m *Module) reprendre(ctx context.Context, c *appli.Contexte, x donnees.Veh
 			}
 			n++
 			ids[i] = ligne.ID
+			ret.lignes = append(ret.lignes, ligne.ID)
 			kmMax = max(kmMax, l.Km)
 			if l.Plein {
 				ret.pleins++

@@ -307,7 +307,7 @@ func (m *Module) enregistrerVehicule(w http.ResponseWriter, r *http.Request, c *
 	if x, err := m.a.Q.VehiculeParID(ctx, donnees.VehiculeParIDParams{ID: id, FamilleID: c.Famille.ID}); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
-	} else if ret, err := m.reglerBudget(ctx, c, x, r.PostFormValue("budget")); err != nil {
+	} else if ret, err := m.reglerBudget(ctx, c, x, r.PostFormValue("budget"), nil); err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
 	} else if t := ret.Message(); t != "" {

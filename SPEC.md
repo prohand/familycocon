@@ -935,3 +935,26 @@ reviennent.
   du prévu plus claires (`Barre.Prevus`, classes g-p0, g-p1) ; « Reste
   prévu sur l'année » et « Dont prévu : +… · −… » ; mois marqués
   « prévu » ou « en partie prévu » ; catégories prévu compris.
+
+## Budget : revue du 26/11/2026 (8 corrections)
+- Opération qui revient **terminée** : enregistrer sa fiche sans date garde
+  sa fin et sa fréquence (vider « Jusqu'au » ou changer la fréquence la
+  relançait et écrivait d'un coup les fois manquées) ; pour la relancer,
+  une date. Abonnement résilié : la fréquence ne change plus non plus.
+- « Arrêter » / « Résilier » une opération déjà terminée : sa fin ne
+  bouge pas (`ArreterRecurrence` ne repousse jamais une fin passée).
+- Véhicule : le carnet n'est rangé dans le budget que quand le réglage
+  **change** ; la reprise Fuelio n'ajoute que les lignes qu'elle vient
+  d'écrire (`RangerBudget(..., seules)`). Une dépense retirée à la main du
+  budget n'y revient plus.
+- Coût ajouté après coup à une ligne du carnet : va au budget si le
+  véhicule est réglé pour.
+- Un enfant qui corrige la date ou le libellé d'une ligne fait suivre la
+  dépense du compte commun (jamais celle d'un budget perso, jamais le coût).
+- « Mon budget perso » ne prend que les dépenses ajoutées par ce parent :
+  celles d'un autre restent au compte commun.
+- L'année : « prévu » seulement si tout le mois est prévu (sinon « en
+  partie prévu »).
+- Fréquences « certains mois » : date calculée directement (plus mois par
+  mois) ; le prévu saute aux fois de la période ; années affichables de
+  1970 à dans 30 ans (`anPermis`, aussi pour `?mois=`).

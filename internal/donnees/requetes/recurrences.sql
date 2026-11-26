@@ -23,8 +23,10 @@ UPDATE recurrences SET sens = sqlc.arg(sens), montant = sqlc.arg(montant), categ
   nouveau_montant = sqlc.arg(nouveau_montant), nouveau_le = sqlc.arg(nouveau_le), a_confirmer = sqlc.arg(a_confirmer)
 WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND faites = sqlc.arg(faites_avant);
 
+-- Une recurrence deja terminee (fin passee) ne repart pas.
 -- name: ArreterRecurrence :exec
-UPDATE recurrences SET fin = ? WHERE id = ? AND famille_id = ?;
+UPDATE recurrences SET fin = sqlc.arg(fin)
+WHERE id = sqlc.arg(id) AND famille_id = sqlc.arg(famille_id) AND (fin = '' OR fin > sqlc.arg(fin));
 
 -- name: SupprimerRecurrence :exec
 DELETE FROM recurrences WHERE id = ? AND famille_id = ?;

@@ -158,3 +158,53 @@ func TestRevueBudget(t *testing.T) {
 		t.Fatalf("PlaceRecurrence : %q %v", msg, err)
 	}
 }
+
+// Revue du 26/11/2026 : une opération terminée ne repart pas toute seule
+// (fiche enregistrée sans date, fréquence changée, « Arrêter » de nouveau).
+func TestRevueTermineeNeRepartPas(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	ctx := context.Background()
+	auj := essai.Maintenant()
+	cle := func(mois, jours int) string { return repetition.CleJour(auj.AddDate(0, mois, jours)) }
+	compter := func() int {
+		t.Helper()
+		ops, err := a.Q.OperationsPeriode(ctx, donnees.OperationsPeriodeParams{FamilleID: 1, Du: "2000-01-01", Au: "2999-01-01"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(ops)
+	}
+	// Loyer commencé il y a 6 mois, arrêté il y a 4 mois : 3 loyers.
+	marie.Get("/budget/nouvelle")
+	marie.Post("/budget", map[string]string{"montant": "800", "categorie": "logement", "libelle": "Loyer", "jour": cle(-6, 0),
+		"frequence": "mois", "fin": cle(-4, 0)})
+	marie.Get("/budget")
+	if n := compter(); n != 3 {
+		t.Fatalf("%d loyers, attendu 3", n)
+	}
+	_, page := marie.Get("/budget/recurrences")
+	id := essai.Trouver(t, page, `href="/recurrences/(\d+)"`)
+	// Fiche enregistrée sans date et sans fin, puis en semaine : rien ne repart.
+	for _, freq := range []string{"mois", "semaine"} {
+		if code, p := marie.Post("/recurrences/"+id, map[string]string{"montant": "800", "categorie": "logement", "libelle": "Loyer",
+			"frequence": freq, "prochaine": "", "fin": ""}); code != 200 {
+			t.Fatalf("fiche terminée non enregistrée : %d\n%s", code, p)
+		}
+		marie.Get("/budget")
+		if n := compter(); n != 3 {
+			t.Fatalf("relancée par la fiche (%s) : %d loyers", freq, n)
+		}
+	}
+	// « Arrêter » de nouveau (onglet resté ouvert) : la fin ne bouge pas.
+	marie.Post("/recurrences/"+id+"/arreter", nil)
+	marie.Get("/budget")
+	if n := compter(); n != 3 {
+		t.Fatalf("relancée par « Arrêter » : %d loyers", n)
+	}
+	// Année lointaine : réponse rapide, année bornée.
+	debut := time.Now()
+	if code, _ := marie.Get("/budget/annee?an=2200"); code != 200 || time.Since(debut) > 2*time.Second {
+		t.Fatalf("année lointaine : %d en %v", code, time.Since(debut))
+	}
+}

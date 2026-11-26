@@ -108,7 +108,7 @@ type vueAnnee struct {
 func (m *Module) annee(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	ctx := r.Context()
 	an := c.Maintenant().Year()
-	if n, err := strconv.Atoi(r.URL.Query().Get("an")); err == nil && n >= 1900 && n <= 2200 {
+	if n, err := strconv.Atoi(r.URL.Query().Get("an")); err == nil && anPermis(n, c.Maintenant()) {
 		an = n
 	}
 	compte := m.compteDe(w, r, c)

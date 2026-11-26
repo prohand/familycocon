@@ -676,12 +676,21 @@ func (s *Suivi) supprimerEcheance(w http.ResponseWriter, r *http.Request, c *app
 // suit-elle la ligne (correction, suppression) ? Seulement pour un parent
 // (le budget leur est réservé), et jamais dans le budget perso d'un autre
 // parent : elle reste à son propriétaire.
+//
+// Un enfant (qui corrige la date ou le libellé, jamais le coût) fait suivre
+// une dépense du compte commun, pas celle d'un budget perso.
 func (s *Suivi) operationSuit(ctx context.Context, c *appli.Contexte, l donnees.Carnet) bool {
-	if !l.OperationID.Valid || !c.EstParent() {
+	if !l.OperationID.Valid {
 		return false
 	}
 	op, err := s.a.Q.OperationParID(ctx, donnees.OperationParIDParams{ID: l.OperationID.Int64, FamilleID: c.Famille.ID})
-	return err == nil && (op.PersoDe == 0 || op.PersoDe == c.Membre.ID)
+	if err != nil {
+		return false
+	}
+	if !c.EstParent() {
+		return op.PersoDe == 0
+	}
+	return op.PersoDe == 0 || op.PersoDe == c.Membre.ID
 }
 
 func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -747,26 +756,35 @@ func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.
 		x.montant = l.Montant // un enfant corrige la ligne sans voir ni effacer son coût
 	}
 	suit := s.operationSuit(ctx, c, l)
+	// Pas encore au budget et un coût ajouté : il y va si l'objet est réglé
+	// pour (véhicule « Compte commun » ou « Mon budget perso »).
+	persoAuto, auto := s.compteAuto(ctx, c, o, l.ObjetID)
+	auto = auto && !l.OperationID.Valid && x.montant > 0
 	err = s.a.Transaction(ctx, func(q *donnees.Queries) error {
 		if err := q.ModifierCarnet(ctx, donnees.ModifierCarnetParams{Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km,
 			Litres: x.litres, Carburant: x.carburant, Note: x.note, ID: l.ID, FamilleID: c.Famille.ID}); err != nil {
 			return err
 		}
+		if auto {
+			op, err := q.CreerOperation(ctx, donnees.CreerOperationParams{FamilleID: c.Famille.ID, PersoDe: persoAuto, Sens: "depense", Montant: x.montant,
+				Categorie: o.Categorie, Libelle: libelleBudget(x.libelle, x.nom), Jour: x.jour, MembreID: memberID(c), CreePar: memberID(c), CreeLe: time.Now().Unix()})
+			if err != nil {
+				return err
+			}
+			return q.LierCarnetOperation(ctx, donnees.LierCarnetOperationParams{OperationID: sql.NullInt64{Int64: op.ID, Valid: true}, ID: l.ID, FamilleID: c.Famille.ID})
+		}
 		if !suit {
 			return nil
 		}
-		// Coût vidé : la dépense quitte le budget (le lien se vide seul).
+		// Coût vidé (par un parent) : la dépense quitte le budget (le lien se
+		// vide seul).
 		if x.montant == 0 {
+			if !c.EstParent() {
+				return nil
+			}
 			return q.SupprimerOperation(ctx, donnees.SupprimerOperationParams{ID: l.OperationID.Int64, FamilleID: c.Famille.ID})
 		}
-		libelle := x.libelle
-		if x.nom != "" {
-			libelle += " · " + x.nom
-		}
-		if utf8.RuneCountInString(libelle) > 80 {
-			libelle = string([]rune(libelle)[:80])
-		}
-		return q.ModifierOperationCarnet(ctx, donnees.ModifierOperationCarnetParams{Montant: x.montant, Libelle: libelle, Jour: x.jour,
+		return q.ModifierOperationCarnet(ctx, donnees.ModifierOperationCarnetParams{Montant: x.montant, Libelle: libelleBudget(x.libelle, x.nom), Jour: x.jour,
 			ID: l.OperationID.Int64, FamilleID: c.Famille.ID})
 	})
 	if err != nil {
@@ -775,7 +793,7 @@ func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.
 	}
 	s.noterKm(ctx, c, o, l.ObjetID, x.km)
 	s.publier(c, o)
-	if suit {
+	if suit || auto {
 		s.a.Publier(c, "budget", "")
 	}
 	s.a.Flash(w, "Ligne corrigée ✓")

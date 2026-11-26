@@ -62,29 +62,47 @@ func (r Rangement) Message() string {
 //   - BudgetNon : les dépenses ajoutées au budget avec le carnet en sont
 //     retirées (les lignes du carnet restent, avec leur coût).
 //
-// Le budget perso d'un autre parent n'est jamais touché. Rien n'est fait
+// seules (non nil) : n'ajouter que ces lignes-là (reprise Fuelio : les
+// lignes qu'elle vient d'écrire), sans rien déplacer ni retirer. Une
+// dépense retirée à la main du budget n'y revient donc pas.
+//
+// Le budget perso d'un autre parent n'est jamais touché, et vers « mon
+// budget perso » ne passent que les dépenses ajoutées par ce parent (celles
+// d'un autre restent au compte commun, où il les voit). Rien n'est fait
 // pour un enfant, si le budget est fermé ou si l'objet n'a pas de catégorie.
 // nom : le nom de l'objet (libellé des dépenses : « Plein · Clio »).
-func (s *Suivi) RangerBudget(ctx context.Context, c *appli.Contexte, module string, objet int64, nom, compte string) (Rangement, error) {
+func (s *Suivi) RangerBudget(ctx context.Context, c *appli.Contexte, module string, objet int64, nom, compte string, seules []int64) (Rangement, error) {
 	var r Rangement
 	o, ok := s.objets[module]
 	if !ok || o.Categorie == "" || !c.EstParent() || !c.Actif("budget") {
 		return r, nil
 	}
 	compte = BudgetValide(compte)
+	if seules != nil && compte == BudgetNon {
+		return r, nil
+	}
 	var cible int64 // budget visé : 0 (commun) ou ce parent (perso)
 	if compte == BudgetPerso {
 		cible = c.Membre.ID
 	}
+	garder := map[int64]bool{}
+	for _, id := range seules {
+		garder[id] = true
+	}
 	err := s.a.Transaction(ctx, func(q *donnees.Queries) error {
-		r = Rangement{} // transaction rejouée : on recompte
 		lies, err := q.CarnetAuBudget(ctx, donnees.CarnetAuBudgetParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet})
 		if err != nil {
 			return err
 		}
+		if seules != nil {
+			lies = nil // reprise : rien ne bouge de ce qui est déjà au budget
+		}
 		for _, l := range lies {
 			if l.PersoDe != 0 && l.PersoDe != c.Membre.ID {
 				continue // budget perso d'un autre parent : le sien
+			}
+			if cible != 0 && l.PersoDe == 0 && l.CreePar.Int64 != c.Membre.ID {
+				continue // ajoutée au commun par un autre parent : elle y reste
 			}
 			switch {
 			case compte == BudgetNon:
@@ -108,6 +126,9 @@ func (s *Suivi) RangerBudget(ctx context.Context, c *appli.Contexte, module stri
 		}
 		maintenant := time.Now().Unix()
 		for _, l := range lignes {
+			if seules != nil && !garder[l.ID] {
+				continue
+			}
 			op, err := q.CreerOperation(ctx, donnees.CreerOperationParams{FamilleID: c.Famille.ID, PersoDe: cible, Sens: "depense", Montant: l.Montant,
 				Categorie: o.Categorie, Libelle: libelleBudget(l.Libelle, nom), Jour: l.Jour, MembreID: memberID(c), CreePar: memberID(c), CreeLe: maintenant})
 			if err != nil {
@@ -135,4 +156,21 @@ func libelleBudget(libelle, nom string) string {
 		libelle = string([]rune(libelle)[:80])
 	}
 	return libelle
+}
+
+// compteAuto : le budget où va d'elle-même une dépense de cet objet,
+// d'après son réglage (véhicule) : perso = 0 (commun) ou ce parent.
+// ok faux : nulle part (pas de réglage, budget perso d'un autre parent,
+// enfant, budget fermé).
+func (s *Suivi) compteAuto(ctx context.Context, c *appli.Contexte, o Objet, objet int64) (perso int64, ok bool) {
+	if o.Budget == nil || o.Categorie == "" || !c.EstParent() || !c.Actif("budget") {
+		return 0, false
+	}
+	switch compte, de := o.Budget(ctx, c.Famille.ID, objet); {
+	case compte == BudgetCommun:
+		return 0, true
+	case compte == BudgetPerso && de == c.Membre.ID:
+		return c.Membre.ID, true
+	}
+	return 0, false
 }
