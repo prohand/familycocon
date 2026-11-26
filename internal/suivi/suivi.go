@@ -26,6 +26,7 @@ import (
 	"familycocon/internal/appli"
 	"familycocon/internal/budget"
 	"familycocon/internal/donnees"
+	"familycocon/internal/repetition"
 )
 
 // Modele : une échéance proposée (« Contrôle technique », 24 mois).
@@ -662,6 +663,18 @@ func (s *Suivi) supprimerEcheance(w http.ResponseWriter, r *http.Request, c *app
 	s.a.Rediriger(w, r, o.URL(e.ObjetID))
 }
 
+// operationSuit : la dépense ajoutée au budget avec la ligne du carnet
+// suit-elle la ligne (correction, suppression) ? Seulement pour un parent
+// (le budget leur est réservé), et jamais dans le budget perso d'un autre
+// parent : elle reste à son propriétaire.
+func (s *Suivi) operationSuit(ctx context.Context, c *appli.Contexte, l donnees.Carnet) bool {
+	if !l.OperationID.Valid || !c.EstParent() {
+		return false
+	}
+	op, err := s.a.Q.OperationParID(ctx, donnees.OperationParIDParams{ID: l.OperationID.Int64, FamilleID: c.Famille.ID})
+	return err == nil && (op.PersoDe == 0 || op.PersoDe == c.Membre.ID)
+}
+
 func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	id, _ := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	l, err := s.a.Q.LigneCarnetParID(r.Context(), donnees.LigneCarnetParIDParams{ID: id, FamilleID: c.Famille.ID})
@@ -676,8 +689,9 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 		s.a.ErreurInterne(w, r, err)
 		return
 	}
+	suit := s.operationSuit(r.Context(), c, l)
 	err = s.a.Transaction(r.Context(), func(q *donnees.Queries) error {
-		if l.OperationID.Valid {
+		if suit {
 			if err := q.SupprimerOperation(r.Context(), donnees.SupprimerOperationParams{ID: l.OperationID.Int64, FamilleID: c.Famille.ID}); err != nil {
 				return err
 			}
@@ -690,7 +704,7 @@ func (s *Suivi) supprimerCarnet(w http.ResponseWriter, r *http.Request, c *appli
 	}
 	s.effacerFichiers(pieces)
 	s.publier(c, o)
-	if l.OperationID.Valid {
+	if suit {
 		s.a.Publier(c, "budget", "")
 	}
 	s.a.Flash(w, "Ligne supprimée")
@@ -723,23 +737,28 @@ func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.
 	if !c.EstParent() {
 		x.montant = l.Montant // un enfant corrige la ligne sans voir ni effacer son coût
 	}
+	suit := s.operationSuit(ctx, c, l)
 	err = s.a.Transaction(ctx, func(q *donnees.Queries) error {
 		if err := q.ModifierCarnet(ctx, donnees.ModifierCarnetParams{Jour: x.jour, Libelle: x.libelle, Montant: x.montant, Km: x.km,
 			Litres: x.litres, Carburant: x.carburant, Note: x.note, ID: l.ID, FamilleID: c.Famille.ID}); err != nil {
 			return err
 		}
-		if l.OperationID.Valid && x.montant > 0 {
-			libelle := x.libelle
-			if x.nom != "" {
-				libelle += " · " + x.nom
-			}
-			if utf8.RuneCountInString(libelle) > 80 {
-				libelle = string([]rune(libelle)[:80])
-			}
-			return q.ModifierOperationCarnet(ctx, donnees.ModifierOperationCarnetParams{Montant: x.montant, Libelle: libelle, Jour: x.jour,
-				ID: l.OperationID.Int64, FamilleID: c.Famille.ID})
+		if !suit {
+			return nil
 		}
-		return nil
+		// Coût vidé : la dépense quitte le budget (le lien se vide seul).
+		if x.montant == 0 {
+			return q.SupprimerOperation(ctx, donnees.SupprimerOperationParams{ID: l.OperationID.Int64, FamilleID: c.Famille.ID})
+		}
+		libelle := x.libelle
+		if x.nom != "" {
+			libelle += " · " + x.nom
+		}
+		if utf8.RuneCountInString(libelle) > 80 {
+			libelle = string([]rune(libelle)[:80])
+		}
+		return q.ModifierOperationCarnet(ctx, donnees.ModifierOperationCarnetParams{Montant: x.montant, Libelle: libelle, Jour: x.jour,
+			ID: l.OperationID.Int64, FamilleID: c.Famille.ID})
 	})
 	if err != nil {
 		s.a.ErreurInterne(w, r, err)
@@ -747,7 +766,7 @@ func (s *Suivi) modifierCarnet(w http.ResponseWriter, r *http.Request, c *appli.
 	}
 	s.noterKm(ctx, c, o, l.ObjetID, x.km)
 	s.publier(c, o)
-	if l.OperationID.Valid {
+	if suit {
 		s.a.Publier(c, "budget", "")
 	}
 	s.a.Flash(w, "Ligne corrigée ✓")
@@ -797,6 +816,11 @@ func (s *Suivi) reporter(w http.ResponseWriter, r *http.Request, c *appli.Contex
 	if err != nil {
 		s.a.Echec(w, r, http.StatusBadRequest, "Date invalide.")
 		return
+	}
+	// En retard : un mois à partir d'aujourd'hui (sinon elle resterait en
+	// retard après le report).
+	if auj, err := time.Parse("2006-01-02", repetition.CleJour(c.Maintenant())); err == nil && j.Before(auj) {
+		j = auj
 	}
 	suivante := AjouterMois(j, 1)
 	// Une seule fois même en double envoi : seulement si elle est encore à sa date.

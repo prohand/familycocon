@@ -16,6 +16,7 @@ import (
 
 	"familycocon/internal/appli"
 	"familycocon/internal/donnees"
+	"familycocon/internal/photo"
 	"familycocon/internal/texte"
 )
 
@@ -182,7 +183,7 @@ func (m *Module) pageContacts(w http.ResponseWriter, r *http.Request, c *appli.C
 func (m *Module) resumeContacts(ctx context.Context, c *appli.Contexte) appli.Resume {
 	n, err := m.a.Q.CompterContacts(ctx, c.Famille.ID)
 	if err != nil || n == 0 {
-		return appli.Resume{Info: "Carnet vide"}
+		return appli.Resume{Info: "Carnet vide", Vide: true}
 	}
 	return appli.Resume{Info: appli.Pluriel(n, "contact", "contacts")}
 }
@@ -224,7 +225,7 @@ func (m *Module) resumeAdresses(ctx context.Context, c *appli.Contexte) appli.Re
 		return appli.Resume{}
 	}
 	if n == 0 {
-		return appli.Resume{Info: "Aucune adresse"}
+		return appli.Resume{Info: "Aucune adresse", Vide: true}
 	}
 	return appli.Resume{Info: appli.Pluriel(n, "adresse", "adresses")}
 }
@@ -559,7 +560,14 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 		return
 	}
 	ctx := r.Context()
-	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
+	// Photos des tickets et factures de ses interventions : lues avant, leurs
+	// fichiers effacés après (les lignes partent avec le carnet).
+	pieces, err := m.a.Q.PiecesObjet(ctx, donnees.PiecesObjetParams{FamilleID: c.Famille.ID, Module: modPrestataires, ObjetID: ct.ID})
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
 		if err := q.SupprimerContact(ctx, donnees.SupprimerContactParams{ID: ct.ID, FamilleID: c.Famille.ID}); err != nil {
 			return err
 		}
@@ -571,6 +579,11 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 	if err != nil {
 		m.a.ErreurInterne(w, r, err)
 		return
+	}
+	for _, p := range pieces {
+		if err := photo.Effacer(m.a.DossierPieces(), p.FamilleID, p.Fichier); err != nil {
+			m.a.Journal.Warn("pièce jointe non effacée", "fichier", p.Fichier, "erreur", err)
+		}
 	}
 	m.a.Publier(c, modContacts, "")
 	m.a.Flash(w, ct.Nom+" supprimé(e)")

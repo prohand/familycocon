@@ -159,6 +159,7 @@ type vueBudget struct {
 	Reste    int64
 	ResteAuj int64 // reste à vivre de ce qui est déjà passé
 	EnCours  bool  // le mois d'aujourd'hui
+	Vide     bool  // aucune opération ce mois-ci : ni courbe ni filtre
 	Futur    bool  // un mois qui n'a pas commencé : tout est prévu
 	PrevuRev int64 // revenus encore à venir ce mois-ci
 	PrevuDep int64 // dépenses encore à venir ce mois-ci
@@ -342,6 +343,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 	// Le reste à vivre compte le mois entier : ce qui est passé et ce qui
 	// est prévu (salaire, virement, loyer… pas encore arrivés).
 	v.ResteAuj = v.Reste
+	v.Vide = len(ops) == 0
 	v.EnCours = premier.Year() == maintenant.Year() && premier.Month() == maintenant.Month()
 	v.Futur = premier.After(maintenant)
 	for _, p := range Prevues(recs, premier, dernier, maintenant) {
@@ -366,7 +368,6 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, compte int64, ref t
 	return v, nil
 }
 
-// recurrencesCompte : les opérations qui reviennent de ce budget.
 // nbAttentes : opérations à date variable à confirmer, au commun et dans
 // le budget perso du membre.
 func (m *Module) nbAttentes(ctx context.Context, c *appli.Contexte) int {
@@ -425,6 +426,7 @@ func (m *Module) virementsRecus(ctx context.Context, c *appli.Contexte, parID ma
 	return out, err
 }
 
+// recurrencesCompte : les opérations qui reviennent de ce budget.
 func (m *Module) recurrencesCompte(ctx context.Context, c *appli.Contexte, compte int64) ([]donnees.Recurrence, error) {
 	tous, err := m.a.Q.RecurrencesFamille(ctx, c.Famille.ID)
 	var out []donnees.Recurrence
@@ -690,9 +692,12 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	if err := GenererSiBesoin(ctx, m.a, c.Famille.ID, c.Maintenant()); err != nil {
 		m.a.Journal.Error("budget : opérations qui reviennent", "erreur", err)
 	}
-	// Des opérations à date variable attendent : on le dit d'abord.
-	if n := m.nbAttentes(ctx, c); n > 0 {
-		return appli.Resume{Info: "⏳ " + strconv.Itoa(n) + " à confirmer", Badge: n}
+	// Opérations à date variable qui attendent (badge, après une alerte
+	// de plafond).
+	n := m.nbAttentes(ctx, c)
+	attente := ""
+	if n > 0 {
+		attente = "⏳ " + strconv.Itoa(n) + " à confirmer"
 	}
 	premier, dernier := mois(c.Maintenant())
 	totaux := func(compte int64) (donnees.TotauxPeriodeRow, error) {
@@ -701,20 +706,29 @@ func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	}
 	t, err := totaux(0)
 	p, errP := totaux(c.Membre.ID)
-	if err != nil || errP != nil || t.Revenus+t.Depenses+p.Revenus+p.Depenses == 0 {
+	// Même reste à vivre que la page : le prévu du mois compris.
+	netCommun, errC := m.prevuNet(ctx, c, 0, premier, dernier)
+	netMoi, errM := m.prevuNet(ctx, c, c.Membre.ID, premier, dernier)
+	if errC != nil || errM != nil {
+		netCommun, netMoi = 0, 0
+	}
+	if err != nil || errP != nil || (t.Revenus+t.Depenses+p.Revenus+p.Depenses == 0 && netCommun == 0 && netMoi == 0) {
+		if attente != "" {
+			return appli.Resume{Info: attente, Badge: n}
+		}
 		return appli.Resume{Info: "Rien ce mois-ci"}
 	}
-	// Un plafond presque atteint passe avant le reste à vivre.
+	// Un plafond presque atteint passe en premier (les attentes suivent).
 	for _, compte := range []int64{0, c.Membre.ID} {
 		if alerte := m.alertePlafond(ctx, c, compte, premier, dernier); alerte != "" {
-			return appli.Resume{Info: alerte, Badge: 1}
+			if attente != "" {
+				alerte += " · " + attente
+			}
+			return appli.Resume{Info: alerte, Badge: 1 + n}
 		}
 	}
-	// Même reste à vivre que la page : le prévu du mois compris.
-	netCommun, err := m.prevuNet(ctx, c, 0, premier, dernier)
-	netMoi, errM := m.prevuNet(ctx, c, c.Membre.ID, premier, dernier)
-	if err != nil || errM != nil {
-		netCommun, netMoi = 0, 0
+	if attente != "" {
+		return appli.Resume{Info: attente, Badge: n}
 	}
 	info := "Reste " + appli.Montant(t.Revenus-t.Depenses+netCommun, c.Famille.Devise)
 	if p.Revenus+p.Depenses > 0 || netMoi != 0 {

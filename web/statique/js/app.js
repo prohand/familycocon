@@ -473,13 +473,19 @@ document.addEventListener("change", function (e) {
 // Le numéro et le type de code sont remplis tout seuls ; rien n'est gardé.
 (function () {
   "use strict";
-  var types = { ean_13: "ean13", ean_8: "ean8", upc_a: "upca", code_128: "code128", qr_code: "qr", pdf417: "pdf417", aztec: "aztec" };
-  var typesZx = { EAN13: "ean13", EAN8: "ean8", UPCA: "upca", Code128: "code128", QRCode: "qr", PDF417: "pdf417", Aztec: "aztec" };
-  var noms = { ean13: "EAN-13", ean8: "EAN-8", upca: "UPC-A", code128: "Code 128", qr: "QR code", pdf417: "PDF417", aztec: "Aztec" };
+  var types = { ean_13: "ean13", ean_8: "ean8", upc_a: "upca", code_128: "code128", code_39: "code39", code_93: "code93",
+    codabar: "codabar", itf: "itf", qr_code: "qr", data_matrix: "datamatrix", pdf417: "pdf417", aztec: "aztec" };
+  var typesZx = { EAN13: "ean13", EAN8: "ean8", UPCA: "upca", Code128: "code128", Code39: "code39", Code93: "code93",
+    Codabar: "codabar", ITF: "itf", QRCode: "qr", DataMatrix: "datamatrix", PDF417: "pdf417", Aztec: "aztec" };
+  var noms = { ean13: "EAN-13", ean8: "EAN-8", upca: "UPC-A", code128: "Code 128", code39: "Code 39", code93: "Code 93",
+    codabar: "Codabar", itf: "ITF", qr: "QR code", datamatrix: "Data Matrix", pdf417: "PDF417", aztec: "Aztec" };
   function jeton() {
     try { return JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) { return ""; }
   }
   function remplir(f, numero, type) {
+    // Codabar : sans les lettres de début et de fin (A à D), comme le numéro
+    // imprimé ; le dessin les remet.
+    if (type === "codabar" && /^[A-D].+[A-D]$/i.test(numero)) numero = numero.slice(1, -1);
     var champ = f.querySelector("[name=numero]");
     if (champ) champ.value = numero;
     var choix = f.querySelector("[name=format]");
@@ -1650,3 +1656,22 @@ document.addEventListener("change", function (e) {
   if (f.matches && f.matches("input[type=file][data-envoi-auto]") && f.files.length && f.form) f.form.requestSubmit();
 });
 
+
+// Barre de gauche (grand écran) : « « » la réduit aux icônes ou l'agrandit.
+// Tout de suite à l'écran, puis gardé par le serveur pour cet appareil
+// (cookie, comme le thème : la page arrive déjà dans le bon état).
+(function () {
+  "use strict";
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest("[data-rail]");
+    if (!b) return;
+    var racine = document.documentElement;
+    var reduite = racine.getAttribute("data-rail") !== "reduite";
+    if (reduite) racine.setAttribute("data-rail", "reduite"); else racine.removeAttribute("data-rail");
+    var jeton = "";
+    try { jeton = JSON.parse(document.body.getAttribute("hx-headers"))["X-Jeton"]; } catch (_) {}
+    fetch("/moi/rail", { method: "POST", credentials: "same-origin",
+      headers: { "X-Jeton": jeton, "Content-Type": "application/x-www-form-urlencoded" },
+      body: "rail=" + (reduite ? "reduite" : "") }).catch(function () {});
+  });
+})();

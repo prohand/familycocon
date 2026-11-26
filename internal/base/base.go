@@ -230,16 +230,26 @@ func appliquer(ctx context.Context, db *sql.DB, m migration) error {
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck // sans effet après Commit
+	// Liens déjà cassés avant la migration (base réparée à la main…) : ils
+	// ne la bloquent pas ; seuls ceux qu'elle casserait l'annulent.
+	var avant map[string]bool
+	if sansCles {
+		if avant, err = liensCasses(ctx, tx); err != nil {
+			return err
+		}
+	}
 	if _, err := tx.ExecContext(ctx, m.sql); err != nil {
 		return err
 	}
 	if sansCles {
-		var table string
-		err := tx.QueryRowContext(ctx, "PRAGMA foreign_key_check").Scan(&table, new(any), new(any), new(any))
-		if err == nil {
-			return fmt.Errorf("lien cassé dans la table %s", table)
-		} else if !errors.Is(err, sql.ErrNoRows) {
+		apres, err := liensCasses(ctx, tx)
+		if err != nil {
 			return err
+		}
+		for lien := range apres {
+			if !avant[lien] {
+				return fmt.Errorf("lien cassé par la migration : %s", lien)
+			}
 		}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO schema_version(version, nom, appliquee_le) VALUES (?, ?, ?)`,
@@ -247,6 +257,26 @@ func appliquer(ctx context.Context, db *sql.DB, m migration) error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// liensCasses : les liens cassés de la base (PRAGMA foreign_key_check),
+// « table, ligne n → table visée ».
+func liensCasses(ctx context.Context, tx *sql.Tx) (map[string]bool, error) {
+	lignes, err := tx.QueryContext(ctx, "PRAGMA foreign_key_check")
+	if err != nil {
+		return nil, err
+	}
+	defer lignes.Close()
+	out := map[string]bool{}
+	for lignes.Next() {
+		var table, parent string
+		var id, fk sql.NullInt64
+		if err := lignes.Scan(&table, &id, &parent, &fk); err != nil {
+			return nil, err
+		}
+		out[fmt.Sprintf("%s, ligne %d → %s (lien %d)", table, id.Int64, parent, fk.Int64)] = true
+	}
+	return out, lignes.Err()
 }
 
 // Copier fait une copie cohérente de la base pendant qu'elle tourne

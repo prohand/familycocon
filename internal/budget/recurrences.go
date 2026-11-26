@@ -148,8 +148,10 @@ func MontantDu(r donnees.Recurrence, jour string) int64 {
 
 // LireNouveauMontant : les champs « nouveau_montant » et « nouveau_le » d'un
 // formulaire. Tous deux vides : rien de prévu (0, « »). msg : « » si tout va
-// bien.
-func LireNouveauMontant(r *http.Request, aujourdhui time.Time) (montant int64, le, msg string) {
+// bien. deja : la date déjà enregistrée ; elle reste acceptée même passée
+// (la fois qui doit en profiter n'est pas encore écrite : paiement en
+// retard, date variable à confirmer), sinon la fiche ne s'enregistrerait plus.
+func LireNouveauMontant(r *http.Request, aujourdhui time.Time, deja string) (montant int64, le, msg string) {
 	sm, le := strings.TrimSpace(r.PostFormValue("nouveau_montant")), r.PostFormValue("nouveau_le")
 	if sm == "" && le == "" {
 		return 0, "", ""
@@ -161,7 +163,7 @@ func LireNouveauMontant(r *http.Request, aujourdhui time.Time) (montant int64, l
 	if err != nil {
 		return 0, "", "Nouveau montant : " + err.Error()
 	}
-	if _, ok := LireJour(le, aujourdhui); !ok || le <= repetition.CleJour(aujourdhui) {
+	if _, ok := LireJour(le, aujourdhui); !ok || (le <= repetition.CleJour(aujourdhui) && le != deja) {
 		return 0, "", "Nouveau montant : la date doit être après aujourd'hui (sinon, changez directement le montant)."
 	}
 	return montant, le, ""
@@ -208,7 +210,13 @@ func PlaceRecurrence(ctx context.Context, a *appli.App, famille int64) (string, 
 // bouge. Sinon on repart de la date donnée (compteur à zéro), après contrôle.
 // msg : « » si tout va bien.
 func Replanifier(rec donnees.Recurrence, prochaine, freq string, aujourdhui time.Time) (debut string, faites int64, msg string) {
-	if j, ok := Prochaine(rec); ok && repetition.CleJour(j) == prochaine && freq == rec.Frequence {
+	j, ok := Prochaine(rec)
+	if ok && repetition.CleJour(j) == prochaine && freq == rec.Frequence {
+		return rec.Debut, rec.Faites, ""
+	}
+	// Terminée (arrêtée, abonnement résilié) et pas de nouvelle date : on
+	// garde tout (sinon elle repartirait de zéro et réécrirait des fois).
+	if !ok && prochaine == "" {
 		return rec.Debut, rec.Faites, ""
 	}
 	if msg := ValiderProchaine(prochaine, &rec, aujourdhui); msg != "" {
@@ -226,8 +234,12 @@ const MessageModifiee = "Cette opération vient de changer : rechargez la page e
 // transaction ; errDejaFaite si une autre requête l'a déjà écrite.
 func ecrireOccurrence(ctx context.Context, q *donnees.Queries, r donnees.Recurrence, prevu, jour string, montant int64, passer bool) error {
 	// Avancer d'abord : si une autre requête l'a déjà fait, rien n'est écrit deux fois.
-	if n, err := q.AvancerRecurrence(ctx, donnees.AvancerRecurrenceParams{ID: r.ID, FamilleID: r.FamilleID, Faites: r.Faites}); err != nil || n == 0 {
-		return errors.Join(err, errDejaFaite)
+	n, err := q.AvancerRecurrence(ctx, donnees.AvancerRecurrenceParams{ID: r.ID, FamilleID: r.FamilleID, Faites: r.Faites})
+	if err != nil {
+		return err // vraie erreur (base occupée…), pas un conflit
+	}
+	if n == 0 {
+		return errDejaFaite
 	}
 	// Date du nouveau montant arrivée : il devient le montant.
 	if r.NouveauLe != "" && prevu >= r.NouveauLe {
@@ -247,7 +259,7 @@ func ecrireOccurrence(ctx context.Context, q *donnees.Queries, r donnees.Recurre
 		return ecrireVirement(ctx, q, r.FamilleID, r.PersoDe, qui.Nom, montant, jour, r.Libelle,
 			sql.NullInt64{Int64: r.ID, Valid: true}, r.CreePar)
 	}
-	_, err := q.CreerOccurrence(ctx, donnees.CreerOccurrenceParams{
+	_, err = q.CreerOccurrence(ctx, donnees.CreerOccurrenceParams{
 		FamilleID: r.FamilleID, PersoDe: r.PersoDe, Sens: r.Sens, Montant: montant, Categorie: r.Categorie, Libelle: r.Libelle,
 		Jour: jour, MembreID: r.MembreID, RecurrenceID: sql.NullInt64{Int64: r.ID, Valid: true},
 		CreePar: r.CreePar, CreeLe: time.Now().Unix(),
@@ -370,8 +382,8 @@ type LigneRecurrence struct {
 	SansLien   bool   // virement reçu d'un budget perso : se modifie de ce côté-là
 }
 
-// DateNouveau : la date d'un nouveau montant prévu, à afficher (« 1er
-// janvier » ou « 01/01/2028 »), ou « ».
+// DateNouveau : la date d'un nouveau montant prévu, à afficher (« 01/01 »,
+// ou « 01/01/2028 » une autre année), ou « ».
 func DateNouveau(le string, aujourdhui time.Time) string {
 	j, err := time.Parse("2006-01-02", le)
 	if err != nil {
@@ -453,6 +465,7 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 		}
 		recs = append(recs, virements...)
 	}
+	var revAn, depAn int64
 	for _, x := range recs {
 		l := ligneRecurrence(x, abonnees, c.Maintenant())
 		l.SansLien = recus[x.ID]
@@ -460,15 +473,17 @@ func (m *Module) pageRecurrences(w http.ResponseWriter, r *http.Request, c *appl
 		if x.Sens == "revenu" {
 			v.Revenus = append(v.Revenus, l)
 			if active {
-				v.RevenusMois += ParMois(x.Montant, x.Frequence)
+				revAn += ParAn(x.Montant, x.Frequence)
 			}
 		} else {
 			v.Depenses = append(v.Depenses, l)
 			if active {
-				v.DepensesMois += ParMois(x.Montant, x.Frequence)
+				depAn += ParAn(x.Montant, x.Frequence)
 			}
 		}
 	}
+	// Sommes sur l'année, divisées une seule fois (pas de centimes perdus).
+	v.RevenusMois, v.DepensesMois = revAn/12, depAn/12
 	v.NetMois = v.RevenusMois - v.DepensesMois
 	m.a.Afficher(w, r, c, "budget/recurrences", "Opérations qui reviennent", mod, v)
 }
@@ -537,6 +552,9 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	freq := r.PostFormValue("frequence")
 	prochaine, fin := r.PostFormValue("prochaine"), r.PostFormValue("fin")
 	_, okP := LireJour(prochaine, c.Maintenant())
+	if _, active := Prochaine(x); !active && prochaine == "" {
+		okP = true // terminée : la date reste vide, rien ne repart
+	}
 	_, okF := LireJour(fin, c.Maintenant())
 	switch {
 	case !ok:
@@ -556,7 +574,7 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	if r.PostFormValue("a_confirmer") == "1" {
 		aConfirmer = 1
 	}
-	nouveau, nouveauLe, msgN := LireNouveauMontant(r, c.Maintenant())
+	nouveau, nouveauLe, msgN := LireNouveauMontant(r, c.Maintenant(), x.NouveauLe)
 	if msgN != "" {
 		m.a.Echec(w, r, http.StatusBadRequest, msgN)
 		return

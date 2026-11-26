@@ -604,7 +604,7 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 func (m *Module) resume(ctx context.Context, c *appli.Contexte) appli.Resume {
 	n, err := m.a.Q.CompterNotes(ctx, donnees.CompterNotesParams{FamilleID: c.Famille.ID, MembreID: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, Parent: estParent(c)})
 	if err != nil || n == 0 {
-		return appli.Resume{Info: "Aucune note"}
+		return appli.Resume{Info: "Aucune note", Vide: true}
 	}
 	return appli.Resume{Info: appli.Pluriel(n, "note", "notes")}
 }

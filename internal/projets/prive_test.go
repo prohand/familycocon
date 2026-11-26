@@ -4,12 +4,14 @@ package projets
 
 import (
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 
 	"familycocon/internal/abonnements"
 	"familycocon/internal/appli"
 	"familycocon/internal/budget"
+	"familycocon/internal/donnees"
 	"familycocon/internal/essai"
 	"familycocon/internal/suivi"
 )
@@ -122,5 +124,54 @@ func TestPriveProjetsAbonnements(t *testing.T) {
 	}
 	if err := a.DB.QueryRow("SELECT count(*) FROM carnet WHERE module = 'projets' AND objet_id = ?", id2).Scan(&reste); err != nil || reste != 0 {
 		t.Fatalf("carnet du projet privé resté : %d %v", reste, err)
+	}
+}
+
+// Ligne du carnet d'un projet partagé envoyée au budget perso de Marie :
+// Paul la corrige ou la supprime sans toucher au budget perso de Marie ;
+// Marie vide le coût : la dépense quitte son budget.
+func TestCarnetBudgetPersoDUnAutre(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, func(a *appli.App) {
+		budget.Brancher(a)
+		Brancher(a, suivi.Brancher(a))
+	})
+	marie := essai.Famille(t, srv)
+	paul := essai.Parent(t, srv, marie, "Paul")
+	auj := essai.Maintenant().Format("2006-01-02")
+	marie.Get("/projets/nouveau")
+	_, page := marie.Post("/projets", map[string]string{"nom": "Cuisine"})
+	id := essai.Trouver(t, page, `action="/projets/(\d+)/etapes"`)
+	if code, p := marie.Post("/suivi/projets/"+id+"/carnet", map[string]string{"libelle": "Peinture", "jour": auj, "montant": "120", "budget": "perso"}); code != 200 {
+		t.Fatalf("carnet : %d %s", code, p[:300])
+	}
+	montant := func() (int64, int) {
+		ops, _ := a.Q.OperationsPeriode(t.Context(), donnees.OperationsPeriodeParams{FamilleID: 1, Compte: 1, Du: "2000-01-01", Au: "2999-01-01"}) // Marie : membre 1
+		if len(ops) == 0 {
+			return 0, 0
+		}
+		return ops[0].Montant, len(ops)
+	}
+	if m, n := montant(); m != 12000 || n != 1 {
+		t.Fatalf("dépense perso de Marie : %d (%d)", m, n)
+	}
+	_, page = paul.Get("/projets/" + id)
+	ligne := essai.Trouver(t, page, `action="/suivi/carnet/(\d+)"`)
+	paul.Post("/suivi/carnet/"+ligne, map[string]string{"libelle": "Peinture", "jour": auj, "montant": "999"})
+	if m, _ := montant(); m != 12000 {
+		t.Fatalf("Paul a changé le budget perso de Marie : %d", m)
+	}
+	// Marie vide le coût : la dépense quitte son budget.
+	marie.Post("/suivi/carnet/"+ligne, map[string]string{"libelle": "Peinture", "jour": auj, "montant": ""})
+	if _, n := montant(); n != 0 {
+		t.Fatalf("coût vidé : %d dépense(s) restée(s) au budget", n)
+	}
+	// Nouvelle ligne perso de Marie, supprimée par Paul : la dépense reste.
+	marie.Post("/suivi/projets/"+id+"/carnet", map[string]string{"libelle": "Évier", "jour": auj, "montant": "80", "budget": "perso"})
+	_, page = paul.Get("/projets/" + id)
+	for _, l := range regexp.MustCompile(`action="/suivi/carnet/(\d+)/supprimer"`).FindAllStringSubmatch(page, -1) {
+		paul.Post("/suivi/carnet/"+l[1]+"/supprimer", nil)
+	}
+	if m, n := montant(); m != 8000 || n != 1 {
+		t.Fatalf("Paul a supprimé la dépense perso de Marie : %d (%d)", m, n)
 	}
 }

@@ -28,7 +28,7 @@
   {{- if .L}}
   <ul class="liste-joints">
     {{- range .L}}
-    <li><a href="/joints/{{.ID}}/{{.Nom}}" target="_blank" rel="noopener">{{or .Icone "📎"}} <span class="nom-joint">{{.Nom}}</span></a> <small>{{.TailleTexte}}</small>
+    <li><a href="/joints/{{.ID}}/{{segment .Nom}}" target="_blank" rel="noopener">{{or .Icone "📎"}} <span class="nom-joint">{{.Nom}}</span></a> <small>{{.TailleTexte}}</small>
       {{- if $.Modifiable}}
       <form method="post" action="/joints/{{.ID}}/supprimer" hx-confirm="Retirer « {{.Nom}} » ?">
         <input type="hidden" name="_jeton" value="{{$.CSRF}}"><input type="hidden" name="retour" value="{{$.Retour}}">

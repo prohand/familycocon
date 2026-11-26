@@ -12,7 +12,7 @@
   <a class="bouton" href="/agenda/nouveau">＋ Événement</a>
 </div>
 {{template "agenda" $}}
-<p class="centre bloc"><a class="bouton discret" href="/agenda/calendrier">📱 Voir l'agenda dans le calendrier du téléphone</a></p>
+<p class="centre bloc"><a class="bouton secondaire petit" href="/agenda/calendrier">📱 Voir l'agenda dans le calendrier du téléphone</a></p>
 {{end}}
 {{end}}
 
@@ -37,12 +37,15 @@
   {{if eq .Vue "semaine"}}
   <div class="semaine">
     {{- range .Jours}}
-    <section class="carte jour-semaine{{if .Aujourdhui}} aujourdhui{{end}}">
+    {{/* Jour sans rien : une ligne fine (« rien de prévu »). */}}
+    {{- $vide := and (not .Occurrences) (not .Elements)}}
+    <section class="carte jour-semaine{{if .Aujourdhui}} aujourdhui{{end}}{{if $vide}} vide{{end}}">
       <div class="jour-entete">
         <h3>{{.Titre}}{{if .Aujourdhui}} <span class="etiquette">aujourd'hui</span>{{end}}</h3>
+        {{if $vide}}<span class="rien-jour">rien de prévu</span>{{end}}
         <a class="ajout-jour" href="/agenda/nouveau?date={{.Cle}}" aria-label="Ajouter le {{.Titre}}">＋</a>
       </div>
-      {{- range .Occurrences}}{{template "ligne-evt" .}}{{else}}{{if not .Elements}}<p class="rien">—</p>{{end}}{{end}}
+      {{- range .Occurrences}}{{template "ligne-evt" .}}{{end}}
       {{template "elements-jour" .Elements}}
     </section>
     {{- end}}

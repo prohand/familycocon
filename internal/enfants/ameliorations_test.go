@@ -59,4 +59,12 @@ func TestMissionsGroupeesEtBonus(t *testing.T) {
 	if !strings.Contains(page, "A aidé son frère") || !strings.Contains(page, "<b>5</b> étoiles") {
 		t.Fatalf("bonus absent de l'espace de Léa :\n%s", page)
 	}
+	// Les étoiles bonus comptent pour une récompense (2 de mission + 3 bonus).
+	marie.Get("/enfants/recompenses/nouvelle")
+	marie.Post("/enfants/recompenses", map[string]string{"titre": "Glace", "prix": "5", "emoji": "🍦"})
+	_, page = lea.Get("/enfants")
+	rec := essai.Trouver(t, page, `/enfants/recompenses/(\d+)/demander`)
+	if code, _ := lea.Post("/enfants/recompenses/"+rec+"/demander", nil); code != 200 {
+		t.Fatalf("récompense refusée malgré les étoiles bonus : %d", code)
+	}
 }

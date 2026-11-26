@@ -183,7 +183,7 @@ Au démarrage, la base est migrée toute seule. Avant toute migration, une copie
 
 La base SQLite est copiée **à chaud**, le serveur continue de tourner (`VACUUM INTO`). Chaque copie est vérifiée (`PRAGMA integrity_check`).
 
-**1. Sauvegarde automatique** : chaque jour à `FC_SAUVEGARDE_HEURE`, dans le volume (`/donnees/sauvegardes/auto-….db`), avec rotation. Les photos du carnet (`/donnees/pieces`) sont copiées dans `/donnees/sauvegardes/pieces`.
+**1. Sauvegarde automatique** : chaque jour à `FC_SAUVEGARDE_HEURE`, dans le volume (`/donnees/sauvegardes/auto-….db`), avec rotation. Les photos du carnet (`/donnees/pieces`) sont copiées dans `/donnees/sauvegardes/pieces`. Une photo effacée de l'appli passe dans `/donnees/sauvegardes/pieces-effacees/<date>`, gardée autant de jours que les sauvegardes de la base.
 
 **2. Sauvegarde vers l'hôte** (recommandée, à mettre dans cron) :
 

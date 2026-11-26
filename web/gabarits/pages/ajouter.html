@@ -4,11 +4,16 @@
   <p>Que voulez-vous ajouter ?</p>
 </section>
 {{if .Donnees}}
-<div class="actions">
-  {{- range .Donnees}}
-  <a class="action" href="{{.URL}}"><span class="emoji">{{emoji .Emoji}}</span>{{.Texte}}</a>
-  {{- end}}
-</div>
+{{- range .Donnees}}
+<section class="groupe-ajout">
+  <h2>{{.Nom}}</h2>
+  <div class="actions">
+    {{- range .Actions}}
+    <a class="action" href="{{.URL}}"><span class="emoji">{{emoji .Emoji}}</span>{{.Texte}}</a>
+    {{- end}}
+  </div>
+</section>
+{{- end}}
 {{else}}
 <div class="carte vide"><span class="emoji">🧺</span>Rien à ajouter pour l'instant.</div>
 {{end}}

@@ -48,6 +48,7 @@
       {{if and .Mdp.Valid (ne .ID $c.Membre.ID)}}
       <form method="post" action="/famille/membres/{{.ID}}/securite" hx-confirm="Retirer la double authentification et les passkeys de {{.Nom}} (téléphone perdu) ?">
         {{template "jeton" $c.CSRF}}
+        {{if $c.Membre.Mdp.Valid}}<div class="rangee"><label class="champ"><span>Votre mot de passe</span><input type="password" name="mdp" autocomplete="current-password" required></label></div>{{end}}
         <p><button class="bouton petit secondaire">🔐 Réinitialiser sa double authentification</button></p>
       </form>
       {{end}}
@@ -89,6 +90,7 @@
     {{template "jeton" $c.CSRF}}
     <label class="champ"><span>Rôle</span>
       <select name="role"><option value="parent">Parent</option><option value="enfant">Enfant (avec mot de passe)</option></select></label>
+    {{if $c.Membre.Mdp.Valid}}<label class="champ"><span>Votre mot de passe</span><input type="password" name="mdp" autocomplete="current-password"></label>{{end}}
     <button class="bouton">Créer le lien</button>
   </form>
   {{if .Invitations}}

@@ -175,6 +175,11 @@ func (a *App) inviter(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	if role != RoleParent && role != RoleEnfant {
 		role = RoleParent
 	}
+	// Un nouveau parent a accès à tout : mot de passe redemandé (une
+	// session volée ne suffit pas à se créer un accès durable).
+	if role == RoleParent && !a.motDePasseSiDefini(w, r, c) {
+		return
+	}
 	jeton, empreinte := jetonAleatoire()
 	t := time.Now()
 	if err := a.Q.CreerInvitation(r.Context(), donnees.CreerInvitationParams{
@@ -185,6 +190,9 @@ func (a *App) inviter(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		return
 	}
 	a.Journal.Info("invitation créée", "famille", c.Famille.ID, "par", c.Membre.ID, "role", role)
+	// Page rendue en réponse au POST : l'adresse reste /famille (sinon
+	// « Recharger » ou « Précédent » demanderait /famille/invitations : 405).
+	w.Header().Set("HX-Push-Url", "/famille")
 	a.afficherFamille(w, r, c, donneesFamille{Lien: a.Config.URLPublique.String() + "/invitation/" + jeton})
 }
 
@@ -294,6 +302,11 @@ func (a *App) retirerMembre(w http.ResponseWriter, r *http.Request, c *Contexte)
 			}
 		}
 		if err := q.RetirerMembre(ctx, donnees.RetirerMembreParams{ID: m.ID, FamilleID: c.Famille.ID}); err != nil {
+			return err
+		}
+		// Ses liens d'invitation partent avec lui (sinon il reviendrait).
+		if err := q.SupprimerInvitationsDe(ctx, donnees.SupprimerInvitationsDeParams{FamilleID: c.Famille.ID,
+			CreePar: sql.NullInt64{Int64: m.ID, Valid: true}}); err != nil {
 			return err
 		}
 		if err := q.SupprimerAbonnementsPushMembre(ctx, m.ID); err != nil {

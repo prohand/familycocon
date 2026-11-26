@@ -130,3 +130,24 @@ func TestDessinPDF417Aztec(t *testing.T) {
 		t.Fatal("formats PDF417 / Aztec refusés")
 	}
 }
+
+// Formats ajoutés : Code 39, Code 93, Codabar, ITF (SVG), Data Matrix (image).
+func TestAutresFormats(t *testing.T) {
+	for _, c := range []struct {
+		format, numero string
+		image          bool
+	}{
+		{"code39", "CARTE-1234", false}, {"code39", "minuscules", false}, {"code93", "FID 98765", false},
+		{"codabar", "123456789", false}, {"codabar", "B123B", false}, {"itf", "12345678901234", false},
+		{"datamatrix", "Carte fidelite 4242", true},
+	} {
+		v := Dessin(donnees.Carte{Numero: c.numero, Format: c.format})
+		if v.Probleme != "" || (c.image && v.QR == "") || (!c.image && v.SVG == "") {
+			t.Errorf("%s %q : %q", c.format, c.numero, v.Probleme)
+		}
+	}
+	// ITF : un nombre pair de chiffres seulement.
+	if v := Dessin(donnees.Carte{Numero: "123", Format: "itf"}); v.Probleme == "" {
+		t.Error("ITF impair accepté")
+	}
+}

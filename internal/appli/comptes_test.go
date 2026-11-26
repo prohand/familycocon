@@ -186,7 +186,14 @@ func TestVerrouPin(t *testing.T) {
 func TestInvitation(t *testing.T) {
 	_, srv, n := familleTest(t)
 	n.get("/famille")
-	code, page := n.post("/famille/invitations", map[string]string{"role": "parent"})
+	// Inviter un parent redemande le mot de passe (session volée).
+	if code, _ := n.post("/famille/invitations", map[string]string{"role": "parent"}); code == 200 {
+		t.Fatal("invitation de parent sans mot de passe acceptée")
+	}
+	if code, _ := n.post("/famille/invitations", map[string]string{"role": "enfant"}); code != 200 {
+		t.Fatalf("invitation d'enfant : %d", code)
+	}
+	code, page := n.post("/famille/invitations", map[string]string{"role": "parent", "mdp": "un grand nid douillet"})
 	m := regexp.MustCompile(`/invitation/([A-Za-z0-9_-]{43})`).FindStringSubmatch(page)
 	if code != 200 || m == nil {
 		t.Fatalf("lien d'invitation absent : %d", code)
@@ -236,7 +243,7 @@ func TestModulesEtRaccourcis(t *testing.T) {
 	if code, _ := n.post("/moi/raccourcis", map[string]string{"r1": "accueil", "r2": "agenda", "r3": "moi", "r4": "menus"}); code != 400 {
 		t.Fatalf("module désactivé accepté : %d", code)
 	}
-	if code, page := n.post("/moi/raccourcis", map[string]string{"r1": "menus", "r2": "famille", "r3": "courses", "r4": "moi"}); code != 200 || !strings.Contains(page, `href="/famille"><span class="ico">🏡`) {
+	if code, page := n.post("/moi/raccourcis", map[string]string{"r1": "menus", "r2": "famille", "r3": "courses", "r4": "moi"}); code != 200 || !strings.Contains(page, `href="/famille" title="Famille"><span class="ico">🏡`) {
 		t.Fatalf("raccourcis : %d", code)
 	}
 }

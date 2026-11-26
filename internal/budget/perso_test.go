@@ -17,8 +17,8 @@ func TestBudgetPerso(t *testing.T) {
 	_, srv := essai.NouvelleApp(t, Brancher)
 	marie := essai.Famille(t, srv)
 	paul := essai.Parent(t, srv, marie, "Paul")
-	mois := time.Now().Format("2006-01")
-	jour := time.Now().Format("2006-01-02")
+	mois := essai.Maintenant().Format("2006-01")
+	jour := essai.Maintenant().Format("2006-01-02")
 
 	// Commun (comme avant) et perso de Marie.
 	marie.Post("/budget", map[string]string{"montant": "100", "categorie": "courses", "libelle": "Marché commun", "jour": jour})
@@ -70,11 +70,11 @@ func TestBudgetPerso(t *testing.T) {
 	}
 
 	// Virement chaque mois, commencé il y a 2 mois : 3 occurrences de chaque côté.
-	debut := time.Now().AddDate(0, -2, 0).Format("2006-01-02")
+	debut := essai.Maintenant().AddDate(0, -2, 0).Format("2006-01-02")
 	if code, _ := marie.Post("/budget/virement", map[string]string{"montant": "800", "jour": debut, "frequence": "mois"}); code != 200 {
 		t.Fatalf("virement mensuel : %d", code)
 	}
-	for _, m := range []string{time.Now().AddDate(0, -2, 0).Format("2006-01"), mois} {
+	for _, m := range []string{essai.Maintenant().AddDate(0, -2, 0).Format("2006-01"), mois} {
 		_, perso = marie.Get("/budget?compte=perso&mois=" + m)
 		_, p = paul.Get("/budget?compte=commun&mois=" + m)
 		if !strings.Contains(perso, "800,00") || !strings.Contains(p, "Virement de Marie") || !strings.Contains(p, "800,00") {
@@ -105,9 +105,9 @@ func TestBudgetPerso(t *testing.T) {
 	}
 	// Le mois prochain : rien de passé, tout est prévu ; le reste à vivre
 	// du commun compte le virement à venir.
-	suivant := time.Now().AddDate(0, 1, 0).Format("2006-01")
-	if time.Now().Day() > 28 { // 31 janvier + 1 mois : on vise le mois d'après le 1er
-		suivant = time.Date(time.Now().Year(), time.Now().Month()+1, 1, 0, 0, 0, 0, time.Local).Format("2006-01")
+	suivant := essai.Maintenant().AddDate(0, 1, 0).Format("2006-01")
+	if essai.Maintenant().Day() > 28 { // 31 janvier + 1 mois : on vise le mois d'après le 1er
+		suivant = time.Date(essai.Maintenant().Year(), essai.Maintenant().Month()+1, 1, 0, 0, 0, 0, essai.Maintenant().Location()).Format("2006-01")
 	}
 	_, p = paul.Get("/budget?compte=commun&mois=" + suivant)
 	if !strings.Contains(p, "Revenus <b>850,00") || strings.Contains(p, "à venir</small>") || strings.Contains(p, "Aujourd'hui :") || !strings.Contains(p, "· prévu</small>") {

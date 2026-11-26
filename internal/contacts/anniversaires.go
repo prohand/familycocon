@@ -180,7 +180,7 @@ func (m *Module) resumeAnniv(ctx context.Context, c *appli.Contexte) appli.Resum
 	auj := minuit(c.Maintenant())
 	l, err := m.anniversaires(ctx, c, c.Famille, auj)
 	if err != nil || len(l) == 0 {
-		return appli.Resume{Info: "Aucune date"}
+		return appli.Resume{Info: "Aucune date", Vide: true}
 	}
 	r := appli.Resume{Info: l[0].Nom + " : " + strings.ToLower(l[0].Quand[:1]) + l[0].Quand[1:]}
 	if l[0].Proche {

@@ -93,7 +93,11 @@ func (a *App) Envelopper(h http.Handler) http.Handler {
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "same-origin")
-		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+		// Caméra permise à l'appli elle-même (scan des cartes et des tickets) :
+		// avec hx-boost, la politique reste celle de la première page chargée,
+		// la permettre sur une seule page ne marchait pas. Le navigateur
+		// demande toujours l'accord avant de l'ouvrir.
+		h.Set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=()")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		// Pages privées : jamais gardées par le navigateur (« Précédent »
 		// après une déconnexion sur la tablette partagée ne remontre rien).

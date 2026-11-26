@@ -98,6 +98,30 @@ func (q *Queries) EnregistrerRepas(ctx context.Context, arg EnregistrerRepasPara
 	return i, err
 }
 
+const fusionnerRecette = `-- name: FusionnerRecette :exec
+UPDATE recettes SET nom = ?, ingredients = ?, compte = compte + ? WHERE famille_id = ? AND cle = ?
+`
+
+type FusionnerRecetteParams struct {
+	Nom         string
+	Ingredients string
+	Compte      int64
+	FamilleID   int64
+	Cle         string
+}
+
+// Renommee comme une recette deja connue : les deux n'en font qu'une.
+func (q *Queries) FusionnerRecette(ctx context.Context, arg FusionnerRecetteParams) error {
+	_, err := q.db.ExecContext(ctx, fusionnerRecette,
+		arg.Nom,
+		arg.Ingredients,
+		arg.Compte,
+		arg.FamilleID,
+		arg.Cle,
+	)
+	return err
+}
+
 const marquerDansCourses = `-- name: MarquerDansCourses :execrows
 UPDATE repas SET dans_courses = 1 WHERE id = ? AND famille_id = ? AND dans_courses = 0
 `
@@ -199,6 +223,32 @@ func (q *Queries) RecettesConnues(ctx context.Context, familleID int64) ([]strin
 		return nil, err
 	}
 	return items, nil
+}
+
+const renommerRecette = `-- name: RenommerRecette :exec
+UPDATE recettes SET cle = ?1, nom = ?2, ingredients = ?3
+WHERE famille_id = ?4 AND cle = ?5
+`
+
+type RenommerRecetteParams struct {
+	Nouvelle    string
+	Nom         string
+	Ingredients string
+	FamilleID   int64
+	Cle         string
+}
+
+// Renommee : la cle suit le nouveau nom (sinon le nouveau nom ne retrouve
+// pas ses ingredients).
+func (q *Queries) RenommerRecette(ctx context.Context, arg RenommerRecetteParams) error {
+	_, err := q.db.ExecContext(ctx, renommerRecette,
+		arg.Nouvelle,
+		arg.Nom,
+		arg.Ingredients,
+		arg.FamilleID,
+		arg.Cle,
+	)
+	return err
 }
 
 const repasDuCreneau = `-- name: RepasDuCreneau :one

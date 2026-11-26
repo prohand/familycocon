@@ -67,7 +67,7 @@ func TestNotificationsPush(t *testing.T) {
 
 	// Thomas rejoint la famille et abonne son téléphone.
 	marie.get("/famille")
-	_, page := marie.post("/famille/invitations", map[string]string{"role": "parent"})
+	_, page := marie.post("/famille/invitations", map[string]string{"role": "parent", "mdp": "un grand nid douillet"})
 	lien := page[strings.Index(page, "/invitation/"):][:len("/invitation/")+43]
 	thomas := nouveauNavigateur(t, srv)
 	thomas.post(lien, map[string]string{"prenom": "Thomas", "identifiant": "thomas", "mdp": "le papa du nid", "mdp2": "le papa du nid"})
@@ -342,7 +342,7 @@ func TestRappelsPrives(t *testing.T) {
 		}
 	}
 	marie.get("/famille")
-	_, page := marie.post("/famille/invitations", map[string]string{"role": "parent"})
+	_, page := marie.post("/famille/invitations", map[string]string{"role": "parent", "mdp": "un grand nid douillet"})
 	lien := page[strings.Index(page, "/invitation/"):][:len("/invitation/")+43]
 	paul := nouveauNavigateur(t, srv)
 	paul.post(lien, map[string]string{"prenom": "Paul", "identifiant": "paul", "mdp": "le papa du nid", "mdp2": "le papa du nid"})

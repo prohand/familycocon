@@ -138,7 +138,8 @@ Pour les comptes à mot de passe (parents, ados). Code repris de mirador-stack
   un départ en novembre ou décembre part du janvier suivant. La migration
   refait la table (un CHECK ne se modifie pas) : une migration qui commence
   par `-- sans cles etrangeres` tourne avec `foreign_keys=OFF`, puis
-  `foreign_key_check` (un lien cassé annule tout).
+  `foreign_key_check` : un lien cassé par la migration annule tout (ceux
+  déjà cassés avant ne la bloquent pas).
 - Nouveau montant prévu à l'avance (« 📅 Prévoir un nouveau montant », dans
   la fiche d'une opération qui revient et d'un abonnement) : colonnes
   `nouveau_montant` et `nouveau_le` (migration 0044). Les fois à partir de
@@ -804,3 +805,57 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - Essai : les deux cartes Wallet de l'utilisateur (QR code, PDF417 Starbucks)
   lues depuis une capture d'écran, et chaque code dessiné relu à l'identique.
 
+
+## Revue de tous les modules (26/11/2026)
+
+- Carnet : la dépense envoyée au budget perso d'un parent ne suit la ligne
+  (correction, suppression) que pour ce parent ; coût vidé : elle quitte
+  le budget.
+- Sécurité : inviter un parent et réinitialiser la sécurité d'un autre
+  membre redemandent le mot de passe ; sa propre sécurité se règle sur la
+  page Sécurité ; les invitations d'un membre retiré sont supprimées.
+- Caméra permise à l'appli (`Permissions-Policy: camera=(self)`) sur toutes
+  les pages : avec hx-boost, la politique reste celle de la première page.
+- Sauvegardes : les photos effacées de l'appli quittent
+  `sauvegardes/pieces` pour `sauvegardes/pieces-effacees/AAAA-MM-JJ`,
+  effacé après `FC_SAUVEGARDE_GARDER` jours.
+- Liens de téléchargement (vCard, export) : `download hx-boost="false"`.
+
+## Affichage (26/11/2026, maquettes 1 à 6)
+
+- Budget : sur grand écran (≥ 900 px), reste à vivre et courbe côte à côte
+  (`.budget-grille`), courbe de 260 px de haut au plus. Mois sans
+  opération : ni courbe ni filtre, un seul message.
+- Accueil : un module encore vide (`Resume.Vide`, « Aucune note »…) passe en
+  petite pastille sous « Pas encore utilisés ». « Mon accueil »
+  (`/moi/accueil`, colonne `membres.accueil`, migration 0046 :
+  « agenda,courses,-animaux », « - » masqué) : ordre des tuiles et tuiles
+  masquées, pour chaque membre. Un module nouveau se met à la fin.
+- Ajouter : rangé en 4 groupes (Au quotidien, Argent, Famille, Maison et
+  véhicules), 3 cases par ligne sur téléphone, 6 sur grand écran.
+- Agenda : un jour sans rien tient sur une ligne (« rien de prévu ») ; sur
+  grand écran (≥ 1000 px), la semaine en 7 colonnes.
+- Moi : chaque partie est repliée avec un résumé (thème choisi, barre du
+  bas, notifications activées).
+
+## Cartes : autres formats de code (26/11/2026)
+
+- En plus d'EAN-13, UPC-A, EAN-8, Code 128, QR, PDF417 et Aztec : Code 39,
+  Code 93, Codabar, ITF (2 parmi 5 entrelacé) et Data Matrix. Ils sont lus
+  au scan (BarcodeDetector ou zxing-wasm, qui les lisait déjà) et redessinés
+  dans le même format (boombuler/barcode, déjà là : rien de plus dans le
+  binaire). Aller-retour dessin → lecture vérifié pour chacun.
+- Code 93 : avec ses deux caractères de contrôle (obligatoires). Codabar : le
+  numéro est gardé sans ses lettres de début et de fin (A à D), remises au
+  dessin. UPC-E reste lu en « détecté tout seul » (pas de dessin UPC-E).
+
+## Barre de gauche sur grand écran (26/11/2026)
+
+- Au-dessus de 1 000 px, la barre du bas se pose à gauche : le « + » en
+  haut, les 4 raccourcis de chacun, « Chercher » en bas. Pas de liste des
+  modules (les tuiles de l'accueil y sont déjà).
+- « « » la réduit aux icônes (64 px, nom en infobulle) ; réglage de
+  l'appareil (préférence `rail`, cookie, comme le thème) posé par
+  POST /moi/rail : la page arrive déjà dans le bon état.
+- Entre 900 et 1 000 px : la pilule flottante en bas, comme avant ; sur
+  téléphone, rien ne change.

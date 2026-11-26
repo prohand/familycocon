@@ -21,8 +21,10 @@
 </a>
 {{end}}
 
-<section class="carte bloc">
-  <h2>🎨 Mon profil</h2>
+<a class="carte bloc partie-lien" href="/moi/accueil"><span>🏠 Mon accueil<small>Ordre des modules, modules masqués</small></span><span class="fleche-droite">›</span></a>
+
+<details class="carte bloc partie">
+  <summary><span>🎨 Mon profil<small>Prénom, date de naissance, avatar, couleur</small></span></summary>
   <form method="post" action="/moi/profil">
     {{template "jeton" $c.CSRF}}
     <label class="champ"><span>Prénom</span><input name="prenom" value="{{$c.Membre.Nom}}" maxlength="40" required></label>
@@ -32,10 +34,10 @@
     {{template "choix-couleur" dict "Nom" "couleur" "Choisie" $c.Membre.Couleur}}
     <button class="bouton">Enregistrer</button>
   </form>
-</section>
+</details>
 
-<section class="carte bloc">
-  <h2>🌗 Thème</h2>
+<details class="carte bloc partie">
+  <summary><span>🌗 Thème<small>{{if eq $.Theme "clair"}}☀️ Clair{{else if eq $.Theme "sombre"}}🌙 Sombre{{else}}📱 Comme le téléphone{{end}}</small></span></summary>
   <form method="post" action="/moi/theme">
     {{template "jeton" $c.CSRF}}
     <div class="pilules-choix">
@@ -46,10 +48,10 @@
     <p class="aide">Gardé sur cet appareil.</p>
     <button class="bouton">Enregistrer</button>
   </form>
-</section>
+</details>
 
-<section class="carte bloc">
-  <h2>📌 Ma barre du bas</h2>
+<details class="carte bloc partie">
+  <summary><span>📌 Ma barre du bas<small>{{.BarreTexte}}</small></span></summary>
   <p class="aide">Les 4 raccourcis autour du bouton « + ».</p>
   <form method="post" action="/moi/raccourcis">
     {{template "jeton" $c.CSRF}}
@@ -63,10 +65,10 @@
     </div>
     <button class="bouton">Enregistrer</button>
   </form>
-</section>
+</details>
 
-<section class="carte bloc">
-  <h2>🔔 Notifications</h2>
+<details class="carte bloc partie">
+  <summary><span>🔔 Notifications<small>{{.NbPush}} sur {{.NbPushMax}} activées{{if .Appareils}} · {{pluriel .Appareils "appareil" "appareils"}}{{end}}</small></span></summary>
   <p class="aide">Sur le téléphone, même quand FamilyCocon est fermé.{{if .Appareils}} {{pluriel .Appareils "appareil abonné" "appareils abonnés"}}.{{end}}</p>
   <p><button class="bouton secondaire" type="button" data-push="activer">🔔 Activer sur cet appareil</button></p>
   <p class="aide" id="etat-push"></p>
@@ -86,11 +88,11 @@
     {{- end}}
     <div class="boutons"><button class="bouton">Enregistrer</button></div>
   </form>
-</section>
+</details>
 
 {{if .AMotDePasse}}
-<section class="carte bloc">
-  <h2>🔑 Mot de passe</h2>
+<details class="carte bloc partie">
+  <summary><span>🔑 Mot de passe<small>Changer le mot de passe</small></span></summary>
   <form method="post" action="/moi/mdp">
     {{template "jeton" $c.CSRF}}
     <label class="champ"><span>Mot de passe actuel</span><input type="password" maxlength="128" name="actuel" autocomplete="current-password" required></label>
@@ -98,7 +100,7 @@
     <label class="champ"><span>Le même, encore une fois</span><input type="password" maxlength="128" name="nouveau2" autocomplete="new-password" minlength="10" required></label>
     <button class="bouton">Changer le mot de passe</button>
   </form>
-</section>
+</details>
 {{end}}
 
 <form class="bloc" method="post" action="/deconnexion" data-deconnexion hx-boost="false">

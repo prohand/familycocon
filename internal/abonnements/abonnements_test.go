@@ -94,7 +94,11 @@ func TestAbonnementsRevue(t *testing.T) {
 	_, form := marie.Get("/abonnements/" + id)
 	prochain := essai.Trouver(t, form, `name="prochain" value="([0-9-]*)"`)
 	// Modifié (les notes) : il reste résilié, pas de prélèvement en double.
-	marie.Post("/abonnements/"+id, map[string]string{"nom": "Vidéo", "montant": "10", "frequence": "mois", "prochain": prochain, "notes": "résilié en ligne"})
+	if code, _ := marie.Post("/abonnements/"+id, map[string]string{"nom": "Vidéo", "montant": "10", "frequence": "mois", "prochain": prochain, "notes": "résilié en ligne"}); code != 200 {
+		t.Fatalf("abonnement résilié non modifiable : %d", code)
+	}
+	// Même avec une date (ancienne page) : rien ne repart.
+	marie.Post("/abonnements/"+id, map[string]string{"nom": "Vidéo", "montant": "10", "frequence": "mois", "prochain": jour(0)})
 	if _, page := marie.Get("/abonnements"); !strings.Contains(page, "Résiliés (1)") {
 		t.Fatal("réactivé par une simple modification")
 	}

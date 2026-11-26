@@ -15,7 +15,7 @@
   <h2>{{.Titre}}</h2>
   <a class="fleche" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Suivant}}" aria-label="Mois suivant">›</a>
 </div>
-<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-budget from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*">
+<div id="maj" hx-get="{{$.Adresse}}" hx-trigger="maj-budget from:body delay:300ms, maj-tout from:body delay:300ms" hx-select="#maj" hx-swap="outerHTML" hx-disinherit="*" data-maj-prudent{{if not .Vide}} class="budget-grille"{{end}}>
 
 <section class="carte reste bloc">
   <p class="reste-titre">Reste à vivre{{if .Futur}} <small>· prévu</small>{{else if and .EnCours .Prevues}} <small>· fin du mois, prévu compris</small>{{end}}</p>
@@ -97,12 +97,15 @@
 </section>
 {{end}}
 
-<section class="carte bloc">
+{{/* Sur grand écran, la courbe se met à droite du reste à vivre (app.css, .budget-grille). Mois vide : pas de courbe. */}}
+{{if not .Vide}}
+<section class="carte bloc bloc-courbe">
   <div class="section-titre premier"><h2>Dépenses du mois{{with .Filtre}} · filtrées{{end}}</h2></div>
   {{if .Filtre}}<p class="aide">Le reste à vivre et « À venir » comptent toutes les catégories.</p>{{end}}
   {{.Courbe}}
   <p class="legende"><span class="trait actuel"></span>Ce mois-ci <span class="trait precedent"></span>Mois précédent</p>
 </section>
+{{end}}
 
 {{if .ParCat}}
 <section class="carte bloc">
@@ -128,12 +131,14 @@
 {{end}}
 
 <section class="bloc">
+  {{if not .Vide}}
   <nav class="pilules" aria-label="Filtrer par catégorie">
     <a class="pilule{{if not .Filtre}} active{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Mois}}">Tout</a>
     {{- range .Pilules}}
     <a class="pilule{{if eq .Cle $.Donnees.Filtre}} active{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{$.Donnees.Mois}}&amp;cat={{.Cle}}">{{.Emoji}} {{.Nom}}</a>
     {{- end}}
   </nav>
+  {{end}}
   {{- range .Jours}}
   <h3 class="jour-histo">{{.Titre}}</h3>
   <div class="carte operations">
@@ -147,7 +152,7 @@
     {{- end}}
   </div>
   {{- else}}
-  <div class="carte vide"><span class="emoji">🪙</span>Aucune opération ce mois-ci.</div>
+  <div class="carte vide"><span class="emoji">🪙</span>Aucune opération ce mois-ci.{{if .Vide}}<br><small>La courbe du mois apparaîtra avec la première dépense.</small>{{end}}</div>
   {{- end}}
 </section>
 </div>

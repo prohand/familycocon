@@ -535,6 +535,12 @@ func (a *App) motDePasseConfirme(w http.ResponseWriter, r *http.Request, c *Cont
 	return msg == ""
 }
 
+// motDePasseSiDefini : comme motDePasseConfirme, pour un membre qui a un
+// mot de passe (un compte à passkey seule n'a rien à redemander).
+func (a *App) motDePasseSiDefini(w http.ResponseWriter, r *http.Request, c *Contexte) bool {
+	return !c.Membre.Mdp.Valid || a.motDePasseConfirme(w, r, c)
+}
+
 // verifierMotDePasse : « » si le mot de passe est le bon, sinon le statut et
 // le message. 5 erreurs par quart d'heure au plus (session volée : pas de
 // devinette en ligne).
@@ -722,6 +728,15 @@ func (a *App) reinitialiserSecurite(w http.ResponseWriter, r *http.Request, c *C
 	m, err := a.membreCible(r, c)
 	if err != nil {
 		a.Echec(w, r, http.StatusNotFound, "Membre introuvable.")
+		return
+	}
+	// Pour soi-même : page Sécurité, qui redemande le mot de passe (sinon
+	// une session volée suffirait à retirer son second facteur).
+	if m.ID == c.Membre.ID {
+		a.Echec(w, r, http.StatusBadRequest, "Pour votre propre compte, passez par la page Sécurité.")
+		return
+	}
+	if !a.motDePasseSiDefini(w, r, c) {
 		return
 	}
 	err = a.Transaction(ctx, func(q *donnees.Queries) error {

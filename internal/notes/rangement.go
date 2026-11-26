@@ -250,10 +250,12 @@ func quandRappel(t, maintenant time.Time) string {
 	h := t.Format("15:04")
 	j := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 	a := time.Date(maintenant.Year(), maintenant.Month(), maintenant.Day(), 0, 0, 0, 0, t.Location())
-	switch int(j.Sub(a).Hours() / 24) {
-	case 0:
+	// Jours comparés par la date (pas en heures : un jour de changement
+	// d'heure dure 23 ou 25 h).
+	switch {
+	case j.Equal(a):
 		return "aujourd'hui à " + h
-	case 1:
+	case j.Equal(a.AddDate(0, 0, 1)):
 		return "demain à " + h
 	}
 	return appli.JourFR(t) + " " + t.Format("02/01") + " à " + h

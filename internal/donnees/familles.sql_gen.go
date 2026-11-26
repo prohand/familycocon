@@ -70,7 +70,7 @@ func (q *Queries) CreerFamille(ctx context.Context, arg CreerFamilleParams) (Fam
 const creerMembre = `-- name: CreerMembre :one
 INSERT INTO membres (famille_id, nom, role, couleur, identifiant, mdp, pin, push_modules, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar
+RETURNING id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil
 `
 
 type CreerMembreParams struct {
@@ -115,12 +115,13 @@ func (q *Queries) CreerMembre(ctx context.Context, arg CreerMembreParams) (Membr
 		&i.TotpDernier,
 		&i.Naissance,
 		&i.Avatar,
+		&i.Accueil,
 	)
 	return i, err
 }
 
 const enfantsAvecPin = `-- name: EnfantsAvecPin :many
-SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'enfant' AND pin IS NOT NULL
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil FROM membres WHERE famille_id = ? AND actif = 1 AND role = 'enfant' AND pin IS NOT NULL
 ORDER BY id
 `
 
@@ -150,6 +151,7 @@ func (q *Queries) EnfantsAvecPin(ctx context.Context, familleID int64) ([]Membre
 			&i.TotpDernier,
 			&i.Naissance,
 			&i.Avatar,
+			&i.Accueil,
 		); err != nil {
 			return nil, err
 		}
@@ -183,7 +185,7 @@ func (q *Queries) FamilleParID(ctx context.Context, id int64) (Famille, error) {
 }
 
 const membreParID = `-- name: MembreParID :one
-SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar FROM membres WHERE id = ? AND famille_id = ? AND actif = 1
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil FROM membres WHERE id = ? AND famille_id = ? AND actif = 1
 `
 
 type MembreParIDParams struct {
@@ -211,12 +213,13 @@ func (q *Queries) MembreParID(ctx context.Context, arg MembreParIDParams) (Membr
 		&i.TotpDernier,
 		&i.Naissance,
 		&i.Avatar,
+		&i.Accueil,
 	)
 	return i, err
 }
 
 const membreParIdentifiant = `-- name: MembreParIdentifiant :one
-SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar FROM membres WHERE identifiant = ? AND actif = 1
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil FROM membres WHERE identifiant = ? AND actif = 1
 `
 
 func (q *Queries) MembreParIdentifiant(ctx context.Context, identifiant sql.NullString) (Membre, error) {
@@ -239,12 +242,13 @@ func (q *Queries) MembreParIdentifiant(ctx context.Context, identifiant sql.Null
 		&i.TotpDernier,
 		&i.Naissance,
 		&i.Avatar,
+		&i.Accueil,
 	)
 	return i, err
 }
 
 const membresDeFamille = `-- name: MembresDeFamille :many
-SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar FROM membres WHERE famille_id = ? AND actif = 1
+SELECT id, famille_id, nom, role, couleur, identifiant, mdp, pin, raccourcis, actif, cree_le, push_modules, totp, totp_dernier, naissance, avatar, accueil FROM membres WHERE famille_id = ? AND actif = 1
 ORDER BY CASE role WHEN 'parent' THEN 0 ELSE 1 END, id
 `
 
@@ -274,6 +278,7 @@ func (q *Queries) MembresDeFamille(ctx context.Context, familleID int64) ([]Memb
 			&i.TotpDernier,
 			&i.Naissance,
 			&i.Avatar,
+			&i.Accueil,
 		); err != nil {
 			return nil, err
 		}
@@ -286,6 +291,21 @@ func (q *Queries) MembresDeFamille(ctx context.Context, familleID int64) ([]Memb
 		return nil, err
 	}
 	return items, nil
+}
+
+const modifierAccueil = `-- name: ModifierAccueil :exec
+UPDATE membres SET accueil = ? WHERE id = ? AND famille_id = ?
+`
+
+type ModifierAccueilParams struct {
+	Accueil   string
+	ID        int64
+	FamilleID int64
+}
+
+func (q *Queries) ModifierAccueil(ctx context.Context, arg ModifierAccueilParams) error {
+	_, err := q.db.ExecContext(ctx, modifierAccueil, arg.Accueil, arg.ID, arg.FamilleID)
+	return err
 }
 
 const modifierFamille = `-- name: ModifierFamille :exec
@@ -446,6 +466,22 @@ type RetirerMembreParams struct {
 // lisible) : il est desactive, perd ses identifiants et ses sessions.
 func (q *Queries) RetirerMembre(ctx context.Context, arg RetirerMembreParams) error {
 	_, err := q.db.ExecContext(ctx, retirerMembre, arg.ID, arg.FamilleID)
+	return err
+}
+
+const supprimerInvitationsDe = `-- name: SupprimerInvitationsDe :exec
+DELETE FROM invitations WHERE famille_id = ? AND cree_par = ?
+`
+
+type SupprimerInvitationsDeParams struct {
+	FamilleID int64
+	CreePar   sql.NullInt64
+}
+
+// Membre retire : ses liens d'invitation ne servent plus (sinon il
+// reviendrait par l'un d'eux).
+func (q *Queries) SupprimerInvitationsDe(ctx context.Context, arg SupprimerInvitationsDeParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerInvitationsDe, arg.FamilleID, arg.CreePar)
 	return err
 }
 

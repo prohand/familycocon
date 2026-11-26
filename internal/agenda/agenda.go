@@ -581,8 +581,9 @@ func (m *Module) lire(r *http.Request, c *appli.Contexte) (saisie, string) {
 		return s, "Date de fin invalide."
 	}
 	// Un événement répété ne dure pas plus longtemps que l'écart entre deux
-	// répétitions (sinon il se chevauche lui-même à l'infini).
-	if max := dureeMax(rg.Type); s.repetition != "" && s.fin.Sub(s.debut) > max {
+	// répétitions (sinon il se chevauche lui-même à l'infini). Une heure de
+	// marge : le jour du passage à l'heure d'hiver dure 25 h.
+	if max := dureeMax(rg.Type) + time.Hour; s.repetition != "" && s.fin.Sub(s.debut) > max {
 		return s, "Un événement qui revient ne peut pas durer plus longtemps que l'écart entre deux fois."
 	}
 	membres, err := m.a.Membres(r.Context(), c)

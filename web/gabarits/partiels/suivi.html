@@ -403,7 +403,7 @@
   {{- with .L}}
   <ul class="liste-joints">
     {{- range .}}
-    <li><a href="/joints/{{.ID}}/{{.Nom}}" target="_blank" rel="noopener">{{or .Icone "📎"}} <span class="nom-joint">{{.Nom}}</span></a> <small>{{.TailleTexte}}</small>
+    <li><a href="/joints/{{.ID}}/{{segment .Nom}}" target="_blank" rel="noopener">{{or .Icone "📎"}} <span class="nom-joint">{{.Nom}}</span></a> <small>{{.TailleTexte}}</small>
       <form method="post" action="/joints/{{.ID}}/supprimer" hx-confirm="Retirer « {{.Nom}} » ?">
         <input type="hidden" name="_jeton" value="{{$.J}}"><input type="hidden" name="retour" value="{{$.R}}">
         <button class="crayon" aria-label="Retirer {{.Nom}}">✕</button>

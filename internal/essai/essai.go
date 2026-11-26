@@ -27,8 +27,6 @@ import (
 	"familycocon/internal/config"
 )
 
-// NouvelleApp : application complète (modules branchés par brancher) sur
-// une base temporaire, et son serveur HTTP de test.
 // Maintenant : l'heure de la famille d'essai (Europe/Paris, son fuseau par
 // défaut). Les tests qui comparent des jours l'utilisent plutôt que
 // time.Now() (en UTC sur la CI) : entre 23 h et minuit UTC, ce n'est pas le
@@ -40,6 +38,8 @@ func Maintenant() time.Time {
 	return time.Now()
 }
 
+// NouvelleApp : application complète (modules branchés par brancher) sur
+// une base temporaire, et son serveur HTTP de test.
 func NouvelleApp(t *testing.T, brancher func(a *appli.App)) (*appli.App, *httptest.Server) {
 	t.Helper()
 	cfg, err := config.LireDepuis(func(string) string { return "" })
@@ -201,7 +201,7 @@ func Trouver(t *testing.T, page, expr string) string {
 func Parent(t *testing.T, srv *httptest.Server, parent *Navigateur, prenom string) *Navigateur {
 	t.Helper()
 	parent.Get("/famille")
-	_, page := parent.Post("/famille/invitations", map[string]string{"role": "parent"})
+	_, page := parent.Post("/famille/invitations", map[string]string{"role": "parent", "mdp": "un grand nid douillet"})
 	m := regexp.MustCompile(`/invitation/([A-Za-z0-9_-]{43})`).FindStringSubmatch(page)
 	if m == nil {
 		t.Fatal("lien d'invitation absent")

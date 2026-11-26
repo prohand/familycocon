@@ -44,6 +44,16 @@ SELECT * FROM recettes WHERE famille_id = ? ORDER BY nom COLLATE NOCASE;
 -- name: ModifierRecette :exec
 UPDATE recettes SET nom = ?, ingredients = ? WHERE famille_id = ? AND cle = ?;
 
+-- Renommee : la cle suit le nouveau nom (sinon le nouveau nom ne retrouve
+-- pas ses ingredients).
+-- name: RenommerRecette :exec
+UPDATE recettes SET cle = sqlc.arg(nouvelle), nom = sqlc.arg(nom), ingredients = sqlc.arg(ingredients)
+WHERE famille_id = sqlc.arg(famille_id) AND cle = sqlc.arg(cle);
+
+-- Renommee comme une recette deja connue : les deux n'en font qu'une.
+-- name: FusionnerRecette :exec
+UPDATE recettes SET nom = ?, ingredients = ?, compte = compte + ? WHERE famille_id = ? AND cle = ?;
+
 -- name: OublierRecette :exec
 DELETE FROM recettes WHERE famille_id = ? AND cle = ?;
 
