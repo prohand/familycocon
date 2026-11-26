@@ -12,7 +12,9 @@ import (
 )
 
 const ajouterException = `-- name: AjouterException :exec
-INSERT INTO evenements_exceptions (evenement_id, jour) VALUES (?, ?) ON CONFLICT DO NOTHING
+INSERT INTO evenements_exceptions (evenement_id, jour) VALUES (?, ?)
+ON CONFLICT (evenement_id, jour) DO UPDATE SET modifiee = 0, nouveau_debut = 0, nouveau_fin = 0,
+  nouvelle_journee = 0, nouveau_titre = '', nouveau_lieu = NULL
 `
 
 type AjouterExceptionParams struct {
@@ -20,6 +22,7 @@ type AjouterExceptionParams struct {
 	Jour        string
 }
 
+// Annuler une fois (meme une fois modifiee : elle devient annulee).
 func (q *Queries) AjouterException(ctx context.Context, arg AjouterExceptionParams) error {
 	_, err := q.db.ExecContext(ctx, ajouterException, arg.EvenementID, arg.Jour)
 	return err
@@ -148,8 +151,8 @@ func (q *Queries) ContactsDesEvenements(ctx context.Context, evenements []int64)
 }
 
 const creerEvenement = `-- name: CreerEvenement :one
-INSERT INTO evenements (famille_id, titre, lieu, note, debut, fin, journee, repetition, repetition_fin, rappel, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel
+INSERT INTO evenements (famille_id, titre, lieu, note, debut, fin, journee, repetition, repetition_fin, rappel, rappel_avant, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel, rappel_avant
 `
 
 type CreerEvenementParams struct {
@@ -163,6 +166,7 @@ type CreerEvenementParams struct {
 	Repetition    string
 	RepetitionFin string
 	Rappel        int64
+	RappelAvant   string
 	CreePar       sql.NullInt64
 	CreeLe        int64
 }
@@ -179,6 +183,7 @@ func (q *Queries) CreerEvenement(ctx context.Context, arg CreerEvenementParams) 
 		arg.Repetition,
 		arg.RepetitionFin,
 		arg.Rappel,
+		arg.RappelAvant,
 		arg.CreePar,
 		arg.CreeLe,
 	)
@@ -197,12 +202,13 @@ func (q *Queries) CreerEvenement(ctx context.Context, arg CreerEvenementParams) 
 		&i.CreeLe,
 		&i.RepetitionFin,
 		&i.Rappel,
+		&i.RappelAvant,
 	)
 	return i, err
 }
 
 const evenementParID = `-- name: EvenementParID :one
-SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel FROM evenements WHERE id = ? AND famille_id = ?
+SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel, rappel_avant FROM evenements WHERE id = ? AND famille_id = ?
 `
 
 type EvenementParIDParams struct {
@@ -227,13 +233,14 @@ func (q *Queries) EvenementParID(ctx context.Context, arg EvenementParIDParams) 
 		&i.CreeLe,
 		&i.RepetitionFin,
 		&i.Rappel,
+		&i.RappelAvant,
 	)
 	return i, err
 }
 
 const evenementsPeriode = `-- name: EvenementsPeriode :many
 
-SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel FROM evenements
+SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel, rappel_avant FROM evenements
 WHERE famille_id = ?1 AND debut < ?2
   AND (fin >= ?3
        OR (repetition <> '' AND (repetition_fin = '' OR repetition_fin >= ?4)))
@@ -276,6 +283,66 @@ func (q *Queries) EvenementsPeriode(ctx context.Context, arg EvenementsPeriodePa
 			&i.CreeLe,
 			&i.RepetitionFin,
 			&i.Rappel,
+			&i.RappelAvant,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const evenementsRappelAvant = `-- name: EvenementsRappelAvant :many
+SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel, rappel_avant FROM evenements
+WHERE famille_id = ?1 AND rappel_avant <> '' AND debut < ?2
+  AND (fin >= ?3
+       OR (repetition <> '' AND (repetition_fin = '' OR repetition_fin >= ?4)))
+ORDER BY debut
+`
+
+type EvenementsRappelAvantParams struct {
+	FamilleID    int64
+	FinPeriode   int64
+	DebutPeriode int64
+	JourMin      string
+}
+
+// Comme EvenementsPeriode, ceux qui ont un rappel juste avant seulement.
+func (q *Queries) EvenementsRappelAvant(ctx context.Context, arg EvenementsRappelAvantParams) ([]Evenement, error) {
+	rows, err := q.db.QueryContext(ctx, evenementsRappelAvant,
+		arg.FamilleID,
+		arg.FinPeriode,
+		arg.DebutPeriode,
+		arg.JourMin,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Evenement{}
+	for rows.Next() {
+		var i Evenement
+		if err := rows.Scan(
+			&i.ID,
+			&i.FamilleID,
+			&i.Titre,
+			&i.Lieu,
+			&i.Note,
+			&i.Debut,
+			&i.Fin,
+			&i.Journee,
+			&i.Repetition,
+			&i.CreePar,
+			&i.CreeLe,
+			&i.RepetitionFin,
+			&i.Rappel,
+			&i.RappelAvant,
 		); err != nil {
 			return nil, err
 		}
@@ -294,8 +361,14 @@ const exceptionsDesEvenements = `-- name: ExceptionsDesEvenements :many
 SELECT evenement_id, jour FROM evenements_exceptions WHERE evenement_id IN (/*SLICE:ids*/?)
 `
 
-// Fois annulees des evenements lus.
-func (q *Queries) ExceptionsDesEvenements(ctx context.Context, ids []int64) ([]EvenementsException, error) {
+type ExceptionsDesEvenementsRow struct {
+	EvenementID int64
+	Jour        string
+}
+
+// Fois annulees ou modifiees des evenements lus (elles ne sont plus a
+// leur date d'origine).
+func (q *Queries) ExceptionsDesEvenements(ctx context.Context, ids []int64) ([]ExceptionsDesEvenementsRow, error) {
 	query := exceptionsDesEvenements
 	var queryParams []interface{}
 	if len(ids) > 0 {
@@ -311,9 +384,9 @@ func (q *Queries) ExceptionsDesEvenements(ctx context.Context, ids []int64) ([]E
 		return nil, err
 	}
 	defer rows.Close()
-	items := []EvenementsException{}
+	items := []ExceptionsDesEvenementsRow{}
 	for rows.Next() {
-		var i EvenementsException
+		var i ExceptionsDesEvenementsRow
 		if err := rows.Scan(&i.EvenementID, &i.Jour); err != nil {
 			return nil, err
 		}
@@ -329,22 +402,149 @@ func (q *Queries) ExceptionsDesEvenements(ctx context.Context, ids []int64) ([]E
 }
 
 const exceptionsEvenement = `-- name: ExceptionsEvenement :many
-SELECT jour FROM evenements_exceptions WHERE evenement_id = ? ORDER BY jour
+SELECT jour, modifiee, nouveau_debut, nouveau_fin, nouvelle_journee, nouveau_titre, nouveau_lieu
+FROM evenements_exceptions WHERE evenement_id = ? ORDER BY jour
 `
 
-func (q *Queries) ExceptionsEvenement(ctx context.Context, evenementID int64) ([]string, error) {
+type ExceptionsEvenementRow struct {
+	Jour            string
+	Modifiee        int64
+	NouveauDebut    int64
+	NouveauFin      int64
+	NouvelleJournee int64
+	NouveauTitre    string
+	NouveauLieu     sql.NullString
+}
+
+func (q *Queries) ExceptionsEvenement(ctx context.Context, evenementID int64) ([]ExceptionsEvenementRow, error) {
 	rows, err := q.db.QueryContext(ctx, exceptionsEvenement, evenementID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []string{}
+	items := []ExceptionsEvenementRow{}
 	for rows.Next() {
-		var jour string
-		if err := rows.Scan(&jour); err != nil {
+		var i ExceptionsEvenementRow
+		if err := rows.Scan(
+			&i.Jour,
+			&i.Modifiee,
+			&i.NouveauDebut,
+			&i.NouveauFin,
+			&i.NouvelleJournee,
+			&i.NouveauTitre,
+			&i.NouveauLieu,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, jour)
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const famillesRappelAvant = `-- name: FamillesRappelAvant :many
+
+SELECT id, fuseau, modules FROM familles
+WHERE EXISTS (SELECT 1 FROM evenements WHERE evenements.famille_id = familles.id AND evenements.rappel_avant <> '')
+ORDER BY id
+`
+
+type FamillesRappelAvantRow struct {
+	ID      int64
+	Fuseau  string
+	Modules string
+}
+
+// Rappel juste avant (15 min, 1 h, la veille a 18 h).
+// Familles qui ont au moins un evenement avec un rappel juste avant.
+func (q *Queries) FamillesRappelAvant(ctx context.Context) ([]FamillesRappelAvantRow, error) {
+	rows, err := q.db.QueryContext(ctx, famillesRappelAvant)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FamillesRappelAvantRow{}
+	for rows.Next() {
+		var i FamillesRappelAvantRow
+		if err := rows.Scan(&i.ID, &i.Fuseau, &i.Modules); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const foisModifieesPeriode = `-- name: FoisModifieesPeriode :many
+SELECT evenements.id, evenements.famille_id, evenements.titre, evenements.lieu, evenements.note, evenements.debut, evenements.fin, evenements.journee, evenements.repetition, evenements.cree_par, evenements.cree_le, evenements.repetition_fin, evenements.rappel, evenements.rappel_avant, x.jour, x.nouveau_debut, x.nouveau_fin, x.nouvelle_journee, x.nouveau_titre, x.nouveau_lieu
+FROM evenements_exceptions x JOIN evenements ON evenements.id = x.evenement_id
+WHERE evenements.famille_id = ?1 AND evenements.repetition <> '' AND x.modifiee = 1
+  AND x.nouveau_debut < ?2 AND x.nouveau_fin >= ?3
+ORDER BY x.nouveau_debut
+`
+
+type FoisModifieesPeriodeParams struct {
+	FamilleID    int64
+	FinPeriode   int64
+	DebutPeriode int64
+}
+
+type FoisModifieesPeriodeRow struct {
+	Evenement       Evenement
+	Jour            string
+	NouveauDebut    int64
+	NouveauFin      int64
+	NouvelleJournee int64
+	NouveauTitre    string
+	NouveauLieu     sql.NullString
+}
+
+// Fois modifiees qui touchent la periode, avec leur evenement (une fois
+// deplacee peut tomber hors des dates de l'evenement).
+func (q *Queries) FoisModifieesPeriode(ctx context.Context, arg FoisModifieesPeriodeParams) ([]FoisModifieesPeriodeRow, error) {
+	rows, err := q.db.QueryContext(ctx, foisModifieesPeriode, arg.FamilleID, arg.FinPeriode, arg.DebutPeriode)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FoisModifieesPeriodeRow{}
+	for rows.Next() {
+		var i FoisModifieesPeriodeRow
+		if err := rows.Scan(
+			&i.Evenement.ID,
+			&i.Evenement.FamilleID,
+			&i.Evenement.Titre,
+			&i.Evenement.Lieu,
+			&i.Evenement.Note,
+			&i.Evenement.Debut,
+			&i.Evenement.Fin,
+			&i.Evenement.Journee,
+			&i.Evenement.Repetition,
+			&i.Evenement.CreePar,
+			&i.Evenement.CreeLe,
+			&i.Evenement.RepetitionFin,
+			&i.Evenement.Rappel,
+			&i.Evenement.RappelAvant,
+			&i.Jour,
+			&i.NouveauDebut,
+			&i.NouveauFin,
+			&i.NouvelleJournee,
+			&i.NouveauTitre,
+			&i.NouveauLieu,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -390,8 +590,28 @@ func (q *Queries) IcalParEmpreinte(ctx context.Context, empreinte []byte) (IcalP
 	return i, err
 }
 
+const marquerRappelAvant = `-- name: MarquerRappelAvant :execrows
+INSERT INTO evenements_rappels (evenement_id, debut, envoye_le) VALUES (?, ?, ?)
+ON CONFLICT (evenement_id, debut) DO NOTHING
+`
+
+type MarquerRappelAvantParams struct {
+	EvenementID int64
+	Debut       int64
+	EnvoyeLe    int64
+}
+
+// 0 ligne : rappel deja envoye pour cette fois.
+func (q *Queries) MarquerRappelAvant(ctx context.Context, arg MarquerRappelAvantParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, marquerRappelAvant, arg.EvenementID, arg.Debut, arg.EnvoyeLe)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const modifierEvenement = `-- name: ModifierEvenement :exec
-UPDATE evenements SET titre = ?, lieu = ?, note = ?, debut = ?, fin = ?, journee = ?, repetition = ?, repetition_fin = ?, rappel = ?
+UPDATE evenements SET titre = ?, lieu = ?, note = ?, debut = ?, fin = ?, journee = ?, repetition = ?, repetition_fin = ?, rappel = ?, rappel_avant = ?
 WHERE id = ? AND famille_id = ?
 `
 
@@ -405,6 +625,7 @@ type ModifierEvenementParams struct {
 	Repetition    string
 	RepetitionFin string
 	Rappel        int64
+	RappelAvant   string
 	ID            int64
 	FamilleID     int64
 }
@@ -420,8 +641,41 @@ func (q *Queries) ModifierEvenement(ctx context.Context, arg ModifierEvenementPa
 		arg.Repetition,
 		arg.RepetitionFin,
 		arg.Rappel,
+		arg.RappelAvant,
 		arg.ID,
 		arg.FamilleID,
+	)
+	return err
+}
+
+const modifierFois = `-- name: ModifierFois :exec
+INSERT INTO evenements_exceptions (evenement_id, jour, modifiee, nouveau_debut, nouveau_fin, nouvelle_journee, nouveau_titre, nouveau_lieu)
+VALUES (?1, ?2, 1, ?3, ?4, ?5, ?6, ?7)
+ON CONFLICT (evenement_id, jour) DO UPDATE SET modifiee = 1, nouveau_debut = excluded.nouveau_debut,
+  nouveau_fin = excluded.nouveau_fin, nouvelle_journee = excluded.nouvelle_journee,
+  nouveau_titre = excluded.nouveau_titre, nouveau_lieu = excluded.nouveau_lieu
+`
+
+type ModifierFoisParams struct {
+	EvenementID     int64
+	Jour            string
+	NouveauDebut    int64
+	NouveauFin      int64
+	NouvelleJournee int64
+	NouveauTitre    string
+	NouveauLieu     sql.NullString
+}
+
+// Modifier une fois seulement (date, heures, titre, lieu).
+func (q *Queries) ModifierFois(ctx context.Context, arg ModifierFoisParams) error {
+	_, err := q.db.ExecContext(ctx, modifierFois,
+		arg.EvenementID,
+		arg.Jour,
+		arg.NouveauDebut,
+		arg.NouveauFin,
+		arg.NouvelleJournee,
+		arg.NouveauTitre,
+		arg.NouveauLieu,
 	)
 	return err
 }
@@ -437,6 +691,15 @@ type NoterLectureIcalParams struct {
 
 func (q *Queries) NoterLectureIcal(ctx context.Context, arg NoterLectureIcalParams) error {
 	_, err := q.db.ExecContext(ctx, noterLectureIcal, arg.LuLe, arg.MembreID)
+	return err
+}
+
+const oublierRappelsAvant = `-- name: OublierRappelsAvant :exec
+DELETE FROM evenements_rappels WHERE envoye_le < ?
+`
+
+func (q *Queries) OublierRappelsAvant(ctx context.Context, envoyeLe int64) error {
+	_, err := q.db.ExecContext(ctx, oublierRappelsAvant, envoyeLe)
 	return err
 }
 

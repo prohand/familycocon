@@ -16,7 +16,8 @@
 <form class="carte" method="post" action="{{if .Nouveau}}/agenda{{else}}/agenda/{{.Evt.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
   {{if .Jour}}<input type="hidden" name="retour" value="{{.Jour}}">
-  <p class="aide">🔁 Cette fois-ci : {{.JourTitre}}. Les changements valent pour toutes les fois.</p>{{end}}
+  {{if and .Fois .Fois.Modifiee}}<p class="aide">✏️ Cette fois-ci ({{.JourTitre}}) est modifiée : {{.Fois.Texte}}. Ce formulaire change toutes les fois.</p>
+  {{else}}<p class="aide">🔁 Cette fois-ci : {{.JourTitre}}. Les changements valent pour toutes les fois.</p>{{end}}{{end}}
   <fieldset class="sans-bord"{{if not .Modifiable}} disabled{{end}}>
   <label class="champ"><span>Quoi ?</span>
     <input name="titre" value="{{.Evt.Titre}}" placeholder="Ex. : Piscine, Dentiste, Anniversaire de Jules" maxlength="80" required{{if .Nouveau}} autofocus{{end}}></label>
@@ -65,11 +66,40 @@
     <span class="emoji">⏰</span><span class="nom">Me le rappeler <small class="aide">(le matin même et 7 jours avant, et dans « À venir »)</small></span>
     <input type="checkbox" name="rappel" value="1"{{if eq .Evt.Rappel 1}} checked{{end}}><span class="glissiere"></span>
   </label>
+  <label class="champ"><span>⏰ Prévenir juste avant</span>
+    <select name="rappel_avant">
+      {{- range .ChoixAvant}}<option value="{{.Cle}}"{{if eq .Cle $.Donnees.Evt.RappelAvant}} selected{{end}}>{{.Nom}}</option>{{end}}
+    </select></label>
+  <p class="aide">Une notification à tous (« Rappels »). Sans heure (toute la journée) : la veille à 18 h seulement.</p>
   <label class="champ"><span>Où ? (facultatif)</span><input name="lieu" value="{{.Evt.Lieu}}" maxlength="80"></label>
   <label class="champ"><span>Note (facultatif)</span><textarea name="note" rows="3" maxlength="500" data-riche>{{.Evt.Note}}</textarea><template data-editeur-contenu>{{richeEdition .Evt.Note}}</template></label>
   {{if .Modifiable}}<div class="boutons"><button class="bouton">{{if .Nouveau}}Ajouter{{else}}Enregistrer{{end}}</button></div>{{end}}
   </fieldset>
 </form>
+{{if and .Fois .Modifiable}}
+<details class="carte bloc fois-seule"{{if .Fois.Modifiee}} open{{end}}>
+  <summary>✏️ Modifier cette fois seulement ({{.JourTitre}})</summary>
+  <form method="post" action="/agenda/{{.Evt.ID}}/fois">
+    {{template "jeton" $c.CSRF}}<input type="hidden" name="jour" value="{{.Jour}}">
+    <p class="aide">Date, heures, lieu ou titre de cette fois-ci ; les autres fois ne changent pas.</p>
+    <label class="champ"><span>Quoi ?</span><input name="titre" value="{{.Fois.Titre}}" maxlength="80" required></label>
+    <label class="champ"><span>Le</span><input type="date" name="date" value="{{.Fois.Date}}" required></label>
+    <div class="rangee">
+      <label class="champ"><span>De</span><input type="time" name="heure_debut" value="{{.Fois.HeureDebut}}"></label>
+      <label class="champ"><span>À</span><input type="time" name="heure_fin" value="{{.Fois.HeureFin}}"></label>
+    </div>
+    <p class="aide">Sans heure : toute la journée.</p>
+    <label class="champ"><span>Où ? (facultatif)</span><input name="lieu" value="{{.Fois.Lieu}}" maxlength="80"></label>
+    <div class="boutons"><button class="bouton">Enregistrer cette fois</button></div>
+  </form>
+  {{if .Fois.Modifiee}}
+  <form method="post" action="/agenda/{{.Evt.ID}}/retablir">
+    {{template "jeton" $c.CSRF}}<input type="hidden" name="jour" value="{{.Jour}}">
+    <button class="bouton secondaire petit">↩️ Comme les autres fois</button>
+  </form>
+  {{end}}
+</details>
+{{end}}
 {{if and .Jour .Modifiable}}
 <form class="bloc" method="post" action="/agenda/{{.Evt.ID}}/sauter" hx-confirm="Annuler « {{.Evt.Titre}} » le {{.JourTitre}} seulement ?">
   {{template "jeton" $c.CSRF}}<input type="hidden" name="jour" value="{{.Jour}}">
@@ -78,9 +108,9 @@
 {{end}}
 {{if .Annulees}}
 <section class="carte bloc">
-  <h2>🚫 Fois annulées</h2>
+  <h2>🔁 Fois annulées ou modifiées</h2>
   {{- range .Annulees}}
-  <div class="ligne"><span class="quoi">{{.Titre}}</span>
+  <div class="ligne">{{if .Modifiee}}<a class="quoi" href="/agenda/{{$.Donnees.Evt.ID}}?jour={{.Cle}}">✏️ {{.Titre}}<small>→ {{.Nouvelle}}</small></a>{{else}}<span class="quoi">🚫 {{.Titre}}<small>annulée</small></span>{{end}}
     {{if $.Donnees.Modifiable}}<form method="post" action="/agenda/{{$.Donnees.Evt.ID}}/retablir">{{template "jeton" $c.CSRF}}<input type="hidden" name="jour" value="{{.Cle}}"><button class="bouton petit secondaire">Rétablir</button></form>{{end}}</div>
   {{- end}}
 </section>

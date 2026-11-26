@@ -440,7 +440,7 @@ func (q *Queries) ExportEtoilesBonus(ctx context.Context, familleID int64) ([]Et
 }
 
 const exportEvenements = `-- name: ExportEvenements :many
-SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel FROM evenements WHERE famille_id = ?
+SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel, rappel_avant FROM evenements WHERE famille_id = ?
 `
 
 func (q *Queries) ExportEvenements(ctx context.Context, familleID int64) ([]Evenement, error) {
@@ -466,6 +466,7 @@ func (q *Queries) ExportEvenements(ctx context.Context, familleID int64) ([]Even
 			&i.CreeLe,
 			&i.RepetitionFin,
 			&i.Rappel,
+			&i.RappelAvant,
 		); err != nil {
 			return nil, err
 		}
