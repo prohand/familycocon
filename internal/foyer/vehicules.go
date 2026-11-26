@@ -77,7 +77,7 @@ func (m *Module) brancherVehicules() {
 			}
 		}
 		if err != nil || len(l) == 0 {
-			return appli.Resume{Info: "Aucun véhicule", Vide: true}
+			return appli.Resume{Info: "Aucun véhicule"}
 		}
 		alertes := m.alertes(ctx, c, modVehicules)
 		for _, v := range l {

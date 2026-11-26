@@ -610,43 +610,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
   }
 }
 
-/* Chercher et « réduire » n'existent que dans la barre de gauche. */
-.nav-bas .nav-chercher, .nav-reduire { display: none; }
-
-/* Grand écran : la barre se pose à gauche (mêmes raccourcis, le « + » en
-   haut, Chercher en bas). « « » la réduit aux icônes (data-rail, gardé
-   sur cet appareil). */
-@media (min-width: 1000px) {
-  :root { --rail: 96px; }
-  :root[data-rail="reduite"] { --rail: 64px; }
-  body { padding-bottom: 28px; padding-left: var(--rail); }
-  .nav-bas {
-    top: 0; bottom: 0; left: 0; right: auto;
-    width: var(--rail); height: auto;
-    transform: none;
-    border-radius: 0 24px 24px 0;
-    padding: 18px 0 12px;
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    box-shadow: 4px 0 24px rgba(80, 50, 30, .08);
-    transition: width .2s;
-  }
-  .nav-bas a { width: calc(var(--rail) - 16px); padding: 9px 0; border-radius: 14px; }
-  .nav-bas a.actif { background: var(--fond); }
-  .nav-bas .plus { order: -1; width: 54px; height: 54px; margin: 0 0 12px; font-size: 1.9rem; border-width: 4px; }
-  .nav-bas .nav-chercher { display: flex; margin-top: auto; }
-  .nav-reduire {
-    display: block; border: 0; background: none; cursor: pointer;
-    color: var(--texte-doux); font: inherit; font-size: 1.2rem; font-weight: 800;
-    width: 40px; height: 32px; border-radius: 10px;
-  }
-  .nav-reduire:hover { background: var(--fond); }
-  :root[data-rail="reduite"] .nav-bas a:not(.plus) { font-size: 0; gap: 0; }
-  :root[data-rail="reduite"] .nav-bas a .ico { font-size: 1.4rem; }
-  :root[data-rail="reduite"] .nav-bas .plus { width: 46px; height: 46px; font-size: 1.6rem; }
-  :root[data-rail="reduite"] .nav-reduire { transform: rotate(180deg); }
-  html .toasts { bottom: 24px; } /* plus de barre en bas */
-}
-
 /* ---------- Notifications en bas de l'écran ---------- */
 .toasts {
   position: fixed;
@@ -1911,10 +1874,5 @@ details.partie[open] { padding-bottom: 16px; }
 .ligne-accueil .fleches { display: flex; gap: 4px; }
 .ligne-accueil .fleches .bouton { padding: 6px 10px; }
 @media (max-width: 360px) { .ligne-accueil .fleches .bouton { padding: 5px 7px; } .ligne-accueil .interrupteur .emoji { display: none; } }
-/* Accueil : modules pas encore utilisés, en petites pastilles. */
-.pas-utilises { margin-top: 18px; }
-.pas-utilises h2 { font-size: 1rem; color: var(--texte-doux); margin: 0 0 8px; }
-.pastilles-modules { display: flex; flex-wrap: wrap; gap: 8px; }
-.pastilles-modules a { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; background: var(--carte); box-shadow: var(--ombre); font-weight: 700; font-size: .85rem; }
 .lien-organiser { display: inline-block; margin-top: 14px; font-weight: 800; color: var(--corail); }
 .ligne-accueil .fleches .bouton:disabled { opacity: .3; cursor: default; }

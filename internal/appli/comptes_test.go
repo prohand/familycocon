@@ -243,7 +243,7 @@ func TestModulesEtRaccourcis(t *testing.T) {
 	if code, _ := n.post("/moi/raccourcis", map[string]string{"r1": "accueil", "r2": "agenda", "r3": "moi", "r4": "menus"}); code != 400 {
 		t.Fatalf("module désactivé accepté : %d", code)
 	}
-	if code, page := n.post("/moi/raccourcis", map[string]string{"r1": "menus", "r2": "famille", "r3": "courses", "r4": "moi"}); code != 200 || !strings.Contains(page, `href="/famille" title="Famille"><span class="ico">🏡`) {
+	if code, page := n.post("/moi/raccourcis", map[string]string{"r1": "menus", "r2": "famille", "r3": "courses", "r4": "moi"}); code != 200 || !strings.Contains(page, `href="/famille"><span class="ico">🏡`) {
 		t.Fatalf("raccourcis : %d", code)
 	}
 }

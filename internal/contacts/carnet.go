@@ -183,7 +183,7 @@ func (m *Module) pageContacts(w http.ResponseWriter, r *http.Request, c *appli.C
 func (m *Module) resumeContacts(ctx context.Context, c *appli.Contexte) appli.Resume {
 	n, err := m.a.Q.CompterContacts(ctx, c.Famille.ID)
 	if err != nil || n == 0 {
-		return appli.Resume{Info: "Carnet vide", Vide: true}
+		return appli.Resume{Info: "Carnet vide"}
 	}
 	return appli.Resume{Info: appli.Pluriel(n, "contact", "contacts")}
 }
@@ -225,7 +225,7 @@ func (m *Module) resumeAdresses(ctx context.Context, c *appli.Contexte) appli.Re
 		return appli.Resume{}
 	}
 	if n == 0 {
-		return appli.Resume{Info: "Aucune adresse", Vide: true}
+		return appli.Resume{Info: "Aucune adresse"}
 	}
 	return appli.Resume{Info: appli.Pluriel(n, "adresse", "adresses")}
 }

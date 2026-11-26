@@ -22,9 +22,6 @@ import (
 type Resume struct {
 	Info  string // sous le nom du module
 	Badge int    // pastille en haut à droite (0 : pas de pastille)
-	// Vide : rien encore dans ce module (« Aucune note ») : il passe en
-	// petite pastille en bas de l'accueil, sous « Pas encore utilisés ».
-	Vide bool
 }
 
 // ResumeFunc calcule le résumé d'un module pour ce membre.
@@ -78,10 +75,9 @@ type tuile struct {
 }
 
 type donneesAccueil struct {
-	Date      string
-	Tuiles    []tuile
-	Pastilles []tuile // modules pas encore utilisés
-	Blocs     []template.HTML
+	Date   string
+	Tuiles []tuile
+	Blocs  []template.HTML
 	// Compte à mot de passe sans double authentification ni passkey : un
 	// conseil s'affiche pour le protéger.
 	ConseilSecurite bool
@@ -103,7 +99,7 @@ func (a *App) pageAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		d.ConseilSecurite = err == nil && n == 0
 	}
 	// Dans l'ordre choisi par le membre (« Mon accueil »), sans ceux qu'il
-	// a masqués ; ceux qui sont encore vides passent en pastilles.
+	// a masqués.
 	for _, m := range ModulesAccueil(c) {
 		if m.Masque {
 			continue
@@ -112,11 +108,7 @@ func (a *App) pageAccueil(w http.ResponseWriter, r *http.Request, c *Contexte) {
 		if f, ok := a.resumes[m.Cle]; ok {
 			t.Resume = f(ctx, c)
 		}
-		if t.Vide && t.Badge == 0 {
-			d.Pastilles = append(d.Pastilles, t)
-		} else {
-			d.Tuiles = append(d.Tuiles, t)
-		}
+		d.Tuiles = append(d.Tuiles, t)
 	}
 	for _, b := range a.blocs {
 		if b.Module != "" && !c.Actif(b.Module) { // "" : bloc commun (« À venir »)

@@ -1,5 +1,5 @@
 {{define "base.html"}}<!doctype html>
-<html lang="fr"{{with .Theme}} data-theme="{{.}}"{{end}}{{if .RailReduit}} data-rail="reduite"{{end}}>
+<html lang="fr"{{with .Theme}} data-theme="{{.}}"{{end}}>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -39,15 +39,12 @@
 </main>
 <nav class="nav-bas" aria-label="Navigation principale">
   {{- range .Gauche}}
-  <a href="{{.URL}}" title="{{.Nom}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{emoji .Emoji}}</span>{{.Nom}}</a>
+  <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{emoji .Emoji}}</span>{{.Nom}}</a>
   {{- end}}
-  <a class="plus" href="/ajouter" aria-label="Ajouter" title="Ajouter"{{if eq .Chemin "/ajouter"}} aria-current="page"{{end}}>+</a>
+  <a class="plus" href="/ajouter" aria-label="Ajouter"{{if eq .Chemin "/ajouter"}} aria-current="page"{{end}}>+</a>
   {{- range .Droite}}
-  <a href="{{.URL}}" title="{{.Nom}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{emoji .Emoji}}</span>{{.Nom}}</a>
+  <a href="{{.URL}}"{{if $.Actif .}} class="actif" aria-current="page"{{end}}><span class="ico">{{emoji .Emoji}}</span>{{.Nom}}</a>
   {{- end}}
-  {{/* Grand écran seulement (barre posée à gauche) : Chercher, et réduire la barre. */}}
-  <a class="nav-chercher{{if eq .Chemin "/chercher"}} actif{{end}}" href="/chercher"{{if eq .Chemin "/chercher"}} aria-current="page"{{end}}><span class="ico">🔎</span>Chercher</a>
-  <button class="nav-reduire" type="button" data-rail aria-label="Réduire ou agrandir la barre" title="Réduire ou agrandir la barre">«</button>
 </nav>
 {{- else}}
 <body class="sans-barre">

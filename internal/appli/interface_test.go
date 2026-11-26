@@ -135,21 +135,3 @@ func TestMonAccueil(t *testing.T) {
 		t.Fatal("ordre de départ non remis")
 	}
 }
-
-// Barre de gauche (grand écran) : réduite ou non, gardée sur cet appareil.
-func TestBarreReduite(t *testing.T) {
-	_, _, n := familleTest(t)
-	if _, page := n.get("/"); strings.Contains(page, `data-rail="reduite"`) || !strings.Contains(page, `data-rail aria-label="Réduire`) {
-		t.Fatal("barre : état de départ ou bouton")
-	}
-	if code, _ := n.post("/moi/rail", map[string]string{"rail": "reduite"}); code != 204 {
-		t.Fatalf("réduire : %d", code)
-	}
-	if _, page := n.get("/"); !strings.Contains(page, `<html lang="fr" data-rail="reduite">`) {
-		t.Fatal("barre réduite non gardée")
-	}
-	n.post("/moi/rail", map[string]string{"rail": ""})
-	if _, page := n.get("/"); strings.Contains(page, `data-rail="reduite"`) {
-		t.Fatal("barre non agrandie")
-	}
-}
