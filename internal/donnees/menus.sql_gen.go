@@ -54,6 +54,38 @@ func (q *Queries) CopierRepas(ctx context.Context, arg CopierRepasParams) (int64
 	return result.RowsAffected()
 }
 
+const creerRecette = `-- name: CreerRecette :execrows
+INSERT INTO recettes (famille_id, cle, nom, ingredients, preparation, compte, vu_le)
+VALUES (?, ?, ?, ?, ?, 0, ?)
+ON CONFLICT (famille_id, cle) DO NOTHING
+`
+
+type CreerRecetteParams struct {
+	FamilleID   int64
+	Cle         string
+	Nom         string
+	Ingredients string
+	Preparation string
+	VuLe        int64
+}
+
+// Recette creee depuis la page Recettes, sans repas prevu (compte 0).
+// 0 ligne : une recette de ce nom existe deja.
+func (q *Queries) CreerRecette(ctx context.Context, arg CreerRecetteParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, creerRecette,
+		arg.FamilleID,
+		arg.Cle,
+		arg.Nom,
+		arg.Ingredients,
+		arg.Preparation,
+		arg.VuLe,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const enregistrerRepas = `-- name: EnregistrerRepas :one
 INSERT INTO repas (famille_id, jour, moment, nom, ingredients, cree_par, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -140,6 +172,21 @@ func (q *Queries) MarquerDansCourses(ctx context.Context, arg MarquerDansCourses
 	return result.RowsAffected()
 }
 
+const modifierPreparation = `-- name: ModifierPreparation :exec
+UPDATE recettes SET preparation = ? WHERE famille_id = ? AND cle = ?
+`
+
+type ModifierPreparationParams struct {
+	Preparation string
+	FamilleID   int64
+	Cle         string
+}
+
+func (q *Queries) ModifierPreparation(ctx context.Context, arg ModifierPreparationParams) error {
+	_, err := q.db.ExecContext(ctx, modifierPreparation, arg.Preparation, arg.FamilleID, arg.Cle)
+	return err
+}
+
 const modifierRecette = `-- name: ModifierRecette :exec
 UPDATE recettes SET nom = ?, ingredients = ? WHERE famille_id = ? AND cle = ?
 `
@@ -176,7 +223,7 @@ func (q *Queries) OublierRecette(ctx context.Context, arg OublierRecetteParams) 
 }
 
 const recetteParCle = `-- name: RecetteParCle :one
-SELECT famille_id, cle, nom, ingredients, compte, vu_le FROM recettes WHERE famille_id = ? AND cle = ?
+SELECT famille_id, cle, nom, ingredients, compte, vu_le, preparation FROM recettes WHERE famille_id = ? AND cle = ?
 `
 
 type RecetteParCleParams struct {
@@ -194,6 +241,7 @@ func (q *Queries) RecetteParCle(ctx context.Context, arg RecetteParCleParams) (R
 		&i.Ingredients,
 		&i.Compte,
 		&i.VuLe,
+		&i.Preparation,
 	)
 	return i, err
 }
@@ -351,7 +399,7 @@ func (q *Queries) RetenirRecette(ctx context.Context, arg RetenirRecetteParams) 
 }
 
 const toutesRecettes = `-- name: ToutesRecettes :many
-SELECT famille_id, cle, nom, ingredients, compte, vu_le FROM recettes WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
+SELECT famille_id, cle, nom, ingredients, compte, vu_le, preparation FROM recettes WHERE famille_id = ? ORDER BY nom COLLATE NOCASE
 `
 
 // Page Recettes : toutes les recettes retenues.
@@ -371,6 +419,7 @@ func (q *Queries) ToutesRecettes(ctx context.Context, familleID int64) ([]Recett
 			&i.Ingredients,
 			&i.Compte,
 			&i.VuLe,
+			&i.Preparation,
 		); err != nil {
 			return nil, err
 		}

@@ -48,6 +48,7 @@ type annonce struct {
 	pour            []int64 // membres visés (vide : toute la famille)
 	sauf            []int64 // membres exclus (ils ont reçu leur propre version)
 	toujours        bool    // même aux membres qui ont l'appli ouverte (rappel à une heure dite)
+	voulu           bool    // même aux membres qui n'ont pas choisi ce module (appel voulu, voir Appeler)
 }
 
 // tailleFile : au-delà, les annonces sont perdues (elles restent visibles
@@ -151,6 +152,27 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		url = an.url
 	}
 	corps, _ := json.Marshal(map[string]string{"titre": "FamilyCocon", "texte": an.texte, "url": url, "groupe": an.module})
+	// Heures calmes : une notification d'activité n'est pas envoyée pendant
+	// celles du membre (elle reste visible dans l'appli). Les rappels à une
+	// heure choisie et celui du matin partent quand même.
+	// « Je pars faire les courses » (appel voulu) est de l'activité : il se
+	// tait aussi.
+	calmePermis := (!an.toujours || an.voulu) && an.module != moduleRappels
+	var heure time.Time // heure de la famille, lue au premier besoin
+	calme := func(debut, fin string) bool {
+		if !calmePermis || debut == "" || fin == "" {
+			return false
+		}
+		if heure.IsZero() {
+			heure = time.Now()
+			if f, err := p.a.Q.FamilleParID(ctx, an.famille); err == nil {
+				if l, err := time.LoadLocation(f.Fuseau); err == nil {
+					heure = heure.In(l)
+				}
+			}
+		}
+		return EnHeuresCalmes(debut, fin, heure)
+	}
 	// Quelques envois à la fois : un service de push lent (20 s de délai)
 	// ne retarde pas les autres appareils ni les annonces suivantes.
 	var groupe sync.WaitGroup
@@ -159,9 +181,11 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		// Un rappel du matin ne s'affiche nulle part ailleurs : il part même si
 		// le membre a une page ouverte (un onglet oublié sur l'ordinateur).
 		enLigne := an.module != moduleRappels && !an.toujours && p.a.Direct.EnLigne(an.famille, ab.MembreID)
-		if !contient(strings.Split(ab.PushModules, ","), an.module) || enLigne ||
+		choisi := an.voulu || contient(strings.Split(ab.PushModules, ","), an.module)
+		if !choisi || enLigne ||
 			(an.parents && ab.Role != RoleParent) || (an.sansParents && ab.Role == RoleParent) ||
-			(len(an.pour) > 0 && !slices.Contains(an.pour, ab.MembreID)) || slices.Contains(an.sauf, ab.MembreID) {
+			(len(an.pour) > 0 && !slices.Contains(an.pour, ab.MembreID)) || slices.Contains(an.sauf, ab.MembreID) ||
+			calme(ab.CalmeDebut, ab.CalmeFin) {
 			continue
 		}
 		places <- struct{}{}
@@ -184,6 +208,50 @@ func (p *Pousseur) diffuser(ctx context.Context, an annonce) {
 		}()
 	}
 	groupe.Wait()
+}
+
+// EnHeuresCalmes : t (heure de la famille) est-il dans la plage « debut »
+// – « fin » (« 21:00 » – « 07:00 » : elle passe minuit) ? Plage vide ou
+// invalide : non.
+func EnHeuresCalmes(debut, fin string, t time.Time) bool {
+	d, errD := time.Parse("15:04", debut)
+	f, errF := time.Parse("15:04", fin)
+	if errD != nil || errF != nil {
+		return false
+	}
+	md, mf, m := d.Hour()*60+d.Minute(), f.Hour()*60+f.Minute(), t.Hour()*60+t.Minute()
+	switch {
+	case md == mf:
+		return false
+	case md < mf:
+		return m >= md && m < mf
+	}
+	return m >= md || m < mf // la nuit : de 21:00 à minuit, puis jusqu'à 07:00
+}
+
+// heuresCalmes : POST /moi/calme (« de », « a » : HH:MM ; vides : aucune).
+func (a *App) heuresCalmes(w http.ResponseWriter, r *http.Request, c *Contexte) {
+	de, jusqua := r.PostFormValue("de"), r.PostFormValue("a")
+	if r.PostFormValue("actives") != "1" {
+		de, jusqua = "", ""
+	}
+	_, errD := time.Parse("15:04", de)
+	_, errA := time.Parse("15:04", jusqua)
+	if de != "" && (errD != nil || errA != nil || de == jusqua) {
+		a.Echec(w, r, http.StatusBadRequest, "Heures calmes : deux heures différentes (par exemple de 21:00 à 07:00).")
+		return
+	}
+	if err := a.Q.ModifierHeuresCalmes(r.Context(), donnees.ModifierHeuresCalmesParams{CalmeDebut: de, CalmeFin: jusqua,
+		ID: c.Membre.ID, FamilleID: c.Famille.ID}); err != nil {
+		a.ErreurInterne(w, r, err)
+		return
+	}
+	if de == "" {
+		a.Flash(w, "Heures calmes retirées")
+	} else {
+		a.Flash(w, "Heures calmes : de "+de+" à "+jusqua+" ✓")
+	}
+	a.Rediriger(w, r, "/moi")
 }
 
 // Rappeler : une notification à l'heure demandée (rappel d'une liste…),
@@ -222,6 +290,7 @@ func (a *App) routesPush() {
 	a.Route("POST /push/abonnement", "", Membre, a.abonnerPush)
 	a.Route("POST /push/desabonnement", "", Membre, a.desabonnerPush)
 	a.Route("POST /moi/notifications", "", Membre, a.choixNotifications)
+	a.Route("POST /moi/calme", "", Membre, a.heuresCalmes)
 }
 
 // abonnementJS : l'abonnement tel que l'envoie le navigateur (PushSubscription.toJSON).

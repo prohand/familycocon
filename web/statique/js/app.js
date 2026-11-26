@@ -295,6 +295,36 @@ document.addEventListener("keydown", function (e) {
   t.selectionStart = t.selectionEnd = pos + 1 + marque.length;
 });
 
+// Budget, nouvelle opération : un libellé déjà tapé (« Carrefour ») choisit
+// tout seul sa catégorie de la dernière fois (option data-cat de la liste),
+// tant qu'on n'a pas touché soi-même une catégorie. Majuscules et accents
+// à part.
+(function () {
+  function plier(t) { return (t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim(); }
+  document.addEventListener("change", function (e) {
+    var r = e.target;
+    if (r.matches && r.matches("input[name=categorie]") && e.isTrusted && r.form) r.form.setAttribute("data-cat-choisie", "");
+  });
+  document.addEventListener("input", function (e) {
+    var champ = e.target;
+    if (!champ.matches || !champ.matches("input[data-cat-auto]") || !champ.form || champ.form.hasAttribute("data-cat-choisie")) return;
+    var liste = champ.list, info = champ.parentNode.querySelector(".cat-auto");
+    if (!liste) return;
+    var v = plier(champ.value), cat = "";
+    for (var i = 0; i < liste.options.length; i++) {
+      if (plier(liste.options[i].value) === v) { cat = liste.options[i].getAttribute("data-cat"); break; }
+    }
+    var radio = cat && champ.form.querySelector('input[name=categorie][value="' + cat + '"]');
+    if (!radio || !radio.parentNode.offsetParent) { if (info) info.hidden = true; return; }
+    radio.checked = true;
+    if (info) {
+      var emoji = radio.parentNode.querySelector("b"), e2 = emoji ? emoji.textContent : "";
+      info.textContent = e2 + " " + radio.parentNode.textContent.replace(e2, "").trim() + " : comme la dernière fois";
+      info.hidden = false;
+    }
+  });
+})();
+
 // Véhicule : reprise d'une sauvegarde Fuelio (input[data-fuelio] = adresse
 // d'envoi). Le fichier part tel quel (il peut peser des centaines de Mo,
 // photos comprises) ; l'avancement s'affiche, puis la fiche est rechargée
@@ -627,25 +657,46 @@ document.addEventListener("change", function (e) {
 
 // Rayons repliés : gardés en mémoire sur cet appareil (la liste est
 // rechargée à chaque changement, les rayons repliés le restent).
+// Rayon fini (data-fini : tout est pris) : le serveur l'envoie replié, en
+// bas. Rouvert à la main, il reste ouvert aux rechargements (un autre
+// membre coche) tant qu'il est fini ; le replier ne touche pas à la mémoire
+// de l'appareil (sinon il resterait replié une fois de nouveau à remplir).
 (function () {
   "use strict";
   var CLE = "fc-rayons-replies";
+  var finisOuverts = {}; // rayons finis rouverts à la main (cette visite)
   function lire() {
     try { return JSON.parse(localStorage.getItem(CLE) || "{}"); } catch (_) { return {}; }
+  }
+  function ecrire(replies) {
+    try { localStorage.setItem(CLE, JSON.stringify(replies)); } catch (_) {}
   }
   function appliquer() {
     var replies = lire();
     document.querySelectorAll("details[data-rayon]").forEach(function (d) {
-      if (replies[d.getAttribute("data-rayon")]) d.removeAttribute("open");
+      var cle = d.getAttribute("data-rayon");
+      if (d.hasAttribute("data-fini")) {
+        if (finisOuverts[cle]) d.setAttribute("open", "");
+        return;
+      }
+      delete finisOuverts[cle]; // plus fini : la prochaine fois, il se repliera
+      if (replies[cle]) d.removeAttribute("open");
     });
   }
   document.addEventListener("toggle", function (e) {
     var d = e.target;
     if (!d.matches || !d.matches("details[data-rayon]")) return;
+    var cle = d.getAttribute("data-rayon");
     var replies = lire();
-    if (d.open) delete replies[d.getAttribute("data-rayon")];
-    else replies[d.getAttribute("data-rayon")] = 1;
-    try { localStorage.setItem(CLE, JSON.stringify(replies)); } catch (_) {}
+    if (d.hasAttribute("data-fini")) {
+      if (!d.open) { delete finisOuverts[cle]; return; }
+      finisOuverts[cle] = 1;
+      if (replies[cle]) { delete replies[cle]; ecrire(replies); } // ouvert exprès
+      return;
+    }
+    if (d.open) delete replies[cle];
+    else replies[cle] = 1;
+    ecrire(replies);
   }, true);
   document.addEventListener("DOMContentLoaded", appliquer);
   document.addEventListener("htmx:afterSettle", appliquer);
@@ -1655,10 +1706,12 @@ if ("serviceWorker" in navigator) {
 })();
 
 // Pièces jointes : le fichier choisi part aussitôt (le formulaire est
-// envoyé par htmx, avec le fichier).
+// envoyé par htmx, avec le fichier). Une liste data-envoi-auto aussi
+// (filtre de la recherche du budget).
 document.addEventListener("change", function (e) {
   var f = e.target;
   if (f.matches && f.matches("input[type=file][data-envoi-auto]") && f.files.length && f.form) f.form.requestSubmit();
+  if (f.matches && f.matches("select[data-envoi-auto]") && f.form) f.form.requestSubmit();
 });
 
 

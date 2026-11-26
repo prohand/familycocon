@@ -68,7 +68,7 @@
 </details>
 
 <details class="carte bloc partie">
-  <summary><span>🔔 Notifications<small>{{.NbPush}} sur {{.NbPushMax}} activées{{if .Appareils}} · {{pluriel .Appareils "appareil" "appareils"}}{{end}}</small></span></summary>
+  <summary><span>🔔 Notifications<small>{{.NbPush}} sur {{.NbPushMax}} activées{{if .Appareils}} · {{pluriel .Appareils "appareil" "appareils"}}{{end}}{{if $c.Membre.CalmeDebut}} · 🌙 {{$c.Membre.CalmeDebut}}–{{$c.Membre.CalmeFin}}{{end}}</small></span></summary>
   <p class="aide">Sur le téléphone, même quand FamilyCocon est fermé.{{if .Appareils}} {{pluriel .Appareils "appareil abonné" "appareils abonnés"}}.{{end}}</p>
   <p><button class="bouton secondaire" type="button" data-push="activer">🔔 Activer sur cet appareil</button></p>
   <p class="aide" id="etat-push"></p>
@@ -87,6 +87,19 @@
     </label>
     {{- end}}
     <div class="boutons"><button class="bouton">Enregistrer</button></div>
+  </form>
+  {{/* Heures calmes : pas de notification d'activité la nuit. */}}
+  <form class="heures-calmes" method="post" action="/moi/calme">
+    {{template "jeton" $c.CSRF}}
+    <label class="interrupteur">
+      <span class="emoji">🌙</span><span class="nom">Heures calmes <small class="aide">(rien de ce que font les autres ; vos rappels à une heure choisie et celui du matin partent quand même)</small></span>
+      <input type="checkbox" name="actives" value="1"{{if $c.Membre.CalmeDebut}} checked{{end}}><span class="glissiere"></span>
+    </label>
+    <div class="rangee">
+      <label class="champ"><span>De</span><input type="time" name="de" value="{{or $c.Membre.CalmeDebut "21:00"}}"></label>
+      <label class="champ"><span>À</span><input type="time" name="a" value="{{or $c.Membre.CalmeFin "07:00"}}"></label>
+    </div>
+    <div class="boutons"><button class="bouton secondaire">Enregistrer les heures calmes</button></div>
   </form>
 </details>
 

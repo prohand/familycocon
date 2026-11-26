@@ -7,11 +7,11 @@ SELECT * FROM missions WHERE famille_id = ? AND active = 1 ORDER BY enfant_id, i
 SELECT * FROM missions WHERE id = ? AND famille_id = ? AND active = 1;
 
 -- name: CreerMission :one
-INSERT INTO missions (famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, cree_par, cree_le)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
+INSERT INTO missions (famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, sans_verification, cree_par, cree_le)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *;
 
 -- name: ModifierMission :exec
-UPDATE missions SET enfant_id = ?, titre = ?, emoji = ?, etoiles = ?, categorie = ?, repetition = ?
+UPDATE missions SET enfant_id = ?, titre = ?, emoji = ?, etoiles = ?, categorie = ?, repetition = ?, sans_verification = ?
 WHERE id = ? AND famille_id = ?;
 
 -- name: RetirerMission :exec
@@ -23,12 +23,15 @@ WHERE missions.famille_id = ? AND missions.active = 1 AND missions_faites.occurr
 
 -- Une mission refusee peut etre recochee ; une mission validee ne bouge plus.
 -- La mission doit etre a la famille ; 0 ligne si elle est deja cochee.
+-- Mission " pas besoin de verifier " (sans_verification) : validee tout de
+-- suite (decide_le = coche_le, decide_par vide : personne n'a decide).
 -- name: CocherMission :execrows
-INSERT INTO missions_faites (mission_id, occurrence, etat, etoiles, coche_le)
-SELECT m.id, sqlc.arg(occurrence), 'attente', sqlc.arg(etoiles), sqlc.arg(coche_le)
+INSERT INTO missions_faites (mission_id, occurrence, etat, etoiles, coche_le, decide_le)
+SELECT m.id, sqlc.arg(occurrence), CASE WHEN m.sans_verification = 1 THEN 'validee' ELSE 'attente' END,
+  sqlc.arg(etoiles), sqlc.arg(coche_le), CASE WHEN m.sans_verification = 1 THEN sqlc.arg(coche_le) ELSE NULL END
 FROM missions m WHERE m.id = sqlc.arg(mission_id) AND m.famille_id = sqlc.arg(famille_id)
 ON CONFLICT (mission_id, occurrence) DO UPDATE SET
-  etat = 'attente', etoiles = excluded.etoiles, coche_le = excluded.coche_le, decide_par = NULL, decide_le = NULL
+  etat = excluded.etat, etoiles = excluded.etoiles, coche_le = excluded.coche_le, decide_par = NULL, decide_le = excluded.decide_le
 WHERE missions_faites.etat = 'refusee';
 
 -- name: AnnulerCoche :exec

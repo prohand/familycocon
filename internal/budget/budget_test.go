@@ -79,6 +79,12 @@ func TestBudget(t *testing.T) {
 	if _, page := marie.Get("/budget?mois=" + suivant); !strings.Contains(page, "à venir · le ") || !strings.Contains(page, "Salaire Marie") || !strings.Contains(page, "Prévu pour ce mois") {
 		t.Fatal("salaire du mois prochain non prévu")
 	}
+	// L'année prochaine : 12 salaires prévus (et non une année vide).
+	an := strconv.Itoa(auj.Year() + 1)
+	if _, page := marie.Get("/budget/annee?an=" + an); !strings.Contains(page, "Reste prévu sur l") || !strings.Contains(page, appli.Montant(12*250000, "EUR")) ||
+		!strings.Contains(page, `class="g-p0"`) {
+		t.Fatalf("année prochaine sans le prévu :\n%s", page)
+	}
 	_, page = marie.Get("/budget/recurrences")
 	if !strings.Contains(page, "Salaire Marie") || !strings.Contains(page, "Chaque mois") {
 		t.Fatalf("page des récurrences :\n%s", page)

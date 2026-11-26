@@ -186,10 +186,16 @@ type vueBudget struct {
 }
 
 func lireMois(r *http.Request, c *appli.Contexte) time.Time {
-	if t, err := time.ParseInLocation("2006-01", r.URL.Query().Get("mois"), c.Lieu); err == nil {
+	if t, err := time.ParseInLocation("2006-01", r.URL.Query().Get("mois"), c.Lieu); err == nil && anPermis(t.Year(), c.Maintenant()) {
 		return t
 	}
 	return c.Maintenant()
+}
+
+// anPermis : une année qu'on peut afficher (de 1970 à dans 30 ans) ; au-delà
+// le calcul du prévu n'a plus de sens et coûterait cher pour rien.
+func anPermis(an int, maintenant time.Time) bool {
+	return an >= 1970 && an <= maintenant.Year()+30
 }
 
 func (m *Module) operations(ctx context.Context, c *appli.Contexte, compte int64, du, au time.Time) ([]donnees.Operation, error) {
@@ -466,9 +472,9 @@ func (m *Module) page(w http.ResponseWriter, r *http.Request, c *appli.Contexte)
 }
 
 type formOp struct {
-	Compte     string   // « commun » ou « perso »
-	Virement   bool     // moitié d'un virement : montant et date seulement
-	Libelles   []string // déjà tapés (suggestions)
+	Compte     string                       // « commun » ou « perso »
+	Virement   bool                         // moitié d'un virement : montant et date seulement
+	Libelles   []donnees.LibellesRecentsRow // déjà tapés (suggestions), avec leur dernière catégorie
 	Nouvelle   bool
 	Op         donnees.Operation
 	Montant    string

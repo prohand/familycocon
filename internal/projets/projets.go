@@ -68,6 +68,7 @@ func Brancher(a *appli.App, s *suivi.Suivi) {
 	a.Route("POST /projets/{id}/terminer", mod, appli.Membre, m.terminer)
 	a.Route("POST /projets/{id}/supprimer", mod, appli.Parent, m.supprimer)
 	a.Route("POST /projets/{id}/etapes", mod, appli.Membre, m.ajouterEtape)
+	a.Route("POST /projets/etapes/{id}/modifier", mod, appli.Membre, m.modifierEtape)
 	a.Route("POST /projets/etapes/{id}/cocher", mod, appli.Membre, m.cocher)
 	a.Route("POST /projets/etapes/{id}/supprimer", mod, appli.Parent, m.supprimerEtape)
 
@@ -404,20 +405,35 @@ func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Cont
 
 // ---------- Étapes ----------
 
+// lireEtape : le texte, la date (facultative) et qui (facultatif) d'une
+// étape, lus dans le formulaire (ajout ou modification).
+func (m *Module) lireEtape(r *http.Request, c *appli.Contexte) (texte, jour string, membre sql.NullInt64, msg string) {
+	texte = strings.TrimSpace(r.PostFormValue("texte"))
+	if n := utf8.RuneCountInString(texte); n < 1 || n > 120 {
+		return "", "", membre, "L'étape doit faire entre 1 et 120 caractères."
+	}
+	jour = r.PostFormValue("jour")
+	if _, ok := budget.LireJour(jour, c.Maintenant()); jour != "" && !ok {
+		return "", "", membre, "Date invalide."
+	}
+	if id, _ := strconv.ParseInt(r.PostFormValue("membre"), 10, 64); id > 0 {
+		// Seulement un membre de la famille.
+		if _, err := m.a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: id, FamilleID: c.Famille.ID}); err == nil {
+			membre = sql.NullInt64{Int64: id, Valid: true}
+		}
+	}
+	return texte, jour, membre, ""
+}
+
 func (m *Module) ajouterEtape(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
 	p, ok := m.projet(r, c, idDe(r))
 	if !ok {
 		m.a.Echec(w, r, http.StatusNotFound, "Projet introuvable.")
 		return
 	}
-	texte := strings.TrimSpace(r.PostFormValue("texte"))
-	if n := utf8.RuneCountInString(texte); n < 1 || n > 120 {
-		m.a.Echec(w, r, http.StatusBadRequest, "L'étape doit faire entre 1 et 120 caractères.")
-		return
-	}
-	jour := r.PostFormValue("jour")
-	if _, ok := budget.LireJour(jour, c.Maintenant()); jour != "" && !ok {
-		m.a.Echec(w, r, http.StatusBadRequest, "Date invalide.")
+	texte, jour, membre, msg := m.lireEtape(r, c)
+	if msg != "" {
+		m.a.Echec(w, r, http.StatusBadRequest, msg)
 		return
 	}
 	if n, err := m.a.Q.CompterEtapesProjet(r.Context(), donnees.CompterEtapesProjetParams{ProjetID: p.ID, FamilleID: c.Famille.ID}); err != nil {
@@ -426,13 +442,6 @@ func (m *Module) ajouterEtape(w http.ResponseWriter, r *http.Request, c *appli.C
 	} else if n >= EtapesMax {
 		m.a.Echec(w, r, http.StatusBadRequest, fmt.Sprintf("Trop d'étapes (%d au plus) : supprimez-en d'abord.", EtapesMax))
 		return
-	}
-	var membre sql.NullInt64
-	if id, _ := strconv.ParseInt(r.PostFormValue("membre"), 10, 64); id > 0 {
-		// Seulement un membre de la famille.
-		if _, err := m.a.Q.MembreParID(r.Context(), donnees.MembreParIDParams{ID: id, FamilleID: c.Famille.ID}); err == nil {
-			membre = sql.NullInt64{Int64: id, Valid: true}
-		}
 	}
 	if _, err := m.a.Q.AjouterEtape(r.Context(), donnees.AjouterEtapeParams{ProjetID: p.ID, FamilleID: c.Famille.ID, Texte: texte,
 		Jour: jour, MembreID: membre, CreeLe: time.Now().Unix()}); err != nil {
@@ -477,6 +486,28 @@ func (m *Module) cocher(w http.ResponseWriter, r *http.Request, c *appli.Context
 	}
 	m.a.Publier(c, mod, "")
 	m.a.Flash(w, msg)
+	m.a.Rediriger(w, r, fmt.Sprintf("/projets/%d", e.ProjetID))
+}
+
+// modifierEtape : texte, date et qui d'une étape, par tous ceux qui voient
+// le projet (projet privé : son propriétaire seul).
+func (m *Module) modifierEtape(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
+	e, ok := m.etape(r, c)
+	if !ok {
+		m.a.Echec(w, r, http.StatusNotFound, "Étape introuvable.")
+		return
+	}
+	texte, jour, membre, msg := m.lireEtape(r, c)
+	if msg != "" {
+		m.a.Echec(w, r, http.StatusBadRequest, msg)
+		return
+	}
+	if err := m.a.Q.ModifierEtape(r.Context(), donnees.ModifierEtapeParams{Texte: texte, Jour: jour, MembreID: membre, ID: e.ID, FamilleID: c.Famille.ID}); err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return
+	}
+	m.a.Publier(c, mod, "")
+	m.a.Flash(w, "Étape enregistrée ✓")
 	m.a.Rediriger(w, r, fmt.Sprintf("/projets/%d", e.ProjetID))
 }
 

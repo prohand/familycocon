@@ -62,3 +62,13 @@ DELETE FROM recettes WHERE famille_id = ? AND cle = ?;
 INSERT INTO repas (famille_id, jour, moment, nom, ingredients, cree_par, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (famille_id, jour, moment) DO NOTHING;
+
+-- Recette creee depuis la page Recettes, sans repas prevu (compte 0).
+-- 0 ligne : une recette de ce nom existe deja.
+-- name: CreerRecette :execrows
+INSERT INTO recettes (famille_id, cle, nom, ingredients, preparation, compte, vu_le)
+VALUES (?, ?, ?, ?, ?, 0, ?)
+ON CONFLICT (famille_id, cle) DO NOTHING;
+
+-- name: ModifierPreparation :exec
+UPDATE recettes SET preparation = ? WHERE famille_id = ? AND cle = ?;

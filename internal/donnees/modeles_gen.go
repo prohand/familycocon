@@ -189,6 +189,7 @@ type Evenement struct {
 	CreeLe        int64
 	RepetitionFin string
 	Rappel        int64
+	RappelAvant   string
 }
 
 type EvenementsContact struct {
@@ -197,13 +198,25 @@ type EvenementsContact struct {
 }
 
 type EvenementsException struct {
-	EvenementID int64
-	Jour        string
+	EvenementID     int64
+	Jour            string
+	Modifiee        int64
+	NouveauDebut    int64
+	NouveauFin      int64
+	NouvelleJournee int64
+	NouveauTitre    string
+	NouveauLieu     sql.NullString
 }
 
 type EvenementsMembre struct {
 	EvenementID int64
 	MembreID    int64
+}
+
+type EvenementsRappel struct {
+	EvenementID int64
+	Debut       int64
+	EnvoyeLe    int64
 }
 
 type Famille struct {
@@ -247,37 +260,42 @@ type Liste struct {
 }
 
 type Membre struct {
-	ID          int64
-	FamilleID   int64
-	Nom         string
-	Role        string
-	Couleur     int64
-	Identifiant sql.NullString
-	Mdp         sql.NullString
-	Pin         sql.NullString
-	Raccourcis  string
-	Actif       int64
-	CreeLe      int64
-	PushModules string
-	Totp        string
-	TotpDernier int64
-	Naissance   string
-	Avatar      string
-	Accueil     string
+	ID              int64
+	FamilleID       int64
+	Nom             string
+	Role            string
+	Couleur         int64
+	Identifiant     sql.NullString
+	Mdp             sql.NullString
+	Pin             sql.NullString
+	Raccourcis      string
+	Actif           int64
+	CreeLe          int64
+	PushModules     string
+	Totp            string
+	TotpDernier     int64
+	Naissance       string
+	Avatar          string
+	Accueil         string
+	AccueilJourHaut int64
+	AccueilCompact  int64
+	CalmeDebut      string
+	CalmeFin        string
 }
 
 type Mission struct {
-	ID         int64
-	FamilleID  int64
-	EnfantID   int64
-	Titre      string
-	Emoji      string
-	Etoiles    int64
-	Categorie  string
-	Repetition string
-	Active     int64
-	CreePar    sql.NullInt64
-	CreeLe     int64
+	ID               int64
+	FamilleID        int64
+	EnfantID         int64
+	Titre            string
+	Emoji            string
+	Etoiles          int64
+	Categorie        string
+	Repetition       string
+	Active           int64
+	CreePar          sql.NullInt64
+	CreeLe           int64
+	SansVerification int64
 }
 
 type MissionFaite struct {
@@ -429,6 +447,7 @@ type Recette struct {
 	Ingredients string
 	Compte      int64
 	VuLe        int64
+	Preparation string
 }
 
 type Recompense struct {
@@ -520,6 +539,16 @@ type TachesRappel struct {
 	TacheID  int64
 	Jour     string
 	EnvoyeLe int64
+}
+
+type TachesToursPass struct {
+	ID       int64
+	TacheID  int64
+	Numero   int64
+	DeMembre sql.NullInt64
+	AMembre  sql.NullInt64
+	PassePar sql.NullInt64
+	PasseLe  int64
 }
 
 type Vehicule struct {

@@ -28,24 +28,31 @@ func (q *Queries) ChangerCompteOperation(ctx context.Context, arg ChangerCompteO
 
 const chercherOperations = `-- name: ChercherOperations :many
 SELECT id, famille_id, sens, montant, categorie, libelle, jour, membre_id, fixe, cree_par, cree_le, recurrence_id, perso_de, virement_id FROM operations
-WHERE famille_id = ?1 AND perso_de = ?2 AND jour >= ?3
-  AND instr(plier(libelle), plier(?4)) > 0
-ORDER BY jour DESC, id DESC LIMIT 200
+WHERE famille_id = ?1 AND perso_de = ?2
+  AND jour >= ?3 AND jour <= ?4
+  AND (?5 = '' OR categorie = ?5)
+  AND (?6 = '' OR instr(plier(libelle), plier(?6)) > 0)
+ORDER BY jour DESC, id DESC LIMIT 300
 `
 
 type ChercherOperationsParams struct {
 	FamilleID int64
 	Compte    int64
-	Depuis    string
+	Du        string
+	Au        string
+	Categorie interface{}
 	Motif     interface{}
 }
 
 // Recherche dans les libelles, sans majuscules ni accents, depuis une date.
+// Motif ou categorie vides : pas de filtre. Periode : du, au (compris).
 func (q *Queries) ChercherOperations(ctx context.Context, arg ChercherOperationsParams) ([]Operation, error) {
 	rows, err := q.db.QueryContext(ctx, chercherOperations,
 		arg.FamilleID,
 		arg.Compte,
-		arg.Depuis,
+		arg.Du,
+		arg.Au,
+		arg.Categorie,
 		arg.Motif,
 	)
 	if err != nil {
@@ -138,8 +145,9 @@ func (q *Queries) CreerOperation(ctx context.Context, arg CreerOperationParams) 
 }
 
 const libellesRecents = `-- name: LibellesRecents :many
-SELECT libelle FROM operations WHERE famille_id = ? AND perso_de = ? AND libelle <> ''
-GROUP BY libelle ORDER BY max(jour) DESC LIMIT 30
+SELECT libelle, categorie, CAST(max(jour) AS TEXT) AS dernier FROM operations
+WHERE famille_id = ? AND perso_de = ? AND libelle <> ''
+GROUP BY libelle ORDER BY dernier DESC LIMIT 100
 `
 
 type LibellesRecentsParams struct {
@@ -147,20 +155,28 @@ type LibellesRecentsParams struct {
 	PersoDe   int64
 }
 
+type LibellesRecentsRow struct {
+	Libelle   string
+	Categorie string
+	Dernier   string
+}
+
 // Libelles deja tapes (suggestions du formulaire), les plus recents d'abord.
-func (q *Queries) LibellesRecents(ctx context.Context, arg LibellesRecentsParams) ([]string, error) {
+// Libelles deja tapes, avec la categorie de la derniere fois (SQLite : avec
+// max(), les autres colonnes viennent de la ligne du max).
+func (q *Queries) LibellesRecents(ctx context.Context, arg LibellesRecentsParams) ([]LibellesRecentsRow, error) {
 	rows, err := q.db.QueryContext(ctx, libellesRecents, arg.FamilleID, arg.PersoDe)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []string{}
+	items := []LibellesRecentsRow{}
 	for rows.Next() {
-		var libelle string
-		if err := rows.Scan(&libelle); err != nil {
+		var i LibellesRecentsRow
+		if err := rows.Scan(&i.Libelle, &i.Categorie, &i.Dernier); err != nil {
 			return nil, err
 		}
-		items = append(items, libelle)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -588,5 +604,46 @@ func (q *Queries) TotauxPeriode(ctx context.Context, arg TotauxPeriodeParams) (T
 	)
 	var i TotauxPeriodeRow
 	err := row.Scan(&i.Revenus, &i.Depenses)
+	return i, err
+}
+
+const totauxRecherche = `-- name: TotauxRecherche :one
+SELECT count(*) AS nombre,
+  CAST(coalesce(sum(CASE WHEN sens = 'depense' THEN montant ELSE 0 END), 0) AS INTEGER) AS depenses,
+  CAST(coalesce(sum(CASE WHEN sens = 'revenu' THEN montant ELSE 0 END), 0) AS INTEGER) AS revenus
+FROM operations
+WHERE famille_id = ?1 AND perso_de = ?2
+  AND jour >= ?3 AND jour <= ?4
+  AND (?5 = '' OR categorie = ?5)
+  AND (?6 = '' OR instr(plier(libelle), plier(?6)) > 0)
+`
+
+type TotauxRechercheParams struct {
+	FamilleID int64
+	Compte    int64
+	Du        string
+	Au        string
+	Categorie interface{}
+	Motif     interface{}
+}
+
+type TotauxRechercheRow struct {
+	Nombre   int64
+	Depenses int64
+	Revenus  int64
+}
+
+// Totaux de la meme recherche (sur tout, pas seulement les lignes montrees).
+func (q *Queries) TotauxRecherche(ctx context.Context, arg TotauxRechercheParams) (TotauxRechercheRow, error) {
+	row := q.db.QueryRowContext(ctx, totauxRecherche,
+		arg.FamilleID,
+		arg.Compte,
+		arg.Du,
+		arg.Au,
+		arg.Categorie,
+		arg.Motif,
+	)
+	var i TotauxRechercheRow
+	err := row.Scan(&i.Nombre, &i.Depenses, &i.Revenus)
 	return i, err
 }

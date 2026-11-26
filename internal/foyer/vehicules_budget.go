@@ -79,11 +79,12 @@ func (m *Module) texteBudget(ctx context.Context, c *appli.Contexte, x donnees.V
 	return ""
 }
 
-// reglerBudget : applique le choix du formulaire au véhicule x, puis range
-// ses dépenses (déjà au carnet comprises) dans ce budget. Choix vide ou
-// « garder » : le réglage du véhicule ne change pas (les lignes qui
-// manquent au budget y sont ajoutées, s'il en a un).
-func (m *Module) reglerBudget(ctx context.Context, c *appli.Contexte, x donnees.Vehicule, choix string) (suivi.Rangement, error) {
+// reglerBudget : applique le choix du formulaire au véhicule x. Réglage
+// changé : toutes ses dépenses (déjà au carnet comprises) passent dans ce
+// budget. Inchangé (choix vide ou « garder ») : seules les lignes
+// « nouvelles » (reprise Fuelio : celles qu'elle vient d'écrire) y sont
+// ajoutées ; une dépense retirée à la main du budget n'y revient pas.
+func (m *Module) reglerBudget(ctx context.Context, c *appli.Contexte, x donnees.Vehicule, choix string, nouvelles []int64) (suivi.Rangement, error) {
 	if !peutBudget(c) {
 		return suivi.Rangement{}, nil
 	}
@@ -93,19 +94,20 @@ func (m *Module) reglerBudget(ctx context.Context, c *appli.Contexte, x donnees.
 		compte = suivi.BudgetValide(choix)
 		change = compte != x.Budget || (compte == suivi.BudgetPerso && x.BudgetPersoDe != c.Membre.ID)
 	}
-	if change {
-		var perso int64
-		if compte == suivi.BudgetPerso {
-			perso = c.Membre.ID
+	if !change {
+		// Budget perso d'un autre parent : le sien, on n'y écrit pas.
+		if len(nouvelles) == 0 || compte == suivi.BudgetNon || (compte == suivi.BudgetPerso && x.BudgetPersoDe != c.Membre.ID) {
+			return suivi.Rangement{}, nil
 		}
-		if err := m.a.Q.ChangerBudgetVehicule(ctx, donnees.ChangerBudgetVehiculeParams{Budget: compte, BudgetPersoDe: perso,
-			ID: x.ID, FamilleID: c.Famille.ID}); err != nil {
-			return suivi.Rangement{}, err
-		}
-	} else if compte == suivi.BudgetNon || (compte == suivi.BudgetPerso && x.BudgetPersoDe != c.Membre.ID) {
-		// Rien de réglé (les lignes ajoutées une à une restent) ou budget
-		// perso d'un autre parent (le sien).
-		return suivi.Rangement{}, nil
+		return m.s.RangerBudget(ctx, c, modVehicules, x.ID, x.Nom, compte, nouvelles)
 	}
-	return m.s.RangerBudget(ctx, c, modVehicules, x.ID, x.Nom, compte)
+	var perso int64
+	if compte == suivi.BudgetPerso {
+		perso = c.Membre.ID
+	}
+	if err := m.a.Q.ChangerBudgetVehicule(ctx, donnees.ChangerBudgetVehiculeParams{Budget: compte, BudgetPersoDe: perso,
+		ID: x.ID, FamilleID: c.Famille.ID}); err != nil {
+		return suivi.Rangement{}, err
+	}
+	return m.s.RangerBudget(ctx, c, modVehicules, x.ID, x.Nom, compte, nil)
 }

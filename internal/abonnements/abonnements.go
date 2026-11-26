@@ -256,7 +256,12 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 		if _, rec, ok := m.abonnement(r, c); ok {
 			deja = rec.NouveauLe
 			if _, actif := budget.Prochaine(rec); !actif {
+				// Résilié : rien ne repart (« Reprendre » sert à ça), la
+				// fréquence non plus (elle ferait repartir les fois).
 				prochain, okP = "", true
+				if budget.FrequenceValide(freq) {
+					freq = rec.Frequence
+				}
 			}
 		}
 	}

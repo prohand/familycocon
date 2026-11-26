@@ -131,6 +131,12 @@ func TestNotificationsPush(t *testing.T) {
 	if len(attendre(2)) != 2 {
 		t.Fatal("push envoyé alors que la page est ouverte")
 	}
+	// Appel voulu (« Je pars faire les courses ») : envoyé même sans le
+	// module Courses choisi, et même page ouverte.
+	a.Appeler(cMarie, "courses", "Marie part faire les courses", "/courses/liste/1")
+	if l := attendre(3); len(l) != 3 || !strings.Contains(l[2], "fcm/send/thomas") || !strings.Contains(l[2], `"url":"/courses/liste/1"`) {
+		t.Fatalf("appel voulu : %v", l)
+	}
 	a.Direct.desabonner(1, ch)
 
 	// Abonnement expiré : supprimé.
@@ -138,7 +144,7 @@ func TestNotificationsPush(t *testing.T) {
 	expire = true
 	mu.Unlock()
 	a.Publier(cMarie, "taches", "Marie a ajouté une tâche")
-	attendre(3)
+	attendre(4)
 	for i := 0; i < 100; i++ {
 		if n, _ := a.Q.CompterAbonnements(context.Background(), membreID(t, a, "thomas")); n == 0 {
 			return
@@ -381,5 +387,81 @@ func TestRappelsPrives(t *testing.T) {
 	}
 	if _, p := marie.get("/"); !strings.Contains(p, "Secret de Marie") {
 		t.Fatal("échéance privée absente de l'accueil de Marie")
+	}
+}
+
+// Heures calmes : la plage (y compris celle qui passe minuit), et à l'envoi :
+// pas d'activité pendant celles du membre, mais un rappel à heure dite oui.
+func TestHeuresCalmes(t *testing.T) {
+	h := func(s string) time.Time { x, _ := time.Parse("15:04", s); return x }
+	for _, c := range []struct {
+		de, a, t string
+		calme    bool
+	}{
+		{"21:00", "07:00", "23:30", true}, {"21:00", "07:00", "06:59", true}, {"21:00", "07:00", "07:00", false},
+		{"21:00", "07:00", "12:00", false}, {"13:00", "14:00", "13:30", true}, {"13:00", "14:00", "14:00", false},
+		{"", "", "23:00", false}, {"21:00", "21:00", "21:00", false}, {"xx", "07:00", "01:00", false},
+	} {
+		if got := EnHeuresCalmes(c.de, c.a, h(c.t)); got != c.calme {
+			t.Errorf("%s–%s à %s : %v, attendu %v", c.de, c.a, c.t, got, c.calme)
+		}
+	}
+
+	a, srv, marie := familleTest(t)
+	ctx, annuler := context.WithCancel(context.Background())
+	defer annuler()
+	if err := a.DemarrerPush(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	var envois []string
+	a.Push.envoyer = func(_ context.Context, ab *webpush.Abonnement, corps []byte, o webpush.Options) error {
+		mu.Lock()
+		defer mu.Unlock()
+		envois = append(envois, string(corps))
+		return nil
+	}
+	marie.get("/famille")
+	_, page := marie.post("/famille/invitations", map[string]string{"role": "parent", "mdp": "un grand nid douillet"})
+	lien := page[strings.Index(page, "/invitation/"):][:len("/invitation/")+43]
+	thomas := nouveauNavigateur(t, srv)
+	thomas.post(lien, map[string]string{"prenom": "Thomas", "identifiant": "thomas", "mdp": "le papa du nid", "mdp2": "le papa du nid"})
+	thomas.get("/moi")
+	req, _ := http.NewRequest("POST", srv.URL+"/push/abonnement", strings.NewReader(abonnementFactice(t, "thomas")))
+	req.Header.Set("X-Jeton", thomas.jeton)
+	if rep, err := thomas.c.Do(req); err != nil || rep.StatusCode != http.StatusNoContent {
+		t.Fatal("abonnement")
+	}
+	// Plage invalide refusée ; plage autour de maintenant (heure de Paris).
+	if code, _ := thomas.post("/moi/calme", map[string]string{"actives": "1", "de": "22:00", "a": "22:00"}); code != http.StatusBadRequest {
+		t.Fatalf("plage vide acceptée : %d", code)
+	}
+	paris, _ := time.LoadLocation("Europe/Paris")
+	now := time.Now().In(paris)
+	de, jusqua := now.Add(-time.Hour).Format("15:04"), now.Add(time.Hour).Format("15:04")
+	if code, _ := thomas.post("/moi/calme", map[string]string{"actives": "1", "de": de, "a": jusqua}); code != 200 {
+		t.Fatalf("heures calmes : %d", code)
+	}
+	if _, p := thomas.get("/moi"); !strings.Contains(p, "🌙 "+de+"–"+jusqua) {
+		t.Fatal("heures calmes non montrées")
+	}
+	cMarie := contexteDe(t, a, "marie")
+	famille := cMarie.Famille.ID
+	a.Publier(cMarie, "agenda", "Marie a ajouté « Piscine »")               // activité : rien
+	a.Rappeler(ctx, famille, "agenda", "Dentiste dans 1 h", "/agenda", nil) // rappel : oui
+	for i := 0; i < 200; i++ {
+		mu.Lock()
+		n := len(envois)
+		mu.Unlock()
+		if n >= 1 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	time.Sleep(50 * time.Millisecond)
+	mu.Lock()
+	defer mu.Unlock()
+	if len(envois) != 1 || !strings.Contains(envois[0], "Dentiste") {
+		t.Fatalf("pendant les heures calmes : %v", envois)
 	}
 }

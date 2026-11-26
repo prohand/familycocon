@@ -282,6 +282,31 @@ func (q *Queries) EtapesProjet(ctx context.Context, arg EtapesProjetParams) ([]P
 	return items, nil
 }
 
+const modifierEtape = `-- name: ModifierEtape :exec
+UPDATE projet_etapes SET texte = ?1, jour = ?2, membre_id = ?3
+WHERE id = ?4 AND famille_id = ?5
+`
+
+type ModifierEtapeParams struct {
+	Texte     string
+	Jour      string
+	MembreID  sql.NullInt64
+	ID        int64
+	FamilleID int64
+}
+
+// Modifier une etape (texte, date, qui).
+func (q *Queries) ModifierEtape(ctx context.Context, arg ModifierEtapeParams) error {
+	_, err := q.db.ExecContext(ctx, modifierEtape,
+		arg.Texte,
+		arg.Jour,
+		arg.MembreID,
+		arg.ID,
+		arg.FamilleID,
+	)
+	return err
+}
+
 const modifierProjet = `-- name: ModifierProjet :exec
 UPDATE projets SET nom = ?, emoji = ?, couleur = ?, description = ?, objectif = ?, budget = ?, perso_de = ? WHERE id = ? AND famille_id = ?
 `

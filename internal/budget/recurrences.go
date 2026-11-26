@@ -79,19 +79,24 @@ func Occurrence(debut, freq string, k int64) (time.Time, error) {
 	}
 	premier := time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, int(k)*f.Mois, 0)
 	if len(f.Seulement) > 0 {
-		// Mois par mois en sautant ceux qui n'en sont pas ; un début dans
-		// un mois sauté part du premier mois permis qui suit.
-		premier = time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC)
-		permis := func(t time.Time) bool { return slices.Contains(f.Seulement, int(t.Month())) }
-		for !permis(premier) {
-			premier = premier.AddDate(0, 1, 0)
-		}
-		for n := int64(0); n < k; {
-			premier = premier.AddDate(0, 1, 0)
-			if permis(premier) {
-				n++
+		// Seulement certains mois : les mois permis, dans l'ordre de
+		// l'année. Un début dans un mois sauté part du premier mois permis
+		// qui suit. Calcul direct (pas mois par mois : une année lointaine
+		// coûterait cher).
+		permis := slices.Sorted(slices.Values(f.Seulement))
+		an, rang := d.Year(), len(permis) // rang du premier mois permis
+		for i, mo := range permis {
+			if mo >= int(d.Month()) {
+				rang = i
+				break
 			}
 		}
+		if rang == len(permis) { // plus de mois permis cette année : l'an prochain
+			an, rang = an+1, 0
+		}
+		n := int64(rang) + k
+		an += int(n / int64(len(permis)))
+		premier = time.Date(an, time.Month(permis[n%int64(len(permis))]), 1, 0, 0, 0, 0, time.UTC)
 	}
 	dernierJour := premier.AddDate(0, 1, -1).Day()
 	return premier.AddDate(0, 0, min(d.Day(), dernierJour)-1), nil
@@ -348,12 +353,38 @@ func EnAttente(recs []donnees.Recurrence, aujourdhui time.Time) []Attente {
 	return out
 }
 
+// premiereDes : le numéro de la première fois, à partir de r.Faites, qui
+// tombe le jour « du » ou après (recherche par moitiés : les dates des
+// fois ne font que monter).
+func premiereDes(r donnees.Recurrence, du string) int64 {
+	avant := func(k int64) bool {
+		j, err := Occurrence(r.Debut, r.Frequence, k)
+		return err == nil && repetition.CleJour(j) < du
+	}
+	bas, haut := r.Faites, r.Faites+60*53 // 60 ans de semaines au plus
+	if !avant(bas) {
+		return bas
+	}
+	for bas+1 < haut { // avant(bas) vrai, avant(haut) supposé faux
+		milieu := (bas + haut) / 2
+		if avant(milieu) {
+			bas = milieu
+		} else {
+			haut = milieu
+		}
+	}
+	return haut
+}
+
 // Prevues : les occurrences à venir entre premier et dernier (inclus),
 // après aujourd'hui, comme des opérations (non enregistrées).
 func Prevues(recs []donnees.Recurrence, premier, dernier, aujourdhui time.Time) []donnees.Operation {
 	du, au, auj := repetition.CleJour(premier), repetition.CleJour(dernier), repetition.CleJour(aujourdhui)
 	var out []donnees.Operation
 	for _, r := range recs {
+		// Sauter tout de suite aux fois de la période (une année lointaine
+		// ne coûte pas plus cher, et n'est pas coupée en route).
+		r.Faites = premiereDes(r, du)
 		for n := 0; n < 600; n++ {
 			j, ok := Prochaine(r)
 			cle := repetition.CleJour(j)
@@ -578,6 +609,12 @@ func (m *Module) modifierRecurrence(w http.ResponseWriter, r *http.Request, c *a
 	case fin != "" && (!okF || fin < prochaine):
 		m.a.Echec(w, r, http.StatusBadRequest, "La date de fin doit suivre la prochaine date.")
 		return
+	}
+	// Terminée et pas de nouvelle date : la fin et la fréquence restent
+	// (vider « Jusqu'au » ou changer la fréquence la ferait repartir et
+	// écrire d'un coup les fois manquées). Pour la relancer : une date.
+	if _, active := Prochaine(x); !active && prochaine == "" {
+		fin, freq = x.Fin, x.Frequence
 	}
 	var aConfirmer int64
 	if r.PostFormValue("a_confirmer") == "1" {

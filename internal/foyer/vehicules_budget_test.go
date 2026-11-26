@@ -137,4 +137,32 @@ func TestBudgetVehicule(t *testing.T) {
 	if _, p := marie.Get("/vehicules/" + id); !strings.Contains(p, "Dépenses au budget : Compte commun") {
 		t.Fatal("réglage non gardé après la reprise")
 	}
+	// Une dépense retirée à la main du budget n'y revient pas : ni en
+	// enregistrant la fiche sans changer le réglage, ni à la reprise.
+	var opID string
+	if err := a.DB.QueryRowContext(ctx, "SELECT id FROM operations LIMIT 1").Scan(&opID); err != nil {
+		t.Fatal(err)
+	}
+	marie.Post("/budget/"+opID+"/supprimer", nil)
+	modifier(marie, "commun")
+	envoyer(marie, "/vehicules/"+id+"/fuelio?budget=commun")
+	if n := total(); n != 2 {
+		t.Fatalf("%d dépenses, attendu 2 (la dépense retirée est revenue)", n)
+	}
+	// Un coût ajouté après coup à une ligne du carnet va au budget.
+	marie.Post("/suivi/vehicules/"+id+"/carnet", map[string]string{"libelle": "Pneus", "jour": "2026-10-01"})
+	_, p := marie.Get("/vehicules/" + id)
+	ligne := essai.Trouver(t, p, `action="/suivi/carnet/(\d+)"`)
+	marie.Post("/suivi/carnet/"+ligne, map[string]string{"libelle": "Pneus", "jour": "2026-10-01", "montant": "400"})
+	if n := total(); n != 3 {
+		t.Fatalf("%d dépenses après le coût ajouté, attendu 3", n)
+	}
+	// Vers « Mon budget perso » ne passent que les dépenses ajoutées par ce
+	// parent : celles de Paul restent au compte commun.
+	modifier(marie, "non")
+	modifier(paul, "commun")
+	modifier(marie, "perso")
+	if o := ops(); o[0] != 4 || len(o) != 1 {
+		t.Fatalf("dépenses de Paul passées dans le perso de Marie : %v", o)
+	}
 }

@@ -105,7 +105,7 @@ func (q *Queries) AjouterPiece(ctx context.Context, arg AjouterPieceParams) (Pie
 }
 
 const carnetAuBudget = `-- name: CarnetAuBudget :many
-SELECT c.id, o.id AS operation_id, o.perso_de FROM carnet c JOIN operations o ON o.id = c.operation_id
+SELECT c.id, o.id AS operation_id, o.perso_de, o.cree_par FROM carnet c JOIN operations o ON o.id = c.operation_id
 WHERE c.famille_id = ? AND c.module = ? AND c.objet_id = ?
 `
 
@@ -119,6 +119,7 @@ type CarnetAuBudgetRow struct {
 	ID          int64
 	OperationID int64
 	PersoDe     int64
+	CreePar     sql.NullInt64
 }
 
 // Lignes deja au budget, avec le budget de leur depense (0 : commun).
@@ -131,7 +132,12 @@ func (q *Queries) CarnetAuBudget(ctx context.Context, arg CarnetAuBudgetParams) 
 	items := []CarnetAuBudgetRow{}
 	for rows.Next() {
 		var i CarnetAuBudgetRow
-		if err := rows.Scan(&i.ID, &i.OperationID, &i.PersoDe); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.OperationID,
+			&i.PersoDe,
+			&i.CreePar,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -300,6 +300,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .bloc-accueil { grid-column: 1 / -1; }
 @media (min-width: 900px) { .bloc-accueil { grid-column: span 2; } }
 .bloc-accueil .section-titre { margin-top: 6px; }
+/* Programme du jour en haut (« Mon accueil ») : toute la largeur, avant
+   les tuiles. */
+.bloc-accueil.en-haut { grid-column: 1 / -1; }
+.bloc-accueil.en-haut + .tuile { margin-top: 4px; }
+/* Tuiles compactes : 3 par ligne sur téléphone, sans le résumé. */
+.tuiles.compactes { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+@media (min-width: 600px) { .tuiles.compactes { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .tuiles.compactes { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.tuiles.compactes .tuile { min-height: 76px; padding: 10px; border-radius: 16px; gap: 4px; }
+.tuiles.compactes .tuile .emoji { font-size: 1.55rem; }
+.tuiles.compactes .tuile .nom { font-size: .82rem; overflow-wrap: anywhere; }
+.tuiles.compactes .tuile .info, .tuiles.compactes .tuile br { display: none; }
+.tuiles.compactes .tuile .badge { top: 6px; right: 6px; min-width: 22px; height: 22px; font-size: .72rem; }
+.tuiles.compactes .bloc-accueil { grid-column: 1 / -1; }
 
 .tuile.courses { --bg: var(--courses); --t: var(--courses-t); }
 .tuile.agenda  { --bg: var(--agenda);  --t: var(--agenda-t); }
@@ -497,6 +511,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .rayon[open] > summary::after { transform: rotate(-135deg); margin-top: 4px; }
 .rayon ul { list-style: none; margin: 0; padding: 0 10px 8px; }
+/* Rayon fini (tout est pris) : replié, en bas, plus discret. */
+.rayon.fini { box-shadow: none; border: 1.5px solid var(--bordure); }
+.rayon.fini > summary { padding: 10px 18px; font-size: .95rem; color: var(--texte-doux); }
+.rayon.fini > summary .r-emoji { width: 30px; height: 30px; font-size: 1rem; font-weight: 900; color: var(--courses-t); background: var(--courses); }
+/* « Je pars faire les courses » */
+.depart { margin: 10px 0 0; }
 
 .produit {
   display: flex;
@@ -1092,6 +1112,37 @@ button.coche:hover { border-color: var(--taches-t); }
 .creneau .plat small { display: block; font-weight: 600; color: var(--texte-doux); font-size: .8rem; }
 .creneau .vide-plat { color: var(--menus-t); font-weight: 700; }
 .creneau.rempli .plat:hover { color: var(--menus-t); }
+/* Menus : boutons du haut sur plusieurs lignes au besoin (320 px). */
+.actions-menus { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 14px 0 0; }
+.actions-menus .bouton { padding: 9px 14px; font-size: .9rem; max-width: 100%; }
+/* Jours déjà passés de la semaine en cours : repliés sur téléphone. */
+.jours-passes { margin: 0 0 12px; }
+.jours-passes > summary {
+  list-style: none; cursor: pointer; padding: 10px 18px; border-radius: var(--rayon);
+  border: 1.5px dashed var(--bordure); color: var(--texte-doux); font-weight: 700;
+}
+.jours-passes > summary::-webkit-details-marker { display: none; }
+.jours-passes[open] .si-ferme, .jours-passes:not([open]) .si-ouvert { display: none; }
+.jour-menu.passe { opacity: .75; }
+@media (max-width: 999px) { .jours-passes:not([open]) + .semaine .jour-menu.passe { display: none; } }
+/* Grand écran : toute la semaine en colonnes, rien à replier. */
+@media (min-width: 1000px) {
+  .jours-passes { display: none; }
+  /* 7 colonnes étroites : le moment au-dessus du plat (rien ne déborde). */
+  .jour-menu { padding: 10px; }
+  .jour-menu .creneau { flex-wrap: wrap; gap: 4px 8px; }
+  .jour-menu .creneau .moment { width: auto; }
+  .jour-menu .creneau .plat { flex-basis: 100%; overflow-wrap: anywhere; }
+}
+/* Recettes */
+.entete-recettes { display: flex; justify-content: flex-end; margin: 0 0 10px; }
+.recette > summary small { display: block; }
+.recette .ingredients-recette { margin: 10px 0 0; padding-left: 20px; }
+.recette .preparation { margin-top: 12px; }
+.recette .preparation > h3, .recette .ingredients-titre { font-size: .9rem; color: var(--texte-doux); margin: 12px 0 4px; }
+.prevoir { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--bordure); }
+.prevoir .champ { margin: 0; flex: 1 1 130px; min-width: 0; }
+.prevoir .champ input, .prevoir .champ select { width: 100%; }
 .mini {
   border: 0; cursor: pointer; border-radius: 999px; padding: 6px 10px;
   background: var(--courses); color: var(--courses-t); font-weight: 800; font-size: .8rem;
@@ -1147,15 +1198,20 @@ details.attente + details.attente { border-top: 1px solid var(--bordure); }
 .cle-prevu .prelev::before { background: var(--corail); }
 .cle-prevu .r::before, .cle-prevu .rev::before { background: color-mix(in srgb, var(--budget-t) 35%, var(--carte)); }
 .liste-prevu { padding: 0; overflow: hidden; }
-.mois-prevu { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 12px; align-items: center; padding: 12px 16px; color: inherit; }
+/* Colonnes de largeur fixe : les barres de tous les mois s'alignent. */
+.mois-prevu { display: grid; grid-template-columns: 5.6rem minmax(0, 1fr) 7.4rem; gap: 4px 10px; align-items: center; padding: 12px 16px; color: inherit; }
 .mois-prevu + .mois-prevu { border-top: 1px solid var(--bordure); }
 .mois-prevu.en-cours { background: color-mix(in srgb, var(--budget) 55%, transparent); }
-.nom-mois { font-weight: 800; min-width: 78px; }
+.nom-mois { font-weight: 800; min-width: 0; }
 .nom-mois small, .reste-mois small { display: block; font-weight: 600; font-size: .72rem; color: var(--texte-doux); }
 .barre-prevu { width: 100%; height: 10px; }
 .barre-prevu .fond-reste { fill: color-mix(in srgb, var(--budget-t) 35%, var(--carte)); }
 .barre-prevu .prelev { fill: var(--corail); }
-.reste-mois { font-weight: 900; font-size: 1.02rem; color: var(--budget-t); text-align: right; }
+.reste-mois { font-weight: 900; font-size: 1.02rem; color: var(--budget-t); text-align: right; white-space: nowrap; }
+@media (max-width: 359px) {
+  .mois-prevu { grid-template-columns: 5rem minmax(0, 1fr) 6.6rem; gap: 4px 8px; padding: 12px; }
+  .reste-mois { font-size: .92rem; }
+}
 .mois-prevu.charge .reste-mois { color: var(--corail); }
 .note-mois { grid-column: 1 / -1; font-size: .75rem; font-weight: 600; color: var(--texte-doux); }
 .tableau-prevu { display: none; }
@@ -1548,6 +1604,10 @@ details.termines > summary { cursor: pointer; }
 select[multiple] { min-height: 7em; }
 details.vcard > summary { cursor: pointer; }
 details.plus-champs > summary { cursor: pointer; margin-bottom: 10px; }
+/* Agenda : « Modifier cette fois seulement ». */
+details.fois-seule > summary { cursor: pointer; font-weight: 800; min-height: 44px; display: flex; align-items: center; }
+details.fois-seule[open] > summary { margin-bottom: 8px; }
+details.fois-seule form + form { margin-top: 10px; }
 /* Nouveau montant prévu (opération qui revient, abonnement). */
 details.nouveau-montant { margin: 4px 0 12px; }
 details.nouveau-montant > summary { cursor: pointer; color: var(--corail); font-weight: 800; margin-bottom: 8px; }
@@ -1796,6 +1856,10 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 /* Budget, l'année : revenus (vert du budget) et dépenses (corail). */
 .graphe.annee .g-s0 { fill: var(--budget-t); background: var(--budget-t); }
 .graphe.annee .g-s1 { fill: var(--corail); background: var(--corail); }
+/* Le prévu (pas encore passé) : même couleur, plus claire. */
+.graphe.annee .g-p0 { fill: color-mix(in srgb, var(--budget-t) 40%, var(--carte)); }
+.graphe.annee .g-p1 { fill: color-mix(in srgb, var(--corail) 40%, var(--carte)); background: color-mix(in srgb, var(--corail) 40%, var(--carte)); }
+.barre-mois .nom-cat small { color: var(--texte-doux); font-weight: 600; font-size: .75rem; }
 .graphe.annee .graphique { margin-bottom: 4px; }
 .graphique { touch-action: pan-y; cursor: crosshair; }
 .graphique .g-point.cache { display: none; }
@@ -1916,6 +1980,28 @@ figure.photo-texte img { display: block; max-width: 100%; max-height: 60vh; bord
 .description-tache[open] > .contenu-note { margin-top: 2px; }
 .description-tache .contenu-note > :first-child { margin-top: 0; }
 .description-tache .contenu-note > :last-child { margin-bottom: 0; }
+/* Tâches : filtres repliés (« 🔎 Filtrer »), ajout rapide, tour passé. */
+.filtres-taches { margin-bottom: 4px; }
+.filtres-taches > summary { cursor: pointer; margin: 6px 0 8px; }
+.filtres-taches > summary small { font-weight: 600; }
+.filtres-taches .pilules.petites.voir { margin: 0 0 6px; }
+.filtres-taches .pilules .aide { margin: 0; }
+.ajout-tache { margin: 6px 0 14px; }
+.passer-tour { display: inline-block; margin-top: 4px; padding: 3px 10px; border: 1.5px solid var(--bordure); border-radius: 999px; background: none; color: var(--texte-doux); font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer; min-height: 30px; }
+.passer-tour:hover { color: var(--texte); border-color: var(--texte-doux); }
+.tour-passe .quoi { color: var(--texte-doux); }
+/* Projets : une étape touchée s'ouvre pour être modifiée. */
+.etape-modif { flex: 1; min-width: 0; }
+.etape-modif > summary { display: block; list-style: none; cursor: pointer; overflow-wrap: anywhere; }
+.etape-modif > summary::-webkit-details-marker { display: none; }
+.etape-modif > form { margin-top: 6px; }
+.ligne.etape:has(.etape-modif[open]) { align-items: flex-start; }
+/* Pendant la modification : la place au formulaire (le responsable est dans « Qui ? »). */
+.ligne.etape:has(.etape-modif[open]) > .avatar,
+.ligne.etape:has(.etape-modif[open]) > form[action$="/supprimer"] { display: none; }
+/* Tâches : « ⏭️ Passer à Tom » ; « Tom » seul sur un petit écran. */
+.passer-tour { white-space: nowrap; }
+@media (max-width: 360px) { .passer-tour .passer-mot { display: none; } }
 
 
 /* Page « Moi » : chaque partie repliée, avec un résumé ; s'ouvre d'un toucher. */
@@ -1940,3 +2026,14 @@ details.partie[open] { padding-bottom: 16px; }
 @media (max-width: 360px) { .ligne-accueil .fleches .bouton { padding: 5px 7px; } .ligne-accueil .interrupteur .emoji { display: none; } }
 .lien-organiser { display: inline-block; margin-top: 14px; font-weight: 800; color: var(--corail); }
 .ligne-accueil .fleches .bouton:disabled { opacity: .3; cursor: default; }
+/* Budget : catégorie choisie d'après le libellé. */
+.cat-auto { display: block; margin: 4px 0 0; }
+.cat-auto[hidden] { display: none; }
+.heures-calmes { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--bordure); }
+/* Anniversaires : souhaiter en un geste (SMS, appel). */
+.ligne.anniv { gap: 6px; }
+.ligne.anniv .quoi-lien { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; color: inherit; }
+.ligne.anniv .appel { font-size: 1.2rem; padding: 6px 8px; border-radius: 12px; }
+.ligne.anniv .appel:hover { background: var(--fond); }
+.ligne.anniv .age { white-space: nowrap; }
+.documents > .sous-titre { margin-top: 0; }

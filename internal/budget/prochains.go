@@ -45,6 +45,7 @@ type vueProchains struct {
 	Total  struct{ Revenus, Prelev, Reste int64 }
 	Graphe template.HTML // grand écran : barres revenus / prélèvements
 	Devise string
+	Vide   bool // aucune opération qui revient : l'aide dit d'en ajouter
 	An     string
 }
 
@@ -67,7 +68,7 @@ func (m *Module) pageProchains(w http.ResponseWriter, r *http.Request, c *appli.
 		return
 	}
 	maintenant := c.Maintenant()
-	v := vueProchains{Compte: nomCompte(compte), Perso: compte > 0, Devise: c.Famille.Devise, An: strconv.Itoa(maintenant.Year())}
+	v := vueProchains{Compte: nomCompte(compte), Perso: compte > 0, Devise: c.Famille.Devise, An: strconv.Itoa(maintenant.Year()), Vide: len(recs) == 0}
 	// Combien de mois chaque prélèvement apparaît (pour dire ce qui change).
 	presences := map[string]int{}
 	parMois := make([]map[string]int64, nbProchains)

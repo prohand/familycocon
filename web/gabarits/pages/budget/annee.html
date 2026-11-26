@@ -11,21 +11,22 @@
   <a class="fleche" href="/budget/annee?compte={{if $.Donnees.Perso}}perso{{else}}commun{{end}}&amp;an={{.Suivant}}" aria-label="Année suivante">›</a>
 </div>
 <section class="carte reste bloc">
-  <p class="reste-titre">Reste sur l'année</p>
+  <p class="reste-titre">{{if or .RevenusPrevus .DepensesPrevues}}Reste prévu sur l'année{{else}}Reste sur l'année{{end}}</p>
   <p class="reste-montant{{if lt .Revenus .Depenses}} negatif{{end}}">{{montant .Reste .Devise}}</p>
   <div class="reste-detail">
     <span>⬆️ Revenus <b>{{montant .Revenus .Devise}}</b></span>
     <span>⬇️ Dépenses <b>{{montant .Depenses .Devise}}</b></span>
   </div>
+  {{if or .RevenusPrevus .DepensesPrevues}}<p class="aide">Dont prévu (opérations qui reviennent, pas encore passées) : +{{montant .RevenusPrevus .Devise}} · −{{montant .DepensesPrevues .Devise}}</p>{{end}}
 </section>
 <section class="carte bloc graphe annee">
   <div class="section-titre premier"><h2>Mois par mois</h2></div>
   {{with .Graphe}}{{.}}
-  <p class="legende"><span class="pastille g-s0"></span> Revenus <span class="pastille g-s1"></span> Dépenses</p>
+  <p class="legende"><span class="pastille g-s0"></span> Revenus <span class="pastille g-s1"></span> Dépenses{{if or $.Donnees.RevenusPrevus $.Donnees.DepensesPrevues}} <span class="pastille g-p1"></span> Prévu{{end}}</p>
   {{else}}<p class="aide">Rien de noté en {{.An}}.</p>{{end}}
   {{- range .Mois}}{{if or .Revenus .Depenses}}
   <a class="barre-mois" href="/budget?compte={{if $.Donnees.Perso}}perso{{else}}commun{{end}}&amp;mois={{.Mois}}">
-    <span class="nom-cat">{{.Nom}}</span>
+    <span class="nom-cat">{{.Nom}}{{if or .RevenusPrevus .DepensesPrevues}} <small>{{if and (or (not .Revenus) (eq .RevenusPrevus .Revenus)) (or (not .Depenses) (eq .DepensesPrevues .Depenses))}}prévu{{else}}en partie prévu{{end}}</small>{{end}}</span>
     <span class="montants-mois"><span class="revenu">+{{montant .Revenus $.Donnees.Devise}}</span><span class="depense">−{{montant .Depenses $.Donnees.Devise}}</span><span class="fleche-droite">›</span></span>
   </a>
   {{- end}}{{end}}

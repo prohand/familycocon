@@ -5,7 +5,9 @@ package contacts
 import (
 	"context"
 	"fmt"
+	"html/template"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -79,6 +81,9 @@ type Anniversaire struct {
 	Membre *donnees.Membre // nil pour un contact
 	Idees  string
 	Proche bool
+	// Souhaiter en un geste (contact avec un numéro, anniversaire proche) :
+	// appeler, et SMS déjà écrit (« Joyeux anniversaire Paul ! »).
+	Appel, SMS template.URL
 }
 
 // anniversaires : contacts et membres, du plus proche au plus lointain.
@@ -96,7 +101,14 @@ func (m *Module) anniversaires(ctx context.Context, c *appli.Contexte, f donnees
 			continue
 		}
 		d := n.Prochain(auj)
-		out = append(out, Anniversaire{Nom: ct.Nom, Date: d, Age: n.Age(d), URL: fmt.Sprintf("/contacts/%d", ct.ID), Idees: ct.Idees})
+		an := Anniversaire{Nom: ct.Nom, Date: d, Age: n.Age(d), URL: fmt.Sprintf("/contacts/%d", ct.ID), Idees: ct.Idees}
+		if t := LienTel(PremierTel(ct.Telephone, ct.TelFixe, ct.TelTravail)); t != "" {
+			an.Appel = template.URL("tel:" + t) // #nosec G203 -- chiffres et « + » seulement (LienTel)
+		}
+		if t := LienTel(ct.Telephone); t != "" { // SMS : au portable seulement
+			an.SMS = lienSMS(t, ct.Nom)
+		}
+		out = append(out, an)
 	}
 	var membres []donnees.Membre
 	if c != nil && c.Famille.ID == f.ID {
@@ -121,6 +133,14 @@ func (m *Module) anniversaires(ctx context.Context, c *appli.Contexte, f donnees
 		out[i].Proche = out[i].Date.Sub(auj) <= 7*24*time.Hour
 	}
 	return out, nil
+}
+
+// lienSMS : « sms:0612345678?&body=Joyeux%20anniversaire… » (« ?& » : compris
+// par l'iPhone comme par Android). Le prénom seul (premier mot du nom).
+func lienSMS(tel, nom string) template.URL {
+	prenom, _, _ := strings.Cut(strings.TrimSpace(nom), " ")
+	texte := "Joyeux anniversaire " + prenom + " ! 🎂"
+	return template.URL("sms:" + tel + "?&body=" + url.PathEscape(texte)) // #nosec G203 -- numéro filtré, texte échappé
 }
 
 func minuit(t time.Time) time.Time {

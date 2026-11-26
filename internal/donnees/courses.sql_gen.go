@@ -169,6 +169,21 @@ func (q *Queries) CreerListe(ctx context.Context, arg CreerListeParams) (Liste, 
 	return i, err
 }
 
+const deplacerProduit = `-- name: DeplacerProduit :exec
+UPDATE produits SET liste_id = ? WHERE id = ?
+`
+
+type DeplacerProduitParams struct {
+	ListeID int64
+	ID      int64
+}
+
+// Produit deplace vers une autre liste de la famille (verifiee en Go).
+func (q *Queries) DeplacerProduit(ctx context.Context, arg DeplacerProduitParams) error {
+	_, err := q.db.ExecContext(ctx, deplacerProduit, arg.ListeID, arg.ID)
+	return err
+}
+
 const listeParID = `-- name: ListeParID :one
 SELECT id, famille_id, nom, cree_le FROM listes WHERE id = ? AND famille_id = ?
 `

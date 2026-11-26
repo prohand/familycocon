@@ -12,12 +12,15 @@
   <h2 class="sous-titre">{{.Mois}}</h2>
   <div class="carte">
     {{- range .Liste}}
-    <a class="ligne anniv{{if .Proche}} proche{{end}}" href="{{.URL}}">
-      <span class="date-ronde"><b>{{.Date.Day}}</b></span>
-      {{with .Membre}}<span class="avatar petit c{{.Couleur}}">{{visage .}}</span>{{else}}<span class="p-emoji">🎂</span>{{end}}
-      <span class="quoi">{{.Nom}}{{if .Age}} <span class="age">{{.Age}} ans</span>{{end}}
-        <small>{{.Quand}}{{if .Idees}} · 🎁 {{simple .Idees}}{{end}}</small></span>
-    </a>
+    <div class="ligne anniv{{if .Proche}} proche{{end}}">
+      <a class="quoi-lien" href="{{.URL}}">
+        <span class="date-ronde"><b>{{.Date.Day}}</b></span>
+        {{with .Membre}}<span class="avatar petit c{{.Couleur}}">{{visage .}}</span>{{else}}<span class="p-emoji">🎂</span>{{end}}
+        <span class="quoi">{{.Nom}}{{if .Age}} <span class="age">{{.Age}} ans</span>{{end}}
+          <small>{{.Quand}}{{if .Idees}} · 🎁 {{simple .Idees}}{{end}}</small></span>
+      </a>
+      {{- if .Proche}}{{with .SMS}}<a class="appel" href="{{.}}" aria-label="Souhaiter par SMS">💬</a>{{end}}{{with .Appel}}<a class="appel" href="{{.}}" aria-label="Appeler">📞</a>{{end}}{{end}}
+    </div>
     {{- end}}
   </div>
 </section>

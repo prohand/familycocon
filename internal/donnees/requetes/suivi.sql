@@ -188,7 +188,7 @@ ORDER BY jour, id;
 
 -- Lignes deja au budget, avec le budget de leur depense (0 : commun).
 -- name: CarnetAuBudget :many
-SELECT c.id, o.id AS operation_id, o.perso_de FROM carnet c JOIN operations o ON o.id = c.operation_id
+SELECT c.id, o.id AS operation_id, o.perso_de, o.cree_par FROM carnet c JOIN operations o ON o.id = c.operation_id
 WHERE c.famille_id = ? AND c.module = ? AND c.objet_id = ?;
 
 -- name: LierCarnetOperation :exec

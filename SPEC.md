@@ -930,3 +930,184 @@ reviennent.
   (`graphique.BarresCote` : revenus et dépenses côte à côte, chaque mois,
   bulle au toucher). Sous le graphique, seuls les mois avec des opérations
   (lien vers le mois).
+- Les mois à venir comptent le **prévu** (opérations qui reviennent pas
+  encore passées, `Prevues`) : une année future n'est plus vide. Barres
+  du prévu plus claires (`Barre.Prevus`, classes g-p0, g-p1) ; « Reste
+  prévu sur l'année » et « Dont prévu : +… · −… » ; mois marqués
+  « prévu » ou « en partie prévu » ; catégories prévu compris.
+
+## Budget : revue du 26/11/2026 (8 corrections)
+- Opération qui revient **terminée** : enregistrer sa fiche sans date garde
+  sa fin et sa fréquence (vider « Jusqu'au » ou changer la fréquence la
+  relançait et écrivait d'un coup les fois manquées) ; pour la relancer,
+  une date. Abonnement résilié : la fréquence ne change plus non plus.
+- « Arrêter » / « Résilier » une opération déjà terminée : sa fin ne
+  bouge pas (`ArreterRecurrence` ne repousse jamais une fin passée).
+- Véhicule : le carnet n'est rangé dans le budget que quand le réglage
+  **change** ; la reprise Fuelio n'ajoute que les lignes qu'elle vient
+  d'écrire (`RangerBudget(..., seules)`). Une dépense retirée à la main du
+  budget n'y revient plus.
+- Coût ajouté après coup à une ligne du carnet : va au budget si le
+  véhicule est réglé pour.
+- Un enfant qui corrige la date ou le libellé d'une ligne fait suivre la
+  dépense du compte commun (jamais celle d'un budget perso, jamais le coût).
+- « Mon budget perso » ne prend que les dépenses ajoutées par ce parent :
+  celles d'un autre restent au compte commun.
+- L'année : « prévu » seulement si tout le mois est prévu (sinon « en
+  partie prévu »).
+- Fréquences « certains mois » : date calculée directement (plus mois par
+  mois) ; le prévu saute aux fois de la période ; années affichables de
+  1970 à dans 30 ans (`anPermis`, aussi pour `?mois=`).
+
+## Budget : catégorie d'après le libellé, recherche, prochains mois (26/11/2026)
+- **Catégorie d'après le libellé** (nouvelle opération) : la liste des
+  libellés déjà tapés (`LibellesRecents`, 100 derniers) porte la catégorie
+  de la dernière fois (`data-cat`) ; app.js la coche quand le libellé tapé
+  est le même (majuscules et accents à part) et l'écrit sous le champ
+  (« 🚗 Transport : comme la dernière fois »), tant qu'on n'a pas touché
+  soi-même une catégorie.
+- **Chercher** : par libellé et/ou par catégorie (liste qui s'envoie seule) ;
+  période : 12 derniers mois, cette année, l'année d'avant, tout. Totaux sur
+  tout ce qui est trouvé (`TotauxRecherche`), 300 lignes montrées au plus.
+- **Les prochains mois** : colonnes de largeur fixe (barres alignées) ;
+  l'aide « Ajoutez le salaire… » seulement s'il n'y a encore aucune
+  opération qui revient.
+
+## Accueil, documents, heures calmes, anniversaires (26/11/2026)
+- **Mon accueil** (migration 0049 : `membres.accueil_jour_haut`,
+  `accueil_compact`) : « 📅 Le programme du jour en haut » (blocs Aujourd'hui,
+  tâches, À venir avant les tuiles) et « ▫️ Tuiles compactes » (3 par ligne
+  sur téléphone, sans résumé ; le badge reste). « Remettre l'ordre de
+  départ » ne touche pas à ces réglages.
+- **Documents des fiches** (véhicule, animal, garantie) : pièces jointes
+  communes (`AjouterJoints`), bloc « 📎 Documents » sur la fiche. Vus par
+  tous ceux qui voient le module, ajoutés et retirés par les parents ;
+  effacés au ménage quand la fiche n'existe plus (`JointsOrphelins`).
+- **Heures calmes** (`membres.calme_debut`, `calme_fin`, « HH:MM ») : Moi ›
+  Notifications. Pendant la plage (elle peut passer minuit, heure de la
+  famille), pas de notification d'activité (ce que font les autres ; elle
+  reste visible dans l'appli). Les rappels à heure choisie (`Rappeler`) et
+  celui du matin partent quand même. `EnHeuresCalmes`, POST `/moi/calme`.
+- **Anniversaires** : pour un anniversaire dans les 7 jours d'un contact
+  qui a un numéro, boutons 📞 (premier numéro) et 💬 (portable seulement,
+  SMS déjà écrit « Joyeux anniversaire Paul ! 🎂 », `sms:…?&body=…` compris
+  par l'iPhone et Android).
+
+## Courses et menus : départ aux courses, rayons finis, recettes (26/11/2026)
+
+- **« 🚶 Je pars faire les courses »** (page d'une liste,
+  `POST /courses/liste/{id}/depart`, tout membre) : une notification à toute
+  la famille sauf soi, « Paul part faire les courses : ajoutez vite ce qui
+  manque 🛒 » (avec le nom de la liste quand la famille en a plusieurs),
+  qui ouvre la liste. Choix : c'est un appel voulu, pas du bruit
+  (`App.Appeler`) : il part même chez ceux qui n'ont pas choisi « Courses »
+  dans Moi › Notifications (non par défaut, et on ne distingue pas « jamais
+  réglé » de « coupé exprès »), et même à ceux qui ont une page ouverte
+  (un onglet oublié sur l'ordinateur ne fait pas taire le téléphone).
+  Couper les notifications de l'appareil reste possible. Garde-fou : un
+  appel par liste toutes les 30 minutes, gardé en mémoire (oublié au
+  redémarrage) ; sinon « Déjà annoncé il y a 12 minutes par Marie : un seul
+  message toutes les 30 minutes. »
+- **Rayon fini** (tous ses produits pris) : envoyé replié et en bas de la
+  liste, « ✓ Boulangerie 2/2 » (`data-fini`). Décocher un produit le rend
+  normal (ouvert, à sa place). Rechargements htmx (un autre membre coche) :
+  un rayon fini rouvert à la main reste ouvert tant qu'il est fini (mémoire
+  de la page) ; le replier ne s'écrit pas dans les rayons repliés de
+  l'appareil. Ouvert aussi pendant la modification d'un de ses produits.
+- **Déplacer un produit** : choix « Liste » dans sa modification quand la
+  famille a plusieurs listes (mêmes droits : tout le monde). Déjà sur
+  l'autre liste : une seule ligne, quantités réunies (comme un ajout).
+  Liste pleine (2000) : refus.
+- **Menus, semaine en cours** : les jours passés sont repliés sur téléphone
+  (« Lundi, mardi : passés ▸ », CSS seulement : `.jours-passes:not([open])
+  + .semaine .passe`) ; une semaine passée reste entière ; grand écran :
+  les 7 colonnes, sans repli (plat sous le moment, rien ne déborde).
+  Boutons « Reprendre la semaine dernière » et « Recettes » sur deux lignes
+  au besoin (320 px).
+- **Recettes** : « ＋ Recette » (`/menus/recettes/nouvelle`) crée une
+  recette sans prévoir de repas (compte 0 : « jamais prévu » ; nom déjà
+  connu : refusé). Modification sur sa propre page
+  (`/menus/recettes/modifier?cle=…`, un seul éditeur riche). Champ
+  facultatif « Préparation » (éditeur riche, 5000 caractères, migration
+  `recettes.preparation`), affiché sur la recette et sur la page du repas
+  du même nom. « 📅 Prévoir ce plat » : jour et repas, proposés au premier
+  repas libre des deux semaines à venir ; un repas déjà prévu n'est jamais
+  écrasé (message clair).
+
+## Agenda : rappel avant l'heure, modifier une seule fois (26/11/2026)
+
+- **Rappel juste avant** (`evenements.rappel_avant`, migration 0051) :
+  « Pas de rappel juste avant », « 15 min avant », « 1 h avant », « La
+  veille à 18 h » (heure de la famille), en plus de « Me le rappeler » (9 h
+  le jour même et 7 jours avant, inchangé). Journée entière : la veille à
+  18 h seulement (le formulaire refuse 15 min / 1 h sans heure).
+- Envoi par la tâche de chaque minute (`AjouterMinute`), avec `Rappeler`
+  (notifications « Rappels », toute la famille : les mêmes que le rappel du
+  matin), lien vers la fiche de la fois (`/agenda/{id}?jour=…`). « 15 min »
+  et « 1 h » sont de vraies durées (même la nuit du changement d'heure) ;
+  « la veille à 18 h » est 18 h d'horloge.
+- Une seule fois par fois de l'événement : table `evenements_rappels`
+  (événement, début de la fois), notée avant l'envoi, oubliée après 60
+  jours. Rien n'est renvoyé après un redémarrage ; un rappel manqué part au
+  retour du serveur s'il a moins de 30 min de retard et que l'événement n'a
+  pas commencé. Rien pour un événement créé après l'heure du rappel, ni pour
+  une fois annulée ; une fois modifiée a son rappel à sa nouvelle heure.
+- Lien du téléphone : l'alarme suit le rappel juste avant (-PT15M, -PT1H,
+  la veille à 18 h) ; sinon « Me le rappeler » comme avant.
+- **Modifier cette fois seulement** (fiche ouverte depuis une date d'un
+  événement qui revient) : date, heures de début et de fin, lieu, titre.
+  Stocké dans `evenements_exceptions` (migration 0052) : `modifiee = 1`,
+  `jour` = date d'origine, `nouveau_debut`, `nouveau_fin`,
+  `nouvelle_journee`, `nouveau_titre` ('' : celui de l'événement),
+  `nouveau_lieu` (NULL : celui de l'événement). Annuler une fois modifiée
+  l'annule ; « Comme les autres fois » (ou les mêmes valeurs) efface la
+  ligne. Une modification dont la date d'origine n'est plus une fois de
+  l'événement (répétition changée) ne compte plus. Le formulaire de
+  l'événement modifie toujours toutes les fois.
+- La fois modifiée quitte sa date d'origine et apparaît à sa nouvelle date
+  (même hors des dates de l'événement) : agenda (« ✏️ modifié cette
+  fois »), « Aujourd'hui » de l'accueil, « À venir » et rappel du matin,
+  rappel juste avant, lien du téléphone. Code commun : `lesFois`
+  (`internal/agenda/fois.go`). Les participants sont prévenus
+  (`PublierLien`, vers le nouveau jour).
+- iCal : chaque fois est déjà un VEVENT à part (pas de RRULE), donc pas de
+  RECURRENCE-ID (il désignerait une série absente du flux) ; la fois
+  modifiée garde l'UID de sa date d'origine (`{id}-AAAAMMJJ`) : le
+  téléphone met à jour la même entrée.
+
+## Tâches, enfants, projets : filtres repliés, ajout rapide, tour de rôle, missions sans vérification, étapes modifiables (26/11/2026)
+
+- Tâches, liste : les trois rangées de filtres (pour qui, catégorie,
+  « Voir ») sont dans un bloc « 🔎 Filtrer » replié, avec le résumé des
+  filtres actifs (« · Léa · 🧹 Ménage »). Il s'ouvre quand un filtre vient
+  d'être choisi (il est dans l'adresse). Le membre gardé par l'appareil
+  (cookie `taches_pour`, inchangé) est seulement rappelé dans le résumé :
+  le bloc reste fermé en revenant. « ✕ Retirer les filtres ».
+- Ajout rapide « Ajouter une tâche… » en haut de la liste (comme les
+  courses ; `POST /taches/rapide`, htmx, champ vidé) : une tâche « une
+  fois », pour le membre filtré (« Ajouter une tâche pour Léa… ») sinon
+  tout le monde, dans la catégorie filtrée (si ce membre peut s'en
+  servir). Annonce comme une création. Le formulaire complet reste à
+  « ＋ Tâche ».
+- Tour de rôle : « ⏭️ Passer à Tom » sur la tâche du jour pas faite, pour
+  celui dont c'est le tour et les parents (`POST /taches/{id}/passer`).
+  Migration 0053 (`taches_tours_passes` : numéro d'occurrence, de, à, par,
+  quand). Le membre d'une occurrence n est tour[(n + d) mod nombre], d =
+  tours passés de numéro ≤ n : la tâche du jour passe au suivant, la suite
+  continue à partir de lui, les jours d'avant gardent leur membre (agenda).
+  Liste, accueil, agenda et rappels en tiennent compte. Double envoi :
+  refusé (membre vu par la page, et nombre de tours passés vérifié à
+  l'écriture). Annonce à celui qui la reçoit (et à celui dont c'était le
+  tour si un parent l'a passé) ; ligne « ⏭️ … tour de Léa passé à Tom »
+  dans « Qui a fait quoi » (pas dans les scores).
+- Missions : interrupteur « Pas besoin de vérifier » (parent, migration
+  0054, `missions.sans_verification`). Cochée par l'enfant, la mission est
+  écrite « validée » tout de suite (décidée à l'heure de la coche, sans
+  parent) : étoiles gagnées, semaine et récompenses comme une mission
+  validée ; les parents sont prévenus (« +2 ⭐ »). Il n'existe pas
+  d'action pour annuler une mission validée : un parent retire des étoiles
+  avec le bonus négatif, comme avant.
+- Projets : une étape touchée s'ouvre (`<details>`) pour modifier son
+  texte, sa date et qui s'en occupe (`POST /projets/etapes/{id}/modifier`,
+  requête `ModifierEtape`) ; tous ceux qui voient le projet (projet privé :
+  son propriétaire seul).

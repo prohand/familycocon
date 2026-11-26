@@ -36,6 +36,10 @@
     </div>
   </fieldset>
   {{template "choix-repetition" .Regle}}
+  <label class="interrupteur">
+    <span class="emoji">✅</span><span class="nom">Pas besoin de vérifier <small class="aide">(cochée par l'enfant, ses étoiles sont gagnées tout de suite)</small></span>
+    <input type="checkbox" name="sans_verification" value="1"{{if eq .Mission.SansVerification 1}} checked{{end}}><span class="glissiere"></span>
+  </label>
   <div class="boutons"><button class="bouton">{{if .Nouvelle}}Ajouter la mission{{else}}Enregistrer{{end}}</button></div>
 </form>
 {{if not .Nouvelle}}

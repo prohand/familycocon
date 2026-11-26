@@ -93,3 +93,7 @@ DELETE FROM produits_connus WHERE famille_id = ? AND cle = ?;
 -- name: RemettreProduit :exec
 INSERT INTO produits (liste_id, nom, quantite, rayon, emoji, ajoute_par, pris, pris_par, pris_le, cree_le)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- Produit deplace vers une autre liste de la famille (verifiee en Go).
+-- name: DeplacerProduit :exec
+UPDATE produits SET liste_id = ? WHERE id = ?;

@@ -77,7 +77,8 @@ func (q *Queries) AppliquerNouveauMontant(ctx context.Context, arg AppliquerNouv
 }
 
 const arreterRecurrence = `-- name: ArreterRecurrence :exec
-UPDATE recurrences SET fin = ? WHERE id = ? AND famille_id = ?
+UPDATE recurrences SET fin = ?1
+WHERE id = ?2 AND famille_id = ?3 AND (fin = '' OR fin > ?1)
 `
 
 type ArreterRecurrenceParams struct {
@@ -86,6 +87,7 @@ type ArreterRecurrenceParams struct {
 	FamilleID int64
 }
 
+// Une recurrence deja terminee (fin passee) ne repart pas.
 func (q *Queries) ArreterRecurrence(ctx context.Context, arg ArreterRecurrenceParams) error {
 	_, err := q.db.ExecContext(ctx, arreterRecurrence, arg.Fin, arg.ID, arg.FamilleID)
 	return err

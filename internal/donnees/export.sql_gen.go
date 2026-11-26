@@ -440,7 +440,7 @@ func (q *Queries) ExportEtoilesBonus(ctx context.Context, familleID int64) ([]Et
 }
 
 const exportEvenements = `-- name: ExportEvenements :many
-SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel FROM evenements WHERE famille_id = ?
+SELECT id, famille_id, titre, lieu, note, debut, fin, journee, repetition, cree_par, cree_le, repetition_fin, rappel, rappel_avant FROM evenements WHERE famille_id = ?
 `
 
 func (q *Queries) ExportEvenements(ctx context.Context, familleID int64) ([]Evenement, error) {
@@ -466,6 +466,7 @@ func (q *Queries) ExportEvenements(ctx context.Context, familleID int64) ([]Even
 			&i.CreeLe,
 			&i.RepetitionFin,
 			&i.Rappel,
+			&i.RappelAvant,
 		); err != nil {
 			return nil, err
 		}
@@ -615,7 +616,7 @@ func (q *Queries) ExportMembres(ctx context.Context, familleID int64) ([]ExportM
 }
 
 const exportMissions = `-- name: ExportMissions :many
-SELECT id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le FROM missions WHERE famille_id = ?
+SELECT id, famille_id, enfant_id, titre, emoji, etoiles, categorie, repetition, active, cree_par, cree_le, sans_verification FROM missions WHERE famille_id = ?
 `
 
 func (q *Queries) ExportMissions(ctx context.Context, familleID int64) ([]Mission, error) {
@@ -639,6 +640,7 @@ func (q *Queries) ExportMissions(ctx context.Context, familleID int64) ([]Missio
 			&i.Active,
 			&i.CreePar,
 			&i.CreeLe,
+			&i.SansVerification,
 		); err != nil {
 			return nil, err
 		}
@@ -948,7 +950,7 @@ func (q *Queries) ExportProjets(ctx context.Context, arg ExportProjetsParams) ([
 }
 
 const exportRecettes = `-- name: ExportRecettes :many
-SELECT famille_id, cle, nom, ingredients, compte, vu_le FROM recettes WHERE famille_id = ?
+SELECT famille_id, cle, nom, ingredients, compte, vu_le, preparation FROM recettes WHERE famille_id = ?
 `
 
 func (q *Queries) ExportRecettes(ctx context.Context, familleID int64) ([]Recette, error) {
@@ -967,6 +969,7 @@ func (q *Queries) ExportRecettes(ctx context.Context, familleID int64) ([]Recett
 			&i.Ingredients,
 			&i.Compte,
 			&i.VuLe,
+			&i.Preparation,
 		); err != nil {
 			return nil, err
 		}

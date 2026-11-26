@@ -11,7 +11,7 @@ import (
 
 const abonnementsFamille = `-- name: AbonnementsFamille :many
 SELECT abonnements_push.id, abonnements_push.adresse, abonnements_push.p256dh, abonnements_push.auth,
-       membres.id AS membre_id, membres.push_modules, membres.role
+       membres.id AS membre_id, membres.push_modules, membres.role, membres.calme_debut, membres.calme_fin
 FROM abonnements_push JOIN membres ON membres.id = abonnements_push.membre_id
 WHERE membres.famille_id = ? AND membres.actif = 1 AND membres.id <> ?2
 `
@@ -29,6 +29,8 @@ type AbonnementsFamilleRow struct {
 	MembreID    int64
 	PushModules string
 	Role        string
+	CalmeDebut  string
+	CalmeFin    string
 }
 
 func (q *Queries) AbonnementsFamille(ctx context.Context, arg AbonnementsFamilleParams) ([]AbonnementsFamilleRow, error) {
@@ -48,6 +50,8 @@ func (q *Queries) AbonnementsFamille(ctx context.Context, arg AbonnementsFamille
 			&i.MembreID,
 			&i.PushModules,
 			&i.Role,
+			&i.CalmeDebut,
+			&i.CalmeFin,
 		); err != nil {
 			return nil, err
 		}

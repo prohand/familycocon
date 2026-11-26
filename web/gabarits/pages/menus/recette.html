@@ -1,0 +1,19 @@
+{{define "contenu"}}
+{{$c := .C}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/menus/recettes">‹ Recettes</a>
+  <h1>📖 {{if .Nouvelle}}Nouvelle recette{{else}}{{.Recette.Nom}}{{end}}</h1>
+  {{if .Nouvelle}}<p>Retenue pour plus tard, sans prévoir de repas</p>{{end}}
+</section>
+<form class="carte" method="post" action="{{if .Nouvelle}}/menus/recettes{{else}}/menus/recettes/modifier{{end}}">
+  {{template "jeton" $c.CSRF}}
+  {{if not .Nouvelle}}<input type="hidden" name="cle" value="{{.Recette.Cle}}">{{end}}
+  <label class="champ"><span>Nom</span><input name="nom" value="{{.Recette.Nom}}" maxlength="80" placeholder="Ex. : Gratin dauphinois" required{{if .Nouvelle}} autofocus{{end}}></label>
+  <label class="champ"><span>Ingrédients (un par ligne)</span>
+    <textarea name="ingredients" rows="6" placeholder="1 kg de pommes de terre&#10;50 cl de crème&#10;Gruyère râpé">{{.Recette.Ingredients}}</textarea></label>
+  <label class="champ"><span>Préparation <small class="aide">(facultatif)</small></span><textarea name="preparation" rows="6" maxlength="5000" data-riche>{{.Recette.Preparation}}</textarea><template data-editeur-contenu>{{richeEdition .Recette.Preparation}}</template></label>
+  <div class="boutons"><button class="bouton">Enregistrer</button></div>
+</form>
+{{end}}
+{{end}}
