@@ -5,6 +5,7 @@
   <h1>🔎 Chercher</h1>{{if .Perso}}<p>🔒 Dans votre budget perso</p>{{end}}
   <p>Dans les libellés des 12 derniers mois</p>
 </section>
+{{template "vues-budget" dict "Compte" (or (and .Perso "perso") "commun") "Active" "chercher" "An" ""}}
 <form class="ajout" method="get" action="/budget/chercher" role="search">
   <input name="q" value="{{.Q}}" placeholder="Ex. : dentiste, cantine…" maxlength="60" aria-label="Texte à chercher" autofocus>
   <button class="bouton">Chercher</button>

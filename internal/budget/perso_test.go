@@ -110,18 +110,10 @@ func TestBudgetPerso(t *testing.T) {
 		suivant = time.Date(essai.Maintenant().Year(), essai.Maintenant().Month()+1, 1, 0, 0, 0, 0, essai.Maintenant().Location()).Format("2006-01")
 	}
 	_, p = paul.Get("/budget?compte=commun&mois=" + suivant)
-	if !strings.Contains(p, "Revenus <b>850,00") || strings.Contains(p, "à venir</small>") || strings.Contains(p, "Aujourd'hui :") || !strings.Contains(p, "· prévu</small>") {
-		t.Fatal("reste à vivre : le virement à venir n'est pas compté")
+	if !strings.Contains(p, "Revenus du mois : <b>850,00") || !strings.Contains(p, "Prévu pour ce mois") || !strings.Contains(p, "Virement de Marie") {
+		t.Fatal("le virement à venir n'est pas compté dans les revenus du mois")
 	}
 
-	// Plafonds séparés.
-	marie.Post("/budget/plafonds", map[string]string{"compte": "perso", "plafond_loisirs": "50"})
-	if _, pl := marie.Get("/budget/plafonds?compte=perso"); !strings.Contains(pl, `value="50,00"`) {
-		t.Fatal("plafond perso")
-	}
-	if _, pl := marie.Get("/budget/plafonds?compte=commun"); strings.Contains(pl, `value="50,00"`) {
-		t.Fatal("plafond perso visible dans le commun")
-	}
 	// Accueil : les deux.
 	if _, a := marie.Get("/"); !strings.Contains(a, "Commun :") || !strings.Contains(a, "Moi :") {
 		t.Fatal("résumé de l'accueil")

@@ -1,0 +1,41 @@
+{{define "contenu"}}
+{{with .Donnees}}
+<section class="titre-page">
+  <a class="retour" href="/budget?compte={{.Compte}}">‹ Budget</a>
+  <h1>🔮 Les prochains mois</h1>
+  <p>D'après les opérations qui reviennent{{if .Perso}} · 🔒 votre budget perso{{end}}</p>
+</section>
+{{template "vues-budget" dict "Compte" .Compte "Active" "prochains" "An" .An}}
+
+{{if .Mois}}
+{{/* Téléphone : un mois par ligne. */}}
+<p class="cle-prevu cle-liste"><span class="prelev">Prélèvements</span><span class="r">Reste après prélèvements</span></p>
+<section class="carte bloc liste-prevu">
+  {{- range .Mois}}
+  <a class="mois-prevu{{if .EnCours}} en-cours{{end}}{{if .Charge}} charge{{end}}" href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Mois}}">
+    <span class="nom-mois">{{.Nom}}<small>{{.An}}{{if .EnCours}} · en cours{{end}}</small></span>
+    {{.Barre}}
+    <span class="reste-mois">{{montant .Reste $.Donnees.Devise}}<small>{{montant .Prelev $.Donnees.Devise}} prélevés</small></span>
+    {{with .Note}}<span class="note-mois">{{.}}</span>{{end}}
+  </a>
+  {{- end}}
+</section>
+
+{{/* Grand écran : barres et tableau. */}}
+<section class="carte bloc tableau-prevu">
+  {{.Graphe}}
+  <p class="cle-prevu"><span class="rev">Revenus</span><span class="prelev">Prélèvements</span></p>
+  <table>
+    <thead><tr><th>Mois</th><th>Revenus</th><th>Prélèvements</th><th>Reste</th><th>Ce qui change</th></tr></thead>
+    <tbody>
+    {{- range .Mois}}
+    <tr{{if .Charge}} class="charge"{{end}}><td><a href="/budget?compte={{$.Donnees.Compte}}&amp;mois={{.Mois}}">{{.Nom}} {{.An}}</a></td><td>{{montant .Revenus $.Donnees.Devise}}</td><td>{{montant .Prelev $.Donnees.Devise}}</td><td class="c-reste">{{montant .Reste $.Donnees.Devise}}</td><td class="c-note">{{.Note}}</td></tr>
+    {{- end}}
+    <tr class="total"><td>Sur 12 mois</td><td>{{montant .Total.Revenus .Devise}}</td><td>{{montant .Total.Prelev .Devise}}</td><td class="c-reste">{{montant .Total.Reste .Devise}}</td><td></td></tr>
+    </tbody>
+  </table>
+</section>
+<p class="aide">Ajoutez le salaire, le loyer, les crédits… avec « Revient » : ils apparaissent ici chaque mois. Touchez un mois pour voir son détail.</p>
+{{end}}
+{{end}}
+{{end}}

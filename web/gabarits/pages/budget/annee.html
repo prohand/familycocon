@@ -4,6 +4,7 @@
   <a class="retour" href="/budget?compte={{if .Perso}}perso{{else}}commun{{end}}">‹ Budget</a>
   <h1>📊 Budget de l'année</h1>{{if .Perso}}<p>🔒 Votre budget perso</p>{{end}}
 </section>
+{{template "vues-budget" dict "Compte" (or (and .Perso "perso") "commun") "Active" "annee" "An" .An}}
 <div class="navigation-periode">
   <a class="fleche" href="/budget/annee?compte={{if $.Donnees.Perso}}perso{{else}}commun{{end}}&amp;an={{.Precedent}}" aria-label="Année précédente">‹</a>
   <h2>{{.An}}</h2>

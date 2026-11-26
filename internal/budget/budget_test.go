@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"familycocon/internal/appli"
 	"familycocon/internal/donnees"
 	"familycocon/internal/essai"
 )
@@ -58,10 +59,10 @@ func TestBudget(t *testing.T) {
 	marie.Post("/budget", map[string]string{"montant": "84,30", "categorie": "courses", "jour": jour, "libelle": "Supermarché"})
 	code, page := marie.Post("/budget", map[string]string{"montant": "12,5", "categorie": "loisirs", "jour": jour})
 	if code != 200 || !strings.Contains(page, "2 403,20 €") {
-		t.Fatalf("reste à vivre : %d\n%s", code, page)
+		t.Fatalf("disponible : %d\n%s", code, page)
 	}
-	if !strings.Contains(page, `<svg class="courbe"`) || !strings.Contains(page, "Supermarché") {
-		t.Fatal("courbe ou opération absente")
+	if !strings.Contains(page, `class="jauge-mois"`) || !strings.Contains(page, "Supermarché") || !strings.Contains(page, "Dépenses du quotidien") {
+		t.Fatal("jauge, opération ou dépenses du quotidien absentes")
 	}
 	if code, _ := marie.Post("/budget", map[string]string{"montant": "-3", "categorie": "courses", "jour": jour}); code != 400 {
 		t.Fatalf("montant négatif accepté : %d", code)
@@ -75,7 +76,7 @@ func TestBudget(t *testing.T) {
 	}
 	// Mois suivant : le salaire est prévu, puis écrit tout seul le jour venu.
 	suivant := time.Date(auj.Year(), auj.Month()+1, 1, 0, 0, 0, 0, paris).Format("2006-01")
-	if _, page := marie.Get("/budget?mois=" + suivant); !strings.Contains(page, "À venir ce mois-ci") || !strings.Contains(page, "Salaire Marie") {
+	if _, page := marie.Get("/budget?mois=" + suivant); !strings.Contains(page, "à venir · le ") || !strings.Contains(page, "Salaire Marie") || !strings.Contains(page, "Prévu pour ce mois") {
 		t.Fatal("salaire du mois prochain non prévu")
 	}
 	_, page = marie.Get("/budget/recurrences")
@@ -274,12 +275,8 @@ func TestAConfirmer(t *testing.T) {
 		t.Fatalf("%d opérations écrites toutes seules", len(ops))
 	}
 	_, page := marie.Get("/budget?compte=commun")
-	if !strings.Contains(page, "⏳ À confirmer") || !strings.Contains(page, "Dépenses <b>45,00") || !strings.Contains(page, "Revenus <b>30,00") {
-		t.Fatal("à confirmer : absent de la page ou pas compté dans le reste à vivre")
-	}
-	// Tout est encore à venir : « dont … à venir » ne répète pas le total.
-	if strings.Contains(page, "dont 45,00") || !strings.Contains(page, "Aujourd'hui :") {
-		t.Fatal("« dont … à venir » égal au total, ou « Aujourd'hui » absent")
+	if !strings.Contains(page, "⏳ À confirmer") || !strings.Contains(page, "À prélever 45,00") || !strings.Contains(page, "Revenus du mois : <b>30,00") {
+		t.Fatal("à confirmer : absent de la page ou pas compté dans le mois")
 	}
 	cantine := essai.Trouver(t, page, `Cantine<small>[^<]*</small></span>[\s\S]*?action="/recurrences/(\d+)/confirmer"`)
 	// Mauvais numéro de fois : rien n'est fait.
@@ -330,5 +327,36 @@ func TestAConfirmer(t *testing.T) {
 	}
 	if _, page = marie.Get("/budget?compte=commun"); !strings.Contains(page, "attendu en ") {
 		t.Fatal("« attendu en <mois> » absent")
+	}
+}
+
+// Les prochains mois : 12 mois d'après les opérations qui reviennent ; ce
+// qui change d'un mois à l'autre (« + » une fois par an, « pas de » l'été).
+func TestProchainsMois(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	maint := essai.Maintenant()
+	premier := func(n int) string {
+		return time.Date(maint.Year(), maint.Month()+time.Month(n), 1, 0, 0, 0, 0, maint.Location()).Format("2006-01-02")
+	}
+	marie.Get("/budget/nouvelle")
+	for _, f := range []map[string]string{
+		{"montant": "2000", "categorie": "salaire", "jour": premier(1), "frequence": "mois", "libelle": "Salaire"},
+		{"montant": "700", "categorie": "logement", "jour": premier(1), "frequence": "mois", "libelle": "Loyer"},
+		{"montant": "300", "categorie": "assurances", "jour": premier(3), "frequence": "annee", "libelle": "Assurance"},
+	} {
+		if code, _ := marie.Post("/budget", f); code != 200 {
+			t.Fatalf("création %v : %d", f, code)
+		}
+	}
+	code, page := marie.Get("/budget/prochains?compte=commun")
+	if code != 200 || strings.Count(page, `class="mois-prevu`) != 12 {
+		t.Fatalf("prochains mois : %d, %d mois", code, strings.Count(page, `class="mois-prevu`))
+	}
+	if !strings.Contains(page, appli.Montant(130000, "EUR")) || !strings.Contains(page, appli.Montant(100000, "EUR")) || !strings.Contains(page, "&#43; Assurance") {
+		t.Fatal("reste des mois (1 300 / 1 000 avec l'assurance) ou « + Assurance » absents")
+	}
+	if !strings.Contains(page, `href="/budget?compte=commun&amp;mois=`+premier(3)[:7]+`"`) {
+		t.Fatal("lien vers la page du mois")
 	}
 }
