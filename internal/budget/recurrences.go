@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,19 +31,21 @@ type Frequence struct {
 	Cle, Nom string
 	Mois     int // 0 : chaque semaine
 	ParAn    int // nombre de fois par an
+	// Seulement : chaque mois, mais seulement ceux-ci (1 = janvier) ;
+	// vide : tous les mois de la période.
+	Seulement []int
 }
 
-// Dix mois : chaque mois de janvier à octobre, rien en novembre et
-// décembre (taxe foncière, taxe d'habitation mensualisées).
-const dixMois = "mois10"
-
-// Frequences proposées.
+// Frequences proposées. « Seulement » :
+//   - janvier à octobre : taxe foncière, taxe d'habitation mensualisées ;
+//   - septembre à juin : l'année scolaire (cantine, garderie…).
 var Frequences = []Frequence{
-	{"semaine", "Chaque semaine", 0, 52}, {"mois", "Chaque mois", 1, 12},
-	{dixMois, "Chaque mois, de janvier à octobre (10 fois par an)", 1, 10},
-	{"2mois", "Tous les 2 mois", 2, 6},
-	{"trimestre", "Tous les 3 mois (trimestre)", 3, 4}, {"semestre", "Tous les 6 mois (semestre)", 6, 2},
-	{"annee", "Chaque année", 12, 1},
+	{"semaine", "Chaque semaine", 0, 52, nil}, {"mois", "Chaque mois", 1, 12, nil},
+	{"mois10", "Chaque mois, de janvier à octobre (10 fois par an)", 1, 10, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}},
+	{"scolaire", "Chaque mois, de septembre à juin (année scolaire)", 1, 10, []int{9, 10, 11, 12, 1, 2, 3, 4, 5, 6}},
+	{"2mois", "Tous les 2 mois", 2, 6, nil},
+	{"trimestre", "Tous les 3 mois (trimestre)", 3, 4, nil}, {"semestre", "Tous les 6 mois (semestre)", 6, 2, nil},
+	{"annee", "Chaque année", 12, 1, nil},
 }
 
 func frequence(cle string) (Frequence, bool) {
@@ -75,15 +78,20 @@ func Occurrence(debut, freq string, k int64) (time.Time, error) {
 		return d.AddDate(0, 0, int(7*k)), nil
 	}
 	premier := time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, int(k)*f.Mois, 0)
-	if f.Cle == dixMois {
-		// Les mois comptés de 0 à 9 dans chaque année (janvier à octobre) ;
-		// un début en novembre ou décembre part du janvier suivant.
-		an, mois := d.Year(), int(d.Month())
-		if mois > 10 {
-			an, mois = an+1, 1
+	if len(f.Seulement) > 0 {
+		// Mois par mois en sautant ceux qui n'en sont pas ; un début dans
+		// un mois sauté part du premier mois permis qui suit.
+		premier = time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC)
+		permis := func(t time.Time) bool { return slices.Contains(f.Seulement, int(t.Month())) }
+		for !permis(premier) {
+			premier = premier.AddDate(0, 1, 0)
 		}
-		n := int64(an)*10 + int64(mois-1) + k
-		premier = time.Date(int(n/10), time.Month(n%10+1), 1, 0, 0, 0, 0, time.UTC)
+		for n := int64(0); n < k; {
+			premier = premier.AddDate(0, 1, 0)
+			if permis(premier) {
+				n++
+			}
+		}
 	}
 	dernierJour := premier.AddDate(0, 1, -1).Day()
 	return premier.AddDate(0, 0, min(d.Day(), dernierJour)-1), nil

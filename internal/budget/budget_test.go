@@ -111,6 +111,13 @@ func TestOccurrence(t *testing.T) {
 		{"2026-01-15", "mois10", 10, "2027-01-15"},
 		{"2026-09-30", "mois10", 3, "2027-02-28"},
 		{"2026-11-15", "mois10", 0, "2027-01-15"},
+		// Année scolaire : septembre à juin, puis septembre suivant.
+		{"2026-09-05", "scolaire", 3, "2026-12-05"},
+		{"2026-09-05", "scolaire", 4, "2027-01-05"},
+		{"2026-09-05", "scolaire", 9, "2027-06-05"},
+		{"2026-09-05", "scolaire", 10, "2027-09-05"},
+		{"2026-07-10", "scolaire", 0, "2026-09-10"},
+		{"2026-01-31", "scolaire", 1, "2026-02-28"},
 	}
 	for _, c := range cas {
 		j, err := Occurrence(c.debut, c.freq, c.k)
@@ -124,7 +131,7 @@ func TestOccurrence(t *testing.T) {
 	if ParMois(1200, "annee") != 100 || ParMois(1200, "semaine") != 5200 || ParMois(1200, "semestre") != 200 {
 		t.Error("ParMois")
 	}
-	if ParAn(10000, "mois10") != 100000 || ParMois(12000, "mois10") != 10000 || ParAn(100, "2mois") != 600 {
+	if ParAn(10000, "scolaire") != 100000 || ParAn(10000, "mois10") != 100000 || ParMois(12000, "mois10") != 10000 || ParAn(100, "2mois") != 600 {
 		t.Error("dix mois")
 	}
 }
