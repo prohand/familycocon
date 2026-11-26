@@ -826,8 +826,7 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - Budget : sur grand écran (≥ 900 px), reste à vivre et courbe côte à côte
   (`.budget-grille`), courbe de 260 px de haut au plus. Mois sans
   opération : ni courbe ni filtre, un seul message.
-- Accueil : un module encore vide (`Resume.Vide`, « Aucune note »…) passe en
-  petite pastille sous « Pas encore utilisés ». « Mon accueil »
+- Accueil : « Mon accueil »
   (`/moi/accueil`, colonne `membres.accueil`, migration 0046 :
   « agenda,courses,-animaux », « - » masqué) : ordre des tuiles et tuiles
   masquées, pour chaque membre. Un module nouveau se met à la fin.
@@ -848,3 +847,11 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - Code 93 : avec ses deux caractères de contrôle (obligatoires). Codabar : le
   numéro est gardé sans ses lettres de début et de fin (A à D), remises au
   dessin. UPC-E reste lu en « détecté tout seul » (pas de dessin UPC-E).
+
+## Retirés à l'usage (26/11/2026)
+
+- Les pastilles « Pas encore utilisés » (un module qui ne sert pas se masque
+  dans « Mon accueil ») et la barre de gauche sur grand écran (retour de la
+  pilule flottante en bas).
+- Thème : « Automatique » (le réglage de l'appareil, téléphone ou
+  ordinateur) au lieu de « Comme le téléphone ».

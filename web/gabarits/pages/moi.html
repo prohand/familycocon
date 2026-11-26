@@ -37,15 +37,15 @@
 </details>
 
 <details class="carte bloc partie">
-  <summary><span>🌗 Thème<small>{{if eq $.Theme "clair"}}☀️ Clair{{else if eq $.Theme "sombre"}}🌙 Sombre{{else}}📱 Comme le téléphone{{end}}</small></span></summary>
+  <summary><span>🌗 Thème<small>{{if eq $.Theme "clair"}}☀️ Clair{{else if eq $.Theme "sombre"}}🌙 Sombre{{else}}🌓 Automatique{{end}}</small></span></summary>
   <form method="post" action="/moi/theme">
     {{template "jeton" $c.CSRF}}
     <div class="pilules-choix">
-      <label><input type="radio" name="theme" value=""{{if eq $.Theme ""}} checked{{end}}><span>📱 Comme le téléphone</span></label>
+      <label><input type="radio" name="theme" value=""{{if eq $.Theme ""}} checked{{end}}><span>🌓 Automatique</span></label>
       <label><input type="radio" name="theme" value="clair"{{if eq $.Theme "clair"}} checked{{end}}><span>☀️ Clair</span></label>
       <label><input type="radio" name="theme" value="sombre"{{if eq $.Theme "sombre"}} checked{{end}}><span>🌙 Sombre</span></label>
     </div>
-    <p class="aide">Gardé sur cet appareil.</p>
+    <p class="aide">Automatique : clair ou sombre selon le réglage de l'appareil (téléphone ou ordinateur). Gardé sur cet appareil.</p>
     <button class="bouton">Enregistrer</button>
   </form>
 </details>
