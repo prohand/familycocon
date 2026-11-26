@@ -137,7 +137,9 @@ func rangDecale(d0 time.Time, k int, lieu *time.Location) time.Time {
 }
 
 // occurrencesMax : au plus par événement et par période affichée (garde-fou).
-const occurrencesMax = 400
+// Assez pour un événement de chaque jour sur tout le lien du calendrier du
+// téléphone (3 mois avant, 12 après : ~457 jours).
+const occurrencesMax = 500
 
 // deplier : les occurrences d'un événement dans la période [debut, fin[.
 func deplier(e donnees.Evenement, lieu *time.Location, debut, fin time.Time) [][2]time.Time {

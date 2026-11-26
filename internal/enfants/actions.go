@@ -284,7 +284,12 @@ func (m *Module) demander(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		if err != nil {
 			return err
 		}
-		if g-e.Depensees-e.Reservees < rec.Prix {
+		// Étoiles données ou retirées par un parent : comme le solde affiché.
+		b, err := q.EtoilesBonus(ctx, c.Membre.ID)
+		if err != nil {
+			return err
+		}
+		if g+b-e.Depensees-e.Reservees < rec.Prix {
 			pasAssez = true
 			return nil
 		}

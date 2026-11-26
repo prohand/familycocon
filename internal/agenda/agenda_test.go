@@ -105,3 +105,14 @@ func TestAgenda(t *testing.T) {
 		t.Fatalf("suppression : %d", code)
 	}
 }
+
+// Journée entière, chaque jour, le jour du passage à l'heure d'hiver (25 h
+// à Paris) : acceptée (la durée permise a une heure de marge).
+func TestJourneeChangementDHeure(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	marie.Get("/agenda/nouveau")
+	if code, _ := marie.Post("/agenda", map[string]string{"titre": "Vacances", "date": "2026-10-25", "journee": "1", "repetition": "jour"}); code != 200 {
+		t.Fatalf("journée entière répétée le jour du changement d'heure : %d", code)
+	}
+}

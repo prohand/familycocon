@@ -5,6 +5,7 @@ package notes
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -79,13 +80,18 @@ func (m *Module) lireCategorie(r *http.Request, c *appli.Contexte) int64 {
 	return id
 }
 
-// categorieParents : vrai si la catégorie est réservée aux parents.
+// categorieParents : vrai si la catégorie est réservée aux parents. Si la
+// lecture échoue (base occupée…), on la croit réservée : mieux vaut cacher
+// à un enfant que montrer ce qui ne devait pas l'être.
 func (m *Module) categorieParents(ctx context.Context, cat sql.NullInt64) bool {
 	if !cat.Valid {
 		return false
 	}
 	p, err := m.a.Q.CategorieNoteParents(ctx, cat.Int64)
-	return err == nil && p == 1
+	if errors.Is(err, sql.ErrNoRows) {
+		return false // catégorie supprimée
+	}
+	return err != nil || p == 1
 }
 
 // ranger : la note dans sa catégorie (0 : sans catégorie).

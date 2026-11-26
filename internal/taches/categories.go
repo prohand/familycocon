@@ -5,6 +5,7 @@ package taches
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -80,13 +81,18 @@ func (m *Module) lireCategorie(r *http.Request, c *appli.Contexte) sql.NullInt64
 	return sql.NullInt64{Int64: id, Valid: true}
 }
 
-// categorieParents : vrai si la catégorie est réservée aux parents.
+// categorieParents : vrai si la catégorie est réservée aux parents. Si la
+// lecture échoue (base occupée…), on la croit réservée : mieux vaut cacher
+// à un enfant que montrer ce qui ne devait pas l'être.
 func (m *Module) categorieParents(ctx context.Context, cat sql.NullInt64) bool {
 	if !cat.Valid {
 		return false
 	}
 	p, err := m.a.Q.CategorieTacheParents(ctx, cat.Int64)
-	return err == nil && p == 1
+	if errors.Is(err, sql.ErrNoRows) {
+		return false // catégorie supprimée
+	}
+	return err != nil || p == 1
 }
 
 // estParent : 1 pour un parent (paramètre des requêtes).
