@@ -131,6 +131,11 @@ func TestVCard(t *testing.T) {
 	marie.Get("/contacts/nouveau")
 	marie.Post("/contacts", map[string]string{"nom": "Paul, l'ami; de Léo", "telephone": "06 00 00 00 02", "naissance": "2016-02-29",
 		"adresse": "3 rue X\n75000 Paris", "groupes": "Foot", "notes": strings.Repeat("très long texte ", 10)})
+	// Le lien télécharge le fichier (pas de navigation htmx qui mettrait le
+	// texte du vCard dans la page).
+	if _, p := marie.Get("/contacts"); !strings.Contains(p, `href="/contacts/export.vcf" download hx-boost="false"`) {
+		t.Fatal("lien d'export vCard sans download / hx-boost=false")
+	}
 	code, vcf := marie.Get("/contacts/export.vcf")
 	if code != 200 || !strings.Contains(vcf, `FN:Paul\, l'ami\; de Léo`) || !strings.Contains(vcf, "BDAY:2016-02-29") {
 		t.Fatalf("export : %d\n%s", code, vcf)

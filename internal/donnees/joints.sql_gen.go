@@ -78,6 +78,8 @@ WHERE j.famille_id = ?1
   AND NOT (j.module = 'notes' AND EXISTS (SELECT 1 FROM notes n WHERE n.id = j.objet_id AND n.privee = 1 AND n.auteur_id IS NOT ?2))
   AND NOT (j.module = 'taches' AND EXISTS (SELECT 1 FROM taches t WHERE t.id = j.objet_id AND t.privee = 1 AND t.cree_par IS NOT ?2))
   AND NOT (j.module = 'projets' AND EXISTS (SELECT 1 FROM projets p WHERE p.id = j.objet_id AND p.perso_de <> 0 AND p.perso_de <> ?2))
+  AND NOT (j.module = 'carnet' AND EXISTS (SELECT 1 FROM carnet c JOIN projets p ON p.id = c.objet_id AND c.module = 'projets'
+    WHERE c.id = j.objet_id AND p.perso_de <> 0 AND p.perso_de <> ?2))
 ORDER BY j.id
 `
 
@@ -97,7 +99,8 @@ type ExportJointsRow struct {
 	CreeLe  int64
 }
 
-// Export : sans les pieces des notes, taches et projets prives des autres membres.
+// Export : sans les pieces des notes, taches et projets prives des autres membres
+// (ni celles du carnet de leurs projets prives).
 func (q *Queries) ExportJoints(ctx context.Context, arg ExportJointsParams) ([]ExportJointsRow, error) {
 	rows, err := q.db.QueryContext(ctx, exportJoints, arg.FamilleID, arg.Membre)
 	if err != nil {

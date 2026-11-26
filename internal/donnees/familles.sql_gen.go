@@ -449,6 +449,22 @@ func (q *Queries) RetirerMembre(ctx context.Context, arg RetirerMembreParams) er
 	return err
 }
 
+const supprimerInvitationsDe = `-- name: SupprimerInvitationsDe :exec
+DELETE FROM invitations WHERE famille_id = ? AND cree_par = ?
+`
+
+type SupprimerInvitationsDeParams struct {
+	FamilleID int64
+	CreePar   sql.NullInt64
+}
+
+// Membre retire : ses liens d'invitation ne servent plus (sinon il
+// reviendrait par l'un d'eux).
+func (q *Queries) SupprimerInvitationsDe(ctx context.Context, arg SupprimerInvitationsDeParams) error {
+	_, err := q.db.ExecContext(ctx, supprimerInvitationsDe, arg.FamilleID, arg.CreePar)
+	return err
+}
+
 const toutesFamilles = `-- name: ToutesFamilles :many
 SELECT id, nom, fuseau, devise, modules, cree_le FROM familles ORDER BY id
 `

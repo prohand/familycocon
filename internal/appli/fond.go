@@ -118,9 +118,71 @@ func (a *App) sauvegardesAuto(ctx context.Context) {
 			} else if n > 0 {
 				a.Journal.Info("photos sauvegardées", "nouvelles", n)
 			}
+			// Celles effacées de l'appli quittent la sauvegarde, gardées encore
+			// autant de jours que les copies de la base qui peuvent les citer.
+			if n, err := RangerEffaces(a.DossierPieces(), filepath.Join(dossier, "pieces"), filepath.Join(dossier, "pieces-effacees"),
+				a.Config.SauvegardeNb, time.Now()); err != nil {
+				a.Journal.Error("ménage des photos sauvegardées raté", "erreur", err)
+			} else if n > 0 {
+				a.Journal.Info("photos effacées rangées à part dans la sauvegarde", "nombre", n)
+			}
 			a.Journal.Info("sauvegarde automatique faite", "fichier", chemin, "duree_ms", time.Since(debut).Milliseconds())
 		}()
 	}
+}
+
+// RangerEffaces : les fichiers de la sauvegarde dst qui n'existent plus
+// dans src (pièce supprimée, membre retiré) sont déplacés dans
+// corbeille/AAAA-MM-JJ (le jour où on l'a vu) ; les dossiers de la
+// corbeille plus vieux que « garder » jours sont effacés. Une copie de la
+// base de moins de « garder » jours retrouve donc encore ses fichiers, et la
+// sauvegarde ne grossit plus sans fin. Renvoie le nombre de fichiers rangés.
+func RangerEffaces(src, dst, corbeille string, garder int, maintenant time.Time) (int, error) {
+	if garder < 1 {
+		garder = 1
+	}
+	jour := maintenant.Format("2006-01-02")
+	n := 0
+	err := filepath.WalkDir(dst, func(p string, d fs.DirEntry, err error) error {
+		if errors.Is(err, fs.ErrNotExist) && p == dst {
+			return fs.SkipAll
+		}
+		if err != nil || d.IsDir() || strings.HasSuffix(p, ".tmp") {
+			return err
+		}
+		rel, err := filepath.Rel(dst, p)
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(filepath.Join(src, rel)); !errors.Is(err, fs.ErrNotExist) {
+			return err // encore là (ou erreur à remonter)
+		}
+		cible := filepath.Join(corbeille, jour, rel)
+		if err := os.MkdirAll(filepath.Dir(cible), 0o750); err != nil {
+			return err
+		}
+		n++
+		return os.Rename(p, cible)
+	})
+	if err != nil {
+		return n, err
+	}
+	// Corbeille : les jours trop anciens partent.
+	jours, err := os.ReadDir(corbeille)
+	if errors.Is(err, fs.ErrNotExist) {
+		return n, nil
+	} else if err != nil {
+		return n, err
+	}
+	limite := maintenant.AddDate(0, 0, -garder).Format("2006-01-02")
+	for _, j := range jours {
+		if j.IsDir() && len(j.Name()) == 10 && j.Name() < limite {
+			if err := os.RemoveAll(filepath.Join(corbeille, j.Name())); err != nil {
+				return n, err
+			}
+		}
+	}
+	return n, nil
 }
 
 // CopierNouveaux : copie de src vers dst les fichiers qui n'y sont pas

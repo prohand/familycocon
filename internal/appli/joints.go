@@ -419,8 +419,10 @@ func (a *App) telechargerJoint(w http.ResponseWriter, r *http.Request, c *Contex
 	}
 	if t.mime == "application/pdf" {
 		// Le lecteur PDF du navigateur ne s'ouvre pas sous la politique de
-		// la page (object-src 'none') : une politique à part, sans script.
-		h.Set("Content-Security-Policy", "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'self'")
+		// la page (object-src 'none') : une politique à part, sans script,
+		// qui permet le lecteur (object-src 'self' : default-src 'none'
+		// l'interdirait aussi).
+		h.Set("Content-Security-Policy", "default-src 'none'; object-src 'self'; img-src 'self' data:; style-src 'unsafe-inline'; frame-ancestors 'self'")
 	}
 	h.Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": p.Nom}))
 	http.ServeContent(w, r, "", time.Unix(p.CreeLe, 0), f)

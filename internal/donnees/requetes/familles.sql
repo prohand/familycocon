@@ -65,3 +65,8 @@ UPDATE membres SET raccourcis = ? WHERE id = ?;
 -- name: RetirerMembre :exec
 UPDATE membres SET actif = 0, identifiant = NULL, mdp = NULL, pin = NULL, totp = '', totp_dernier = 0
 WHERE id = ? AND famille_id = ?;
+
+-- Membre retire : ses liens d'invitation ne servent plus (sinon il
+-- reviendrait par l'un d'eux).
+-- name: SupprimerInvitationsDe :exec
+DELETE FROM invitations WHERE famille_id = ? AND cree_par = ?;

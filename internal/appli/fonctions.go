@@ -7,6 +7,7 @@ import (
 	"familycocon/internal/riche"
 	"fmt"
 	"html/template"
+	"net/url"
 	"strconv"
 	"strings"
 	"unicode"
@@ -37,6 +38,9 @@ func fonctionsDeBase(a *App) template.FuncMap {
 		},
 		// {{montant 123456 "EUR"}} → 1 234,56 €
 		"montant": Montant,
+		// {{segment .Nom}} : un nom de fichier dans un chemin d'adresse
+		// (« #1 facture.pdf » → « %231%20facture.pdf »).
+		"segment": url.PathEscape,
 		// {{emoji .Emoji}} : l'emoji, ou son dessin (carte de fidélité).
 		"emoji": Icone,
 		// {{template "avatar" dict "Nom" .Nom "Couleur" .Couleur}}

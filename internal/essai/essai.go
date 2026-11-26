@@ -201,7 +201,7 @@ func Trouver(t *testing.T, page, expr string) string {
 func Parent(t *testing.T, srv *httptest.Server, parent *Navigateur, prenom string) *Navigateur {
 	t.Helper()
 	parent.Get("/famille")
-	_, page := parent.Post("/famille/invitations", map[string]string{"role": "parent"})
+	_, page := parent.Post("/famille/invitations", map[string]string{"role": "parent", "mdp": "un grand nid douillet"})
 	m := regexp.MustCompile(`/invitation/([A-Za-z0-9_-]{43})`).FindStringSubmatch(page)
 	if m == nil {
 		t.Fatal("lien d'invitation absent")

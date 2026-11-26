@@ -186,7 +186,14 @@ func TestVerrouPin(t *testing.T) {
 func TestInvitation(t *testing.T) {
 	_, srv, n := familleTest(t)
 	n.get("/famille")
-	code, page := n.post("/famille/invitations", map[string]string{"role": "parent"})
+	// Inviter un parent redemande le mot de passe (session volée).
+	if code, _ := n.post("/famille/invitations", map[string]string{"role": "parent"}); code == 200 {
+		t.Fatal("invitation de parent sans mot de passe acceptée")
+	}
+	if code, _ := n.post("/famille/invitations", map[string]string{"role": "enfant"}); code != 200 {
+		t.Fatalf("invitation d'enfant : %d", code)
+	}
+	code, page := n.post("/famille/invitations", map[string]string{"role": "parent", "mdp": "un grand nid douillet"})
 	m := regexp.MustCompile(`/invitation/([A-Za-z0-9_-]{43})`).FindStringSubmatch(page)
 	if code != 200 || m == nil {
 		t.Fatalf("lien d'invitation absent : %d", code)

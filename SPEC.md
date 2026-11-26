@@ -805,3 +805,18 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
 - Essai : les deux cartes Wallet de l'utilisateur (QR code, PDF417 Starbucks)
   lues depuis une capture d'écran, et chaque code dessiné relu à l'identique.
 
+
+## Revue de tous les modules (26/11/2026)
+
+- Carnet : la dépense envoyée au budget perso d'un parent ne suit la ligne
+  (correction, suppression) que pour ce parent ; coût vidé : elle quitte
+  le budget.
+- Sécurité : inviter un parent et réinitialiser la sécurité d'un autre
+  membre redemandent le mot de passe ; sa propre sécurité se règle sur la
+  page Sécurité ; les invitations d'un membre retiré sont supprimées.
+- Caméra permise à l'appli (`Permissions-Policy: camera=(self)`) sur toutes
+  les pages : avec hx-boost, la politique reste celle de la première page.
+- Sauvegardes : les photos effacées de l'appli quittent
+  `sauvegardes/pieces` pour `sauvegardes/pieces-effacees/AAAA-MM-JJ`,
+  effacé après `FC_SAUVEGARDE_GARDER` jours.
+- Liens de téléchargement (vCard, export) : `download hx-boost="false"`.

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Thème choisi dans Moi : posé sur la page (data-theme), gardé par l'appareil.
@@ -47,6 +48,38 @@ func TestAvatar(t *testing.T) {
 	marie.post("/moi/profil", map[string]string{"prenom": "Marie", "couleur": "2", "avatar": ""})
 	if _, page := marie.get("/"); !strings.Contains(page, `title="Marie">M</span>`) {
 		t.Fatal("retour à l'initiale impossible")
+	}
+}
+
+// Photos effacées de l'appli : rangées à part dans la sauvegarde, puis
+// effacées après « garder » jours.
+func TestRangerEffaces(t *testing.T) {
+	src, dst, corbeille := t.TempDir(), t.TempDir(), filepath.Join(t.TempDir(), "effacees")
+	_ = os.MkdirAll(filepath.Join(src, "1"), 0o750)
+	_ = os.WriteFile(filepath.Join(src, "1", "garde.jpg"), []byte("g"), 0o640)
+	_ = os.WriteFile(filepath.Join(src, "1", "efface.jpg"), []byte("e"), 0o640)
+	if _, err := CopierNouveaux(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.Remove(filepath.Join(src, "1", "efface.jpg"))
+	j1 := time.Date(2026, 11, 1, 3, 0, 0, 0, time.UTC)
+	if n, err := RangerEffaces(src, dst, corbeille, 7, j1); err != nil || n != 1 {
+		t.Fatalf("rangement : %d %v", n, err)
+	}
+	if _, err := os.Stat(filepath.Join(dst, "1", "garde.jpg")); err != nil {
+		t.Fatal("photo encore utilisée retirée de la sauvegarde")
+	}
+	if _, err := os.Stat(filepath.Join(corbeille, "2026-11-01", "1", "efface.jpg")); err != nil {
+		t.Fatal("photo effacée pas rangée à part")
+	}
+	// 5 jours après : encore gardée ; 8 jours après : effacée.
+	_, _ = RangerEffaces(src, dst, corbeille, 7, j1.AddDate(0, 0, 5))
+	if _, err := os.Stat(filepath.Join(corbeille, "2026-11-01")); err != nil {
+		t.Fatal("effacée trop tôt")
+	}
+	_, _ = RangerEffaces(src, dst, corbeille, 7, j1.AddDate(0, 0, 8))
+	if _, err := os.Stat(filepath.Join(corbeille, "2026-11-01")); err == nil {
+		t.Fatal("jamais effacée")
 	}
 }
 

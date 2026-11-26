@@ -232,8 +232,6 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	if !f.Nouvelle {
 		titre = f.Carte.Enseigne
 	}
-	// Scanner la carte : la caméra est permise sur cette page seulement.
-	w.Header().Set("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=()")
 	m.a.Afficher(w, r, c, "fidelite/formulaire", titre, mod, f)
 }
 
@@ -247,8 +245,15 @@ func lire(r *http.Request) (saisie, string) {
 		enseigne: strings.TrimSpace(r.PostFormValue("enseigne")), format: r.PostFormValue("format"),
 		titulaire: strings.TrimSpace(r.PostFormValue("titulaire")), notes: strings.TrimSpace(r.PostFormValue("notes")),
 	}
-	// Numéro : sans les espaces (souvent tapés en groupes de 4).
-	s.numero = strings.Join(strings.Fields(r.PostFormValue("numero")), "")
+	// Numéro : sans les espaces (souvent tapés en groupes de 4), sauf pour
+	// un QR code, un PDF417 ou un Aztec, qui peuvent en contenir (le code
+	// redessiné doit être le même que celui de la carte).
+	switch s.format {
+	case "qr", "pdf417", "aztec":
+		s.numero = strings.TrimSpace(r.PostFormValue("numero"))
+	default:
+		s.numero = strings.Join(strings.Fields(r.PostFormValue("numero")), "")
+	}
 	if n := utf8.RuneCountInString(s.enseigne); n < 1 || n > 60 {
 		return s, "Le nom de l'enseigne doit faire entre 1 et 60 caractères."
 	}

@@ -226,7 +226,7 @@ func TestPasskeys(t *testing.T) {
 func TestReinitialisationParUnParent(t *testing.T) {
 	_, srv, marie := familleTest(t)
 	marie.get("/famille")
-	_, page := marie.post("/famille/invitations", map[string]string{"role": "parent"})
+	_, page := marie.post("/famille/invitations", map[string]string{"role": "parent", "mdp": "un grand nid douillet"})
 	lien := regexp.MustCompile(`/invitation/[A-Za-z0-9_-]{43}`).FindString(page)
 	thomas := nouveauNavigateur(t, srv)
 	thomas.post(lien, map[string]string{"prenom": "Thomas", "identifiant": "thomas", "mdp": "le papa du nid", "mdp2": "le papa du nid"})
@@ -241,7 +241,11 @@ func TestReinitialisationParUnParent(t *testing.T) {
 	if id == nil {
 		t.Fatal("bouton de réinitialisation absent")
 	}
-	marie.post("/famille/membres/"+id[1]+"/securite", nil)
+	// Sans le mot de passe : refusé. Pour soi-même : refusé (page Sécurité).
+	if code, _ := marie.post("/famille/membres/"+id[1]+"/securite", nil); code == 200 {
+		t.Fatal("réinitialisation sans mot de passe acceptée")
+	}
+	marie.post("/famille/membres/"+id[1]+"/securite", map[string]string{"mdp": "un grand nid douillet"})
 	// Thomas est déconnecté partout, puis se reconnecte avec son seul mot de passe.
 	if _, p := thomas.get("/"); strings.Contains(p, "Bonjour Thomas") {
 		t.Fatal("sessions de Thomas encore ouvertes")
