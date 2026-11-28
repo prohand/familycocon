@@ -75,6 +75,19 @@ func cleMemoire(prefixe, jeton string) string {
 	return prefixe + "|" + hex.EncodeToString(h[:])
 }
 
+// Mémoire courte : entrées gardées au plus par membre (pour chaque usage :
+// connexion en attente, secret TOTP, défi d'inscription), et par adresse
+// pour les défis sans connexion (une famille derrière la même box).
+const (
+	memoireParMembre  = 3
+	memoireParAdresse = 10
+)
+
+// groupeMembre : le groupe de la mémoire courte d'un membre, pour un usage.
+func groupeMembre(usage string, membre int64) string {
+	return usage + "|" + strconv.FormatInt(membre, 10)
+}
+
 func ecrireJSON(w http.ResponseWriter, statut int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
@@ -112,14 +125,11 @@ func (a *App) terminerConnexion(w http.ResponseWriter, r *http.Request, m donnee
 }
 
 // debuterSecondFacteur : mot de passe bon, on demande le second facteur.
-func (a *App) debuterSecondFacteur(w http.ResponseWriter, r *http.Request, m donnees.Membre, suite string) error {
+func (a *App) debuterSecondFacteur(w http.ResponseWriter, r *http.Request, m donnees.Membre, suite string) {
 	jeton, _ := jetonAleatoire()
-	if err := a.Memoire.Mettre(cleMemoire("attente", jeton), &attenteConnexion{Membre: m.ID, Suite: suite}, dureeAttente); err != nil {
-		return err
-	}
+	a.Memoire.Mettre(groupeMembre("attente", m.ID), cleMemoire("attente", jeton), &attenteConnexion{Membre: m.ID, Suite: suite}, dureeAttente)
 	a.poserCookie(w, "fc_attente", jeton, dureeAttente)
 	http.Redirect(w, r, "/connexion/verification", http.StatusSeeOther)
-	return nil
 }
 
 // attenteDe : la connexion en attente de cette requête (et le membre).
@@ -353,10 +363,7 @@ func (a *App) defiSansMotDePasse(w http.ResponseWriter, r *http.Request) {
 	fin(true)
 	defi, _ := mfa.NouveauDefiPasskey()
 	jeton, _ := jetonAleatoire()
-	if err := a.MemoireDefis.Mettre(cleMemoire("defi", jeton), defi, dureeAttente); err != nil {
-		erreurJSON(w, http.StatusServiceUnavailable, err.Error())
-		return
-	}
+	a.MemoireDefis.Mettre(CleIP(a.IPClient(r)), cleMemoire("defi", jeton), defi, dureeAttente)
 	a.poserCookie(w, "fc_defi", jeton, dureeAttente)
 	ecrireJSON(w, http.StatusOK, optionsConnexion(defi, domaine, "required", nil))
 }
@@ -447,10 +454,7 @@ func (a *App) afficherSecurite(w http.ResponseWriter, r *http.Request, c *Contex
 			d.Secret = v.(string)
 		} else {
 			d.Secret, _ = mfa.NouveauSecretTOTP()
-			if err := a.Memoire.Mettre(cle, d.Secret, 10*time.Minute); err != nil {
-				a.Echec(w, r, http.StatusServiceUnavailable, err.Error())
-				return
-			}
+			a.Memoire.Mettre(groupeMembre("totp", m.ID), cle, d.Secret, 10*time.Minute)
 		}
 		d.QR, _ = mfa.ImageQR(mfa.URITOTP(m.Identifiant.String, d.Secret))
 	}
@@ -549,6 +553,10 @@ func (a *App) verifierMotDePasse(r *http.Request, c *Contexte, mdp string) (int,
 	if !ok {
 		return http.StatusTooManyRequests, "Trop d'essais. Réessayez dans " + attenteLisible(attente) + "."
 	}
+	if attente, ok := a.compterCalcul(cleMembre(c.Membre.ID)); !ok {
+		fin(false)
+		return http.StatusTooManyRequests, "Trop d'essais. Réessayez dans " + attenteLisible(attente) + "."
+	}
 	bon, occupe := ComparerOccupe(c.Membre.Mdp.String, mdp)
 	switch {
 	case occupe:
@@ -617,10 +625,7 @@ func (a *App) defiInscription(w http.ResponseWriter, r *http.Request, c *Context
 		return
 	}
 	defi, _ := mfa.NouveauDefiPasskey()
-	if err := a.Memoire.Mettre(cleMemoire("inscription", string(c.jeton)), defi, dureeAttente); err != nil {
-		erreurJSON(w, http.StatusServiceUnavailable, err.Error())
-		return
-	}
+	a.Memoire.Mettre(groupeMembre("inscription", c.Membre.ID), cleMemoire("inscription", string(c.jeton)), defi, dureeAttente)
 	exclues := []map[string]string{}
 	for _, p := range cles {
 		exclues = append(exclues, map[string]string{"type": "public-key", "id": b64(p.Identifiant)})

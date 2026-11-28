@@ -94,7 +94,7 @@ func (s *Suivi) ajouterPiece(w http.ResponseWriter, r *http.Request, c *appli.Co
 	}
 	jpeg, err := photo.Preparer(corps)
 	if err != nil {
-		s.a.Echec(w, r, http.StatusBadRequest, "Photo illisible (JPEG ou PNG).")
+		s.a.Echec(w, r, http.StatusBadRequest, "Photo illisible ou trop grande (JPEG ou PNG).")
 		return
 	}
 	err = AjouterPiece(ctx, s.a, s.a.Q, c.Famille.ID, l.ID, c.Membre.ID, jpeg)

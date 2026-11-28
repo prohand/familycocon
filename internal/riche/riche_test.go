@@ -5,6 +5,7 @@ package riche
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHTML(t *testing.T) {
@@ -77,6 +78,19 @@ func TestDepuisCollage(t *testing.T) {
 	for _, attendu := range []string{"<strong><u>Pneu :</u></strong>", "<em>p0</em>", `href="https://www.walser-shop.fr/bac-de-coffre-xtr-pour-mazda-3-hatchback-bp-11/2018-auj"`, "<ul><li>puce</li></ul>"} {
 		if !strings.Contains(h, attendu) {
 			t.Errorf("sans %q :\n%s", attendu, h)
+		}
+	}
+}
+
+// Une longue ligne de signes jamais fermés (« [ », « ** », « ` »…) se lit
+// en temps linéaire : 64 Kio de « [ » coûtaient 3,4 s de processeur.
+func TestLigneDeSignes(t *testing.T) {
+	for _, motif := range []string{"[", "[a](", "**", "++", "~~", "_ ", "`", "http://\"", "\\"} {
+		ligne := strings.Repeat(motif, (64<<10)/len(motif))
+		debut := time.Now()
+		_ = HTML(DepuisCollage(ligne), Options{Mode: Edition})
+		if d := time.Since(debut); d > 2*time.Second {
+			t.Errorf("%q × %d : %v", motif, len(ligne)/len(motif), d)
 		}
 	}
 }

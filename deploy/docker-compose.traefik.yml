@@ -28,6 +28,9 @@ services:
       - traefik.http.services.familycocon.loadbalancer.server.port=8080
       - traefik.http.middlewares.familycocon-gzip.compress=true
       - traefik.http.routers.familycocon.middlewares=familycocon-gzip
+      # Pas de limite de taille ici : FamilyCocon borne lui-même chaque envoi
+      # (1 Mo, 8 Mo pour l'import vCard, 50 Mo de pièces jointes, 1 Go Fuelio)
+      # et ne garde jamais un gros envoi en mémoire.
     logging:
       options: { max-size: "10m", max-file: "3" }
 

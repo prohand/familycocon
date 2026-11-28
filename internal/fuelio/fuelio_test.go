@@ -254,3 +254,27 @@ func TestDatesEtEcarts(t *testing.T) {
 		t.Fatalf("écarts : %+v", e)
 	}
 }
+
+// ZIP « bombe » : des dizaines de milliers de fichiers vides (Go les
+// garderait tous en mémoire), avec ou sans données placées devant le ZIP.
+// Refusé avant d'être lu.
+func TestZipTropDeFichiers(t *testing.T) {
+	var b bytes.Buffer
+	z := zip.NewWriter(&b)
+	w, _ := z.Create("vehicle-1-sync.csv")
+	_, _ = w.Write([]byte(csvEssai))
+	for i := range fichiersZipMax + 10 {
+		_, _ = z.Create(fmt.Sprintf("v/%d", i))
+	}
+	_ = z.Close()
+	for nom, contenu := range map[string][]byte{"simple": b.Bytes(), "decale": append([]byte(strings.Repeat("x", 100)), b.Bytes()...)} {
+		chemin := filepath.Join(t.TempDir(), nom+".fuelio")
+		_ = os.WriteFile(chemin, contenu, 0o600)
+		if s, err := Ouvrir(chemin); err != ErrFormat {
+			if s != nil {
+				s.Fermer()
+			}
+			t.Errorf("%s : ZIP de %d fichiers accepté (%v)", nom, fichiersZipMax+11, err)
+		}
+	}
+}

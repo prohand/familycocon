@@ -7,6 +7,12 @@
   {{if eq .Compte "perso"}}<p>🔒 Dans votre budget perso (vous seul le voyez).</p>{{end}}
   {{if .Virement}}<p>🔁 Virement : l'autre côté (perso ou commun) suit le montant et la date.</p>{{end}}
 </section>
+{{if .Verrouille}}
+<div class="carte">
+  <p><b>{{.Montant}} {{.Devise}}</b> · {{.Op.Libelle}} · {{.Op.Jour}}</p>
+  <p class="aide">🔒 Ce virement vient du budget perso d'un autre parent : lui seul peut le modifier ou le supprimer.</p>
+</div>
+{{else}}
 <form class="carte" method="post" action="{{if .Nouvelle}}/budget{{else}}/budget/{{.Op.ID}}{{end}}">
   {{template "jeton" $c.CSRF}}
   <input type="hidden" name="compte" value="{{.Compte}}">
@@ -52,6 +58,7 @@
   {{template "jeton" $c.CSRF}}
   <button class="bouton danger">Supprimer</button>
 </form>
+{{end}}
 {{end}}
 {{end}}
 {{end}}

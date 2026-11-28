@@ -595,13 +595,16 @@ func (q *Queries) RetirerTachesPriveesMembre(ctx context.Context, arg RetirerTac
 const scoresTaches = `-- name: ScoresTaches :many
 SELECT taches_faites.fait_par, count(*) AS nombre
 FROM taches_faites JOIN taches ON taches.id = taches_faites.tache_id
-WHERE taches.famille_id = ? AND taches_faites.fait_le >= ? AND taches_faites.fait_par IS NOT NULL
+WHERE taches.famille_id = ?1 AND taches_faites.fait_le >= ?2 AND taches_faites.fait_par IS NOT NULL
+  AND (taches.cree_par = ?3 OR (taches.privee = 0 AND (taches.assigne_a = ?3 OR instr(',' || taches.tour || ',', ',' || ?3 || ',') > 0 OR CAST(?4 AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
 GROUP BY taches_faites.fait_par
 `
 
 type ScoresTachesParams struct {
 	FamilleID int64
 	FaitLe    int64
+	MembreID  sql.NullInt64
+	Parent    int64
 }
 
 type ScoresTachesRow struct {
@@ -609,9 +612,16 @@ type ScoresTachesRow struct {
 	Nombre  int64
 }
 
-// Scores de la semaine : comptes en SQL (pas de plafond de lignes).
+// Scores de la semaine : comptes en SQL (pas de plafond de lignes), avec
+// les memes regles que l'historique : sans les taches privees des autres,
+// ni (pour un enfant) celles reservees aux parents.
 func (q *Queries) ScoresTaches(ctx context.Context, arg ScoresTachesParams) ([]ScoresTachesRow, error) {
-	rows, err := q.db.QueryContext(ctx, scoresTaches, arg.FamilleID, arg.FaitLe)
+	rows, err := q.db.QueryContext(ctx, scoresTaches,
+		arg.FamilleID,
+		arg.FaitLe,
+		arg.MembreID,
+		arg.Parent,
+	)
 	if err != nil {
 		return nil, err
 	}

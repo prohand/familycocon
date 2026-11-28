@@ -60,11 +60,14 @@ WHERE taches.famille_id = sqlc.arg(famille_id) AND taches_faites.fait_le >= sqlc
   AND (taches.cree_par = sqlc.arg(membre_id) OR (taches.privee = 0 AND (taches.assigne_a = sqlc.arg(membre_id) OR instr(',' || taches.tour || ',', ',' || sqlc.arg(membre_id) || ',') > 0 OR CAST(sqlc.arg(parent) AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
 ORDER BY taches_faites.fait_le DESC LIMIT 100;
 
--- Scores de la semaine : comptes en SQL (pas de plafond de lignes).
+-- Scores de la semaine : comptes en SQL (pas de plafond de lignes), avec
+-- les memes regles que l'historique : sans les taches privees des autres,
+-- ni (pour un enfant) celles reservees aux parents.
 -- name: ScoresTaches :many
 SELECT taches_faites.fait_par, count(*) AS nombre
 FROM taches_faites JOIN taches ON taches.id = taches_faites.tache_id
-WHERE taches.famille_id = ? AND taches_faites.fait_le >= ? AND taches_faites.fait_par IS NOT NULL
+WHERE taches.famille_id = sqlc.arg(famille_id) AND taches_faites.fait_le >= sqlc.arg(fait_le) AND taches_faites.fait_par IS NOT NULL
+  AND (taches.cree_par = sqlc.arg(membre_id) OR (taches.privee = 0 AND (taches.assigne_a = sqlc.arg(membre_id) OR instr(',' || taches.tour || ',', ',' || sqlc.arg(membre_id) || ',') > 0 OR CAST(sqlc.arg(parent) AS INTEGER) = 1 OR NOT (taches.parents = 1 OR EXISTS (SELECT 1 FROM categories_taches k WHERE k.id = taches.categorie_id AND k.parents = 1)))))
 GROUP BY taches_faites.fait_par;
 
 -- Membre retire : ses taches privees disparaissent (personne d'autre ne les

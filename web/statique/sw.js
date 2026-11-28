@@ -94,7 +94,11 @@ self.addEventListener("push", function (e) {
 
 self.addEventListener("notificationclick", function (e) {
   e.notification.close();
-  const cible = new URL((e.notification.data && e.notification.data.url) || "/", location.origin).href;
+  // Seulement une page de l'appli (jamais un autre site, même si le contenu
+  // de la notification était faux).
+  let cible = new URL((e.notification.data && e.notification.data.url) || "/", location.origin);
+  if (cible.origin !== location.origin) cible = new URL("/", location.origin);
+  cible = cible.href;
   // Sur iPhone, l'appli fermée s'ouvre souvent sur sa page de départ (l'accueil)
   // au lieu de la page demandée : la cible est gardée une minute, et app.js
   // y va dès que l'appli s'ouvre.

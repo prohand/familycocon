@@ -3,7 +3,6 @@
 package appli
 
 import (
-	"errors"
 	"sync"
 	"time"
 )
@@ -12,42 +11,66 @@ import (
 // (connexion en attente du second facteur, défi d'une passkey, secret TOTP
 // pas encore confirmé). En mémoire seulement : un redémarrage les oublie,
 // il suffit alors de recommencer. Bornée pour ne jamais grossir.
+//
+// Chaque entrée appartient à un groupe (un membre, une adresse IP) qui ne
+// garde que ses parGroupe entrées les plus récentes : un seul compte (ou une
+// seule adresse) ne peut pas remplir la mémoire. Pleine malgré tout, la
+// mémoire oublie l'entrée qui expire le plus tôt au lieu de tout refuser :
+// une avalanche de requêtes ne bloque plus les connexions des autres.
 type MemoireCourte struct {
-	mu      sync.Mutex
-	entrees map[string]entreeCourte
-	max     int
+	mu        sync.Mutex
+	entrees   map[string]entreeCourte
+	max       int
+	parGroupe int
 }
 
 type entreeCourte struct {
 	valeur any
 	expire time.Time
+	groupe string
 }
 
-// ErrMemoirePleine : trop d'opérations en cours (avalanche de requêtes).
-var ErrMemoirePleine = errors.New("trop d'opérations en cours : réessayez dans une minute")
-
-// NouvelleMemoireCourte : au plus max entrées.
-func NouvelleMemoireCourte(max int) *MemoireCourte {
-	return &MemoireCourte{entrees: map[string]entreeCourte{}, max: max}
+// NouvelleMemoireCourte : au plus max entrées, et parGroupe par groupe.
+func NouvelleMemoireCourte(max, parGroupe int) *MemoireCourte {
+	return &MemoireCourte{entrees: map[string]entreeCourte{}, max: max, parGroupe: parGroupe}
 }
 
-// Mettre range une valeur pour la durée donnée.
-func (m *MemoireCourte) Mettre(cle string, valeur any, duree time.Duration) error {
+// Mettre range une valeur du groupe pour la durée donnée.
+func (m *MemoireCourte) Mettre(groupe, cle string, valeur any, duree time.Duration) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	t := time.Now()
-	if _, existe := m.entrees[cle]; !existe && len(m.entrees) >= m.max {
-		for k, e := range m.entrees {
-			if t.After(e.expire) {
-				delete(m.entrees, k)
+	// Les entrées expirées partent, et l'on cherche celle qui expire le plus
+	// tôt (dans le groupe, et en tout).
+	n := 0
+	var vieilleGroupe, vieille string
+	for k, e := range m.entrees {
+		if t.After(e.expire) {
+			delete(m.entrees, k)
+			continue
+		}
+		if k == cle {
+			continue // remplacée plus bas
+		}
+		if vieille == "" || e.expire.Before(m.entrees[vieille].expire) {
+			vieille = k
+		}
+		if e.groupe == groupe {
+			n++
+			if vieilleGroupe == "" || e.expire.Before(m.entrees[vieilleGroupe].expire) {
+				vieilleGroupe = k
 			}
 		}
-		if len(m.entrees) >= m.max {
-			return ErrMemoirePleine
+	}
+	if _, existe := m.entrees[cle]; !existe {
+		switch {
+		case n >= m.parGroupe:
+			delete(m.entrees, vieilleGroupe)
+		case len(m.entrees) >= m.max:
+			delete(m.entrees, vieille)
 		}
 	}
-	m.entrees[cle] = entreeCourte{valeur: valeur, expire: t.Add(duree)}
-	return nil
+	m.entrees[cle] = entreeCourte{valeur: valeur, expire: t.Add(duree), groupe: groupe}
 }
 
 // Lire renvoie la valeur si elle n'a pas expiré.

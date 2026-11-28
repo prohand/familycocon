@@ -28,7 +28,7 @@ import (
 // d'être décodée).
 const (
 	CoteMax   = 1600
-	PixelsMax = 24_000_000 // ~96 Mio une fois décodée : la limite de mémoire
+	PixelsMax = 24_000_000 // la mémoire est aussi bornée (voir MemoireMax)
 	qualite   = 80
 )
 
@@ -55,10 +55,11 @@ func PreparerFlux(ouvrir func() (io.ReadCloser, error)) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg, _, err := image.DecodeConfig(bufio.NewReader(io.LimitReader(r, fluxMax)))
+	// Taille et mémoire vérifiées sur l'en-tête, avant tout décodage.
+	err = Controler(io.LimitReader(r, fluxMax), PixelsMax)
 	_ = r.Close()
-	if err != nil || cfg.Width <= 0 || cfg.Height <= 0 || cfg.Width*cfg.Height > PixelsMax {
-		return nil, ErrPhoto
+	if err != nil {
+		return nil, err
 	}
 	une.Lock()
 	defer une.Unlock()

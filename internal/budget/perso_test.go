@@ -60,9 +60,21 @@ func TestBudgetPerso(t *testing.T) {
 	if !strings.Contains(perso, `<span class="quoi">Virement vers le commun`) || !strings.Contains(p, "Virement de Marie") {
 		t.Fatal("virement : une moitié manque")
 	}
-	// Supprimé du côté commun : les deux moitiés partent.
+	// Paul ne touche pas au virement de Marie (l'autre moitié est dans son
+	// budget privé) : ni modifié, ni supprimé, et la fiche le dit.
 	vir := essai.Trouver(t, p, `href="/budget/(\d+)"[^>]*>\s*<span class="p-emoji">🔁`)
-	if _, page := paul.Post("/budget/"+vir+"/supprimer", nil); !strings.Contains(page, "des deux côtés") {
+	if code, page := paul.Get("/budget/" + vir); code != 200 || !strings.Contains(page, "lui seul peut le modifier") || strings.Contains(page, "/supprimer") {
+		t.Fatalf("fiche du virement de Marie vue par Paul : %d", code)
+	}
+	if code, _ := paul.Post("/budget/"+vir+"/supprimer", nil); code != http.StatusForbidden {
+		t.Fatalf("virement de Marie supprimé par Paul : %d", code)
+	}
+	if code, _ := paul.Post("/budget/"+vir, map[string]string{"montant": "1", "categorie": "virement-recu", "jour": jour}); code != http.StatusForbidden {
+		t.Fatalf("virement de Marie modifié par Paul : %d", code)
+	}
+	// Supprimé par Marie du côté commun : les deux moitiés partent.
+	marie.Get("/budget/" + vir)
+	if _, page := marie.Post("/budget/"+vir+"/supprimer", nil); !strings.Contains(page, "des deux côtés") {
 		t.Fatal("virement non supprimé")
 	}
 	if _, perso = marie.Get("/budget?compte=perso&mois=" + mois); strings.Contains(perso, `<span class="quoi">Virement vers le commun`) {

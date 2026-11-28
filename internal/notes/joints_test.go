@@ -54,6 +54,16 @@ func TestJointsNotes(t *testing.T) {
 			t.Errorf("%s accepté : %d", f.Nom, code)
 		}
 	}
+	// Gros envoi de fichiers sans l'en-tête X-Jeton (jeton seulement dans
+	// le formulaire) : refusé sans lire le corps (il serait gardé en mémoire).
+	jeton := marie.Jeton
+	marie.Jeton = ""
+	code, _ = marie.PostFichiers("/joints/notes/"+assurance, map[string]string{"_jeton": jeton},
+		essai.Fichier{Champ: "fichier", Nom: "b.pdf", Contenu: append(bytes.Clone(pdf), bytes.Repeat([]byte("x"), 9<<20)...)})
+	marie.Jeton = jeton
+	if code != http.StatusForbidden {
+		t.Fatalf("envoi multipart sans en-tête X-Jeton : %d", code)
+	}
 	// Trop gros (10 Mo au plus).
 	gros := append([]byte("%PDF-1.4\n"), bytes.Repeat([]byte("x"), 10<<20)...)
 	if code, _ := marie.PostFichiers("/joints/notes/"+assurance, nil, essai.Fichier{Champ: "fichier", Nom: "gros.pdf", Contenu: gros}); code != http.StatusRequestEntityTooLarge {
@@ -100,6 +110,19 @@ func TestJointsNotes(t *testing.T) {
 	}
 	// Note supprimée : ses pièces partent au ménage.
 	marie.Post("/notes/"+secret+"/supprimer", nil)
+	// Léa crée aussitôt une note : SQLite lui redonne l'id de la note
+	// supprimée (la dernière), mais pas sa pièce jointe.
+	lea.Post("/notes", map[string]string{"titre": "Ma note", "texte": "coucou"})
+	_, p = lea.Get("/notes")
+	if essai.Trouver(t, p, `href="/notes/(\d+)">\s*<h3>Ma note</h3>`) != secret {
+		t.Fatal("essai à revoir : l'id de la note supprimée n'est pas redonné")
+	}
+	if code, _ := lea.Get("/joints/" + idSecret + "/x"); code != http.StatusNotFound {
+		t.Fatalf("pièce de la note privée supprimée reprise par la note de Léa : %d", code)
+	}
+	if _, p = lea.Get("/notes/" + secret); strings.Contains(p, "journal.pdf") {
+		t.Fatal("pièce de la note privée supprimée montrée sur la note de Léa")
+	}
 	a.EffacerJointsOrphelins(context.Background())
 	if code, _ := marie.Get("/joints/" + idSecret + "/x"); code != http.StatusNotFound {
 		t.Fatal("pièce d'une note supprimée encore là")

@@ -525,7 +525,7 @@ func (m *Module) vue(ctx context.Context, c *appli.Contexte, pour, cat int64, vo
 		return nil, err
 	}
 	// Scores comptés en SQL : l'historique affiché, lui, est limité à 100 lignes.
-	scores, err := m.a.Q.ScoresTaches(ctx, donnees.ScoresTachesParams{FamilleID: c.Famille.ID, FaitLe: lundi.Unix()})
+	scores, err := m.a.Q.ScoresTaches(ctx, donnees.ScoresTachesParams{FamilleID: c.Famille.ID, FaitLe: lundi.Unix(), MembreID: moi(c), Parent: estParent(c)})
 	if err != nil {
 		return nil, err
 	}

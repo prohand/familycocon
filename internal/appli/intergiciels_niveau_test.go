@@ -28,3 +28,18 @@ func TestNiveauRequete(t *testing.T) {
 		}
 	}
 }
+
+// Les jetons secrets d'un chemin ne vont pas au journal.
+func TestCheminJournal(t *testing.T) {
+	for v, attendu := range map[string]string{
+		"/invitation/abcdef": "/invitation/…",
+		"/ical/xyz":          "/ical/…",
+		"/annuler/123":       "/annuler/…",
+		"/notes/3":           "/notes/3",
+		"/invitation/":       "/invitation/",
+	} {
+		if r := cheminJournal(v); r != attendu {
+			t.Errorf("cheminJournal(%q) = %q, attendu %q", v, r, attendu)
+		}
+	}
+}

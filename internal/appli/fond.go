@@ -19,6 +19,7 @@ import (
 // Demarrer lance les tâches de fond : ménage des sessions, invitations et
 // appareils périmés (toutes les heures).
 func (a *App) Demarrer(ctx context.Context) {
+	a.EffacerProvisoires()
 	if err := a.DemarrerPush(ctx); err != nil {
 		a.Journal.Error("notifications push indisponibles", "erreur", err)
 	}
@@ -183,6 +184,29 @@ func RangerEffaces(src, dst, corbeille string, garder int, maintenant time.Time)
 		}
 	}
 	return n, nil
+}
+
+// EffacerProvisoires : les fichiers provisoires laissés par un arrêt
+// brutal (reprise Fuelio : jusqu'à 3 Gio ; pièce jointe ou photo coupée).
+// Appelée au démarrage seulement : le verrou du dossier des données est
+// pris, aucun envoi n'est en cours.
+func (a *App) EffacerProvisoires() {
+	var l []string
+	for _, motif := range []string{
+		filepath.Join(a.Config.Donnees, "fuelio-*.tmp"),
+		filepath.Join(a.DossierPieces(), "*", "*.tmp"),
+	} {
+		m, _ := filepath.Glob(motif)
+		l = append(l, m...)
+	}
+	for _, f := range l {
+		if err := os.Remove(f); err != nil {
+			a.Journal.Warn("fichier provisoire non effacé", "fichier", f, "erreur", err)
+		}
+	}
+	if len(l) > 0 {
+		a.Journal.Info("fichiers provisoires effacés", "nombre", len(l))
+	}
 }
 
 // CopierNouveaux : copie de src vers dst les fichiers qui n'y sont pas

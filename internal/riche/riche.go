@@ -343,6 +343,32 @@ func enLigne(s string, html bool) string {
 			b.WriteString(enLigne(dedans, false))
 		}
 	}
+	// Recherches qui ont déjà échoué : un signe sans fermeture plus loin
+	// n'en a pas non plus à partir d'une position suivante. Sans cela, une
+	// ligne de milliers de « [ » ou de « ** » coûtait un temps énorme (chaque
+	// signe relisait toute la fin de la ligne).
+	sansFin := map[string]bool{}
+	ferme := func(reste string, debut int, signe string) int {
+		if sansFin[signe] {
+			return -1
+		}
+		j := fermeture(reste, debut, signe)
+		if j < 0 {
+			sansFin[signe] = true
+		}
+		return j
+	}
+	chercher := func(reste string, c byte) int {
+		if sansFin[string(c)] {
+			return -1
+		}
+		j := strings.IndexByte(reste, c)
+		if j < 0 {
+			sansFin[string(c)] = true
+		}
+		return j
+	}
+	prochainEspace := -1 // position (dans s) du prochain blanc, ou len(s)
 	for i := 0; i < len(s); {
 		reste := s[i:]
 		avant, _ := utf8.DecodeLastRuneInString(s[:i])
@@ -354,10 +380,14 @@ func enLigne(s string, html bool) string {
 			i += 1 + n
 			continue
 		case debutMot && (strings.HasPrefix(reste, "https://") || strings.HasPrefix(reste, "http://")):
-			fin := strings.IndexFunc(reste, unicode.IsSpace)
-			if fin < 0 {
-				fin = len(reste)
+			if prochainEspace < i {
+				if j := strings.IndexFunc(reste, unicode.IsSpace); j < 0 {
+					prochainEspace = len(s)
+				} else {
+					prochainEspace = i + j
+				}
 			}
+			fin := prochainEspace - i
 			u := strings.TrimRight(reste[:fin], ".,;:!?")
 			if strings.HasSuffix(u, ")") && !strings.Contains(u, "(") {
 				u = strings.TrimSuffix(u, ")")
@@ -372,7 +402,7 @@ func enLigne(s string, html bool) string {
 				continue
 			}
 		case reste[0] == '`':
-			if j := strings.IndexByte(reste[1:], '`'); j >= 0 {
+			if j := chercher(reste[1:], '`'); j >= 0 {
 				if html {
 					b.WriteString("<code>" + template.HTMLEscapeString(reste[1:1+j]) + "</code>")
 				} else {
@@ -382,25 +412,25 @@ func enLigne(s string, html bool) string {
 				continue
 			}
 		case strings.HasPrefix(reste, "**"):
-			if j := fermeture(reste, 2, "**"); j > 2 {
+			if j := ferme(reste, 2, "**"); j > 2 {
 				balise("strong", reste[2:j])
 				i += j + 2
 				continue
 			}
 		case strings.HasPrefix(reste, "++"):
-			if j := fermeture(reste, 2, "++"); j > 2 {
+			if j := ferme(reste, 2, "++"); j > 2 {
 				balise("u", reste[2:j])
 				i += j + 2
 				continue
 			}
 		case strings.HasPrefix(reste, "~~"):
-			if j := fermeture(reste, 2, "~~"); j > 2 {
+			if j := ferme(reste, 2, "~~"); j > 2 {
 				balise("s", reste[2:j])
 				i += j + 2
 				continue
 			}
 		case reste[0] == '_' && debutMot:
-			if j := fermeture(reste, 1, "_"); j > 1 {
+			if j := ferme(reste, 1, "_"); j > 1 {
 				apres, _ := utf8.DecodeRuneInString(reste[j+1:])
 				if j+1 == len(reste) || !(unicode.IsLetter(apres) || unicode.IsDigit(apres)) {
 					balise("em", reste[1:j])
@@ -409,8 +439,8 @@ func enLigne(s string, html bool) string {
 				}
 			}
 		case reste[0] == '[':
-			if j := fermeture(reste, 1, "]("); j > 1 {
-				if k := strings.IndexByte(reste[j+2:], ')'); k > 0 {
+			if j := ferme(reste, 1, "]("); j > 1 {
+				if k := chercher(reste[j+2:], ')'); k > 0 {
 					u := reste[j+2 : j+2+k]
 					if adresseOK(u) {
 						if html {

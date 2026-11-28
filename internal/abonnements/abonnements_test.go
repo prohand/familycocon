@@ -207,3 +207,37 @@ func TestAbonnementsFiltres(t *testing.T) {
 		t.Fatalf("filtre vide :\n%s", page)
 	}
 }
+
+// Un abonnement commun ne devient pas privé : Paul ne peut pas faire
+// disparaître de la vue de Marie la box qu'elle a ajoutée (ni ses
+// prélèvements). Un abonnement privé peut, lui, revenir au commun.
+func TestAbonnementCommunJamaisPrive(t *testing.T) {
+	_, srv := essai.NouvelleApp(t, brancher)
+	marie := essai.Famille(t, srv)
+	paul := essai.Parent(t, srv, marie, "Paul")
+	jour := essai.Maintenant().AddDate(0, 0, 5).Format("2006-01-02")
+	marie.Get("/abonnements/nouveau")
+	marie.Post("/abonnements", map[string]string{"nom": "Box internet", "montant": "30", "frequence": "mois", "prochain": jour, "categorie": "abonnements"})
+	_, page := paul.Get("/abonnements")
+	id := essai.Trouver(t, page, `href="/abonnements/(\d+)"`)
+	if _, f := paul.Get("/abonnements/" + id); strings.Contains(f, `name="prive"`) {
+		t.Fatal("case « Privé » proposée sur un abonnement commun")
+	}
+	paul.Post("/abonnements/"+id, map[string]string{"nom": "Box internet", "montant": "30", "frequence": "mois", "prochain": jour, "categorie": "abonnements", "prive": "1"})
+	if _, page = marie.Get("/abonnements"); !strings.Contains(page, "Box internet") {
+		t.Fatal("abonnement commun passé en privé par Paul : Marie ne le voit plus")
+	}
+	// Privé de Paul → commun : permis.
+	paul.Get("/abonnements/nouveau")
+	paul.Post("/abonnements", map[string]string{"nom": "Jeu vidéo", "montant": "5", "frequence": "mois", "prochain": jour, "categorie": "abonnements", "prive": "1"})
+	if _, page = marie.Get("/abonnements"); strings.Contains(page, "Jeu vidéo") {
+		t.Fatal("abonnement privé de Paul vu par Marie")
+	}
+	_, page = paul.Get("/abonnements?compte=perso")
+	idJeu := essai.Trouver(t, page, `href="/abonnements/(\d+)"`)
+	paul.Get("/abonnements/" + idJeu)
+	paul.Post("/abonnements/"+idJeu, map[string]string{"nom": "Jeu vidéo", "montant": "5", "frequence": "mois", "prochain": jour, "categorie": "abonnements"})
+	if _, page = marie.Get("/abonnements"); !strings.Contains(page, "Jeu vidéo") {
+		t.Fatal("abonnement privé revenu au commun : Marie ne le voit pas")
+	}
+}
