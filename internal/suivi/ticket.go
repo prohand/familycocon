@@ -244,14 +244,18 @@ func nomCarburant(m string) string {
 	return m
 }
 
-// station : une ligne faite de 2 à 6 mots en lettres (« AUCHAN ST GENIS
-// LAVAL » → « Auchan St Genis Laval »), sinon « ».
+// station : une ligne faite de 2 à 6 mots en lettres, d'au moins 2
+// lettres chacun (« AUCHAN ST GENIS LAVAL » → « Auchan St Genis Laval »),
+// sinon « ». Un mot d'une lettre vient souvent d'un logo mal lu (« TOT R »).
 func station(l string) string {
 	mots := strings.Fields(l)
 	if len(mots) < 2 || len(mots) > 6 || utf8.RuneCountInString(l) > 40 {
 		return ""
 	}
 	for _, m := range mots {
+		if utf8.RuneCountInString(m) < 2 {
+			return ""
+		}
 		for _, r := range m {
 			if !unicode.IsLetter(r) && r != '-' && r != '\'' {
 				return ""

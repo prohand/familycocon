@@ -407,10 +407,59 @@ document.addEventListener("change", function (e) {
     });
     return script;
   }
-  // L'image tournée (degrés) et mise à la taille voulue (plus grand côté).
-  function dessiner(img, rot, cote) {
-    var r = cote / Math.max(img.width, img.height);
-    var w = Math.round(img.width * r), h = Math.round(img.height * r);
+  // La zone du ticket dans la photo : le papier (blanc) et l'encre (noire)
+  // sont gris, le fond (table, tissu de couleur) ne l'est souvent pas. Un
+  // fond coloré et texturé brouille la lecture : on ne garde que les
+  // colonnes, puis les lignes, faites surtout de gris. Fond gris ou blanc :
+  // rien n'est écarté, toute la photo est lue (comme avant).
+  function zone(img) {
+    var k = 200 / Math.max(img.width, img.height);
+    var w = Math.round(img.width * k), h = Math.round(img.height * k);
+    var c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    var x = c.getContext("2d");
+    x.drawImage(img, 0, 0, w, h);
+    var d = x.getImageData(0, 0, w, h).data;
+    function gris(i, j) {
+      var p = (j * w + i) * 4;
+      return Math.max(d[p], d[p + 1], d[p + 2]) - Math.min(d[p], d[p + 1], d[p + 2]) < 40;
+    }
+    // La plus longue suite de colonnes (ou de lignes) grises à plus de 60 %,
+    // mesurée dans la zone z ; z entière si aucune.
+    function plage(z, colonnes) {
+      var n = colonnes ? z.w : z.h, m = colonnes ? z.h : z.w, mieux = [0, n], deb = -1;
+      for (var i = 0; i <= n; i++) {
+        var g = 0;
+        for (var j = 0; i < n && j < m; j++) {
+          if (colonnes ? gris(z.x + i, z.y + j) : gris(z.x + j, z.y + i)) g++;
+        }
+        if (g > m * 0.6) {
+          if (deb < 0) deb = i;
+        } else if (deb >= 0) {
+          if (i - deb > mieux[1] - mieux[0] || mieux[1] - mieux[0] === n) mieux = [deb, i];
+          deb = -1;
+        }
+      }
+      return mieux;
+    }
+    var z = { x: 0, y: 0, w: w, h: h };
+    // Colonnes, lignes, puis colonnes encore (ticket couché ou debout).
+    [true, false, true].forEach(function (colonnes) {
+      var p = plage(z, colonnes);
+      if (colonnes) { z.x += p[0]; z.w = p[1] - p[0]; } else { z.y += p[0]; z.h = p[1] - p[0]; }
+    });
+    // Zone trop petite : sans doute une erreur, on lit toute la photo.
+    if (z.w < w / 10 || z.h < h / 10) return { x: 0, y: 0, w: img.width, h: img.height };
+    // Un léger retrait (1 px de l'image réduite) : le bord du ticket, avec
+    // son ombre et un reste de fond, gêne aussi la lecture.
+    return { x: (z.x + 1) / k, y: (z.y + 1) / k, w: (z.w - 2) / k, h: (z.h - 2) / k };
+  }
+  // La zone z de l'image, tournée (degrés) et mise à la taille voulue
+  // (plus grand côté).
+  function dessiner(img, z, rot, cote) {
+    var r = cote / Math.max(z.w, z.h);
+    var w = Math.round(z.w * r), h = Math.round(z.h * r);
     var c = document.createElement("canvas");
     var quart = rot % 180 !== 0;
     c.width = quart ? h : w;
@@ -418,7 +467,7 @@ document.addEventListener("change", function (e) {
     var x = c.getContext("2d");
     x.translate(c.width / 2, c.height / 2);
     x.rotate(rot * Math.PI / 180);
-    x.drawImage(img, -w / 2, -h / 2, w, h);
+    x.drawImage(img, z.x, z.y, z.w, z.h, -w / 2, -h / 2, w, h);
     return c;
   }
   function analyser(texte) {
@@ -433,18 +482,23 @@ document.addEventListener("change", function (e) {
     var worker = await Tesseract.createWorker("fra", 1, { workerPath: OCR + "worker.min.js",
       corePath: OCR + "tesseract-core-simd-lstm.js", langPath: OCR, workerBlobURL: false });
     try {
+      var z = zone(img);
       // Photo en largeur : le ticket est sans doute couché (un quart de tour).
       var sens = img.width > img.height ? [90, 270, 0] : [0, 180];
       var texte = "", res = null, rot = sens[0];
       for (var i = 0; i < sens.length; i++) {
-        var t = (await worker.recognize(dessiner(img, sens[i], 1600))).data.text;
+        var t = (await worker.recognize(dessiner(img, z, sens[i], 1600))).data.text;
         var r = await analyser(t);
         if (!res || trouves(r) > trouves(res)) { res = r; texte = t; rot = sens[i]; }
         if (trouves(r) >= 2) break;
       }
-      // Date ou nombres manquants : une seconde lecture, plus grande.
-      if (trouves(res) >= 1 && (!res.complet || !res.jour)) {
-        var t2 = (await worker.recognize(dessiner(img, rot, 2400))).data.text;
+      // Date, carburant ou nombres manquants : une seconde lecture, plus
+      // grande, en « une colonne de texte de tailles variées » (mode 4 de
+      // Tesseract) : elle lit aussi les lignes en gros caractères
+      // (« SP98 EXC ») que la première saute parfois.
+      if (trouves(res) >= 1 && (!res.complet || !res.jour || !res.carburant)) {
+        await worker.setParameters({ tessedit_pageseg_mode: "4" });
+        var t2 = (await worker.recognize(dessiner(img, z, rot, 2400))).data.text;
         res = await analyser(texte + "\n" + t2);
       }
       return res;

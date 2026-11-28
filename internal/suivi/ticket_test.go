@@ -93,3 +93,123 @@ func TestLireTicketAutres(t *testing.T) {
 		}
 	}
 }
+
+// Ticket posé sur un tissu vert : la photo entière était illisible ; le
+// téléphone ne lit plus que la zone du ticket (app.js, zone). Première
+// lecture (1 600 px) : la ligne en gros caractères « SP98 EXC » manque.
+const ticketVert1600 = `| =
+Te ;
+PIERRE BEnScS Energies
+126 BD DE | <E
+pIERRE BENT Culte D1S OULL
+TEL 04723S60000 >> 10
+M eaces7enes
+a TRA à
+COM: FRS9306916099
+FR
+SIRET: 306916
+Code NAF: 470.0 =264
+Vers. logicier.
+FCx Compact Pos Vynamic
+7.19.15-sp5S-hfr1i
+28/11/26 10:09:55
+=> Justificatif de paiement
+pompe 05
+=
+20,30 lit
+-
+1,990 €/lit
+Total 40,40€
+cB (D) € 46,40
+TVA incluse:
+Taux TTC TVA
+23 20,00% 40,40 6,73
+Total H.T. 33,67
+Lignes articles: 1
+N° de ticket : 105000044432
+Code hash:
+(NFS25) B525S/0587-1 -Pn-
+TotalEnergies
+Carte bancaire
+TICKET CLIENT
+REL.PIERRE BENITE
+126 BOULEVARD DE L EUROPE
+69310 PYERRE BENITE
+30691609902564
+28/11/2026 10:10:00 |
+PAIEMENT
+AUTORISÉ
+\ nab
+Montant fAnoL, 40,46 EUR`
+
+// Seconde lecture (2 400 px, mode « une colonne », lignes vides retirées) :
+// le carburant est lu.
+const ticketVert2400 = `To ;
+PIERRE BENTre Energies
+EUROP
+pIERRE BEunr E D15 ouLL
+TEL 6047239600. > =10
+FAX 0160679001
+TVA INTRACOM:
+FRS9306916099
+FR
+SIRET: 3069160
+Code NAF: 4730 = 204
+Vers. logicien:
+FCx Compact Pos
+7.19.15-spS-hfr1
+Vynamic
+28/11/26 10:09:55
+=> Justificatif de paiement
+SP98 EXC
+pompe 05
+20,30 lit
+1,990 €/lit
+— mm © = = = 0 me 0e 4 00 00 04 1 00 NA 00 1 00 A 0 00 0 0
+Total 40,40€
+€
+cB (D) 40,40
+TVA incluse:
+Taux RG TVA
+3 26,00% 40,40 6,73
+Total H.T. 33,67
+Lignes articles: 1
+N° de ticket : 105000044432
+Code hash:
+(NF525) B525/058&7-1 -Pn-
+TotalEnergies
+Carte bancaire
+TICKET CLIENT
+REL.PIERRE BENITE
+126 BOULEVARD DE L EUROPE
+69310 PYERRE BENITE
+30691609902564
+28/11/2026 10:10:00
+PAIEMENT
+AUTORISÉ
+2. mal
+Montant fin 40,40 EUR`
+
+func TestLireTicketFondVert(t *testing.T) {
+	auj := time.Date(2026, 11, 28, 11, 0, 0, 0, time.UTC)
+	x := LireTicket(ticketVert1600, auj)
+	if x.Jour != "2026-11-28" || x.Litres != "20,30" || x.PrixLitre != "1,990" || x.Montant != "40,40" || !x.Complet {
+		t.Fatalf("première lecture : %+v", x)
+	}
+	if x.Carburant != "" {
+		t.Errorf("carburant inventé : %q", x.Carburant)
+	}
+	x = LireTicket(ticketVert1600+"\n"+ticketVert2400, auj)
+	if x.Carburant != "SP98" || x.Litres != "20,30" || x.Montant != "40,40" {
+		t.Fatalf("deux lectures : %+v", x)
+	}
+}
+
+// Un mot d'une lettre (logo mal lu) : pas un nom de station.
+func TestStation(t *testing.T) {
+	for l, attendu := range map[string]string{"TOT R": "", "AUCHAN ST GENIS LAVAL": "Auchan St Genis Laval", "PIERRE BENITE": "Pierre Benite"} {
+		if s := station(l); s != attendu {
+			t.Errorf("%q : %q", l, s)
+		}
+	}
+}

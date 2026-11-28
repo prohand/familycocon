@@ -48,6 +48,7 @@
 | Cartes de fidélité aux couleurs de l'enseigne (v0.9.12, SPEC § 30) | **fait** |
 | Cartes de fidélité : scan QR / PDF417 / Aztec (iPhone compris), dessin PDF417 et Aztec (v0.9.14, SPEC § 31) | **fait** |
 | Revue de sécurité du 28/11/2026 : images piégées, pièces jointes d'un objet supprimé, mémoire, Fuelio, Argon2id, règles plus strictes (SPEC « Revue de sécurité (28/11/2026) ») | **fait** |
+| Scan du ticket de carburant : ticket posé sur un fond coloré, ligne du carburant en gros caractères (v0.9.28, SPEC § 18) | **fait** (essayé sur la vraie photo, dans Chromium) |
 
 ## Mesures
 
