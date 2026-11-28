@@ -20,6 +20,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"encoding/csv"
 	"errors"
 	"io"
@@ -37,10 +38,15 @@ import (
 // Limites (garde-fous contre un fichier piégé ou démesuré).
 const (
 	LignesMax    = 20000    // lignes lues par véhicule
-	ImagesMax    = 20000    // photos lues dans le ZIP
+	ImagesMax    = 2000     // photos lues dans le ZIP (chacune est décodée : ~0,5 s)
 	csvMax       = 16 << 20 // taille d'un CSV une fois décompressé
 	interneMax   = 2 << 30  // ZIP dans le ZIP (pictures.data), une fois décompressé
 	VehiculesMax = 50
+	// Fichiers d'un ZIP : le répertoire est chargé en mémoire en entier par
+	// Go (un ZIP « bombe » de 300 000 fichiers vides prend 56 Mio).
+	fichiersZipMax = 20000
+	// CSV décompressés pour y chercher « ## Log » (16 Mio chacun au plus).
+	csvNombreMax = 100
 )
 
 // ErrFormat : le fichier n'est pas une sauvegarde Fuelio lisible.
@@ -100,6 +106,7 @@ type Sauvegarde struct {
 	Images    []Image
 	fermer    []func() error // fichiers ouverts et provisoires
 	dossier   string         // où écrire un fichier provisoire
+	csvLus    int            // CSV décompressés (borné : csvNombreMax)
 }
 
 // Fermer : ferme les fichiers (les images ne sont plus lisibles ensuite)
@@ -133,7 +140,7 @@ func Ouvrir(chemin string) (*Sauvegarde, error) {
 			_ = s.Fermer()
 			return nil, err
 		}
-		z, err := zip.NewReader(f, info.Size())
+		z, err := lireZip(f, info.Size())
 		if err != nil {
 			_ = s.Fermer()
 			return nil, ErrFormat
@@ -167,6 +174,9 @@ func Ouvrir(chemin string) (*Sauvegarde, error) {
 // porte ce ZIP (pour lire un ZIP interne rangé sans compression).
 func (s *Sauvegarde) parcourir(z *zip.Reader, base io.ReaderAt, niveau int) error {
 	for _, f := range z.File {
+		if s.csvLus >= csvNombreMax {
+			break
+		}
 		nom := strings.ToLower(f.Name)
 		switch {
 		case strings.HasSuffix(nom, "/"):
@@ -175,6 +185,7 @@ func (s *Sauvegarde) parcourir(z *zip.Reader, base io.ReaderAt, niveau int) erro
 				s.Images = append(s.Images, Image{Nom: f.Name, f: f})
 			}
 		case strings.HasSuffix(nom, ".csv"):
+			s.csvLus++
 			b, err := lireEntree(f, csvMax)
 			if err != nil || !bytes.Contains(b, []byte("## Log")) {
 				continue
@@ -218,7 +229,7 @@ func (s *Sauvegarde) ouvrirInterne(f *zip.File, base io.ReaderAt) (*zip.Reader, 
 		debut, err := f.DataOffset()
 		if err == nil {
 			taille := int64(f.UncompressedSize64)
-			return zip.NewReader(io.NewSectionReader(base, debut, taille), taille)
+			return lireZip(io.NewSectionReader(base, debut, taille), taille)
 		}
 	}
 	if f.UncompressedSize64 > interneMax {
@@ -241,7 +252,58 @@ func (s *Sauvegarde) ouvrirInterne(f *zip.File, base io.ReaderAt) (*zip.Reader, 
 	if n > interneMax {
 		return nil, ErrFormat
 	}
-	return zip.NewReader(tmp, n)
+	return lireZip(tmp, n)
+}
+
+// lireZip : zip.NewReader, après avoir compté les fichiers du répertoire
+// central sans rien garder en mémoire. Go lit TOUT le répertoire (le
+// nombre annoncé à la fin du ZIP ne compte pas : il peut mentir) et garde
+// chaque fichier en mémoire : un ZIP de 300 000 fichiers vides prend 56 Mio.
+func lireZip(r io.ReaderAt, taille int64) (*zip.Reader, error) {
+	// La fin du répertoire : 22 octets, plus un commentaire de 64 Kio au plus.
+	n := min(taille, 22+0xFFFF)
+	fin := make([]byte, n)
+	if _, err := r.ReadAt(fin, taille-n); err != nil && err != io.EOF {
+		return nil, ErrFormat
+	}
+	i := bytes.LastIndex(fin, []byte("PK\x05\x06"))
+	if i < 0 || len(fin)-i < 22 {
+		return nil, ErrFormat
+	}
+	finRep := taille - n + int64(i) // où finit le répertoire
+	tailleRep := int64(binary.LittleEndian.Uint32(fin[i+12:]))
+	debutRep := int64(binary.LittleEndian.Uint32(fin[i+16:]))
+	if tailleRep == 0xFFFFFFFF || debutRep == 0xFFFFFFFF {
+		return nil, ErrFormat // ZIP64 : inutile sous 4 Gio, refusé
+	}
+	// Le répertoire est cherché aux deux endroits possibles (adresse
+	// annoncée, ou juste avant sa fin quand des données précèdent le ZIP).
+	for _, d := range []int64{debutRep, finRep - tailleRep} {
+		if d >= 0 && d < taille && compterFichiers(io.NewSectionReader(r, d, taille-d)) > fichiersZipMax {
+			return nil, ErrFormat
+		}
+	}
+	return zip.NewReader(r, taille)
+}
+
+// compterFichiers : les fiches du répertoire central qui se suivent (comme
+// les lit Go), en s'arrêtant un peu après fichiersZipMax.
+func compterFichiers(r io.Reader) int {
+	b := bufio.NewReader(r)
+	var fiche [46]byte
+	n := 0
+	for n <= fichiersZipMax {
+		if _, err := io.ReadFull(b, fiche[:]); err != nil || string(fiche[:4]) != "PK\x01\x02" {
+			break
+		}
+		// Nom, champ « extra » et commentaire, à sauter.
+		saut := int(binary.LittleEndian.Uint16(fiche[28:])) + int(binary.LittleEndian.Uint16(fiche[30:])) + int(binary.LittleEndian.Uint16(fiche[32:]))
+		if _, err := b.Discard(saut); err != nil {
+			break
+		}
+		n++
+	}
+	return n
 }
 
 func estImage(nom string) bool {

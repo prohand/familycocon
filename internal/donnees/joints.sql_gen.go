@@ -74,7 +74,7 @@ func (q *Queries) CompterJointsObjet(ctx context.Context, arg CompterJointsObjet
 
 const exportJoints = `-- name: ExportJoints :many
 SELECT j.id, j.module, j.objet_id, j.nom, j.type, j.taille, j.cree_par, j.cree_le FROM pieces_jointes j
-WHERE j.famille_id = ?1
+WHERE j.famille_id = ?1 AND j.objet_id <> 0
   AND NOT (j.module = 'notes' AND EXISTS (SELECT 1 FROM notes n WHERE n.id = j.objet_id AND n.privee = 1 AND n.auteur_id IS NOT ?2))
   AND NOT (j.module = 'taches' AND EXISTS (SELECT 1 FROM taches t WHERE t.id = j.objet_id AND t.privee = 1 AND t.cree_par IS NOT ?2))
   AND NOT (j.module = 'projets' AND EXISTS (SELECT 1 FROM projets p WHERE p.id = j.objet_id AND p.perso_de <> 0 AND p.perso_de <> ?2))
@@ -100,7 +100,8 @@ type ExportJointsRow struct {
 }
 
 // Export : sans les pieces des notes, taches et projets prives des autres membres
-// (ni celles du carnet de leurs projets prives).
+// (ni celles du carnet de leurs projets prives), ni les pieces detachees
+// d'un objet supprime (objet_id = 0, en attente du menage).
 func (q *Queries) ExportJoints(ctx context.Context, arg ExportJointsParams) ([]ExportJointsRow, error) {
 	rows, err := q.db.QueryContext(ctx, exportJoints, arg.FamilleID, arg.Membre)
 	if err != nil {

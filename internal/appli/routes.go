@@ -72,7 +72,7 @@ func (a *App) Route(motif, module string, acces Acces, h Gestionnaire) {
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && !jetonCSRFValide(r, c.CSRF) {
-			a.Journal.Warn("jeton CSRF absent ou faux", "chemin", r.URL.Path, "membre", c.Membre.ID)
+			a.Journal.Warn("jeton CSRF absent ou faux", "chemin", cheminJournal(r.URL.Path), "membre", c.Membre.ID)
 			a.Echec(w, r, http.StatusForbidden, "Page trop ancienne : rechargez-la puis recommencez.")
 			return
 		}
@@ -187,10 +187,10 @@ func (a *App) ErreurInterne(w http.ResponseWriter, r *http.Request, err error) {
 	// Navigateur parti avant la réponse (page quittée, flux temps réel
 	// fermé) : ce n'est pas une erreur du serveur, et personne n'attend plus.
 	if r.Context().Err() != nil {
-		a.Journal.Debug("requête abandonnée par le navigateur", "chemin", r.URL.Path)
+		a.Journal.Debug("requête abandonnée par le navigateur", "chemin", cheminJournal(r.URL.Path))
 		return
 	}
-	a.Journal.Error("erreur interne", "chemin", r.URL.Path, "erreur", err)
+	a.Journal.Error("erreur interne", "chemin", cheminJournal(r.URL.Path), "erreur", err)
 	a.Echec(w, r, http.StatusInternalServerError, "Erreur interne : réessayez dans un instant.")
 }
 

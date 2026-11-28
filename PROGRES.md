@@ -47,6 +47,7 @@
 | Tâches : « Pour qui ? : Parents » (v0.9.11, SPEC § 29) | **fait** |
 | Cartes de fidélité aux couleurs de l'enseigne (v0.9.12, SPEC § 30) | **fait** |
 | Cartes de fidélité : scan QR / PDF417 / Aztec (iPhone compris), dessin PDF417 et Aztec (v0.9.14, SPEC § 31) | **fait** |
+| Revue de sécurité du 28/11/2026 : images piégées, pièces jointes d'un objet supprimé, mémoire, Fuelio, Argon2id, règles plus strictes (SPEC « Revue de sécurité (28/11/2026) ») | **fait** |
 
 ## Mesures
 
@@ -61,6 +62,7 @@
 | 23/11/2026 | v0.6.0, format réel de Fuelio | 17,9 Mo | non remesurée | — | 66 Mio (RSS) au plus fort pour un `.fuelio` de 296 Mo (200 pleins, 40 photos PNG de 7 Mpx dans pictures.data), ~30 s ; 33 Mio juste après ; 287 Mo de disque pris le temps de la reprise |
 | 23/11/2026 | v0.7.0 (notes, pleins, graphiques, scan du ticket) | 19,9 Mo (amd64), contre 17,9 pour v0.6.0 (+1,8 Mo : lecteur de tickets compressé, servi depuis le binaire sans être chargé en mémoire) | non remesurée | 33 Mio (RSS) au démarrage, comme v0.6.0 | scan d'un vrai ticket : ~5 s dans le navigateur (le serveur ne fait que l'analyse du texte) |
 | 24/11/2026 | v0.9.12+ (catégories, pièces jointes, tâches privées, rappels) | 19,6 Mo (amd64, `-s -w`) | non remesurée (pas de Docker ici) | 40 Mio (RSS) au démarrage sur une base neuve, contre 33 pour v0.7.0 (plus de gabarits et de requêtes) | 42 Mio après 200 pages de connexion ; un envoi de pièce jointe est écrit sur le disque au fil de la lecture (jamais gardé en mémoire) |
+| 28/11/2026 | revue de sécurité (v0.9.26+) | 21,6 Mo (amd64, `-s -w`) | non remesurée (pas de Docker ici) | 43 Mio (RSS) au démarrage sur une base neuve, contre 40 pour v0.9.12 (modules ajoutés depuis) | 44 Mio après 100 pages de connexion ; une image refusée ne prend plus de mémoire (en-tête lu seulement) |
 
 Notes :
 - v0.6.0 : une seule photo décodée à la fois (pour la reprise Fuelio comme

@@ -5,6 +5,7 @@ package appli
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -32,7 +33,29 @@ const (
 	// seuilInscriptions : créations de famille (ou envois du formulaire) par
 	// adresse en 15 min : chaque envoi coûte un calcul Argon2id.
 	seuilInscriptions = 5
+	// seuilCalculs : calculs Argon2id (réussis ou non) par adresse, par
+	// compte, par membre ou par invitation en 15 min. Une boucle de
+	// requêtes avec le BON mot de passe ne compte pas comme un échec, mais
+	// prendrait les 2 places de calcul du serveur.
+	seuilCalculs = 30
 )
+
+// compterCalcul : un calcul Argon2id de plus pour chacune de ces clés.
+// Refusé (avec le temps à attendre) quand l'une a atteint seuilCalculs.
+func (a *App) compterCalcul(cles ...string) (time.Duration, bool) {
+	limites := make([]Limite, len(cles))
+	for i, c := range cles {
+		limites[i] = Limite{"calculs|" + c, seuilCalculs}
+	}
+	fin, attente, ok := a.Limiteur.Essayer(time.Now(), limites...)
+	if ok {
+		fin(true) // chaque calcul compte, réussi ou non
+	}
+	return attente, ok
+}
+
+// cleMembre : la clé d'un membre connecté pour compterCalcul.
+func cleMembre(id int64) string { return "membre|" + strconv.FormatInt(id, 10) }
 
 func (a *App) routesComptes() {
 	a.Mux.HandleFunc("GET /connexion", a.pageConnexion)
@@ -153,6 +176,13 @@ func (a *App) connexion(w http.ResponseWriter, r *http.Request) {
 		a.afficherConnexion(w, r, http.StatusTooManyRequests, f)
 		return
 	}
+	if attente, ok := a.compterCalcul(CleIP(ip), cleCompte); !ok {
+		fin(false)
+		a.Journal.Warn("connexion refusée : trop de calculs", "ip", ip.String())
+		f.Erreur = "Trop d'essais. Réessayez dans " + attenteLisible(attente) + "."
+		a.afficherConnexion(w, r, http.StatusTooManyRequests, f)
+		return
+	}
 	m, err := a.Q.MembreParIdentifiant(r.Context(), sql.NullString{String: ident, Valid: ident != ""})
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		fin(false)
@@ -191,10 +221,7 @@ func (a *App) connexion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if totp || passkeys {
-		if err := a.debuterSecondFacteur(w, r, m, f.Suite); err != nil {
-			f.Erreur = err.Error()
-			a.afficherConnexion(w, r, http.StatusServiceUnavailable, f)
-		}
+		a.debuterSecondFacteur(w, r, m, f.Suite)
 		return
 	}
 	if err := a.terminerConnexion(w, r, m, "mot de passe"); err != nil {
@@ -245,6 +272,12 @@ func (a *App) connexionEnfant(w http.ResponseWriter, r *http.Request) {
 	fin, attente, ok := a.Limiteur.Essayer(time.Now(), Limite{CleIP(ip), seuilIP}, Limite{clePin, seuilPin})
 	if !ok {
 		a.Journal.Warn("code PIN refusé : trop d'essais", "membre", m.ID, "ip", ip.String())
+		f.Erreur = "Trop d'essais. Attends " + attenteLisible(attente) + " ou demande à un parent."
+		a.afficherAnonyme(w, r, http.StatusTooManyRequests, "comptes/pin", "Code secret", f)
+		return
+	}
+	if attente, ok := a.compterCalcul(CleIP(ip), clePin); !ok {
+		fin(false)
 		f.Erreur = "Trop d'essais. Attends " + attenteLisible(attente) + " ou demande à un parent."
 		a.afficherAnonyme(w, r, http.StatusTooManyRequests, "comptes/pin", "Code secret", f)
 		return
@@ -451,6 +484,14 @@ func (a *App) accepterInvitation(w http.ResponseWriter, r *http.Request) {
 	ident := strings.TrimSpace(r.PostFormValue("identifiant"))
 	mdp := r.PostFormValue("mdp")
 	f := formConnexion{Famille: inv.FamilleNom, Role: inv.Role, Prenom: prenom, Identifiant: ident}
+	// Envois limités par lien et par adresse : chacun coûte un calcul, et la
+	// réponse « identifiant déjà pris » ne doit pas servir à essayer tous
+	// les identifiants du serveur.
+	if attente, ok := a.compterCalcul(CleIP(a.IPClient(r)), "invitation|"+hex.EncodeToString(inv.Empreinte)); !ok {
+		f.Erreur = "Trop d'essais. Réessayez dans " + attenteLisible(attente) + "."
+		a.afficherAnonyme(w, r, http.StatusTooManyRequests, "comptes/invitation", "Invitation", f)
+		return
+	}
 	if err := verifierNouveauCompte(prenom, ident, mdp, r.PostFormValue("mdp2")); err != nil {
 		f.Erreur = err.Error()
 		a.afficherAnonyme(w, r, http.StatusBadRequest, "comptes/invitation", "Invitation", f)

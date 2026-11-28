@@ -3,6 +3,8 @@
 package appli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +18,7 @@ func TestNomJointEtTaille(t *testing.T) {
 		"  a\x00b\"c.pdf ":                "abc.pdf",
 		"":                                "",
 		strings.Repeat("é", 200) + ".pdf": strings.Repeat("é", nomJointMax-4) + ".pdf",
+		"a." + strings.Repeat("x", 200):   "a." + strings.Repeat("x", nomJointMax-2), // extension sans fin : pas de plantage
 	} {
 		if r := nomJoint(v); r != attendu {
 			t.Errorf("nomJoint(%q) = %q, attendu %q", v, r, attendu)
@@ -26,7 +29,7 @@ func TestNomJointEtTaille(t *testing.T) {
 			t.Errorf("TailleLisible(%d) = %q, attendu %q", n, r, attendu)
 		}
 	}
-	for v, attendu := range map[string]string{"/notes/3": "/notes/3", "//pirate.fr": "/", "https://x": "/", `/\pirate`: "/"} {
+	for v, attendu := range map[string]string{"/notes/3": "/notes/3", "//pirate.fr": "/", "https://x": "/", `/\pirate`: "/", "/\t/pirate.fr": "/", "/\n/pirate.fr": "/"} {
 		if r := retourSur(v); r != attendu {
 			t.Errorf("retourSur(%q) = %q", v, r)
 		}
@@ -40,5 +43,31 @@ func TestDateCourte(t *testing.T) {
 	}
 	if r := DateCourte(time.Date(2027, 1, 14, 0, 0, 0, 0, time.UTC), maintenant); r != "14/01/2027" {
 		t.Errorf("année suivante : %q", r)
+	}
+}
+
+// Fichiers provisoires d'un arrêt brutal : effacés au démarrage, sans
+// toucher aux vrais fichiers.
+func TestEffacerProvisoires(t *testing.T) {
+	a := nouvelleAppTest(t, map[string]string{"FC_URL_PUBLIQUE": "http://localhost:8080"})
+	dossier := filepath.Join(a.DossierPieces(), "1")
+	_ = os.MkdirAll(dossier, 0o750)
+	provisoires := []string{filepath.Join(a.Config.Donnees, "fuelio-123.tmp"), filepath.Join(dossier, "abc.pdf.tmp")}
+	gardes := []string{filepath.Join(dossier, "abc.pdf"), filepath.Join(a.Config.Donnees, "familycocon.db")}
+	for _, f := range append(provisoires, gardes[0]) {
+		if err := os.WriteFile(f, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	a.EffacerProvisoires()
+	for _, f := range provisoires {
+		if _, err := os.Stat(f); err == nil {
+			t.Errorf("%s pas effacé", f)
+		}
+	}
+	for _, f := range gardes {
+		if _, err := os.Stat(f); err != nil {
+			t.Errorf("%s effacé : %v", f, err)
+		}
 	}
 }

@@ -65,7 +65,7 @@ func (e *enregistreur) Unwrap() http.ResponseWriter { return e.ResponseWriter }
 func (a *App) Envelopper(h http.Handler) http.Handler {
 	protection := http.NewCrossOriginProtection()
 	protection.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		a.Journal.Warn("requête d'un autre site refusée (CSRF)", "chemin", r.URL.Path, "ip", a.IPClient(r).String(),
+		a.Journal.Warn("requête d'un autre site refusée (CSRF)", "chemin", cheminJournal(r.URL.Path), "ip", a.IPClient(r).String(),
 			"origine", r.Header.Get("Origin"))
 		http.Error(w, "Requête refusée", http.StatusForbidden)
 	}))
@@ -79,12 +79,12 @@ func (a *App) Envelopper(h http.Handler) http.Handler {
 				if v == http.ErrAbortHandler {
 					panic(v)
 				}
-				a.Journal.Error("panique", "erreur", v, "chemin", r.URL.Path, "pile", string(debug.Stack()))
+				a.Journal.Error("panique", "erreur", v, "chemin", cheminJournal(r.URL.Path), "pile", string(debug.Stack()))
 				if e.statut == 0 {
 					http.Error(e, "Erreur interne", http.StatusInternalServerError)
 				}
 			}
-			a.Journal.Log(r.Context(), niveauRequete(r.URL.Path, e.statut), "requête", "methode", r.Method, "chemin", r.URL.Path,
+			a.Journal.Log(r.Context(), niveauRequete(r.URL.Path, e.statut), "requête", "methode", r.Method, "chemin", cheminJournal(r.URL.Path),
 				"statut", e.statut, "duree_ms", time.Since(debut).Milliseconds(), "ip", a.IPClient(r).String())
 		}()
 
@@ -183,4 +183,20 @@ func niveauRequete(chemin string, statut int) slog.Level {
 		return slog.LevelInfo
 	}
 	return slog.LevelDebug
+}
+
+// cheminsSecrets : débuts de chemin suivis d'un jeton secret (un lien
+// d'invitation crée un compte pendant 7 jours ; le lien de l'agenda donne
+// les événements ; le jeton d'annulation rend un objet supprimé).
+var cheminsSecrets = []string{"/invitation/", "/ical/", "/annuler/"}
+
+// cheminJournal : le chemin tel qu'écrit au journal, sans les jetons
+// secrets (le journal peut partir vers CrowdSec, Loki…).
+func cheminJournal(chemin string) string {
+	for _, debut := range cheminsSecrets {
+		if strings.HasPrefix(chemin, debut) && len(chemin) > len(debut) {
+			return debut + "…"
+		}
+	}
+	return chemin
 }

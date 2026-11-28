@@ -483,6 +483,7 @@ type formOp struct {
 	Frequences []Frequence
 	Recurrence string // « Chaque mois », si l'opération fait partie d'une récurrence
 	Devise     string
+	Verrouille bool // virement venu du budget perso d'un autre parent : lui seul le change
 }
 
 // operation : l'opération {id}, si elle est dans un budget de ce membre
@@ -497,6 +498,26 @@ func (m *Module) operation(r *http.Request, c *appli.Contexte) (donnees.Operatio
 		return donnees.Operation{}, sql.ErrNoRows
 	}
 	return o, err
+}
+
+// operationModifiable : comme operation, mais refuse aussi la moitié
+// commune du virement d'un autre parent. ok faux : réponse déjà faite.
+func (m *Module) operationModifiable(w http.ResponseWriter, r *http.Request, c *appli.Contexte) (donnees.Operation, bool) {
+	o, err := m.operation(r, c)
+	if err != nil {
+		m.a.Echec(w, r, http.StatusNotFound, "Opération introuvable.")
+		return o, false
+	}
+	autre, err := virementDunAutre(r.Context(), m.a.Q, c, o)
+	if err != nil {
+		m.a.ErreurInterne(w, r, err)
+		return o, false
+	}
+	if autre {
+		m.a.Echec(w, r, http.StatusForbidden, "Ce virement vient du budget perso d'un autre parent : lui seul peut le modifier ou le supprimer.")
+		return o, false
+	}
+	return o, true
 }
 
 func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
@@ -525,6 +546,10 @@ func (m *Module) formulaire(w http.ResponseWriter, r *http.Request, c *appli.Con
 	} else {
 		if f.Op, err = m.operation(r, c); err != nil {
 			m.a.PageErreur(w, r, c, http.StatusNotFound, "Opération introuvable", "Cette opération n'existe plus.")
+			return
+		}
+		if f.Verrouille, err = virementDunAutre(r.Context(), m.a.Q, c, f.Op); err != nil {
+			m.a.ErreurInterne(w, r, err)
 			return
 		}
 		f.Montant = MontantSaisie(f.Op.Montant)
@@ -660,9 +685,8 @@ func (m *Module) creer(w http.ResponseWriter, r *http.Request, c *appli.Contexte
 }
 
 func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	o, err := m.operation(r, c)
-	if err != nil {
-		m.a.Echec(w, r, http.StatusNotFound, "Opération introuvable.")
+	o, ok := m.operationModifiable(w, r, c)
+	if !ok {
 		return
 	}
 	// Un virement garde sa catégorie (le formulaire ne la propose pas).
@@ -676,7 +700,7 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 		return
 	}
 	ctx := r.Context()
-	err = m.a.Transaction(ctx, func(q *donnees.Queries) error {
+	err := m.a.Transaction(ctx, func(q *donnees.Queries) error {
 		if err := q.ModifierOperation(ctx, donnees.ModifierOperationParams{
 			Sens: s.sens, Montant: s.montant, Categorie: s.categorie, Libelle: s.libelle, Jour: s.jour,
 			MembreID: s.membre, ID: o.ID, FamilleID: c.Famille.ID,
@@ -700,9 +724,8 @@ func (m *Module) modifier(w http.ResponseWriter, r *http.Request, c *appli.Conte
 }
 
 func (m *Module) supprimer(w http.ResponseWriter, r *http.Request, c *appli.Contexte) {
-	o, err := m.operation(r, c)
-	if err != nil {
-		m.a.Echec(w, r, http.StatusNotFound, "Opération introuvable.")
+	o, ok := m.operationModifiable(w, r, c)
+	if !ok {
 		return
 	}
 	// Un virement part en entier (ses deux moitiés).

@@ -500,3 +500,42 @@ func TestTacheDateePlusTard(t *testing.T) {
 		t.Fatal("tâche datée plus tard : pas de case à cocher")
 	}
 }
+
+// Scores de la semaine : un enfant ne compte pas les tâches privées d'un
+// parent, ni celles réservées aux parents (seul le nombre fuyait).
+func TestScoresVisibles(t *testing.T) {
+	a, srv := essai.NouvelleApp(t, Brancher)
+	marie := essai.Famille(t, srv)
+	lea := essai.Enfant(t, srv, marie, "Léa")
+	marie.Get("/taches/nouvelle")
+	marie.Post("/taches", map[string]string{"titre": "Vaisselle", "repetition": "jour"})
+	marie.Post("/taches", map[string]string{"titre": "Impôts", "repetition": "jour", "privee": "1"})
+	marie.Post("/taches", map[string]string{"titre": "Banque", "repetition": "jour", "parents": "1"})
+	var ids []int64
+	rows, err := a.DB.Query(`SELECT id FROM taches ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var id int64
+		_ = rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if len(ids) != 3 {
+		t.Fatalf("%d tâches créées", len(ids))
+	}
+	// Marie fait 1 + 4 + 6 coches cette semaine.
+	for i, n := range []int{1, 4, 6} {
+		if _, err := a.DB.Exec(`WITH RECURSIVE k(j) AS (SELECT 1 UNION ALL SELECT j + 1 FROM k WHERE j < ?)
+			INSERT INTO taches_faites (tache_id, occurrence, fait_par, fait_le) SELECT ?, 'e' || j, 1, ? FROM k`, n, ids[i], time.Now().Unix()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, page := marie.Get("/taches"); !strings.Contains(page, "<b>11</b>") {
+		t.Fatalf("Marie ne voit pas ses 11 coches :\n%s", page)
+	}
+	if _, page := lea.Get("/taches"); !strings.Contains(page, "<b>1</b>") || strings.Contains(page, "<b>11</b>") {
+		t.Fatalf("Léa compte les tâches privées ou réservées aux parents :\n%s", page)
+	}
+}

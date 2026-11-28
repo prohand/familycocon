@@ -62,7 +62,7 @@ func (m *Module) ajouterPhoto(w http.ResponseWriter, r *http.Request, c *appli.C
 	}
 	jpeg, err := photo.Preparer(corps)
 	if err != nil {
-		m.a.Echec(w, r, http.StatusBadRequest, "Photo illisible (JPEG ou PNG).")
+		m.a.Echec(w, r, http.StatusBadRequest, "Photo illisible ou trop grande (JPEG ou PNG).")
 		return
 	}
 	nom, err := photo.Ranger(m.a.DossierPieces(), c.Famille.ID, jpeg)

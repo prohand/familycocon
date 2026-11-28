@@ -6,12 +6,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"image"
-	_ "image/jpeg" // photos du téléphone
-	_ "image/png"
 	"io"
 	"net/http"
 
 	"familycocon/internal/appli"
+	photos "familycocon/internal/photo"
 )
 
 // Scanner une carte : le navigateur lit le code lui-même quand il le sait
@@ -32,17 +31,18 @@ func (m *Module) scanner(w http.ResponseWriter, r *http.Request, c *appli.Contex
 		repondre(http.StatusRequestEntityTooLarge, map[string]string{"erreur": "Photo trop lourde."})
 		return
 	}
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(corps))
-	if err != nil || cfg.Width*cfg.Height > pixelsMax {
+	// Taille et mémoire vérifiées sur l'en-tête, avant tout décodage ; une
+	// seule photo décodée à la fois (comme photos.Preparer).
+	if err := photos.Controler(bytes.NewReader(corps), pixelsMax); err != nil {
+		repondre(http.StatusBadRequest, map[string]string{"erreur": "Photo illisible ou trop grande."})
+		return
+	}
+	var numero, format string
+	var ok bool
+	if err := photos.Decoder(corps, func(img image.Image) { numero, format, ok = Lire(img) }); err != nil {
 		repondre(http.StatusBadRequest, map[string]string{"erreur": "Photo illisible."})
 		return
 	}
-	img, _, err := image.Decode(bytes.NewReader(corps))
-	if err != nil {
-		repondre(http.StatusBadRequest, map[string]string{"erreur": "Photo illisible."})
-		return
-	}
-	numero, format, ok := Lire(img)
 	if !ok {
 		repondre(http.StatusUnprocessableEntity, map[string]string{"erreur": "Aucun code-barres lu : approchez la carte, à plat et bien éclairée, ou tapez le numéro."})
 		return

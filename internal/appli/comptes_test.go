@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -215,6 +216,32 @@ func TestInvitation(t *testing.T) {
 	// Usage unique.
 	if code, _ := nouveauNavigateur(t, srv).get("/invitation/" + m[1]); code != http.StatusNotFound {
 		t.Fatalf("lien réutilisable : %d", code)
+	}
+}
+
+// Un lien d'invitation ne sert pas à essayer tous les identifiants du
+// serveur (« déjà pris ») : les envois sont limités (chacun coûte un calcul).
+func TestInvitationLimitee(t *testing.T) {
+	_, srv, n := familleTest(t)
+	n.get("/famille")
+	_, page := n.post("/famille/invitations", map[string]string{"role": "enfant"})
+	m := regexp.MustCompile(`/invitation/([A-Za-z0-9_-]{43})`).FindStringSubmatch(page)
+	if m == nil {
+		t.Fatal("lien d'invitation absent")
+	}
+	curieux := nouveauNavigateur(t, srv)
+	curieux.get("/invitation/" + m[1])
+	dernier := 0
+	for i := range seuilCalculs + 1 {
+		dernier, _ = curieux.post("/invitation/"+m[1], map[string]string{
+			"prenom": "Zoé", "identifiant": "marie", "mdp": "le nid de zoe " + strconv.Itoa(i), "mdp2": "le nid de zoe " + strconv.Itoa(i),
+		})
+		if i < seuilCalculs && dernier != http.StatusConflict {
+			t.Fatalf("essai %d : %d", i, dernier)
+		}
+	}
+	if dernier != http.StatusTooManyRequests {
+		t.Fatalf("essai de trop : %d (429 attendu)", dernier)
 	}
 }
 

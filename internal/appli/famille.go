@@ -132,6 +132,10 @@ func (a *App) ajouterEnfant(w http.ResponseWriter, r *http.Request, c *Contexte)
 		a.Echec(w, r, http.StatusBadRequest, err.Error())
 		return
 	}
+	if attente, ok := a.compterCalcul(cleMembre(c.Membre.ID)); !ok {
+		a.Echec(w, r, http.StatusTooManyRequests, "Trop d'essais. Réessayez dans "+attenteLisible(attente)+".")
+		return
+	}
 	pin, err := EmpreintePin(r.PostFormValue("pin"))
 	if err != nil {
 		a.Echec(w, r, http.StatusBadRequest, err.Error())
@@ -260,6 +264,10 @@ func (a *App) changerPin(w http.ResponseWriter, r *http.Request, c *Contexte) {
 	}
 	if m.Mdp.Valid {
 		a.Echec(w, r, http.StatusBadRequest, m.Nom+" a son propre compte avec mot de passe : pas de code PIN.")
+		return
+	}
+	if attente, ok := a.compterCalcul(cleMembre(c.Membre.ID)); !ok {
+		a.Echec(w, r, http.StatusTooManyRequests, "Trop d'essais. Réessayez dans "+attenteLisible(attente)+".")
 		return
 	}
 	pin, err := EmpreintePin(r.PostFormValue("pin"))

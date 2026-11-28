@@ -355,8 +355,15 @@ func (m *Module) enregistrer(w http.ResponseWriter, r *http.Request, c *appli.Co
 			if n == 0 {
 				return errModifiee
 			}
-			// Passé en privé (ou revenu au commun) : la récurrence et ses
-			// prélèvements déjà écrits changent de budget.
+			// Un abonnement commun ne devient jamais privé : il disparaîtrait
+			// (avec ses prélèvements passés) de la vue de l'autre parent.
+			// Seul un abonnement privé peut revenir au commun (comme les
+			// projets : un projet partagé ne redevient pas privé).
+			if rec.PersoDe == 0 {
+				perso = 0
+			}
+			// Privé revenu au commun : la récurrence et ses prélèvements déjà
+			// écrits changent de budget.
 			if perso != rec.PersoDe {
 				if err := q.ChangerCompteRecurrence(ctx, donnees.ChangerCompteRecurrenceParams{PersoDe: perso, ID: rec.ID, FamilleID: c.Famille.ID}); err != nil {
 					return err

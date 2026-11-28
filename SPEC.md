@@ -1121,3 +1121,68 @@ reviennent.
 - Budget › L'année : « Encore à venir, d'après les opérations qui
   reviennent : +… de revenus et −… de dépenses. Le reste est déjà passé »
   (ou « Rien n'est encore passé… » quand toute l'année est prévue).
+
+## Revue de sécurité (28/11/2026)
+Cinq relectures (authentification, deux lots de modules, fichiers et
+imports, interface et déploiement), chaque point vérifié dans le code.
+Aucun accès aux données d'une autre famille, aucun contournement de la
+connexion ou de la double authentification, aucun passage enfant → parent.
+Corrigé, avec un test par point :
+- **Images piégées** : un petit PNG 16 bits (8 octets par pixel) ou un JPEG
+  « progressif » prenait plus de 128 Mo une fois décodé (conteneur tué par
+  un seul envoi, même d'un enfant). `photo.Controler` lit l'en-tête (IHDR,
+  SOF) et refuse une image qui prendrait plus de 64 Mio (`MemoireMax`)
+  avant tout décodage ; le scan des cartes passe aussi par le verrou « une
+  image à la fois » (`photo.Decoder`).
+- **Pièces jointes d'un objet supprimé** : SQLite redonne l'id de la
+  dernière ligne supprimée ; la pièce d'une note privée supprimée passait à
+  la note créée juste après (par un enfant, par exemple). Migration 0056 :
+  des déclencheurs mettent `objet_id = 0` dès que la note, la tâche, le
+  projet, la ligne du carnet, le véhicule, l'animal ou la garantie est
+  supprimé ; le ménage efface ensuite la ligne et le fichier ; l'export
+  les ignore.
+- **Jeton CSRF dans un envoi de fichiers** : sans l'en-tête `X-Jeton`, Go
+  gardait jusqu'à 32 Mio de fichiers en mémoire avant de vérifier le jeton.
+  Le champ `_jeton` d'un envoi multipart n'est lu que si l'envoi annonce
+  8 Mio au plus (import vCard sans JavaScript).
+- **Mémoire courte** (connexions en attente du second facteur, défis de
+  passkey, secret TOTP) : 3 entrées au plus par membre et par usage, 10 par
+  adresse pour les défis sans connexion ; pleine, elle oublie l'entrée qui
+  expire le plus tôt au lieu de tout refuser (un compte qui se connectait en
+  boucle bloquait la double authentification de tout le serveur).
+- **Fuelio** : les fiches du répertoire du ZIP sont comptées avant
+  `zip.NewReader` (20 000 au plus : Go les garde toutes en mémoire, quel que
+  soit le nombre annoncé) ; 100 CSV décompressés au plus ; 2 000 photos.
+- **Calculs Argon2id** : 30 par quart d'heure (`seuilCalculs`), réussis ou
+  non, par adresse et par compte (connexion, PIN), par lien d'invitation,
+  par membre (mot de passe redemandé, PIN d'un enfant). Le lien
+  d'invitation ne sert donc plus à essayer tous les identifiants
+  (« déjà pris »).
+- **Journal** : les jetons de `/invitation/…`, `/ical/…` et `/annuler/…` ne
+  sont plus écrits (`cheminJournal`).
+- **Texte riche** : une recherche de fermeture qui a échoué n'est pas
+  refaite (64 Kio de « [ » coûtaient 3,4 s de processeur, 0,1 s pour tous
+  les signes maintenant).
+- **Divers** : fichiers `.tmp` (Fuelio, pièces) effacés au démarrage ;
+  place des pièces (par objet, 2 Go par famille) recomptée sous verrou
+  avant l'enregistrement ; nom de fichier à « extension » sans fin coupé
+  sans plantage ; adresse de retour des pièces jointes avec les règles de
+  `suiteSure` (« /\t/autre.site » refusé) ; service worker qui n'ouvre que
+  des pages de l'appli.
+- **Règles rendues plus strictes** (choix de l'utilisateur) :
+  - scores des tâches de la semaine : mêmes règles que l'historique (sans
+    les tâches privées des autres, ni celles réservées aux parents pour un
+    enfant) ;
+  - la moitié commune du virement d'un parent ne peut être modifiée ou
+    supprimée que par lui (l'autre moitié est dans son budget privé) ; la
+    fiche le dit, sans formulaire ;
+  - un abonnement commun ne devient jamais privé (il disparaissait, avec
+    ses prélèvements, de la vue de l'autre parent) ; un abonnement privé
+    peut revenir au commun (comme les projets).
+- **Déploiement** : `deploy/nginx.conf` laisse passer les pièces jointes
+  (51 Mo) et la reprise Fuelio (1 Go) ; l'ancienne limite de 1 Mo les
+  bloquait.
+
+Non corrigé (choix à faire) : supprimer une récurrence de virement « avec
+les opérations passées » efface aussi les revenus déjà reçus au commun ;
+la sauvegarde automatique recopie `pieces/` (place doublée sur le disque).

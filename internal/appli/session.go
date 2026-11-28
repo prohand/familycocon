@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"errors"
+	"mime"
 	"net/http"
 	"slices"
 	"strings"
@@ -191,10 +192,21 @@ func (a *App) NouveauContexte(m donnees.Membre, f donnees.Famille, csrf string, 
 
 // jetonCSRFValide : jeton envoyé par htmx (en-tête X-Jeton) ou par un
 // formulaire classique (champ _jeton), comparé en temps constant.
+//
+// Chercher le champ _jeton dans un envoi de fichiers (multipart) oblige Go
+// à garder en mémoire jusqu'à 32 Mio de fichiers AVANT de vérifier le jeton
+// (quelques envois en même temps, et le conteneur manque de mémoire). Un
+// envoi de fichiers sans l'en-tête n'est donc lu que s'il est petit (taille
+// annoncée de 8 Mio au plus : l'import vCard sans JavaScript) ; les gros
+// (pièces jointes) passent par htmx ou app.js, qui posent l'en-tête.
 func jetonCSRFValide(r *http.Request, attendu string) bool {
 	recu := r.Header.Get("X-Jeton")
 	if recu == "" {
-		recu = r.PostFormValue("_jeton")
+		ct, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if ct == "application/x-www-form-urlencoded" ||
+			(ct == "multipart/form-data" && r.ContentLength > 0 && r.ContentLength <= TailleMaxImport) {
+			recu = r.PostFormValue("_jeton")
+		}
 	}
 	return recu != "" && subtle.ConstantTimeCompare([]byte(recu), []byte(attendu)) == 1
 }

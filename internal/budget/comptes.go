@@ -5,6 +5,7 @@ package budget
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -83,6 +84,23 @@ func supprimerAvecMoitie(ctx context.Context, q *donnees.Queries, famille int64,
 		}
 	}
 	return q.SupprimerOperation(ctx, donnees.SupprimerOperationParams{ID: o.ID, FamilleID: famille})
+}
+
+// virementDunAutre : la moitié commune d'un virement venu du budget perso
+// d'un autre parent. Lui seul peut la modifier ou la supprimer : l'autre
+// moitié est dans son budget privé, qui suivrait sans qu'il le voie.
+func virementDunAutre(ctx context.Context, q *donnees.Queries, c *appli.Contexte, o donnees.Operation) (bool, error) {
+	if !o.VirementID.Valid || o.PersoDe != 0 {
+		return false, nil
+	}
+	autre, err := q.OperationParID(ctx, donnees.OperationParIDParams{ID: o.VirementID.Int64, FamilleID: c.Famille.ID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return autre.PersoDe != 0 && autre.PersoDe != c.Membre.ID, nil
 }
 
 // libelleVirement : « Virement de Marie » (côté commun).

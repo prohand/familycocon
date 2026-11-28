@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -177,11 +178,13 @@ func (a *App) droitsJoint(ctx context.Context, c *Contexte, module string, objet
 }
 
 // retourSur : une adresse de ce site seulement (jamais « //autre.site »).
+// Mêmes règles que l'adresse de retour après la connexion (suiteSure) :
+// sans caractère de contrôle (« /\t/autre.site » serait lu « //autre.site »).
 func retourSur(v string) string {
-	if strings.HasPrefix(v, "/") && !strings.HasPrefix(v, "//") && !strings.HasPrefix(v, "/\\") && len(v) < 300 {
-		return v
+	if len(v) >= 300 {
+		return "/"
 	}
-	return "/"
+	return suiteSure(v)
 }
 
 // nomJoint : le nom d'origine, nettoyé (sans dossier ni caractère de
@@ -196,7 +199,11 @@ func nomJoint(v string) string {
 	}, strings.TrimSpace(v))
 	if utf8.RuneCountInString(v) > nomJointMax {
 		ext := filepath.Ext(v)
-		v = string([]rune(strings.TrimSuffix(v, ext))[:nomJointMax-utf8.RuneCountInString(ext)]) + ext
+		if n := utf8.RuneCountInString(ext); n < nomJointMax/2 {
+			v = string([]rune(strings.TrimSuffix(v, ext))[:nomJointMax-n]) + ext
+		} else {
+			v = string([]rune(v)[:nomJointMax]) // « extension » sans fin : coupée (le type sera refusé)
+		}
 	}
 	if v == "" || v == "." {
 		return ""
@@ -255,6 +262,30 @@ func (a *App) garderJoint(famille int64, nom string, r io.Reader) (fichier strin
 		return "", 0, t, err
 	}
 	return fichier, taille, t, nil
+}
+
+// verrouJoints : les places (pièces par objet, 2 Go par famille) sont
+// recomptées et la pièce enregistrée sous ce verrou. Vérifier seulement
+// avant d'écrire le fichier laissait des envois simultanés dépasser la place.
+var verrouJoints sync.Mutex
+
+// enregistrerJoint : la pièce (fichier déjà écrit) entre dans la base si
+// la place le permet encore ; sinon errJointPlace.
+func (a *App) enregistrerJoint(ctx context.Context, p donnees.AjouterJointParams) error {
+	verrouJoints.Lock()
+	defer verrouJoints.Unlock()
+	if k, err := a.Q.CompterJointsObjet(ctx, donnees.CompterJointsObjetParams{FamilleID: p.FamilleID, Module: p.Module, ObjetID: p.ObjetID}); err != nil {
+		return err
+	} else if k >= JointsParObjet {
+		return errJointPlace
+	}
+	if k, err := a.Q.TailleJointsFamille(ctx, p.FamilleID); err != nil {
+		return err
+	} else if k+p.Taille > JointsParFamille {
+		return errJointPlace
+	}
+	_, err := a.Q.AjouterJoint(ctx, p)
+	return err
 }
 
 // effacerFichierJoint : le fichier d'une pièce (déjà retirée de la base).
@@ -344,7 +375,7 @@ func (a *App) envoyerJoints(w http.ResponseWriter, r *http.Request, c *Contexte)
 		if err != nil {
 			return err
 		}
-		if _, err := a.Q.AjouterJoint(ctx, donnees.AjouterJointParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet, Nom: nom,
+		if err := a.enregistrerJoint(ctx, donnees.AjouterJointParams{FamilleID: c.Famille.ID, Module: module, ObjetID: objet, Nom: nom,
 			Type: t.mime, Taille: taille, Fichier: fichier, CreePar: sql.NullInt64{Int64: c.Membre.ID, Valid: true}, CreeLe: time.Now().Unix()}); err != nil {
 			a.effacerFichierJoint(donnees.PiecesJointe{FamilleID: c.Famille.ID, Fichier: fichier})
 			return err
