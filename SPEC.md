@@ -495,6 +495,15 @@ maintenant `hx-disinherit="*"` ; un test (`web/web_test.go`) refuse un
   manque, seconde lecture à 2 400 px, et les deux textes sont analysés
   ensemble. Pas de retouche de contraste (elle abîme les tickets
   thermiques à points). Essai sur un vrai ticket : ~5 s, tout est lu.
+- **Zone du ticket** (v0.9.28) : un fond coloré et texturé (tissu vert)
+  rendait toute la photo illisible. Avant la lecture, le téléphone garde
+  seulement les colonnes puis les lignes faites surtout de pixels gris
+  (papier blanc, encre noire), avec un léger retrait des bords. Fond gris
+  ou blanc : toute la photo est lue, comme avant.
+- **Seconde lecture** aussi quand le carburant manque, en mode « une
+  colonne de texte de tailles variées » (mode 4 de Tesseract) : la ligne en
+  gros caractères (« SP98 EXC ») sautée par la première est alors lue.
+- **Station** : mots d'au moins 2 lettres (un logo mal lu donnait « Tot R »).
 - **Analyse** en Go (`suivi.LireTicket`, testée sur le texte réellement
   lu) : POST `/suivi/ticket` (JSON). Les trois nombres qui vont ensemble
   (litres × prix au litre = prix payé, au centime près) ; les mots de la
